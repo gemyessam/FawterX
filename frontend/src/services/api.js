@@ -63,14 +63,27 @@ export async function previewInvoice(mapping, rows, metadata = {}) {
 
 /** اختبار الاتصال بـ ETA */
 export async function testETAAuth(customSettings = null) {
-  const headers = {}
-  if (customSettings) {
-    headers['X-ETA-Client-Id'] = customSettings.clientId
-    // Use Secret 1 as primary, fall back to Secret 2 if Secret 1 is not provided
-    headers['X-ETA-Client-Secret'] = customSettings.clientSecret1 || customSettings.clientSecret2
+  if (!customSettings) return { success: false }
+
+  // 1. Test Client Secret 1 if provided
+  if (customSettings.clientSecret1) {
+    const headers = {
+      'X-ETA-Client-Id': customSettings.clientId,
+      'X-ETA-Client-Secret': customSettings.clientSecret1
+    }
+    await api.get('/eta/test-auth', { headers })
   }
-  const { data } = await api.get('/eta/test-auth', { headers })
-  return data
+
+  // 2. Test Client Secret 2 if provided
+  if (customSettings.clientSecret2) {
+    const headers = {
+      'X-ETA-Client-Id': customSettings.clientId,
+      'X-ETA-Client-Secret': customSettings.clientSecret2
+    }
+    await api.get('/eta/test-auth', { headers })
+  }
+
+  return { success: true }
 }
 
 /** إرسال الفاتورة لـ ETA أو حفظ Draft */
