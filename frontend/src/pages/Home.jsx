@@ -29,8 +29,27 @@ export default function Home() {
   const [uploadLoading, setUploadLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Mapping states (Required: quantity, unitValue, description)
+  // ETA mapping fields constant
+  const ETA_FIELDS = [
+    { key: 'invoiceNumber', labelAr: 'رقم الفاتورة (Invoice No)', labelEn: 'Invoice No', required: false },
+    { key: 'receiverName',  labelAr: 'اسم المشتري (Buyer Name)', labelEn: 'Buyer Name', required: false },
+    { key: 'receiverId',    labelAr: 'رقم تسجيل المشتري (Buyer ID/VAT)', labelEn: 'Buyer ID/VAT', required: false },
+    { key: 'codeType',      labelAr: 'نوع الكود (Code Type EGS/GS1)', labelEn: 'Code Type EGS/GS1', required: false },
+    { key: 'itemCode',      labelAr: 'كود المنتج (Item Code)', labelEn: 'Item Code', required: true },
+    { key: 'internalCode',  labelAr: 'الكود الداخلي (Internal Code)', labelEn: 'Internal Code', required: false },
+    { key: 'description',   labelAr: 'وصف المنتج (Item Description)', labelEn: 'Item Description', required: true },
+    { key: 'quantity',      labelAr: 'الكمية (Quantity)', labelEn: 'Quantity', required: true },
+    { key: 'unitType',      labelAr: 'وحدة القياس (Unit)', labelEn: 'Unit', required: false },
+    { key: 'currency',      labelAr: 'العملة (Currency)', labelEn: 'Currency', required: false },
+    { key: 'unitValue',     labelAr: 'سعر الوحدة بالجنيه (Price EGP)', labelEn: 'Price EGP', required: true },
+    { key: 'taxPercent',    labelAr: 'نسبة الضريبة % (Tax %)', labelEn: 'Tax %', required: false },
+  ]
+
+  // Mapping states
   const [mapping, setMapping] = useState({
+    invoiceNumber: '',
+    receiverName: '',
+    receiverId: '',
     codeType: '',
     itemCode: '',
     internalCode: '',
@@ -84,6 +103,9 @@ export default function Home() {
   useEffect(() => {
     if (uploadResult && uploadResult.headers) {
       const autoMap = {
+        invoiceNumber: '',
+        receiverName: '',
+        receiverId: '',
         codeType: '',
         itemCode: '',
         internalCode: '',
@@ -96,15 +118,18 @@ export default function Home() {
       }
       uploadResult.headers.forEach(h => {
         const lower = h.toLowerCase()
-        if (lower === 'quantity' || lower === 'الكمية' || lower === 'qty' || lower === 'الكميه') autoMap.quantity = h
-        else if (lower.includes('desc') || lower.includes('product') || lower.includes('اسم') || lower.includes('وصف') || lower.includes('الصنف')) autoMap.description = h
-        else if (lower.includes('price') || lower.includes('سعر') || lower.includes('unit price') || lower.includes('الفئة')) autoMap.unitValue = h
-        else if (lower.includes('tax') || lower.includes('vat') || lower.includes('ضريبة') || lower.includes('الضريبة')) autoMap.taxPercent = h
+        if (lower === 'quantity' || lower === 'الكمية' || lower === 'qty') autoMap.quantity = h
+        else if (lower.includes('desc') || lower.includes('product') || lower.includes('اسم الصنف') || lower.includes('وصف')) autoMap.description = h
+        else if (lower.includes('price') || lower.includes('سعر')) autoMap.unitValue = h
+        else if (lower.includes('tax') || lower.includes('vat') || lower.includes('ضريبة')) autoMap.taxPercent = h
         else if (lower.includes('code type') || lower.includes('نوع الكود')) autoMap.codeType = h
-        else if (lower.includes('item code') || lower.includes('كود الصنف') || lower.includes('الرمز')) autoMap.itemCode = h
+        else if (lower.includes('item code') || lower.includes('كود الصنف') || lower.includes('كود المنتج')) autoMap.itemCode = h
         else if (lower.includes('internal') || lower.includes('داخلي') || lower.includes('كود داخلي')) autoMap.internalCode = h
         else if (lower.includes('unit') || lower.includes('وحدة') || lower.includes('الواحدة')) autoMap.unitType = h
         else if (lower.includes('currency') || lower.includes('عملة')) autoMap.currency = h
+        else if (lower.includes('invoice') || lower.includes('رقم الفاتورة') || lower.includes('رقم الفاتوره')) autoMap.invoiceNumber = h
+        else if (lower.includes('buyer') || lower.includes('receiver name') || lower.includes('اسم المشتري') || lower.includes('العميل')) autoMap.receiverName = h
+        else if (lower.includes('buyer id') || lower.includes('receiver id') || lower.includes('رقم التسجيل') || lower.includes('الملف الضريبي')) autoMap.receiverId = h
       })
       setMapping(autoMap)
     }
@@ -461,16 +486,18 @@ export default function Home() {
               <h2 className="card-title">🔗 {lang === 'ar' ? 'ربط الحقول بالـ Schema الرسمية' : 'Bilingual Schema Field Mapping'}</h2>
               <p className="card-sub">{lang === 'ar' ? 'قم بربط أعمدة ملف الإكسيل الخاص بك بالحقول الضريبية الإلزامية لتوليد الفاتورة.' : 'Review mapped Excel column titles dynamically associated with official invoice elements.'}</p>
 
-              <div className="mapping-grid">
-                {Object.keys(mapping).map(key => (
-                  <div className="mapping-row" key={key}>
-                    <label>
-                      <span>{key === 'quantity' || key === 'unitValue' || key === 'description' ? `${key} *` : key}</span>
-                      {key === 'quantity' || key === 'unitValue' || key === 'description' ? <span className="required-badge">(إلزامي)</span> : ''}
-                    </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+                {ETA_FIELDS.map(field => (
+                  <div key={field.key} style={{ background: 'var(--bg-lighter)', padding: '1rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                    <div style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+                      <span>{lang === 'ar' ? field.labelAr : field.labelEn}</span>
+                      {field.required && <span style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>{lang === 'ar' ? 'إلزامي *' : 'Required *'}</span>}
+                    </div>
                     <select
-                      value={mapping[key]}
-                      onChange={(e) => setMapping({ ...mapping, [key]: e.target.value })}
+                      className="input"
+                      style={{ width: '100%', padding: '0.5rem', fontSize: '0.85rem' }}
+                      value={mapping[field.key] || ''}
+                      onChange={(e) => setMapping({ ...mapping, [field.key]: e.target.value })}
                     >
                       <option value="">-- {lang === 'ar' ? 'تجاهل هذا العمود' : 'Ignore this Column'} --</option>
                       {uploadResult.headers?.map(h => (
