@@ -1,7 +1,13 @@
 import axios from 'axios'
 import { auth } from '../firebase'
 
-const api = axios.create({ baseURL: '/api' })
+const api = axios.create({
+  baseURL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? '/api'
+    : 'https://fawterx-api.onrender.com/api'
+})
+
+
 
 // Add request interceptor to dynamically inject Firebase ID Token and ETA company credentials
 api.interceptors.request.use(async (config) => {

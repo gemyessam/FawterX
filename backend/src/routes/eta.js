@@ -17,9 +17,9 @@ router.use(authMiddleware);
 // GET /api/eta/usage
 // جلب استهلاك المستخدم الحالي وحالة اشتراكه
 // ══════════════════════════════════════════════════════════════════
-router.get("/usage", (req, res) => {
+router.get("/usage", async (req, res) => {
   try {
-    const usage = getUserUsage(req.user.uid);
+    const usage = await getUserUsage(req.user.uid);
     return res.json({ success: true, usage });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -116,7 +116,7 @@ router.post("/submit", async (req, res) => {
 
     // ─── LIVE: Real ETA Submission ─────────────────────────────────
     // التحقق من الاستهلاك المجاني
-    if (!canUserSubmit(req.user.uid)) {
+    if (!(await canUserSubmit(req.user.uid))) {
       return res.status(403).json({
         success: false,
         limitReached: true,
@@ -171,7 +171,7 @@ router.post("/submit", async (req, res) => {
       }
 
       // زيادة عداد الاستهلاك بنجاح
-      recordSubmission(req.user.uid);
+      await recordSubmission(req.user.uid);
 
       const requestId = result?.submissionUUID || result?.submissionId || result?.requestId || "N/A";
       console.log("[/submit] ✅ Success | RequestID:", requestId, "\n");
