@@ -29,8 +29,9 @@ api.interceptors.request.use(async (config) => {
     if (settings.clientId && !hasHeader('X-ETA-Client-Id')) {
       config.headers['X-ETA-Client-Id'] = settings.clientId
     }
-    if (settings.clientSecret1 && !hasHeader('X-ETA-Client-Secret')) {
-      config.headers['X-ETA-Client-Secret'] = settings.clientSecret1
+    const activeSecret = settings.clientSecret1 || settings.clientSecret2
+    if (activeSecret && !hasHeader('X-ETA-Client-Secret')) {
+      config.headers['X-ETA-Client-Secret'] = activeSecret
     }
   } catch (e) {
     console.error('Error during api request interceptor:', e)
@@ -65,7 +66,8 @@ export async function testETAAuth(customSettings = null) {
   const headers = {}
   if (customSettings) {
     headers['X-ETA-Client-Id'] = customSettings.clientId
-    headers['X-ETA-Client-Secret'] = customSettings.clientSecret1
+    // Use Secret 1 as primary, fall back to Secret 2 if Secret 1 is not provided
+    headers['X-ETA-Client-Secret'] = customSettings.clientSecret1 || customSettings.clientSecret2
   }
   const { data } = await api.get('/eta/test-auth', { headers })
   return data
