@@ -22,8 +22,13 @@ api.interceptors.request.use(async (config) => {
     
     // Case-insensitive header existence check to prevent Axios case normalization from bypassing the check
     const hasHeader = (name) => {
+      if (!config.headers) return false
+      // Axios v1 AxiosHeaders has a .has() method
+      if (typeof config.headers.has === 'function') {
+        return config.headers.has(name)
+      }
       const lower = name.toLowerCase()
-      return Object.keys(config.headers || {}).some(k => k.toLowerCase() === lower)
+      return Object.keys(config.headers).some(k => k.toLowerCase() === lower)
     }
 
     if (settings.clientId && !hasHeader('X-ETA-Client-Id')) {

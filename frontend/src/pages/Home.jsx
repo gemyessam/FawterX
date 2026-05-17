@@ -150,7 +150,7 @@ export default function Home() {
     // Enforce configured ETA credentials check and successful connection verification before any file upload processing
     const saved = localStorage.getItem('companySettings')
     const config = saved ? JSON.parse(saved) : {}
-    if (!config.clientId || !config.clientSecret1 || !config.isVerified) {
+    if (!config.clientId || (!config.clientSecret1 && !config.clientSecret2) || !config.isVerified) {
       toast.error(lang === 'ar' 
         ? '⚠️ خطأ: يجب إدخال واختبار بيانات ربط مصلحة الضرائب (ETA) بنجاح أولاً من قائمة "إعدادات الشركة" قبل معالجة أي فواتير!' 
         : '⚠️ Error: You must enter and successfully test valid ETA connection credentials from "Company Setup" before processing invoices!')
