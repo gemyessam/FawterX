@@ -1,0 +1,53 @@
+/* Status Badges */
+.badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.badge-valid { background: rgba(0,224,161,.15); color: var(--accent); border: 1px solid rgba(0,224,161,.3); }
+.badge-invalid { background: rgba(255,79,106,.15); color: var(--danger); border: 1px solid rgba(255,79,106,.3); }
+.badge-warning { background: rgba(255,184,79,.15); color: var(--warning); border: 1px solid rgba(255,184,79,.3); }
+
+/* Top Nav */
+.header-nav {
+  display: flex; gap: 1rem; align-items: center;
+}
+.nav-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+.nav-link:hover, .nav-link.active {
+  color: var(--primary);
+}
+
+/* Validation Errors Container */
+.validation-list {
+  background: rgba(255,79,106,.05);
+  border-left: 3px solid var(--danger);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.validation-list.warning {
+  background: rgba(255,184,79,.05);
+  border-left-color: var(--warning);
+}
+.validation-list ul {
+  list-style: none; padding-right: 1.2rem;
+}
+.validation-list li {
+  font-size: 0.85rem; margin-bottom: 0.25rem; color: var(--text-muted);
+  position: relative;
+}
+.validation-list li::before {
+  content: '•'; position: absolute; right: -1.2rem;
+}
+.validation-list.error li::before { color: var(--danger); }
+.validation-list.warning li::before { color: var(--warning); }

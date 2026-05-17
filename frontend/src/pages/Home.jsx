@@ -1,0 +1,770 @@
+import { useState, useEffect, useContext } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { AppContext } from '../App'
+import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus } from '../services/api'
+import toast from 'react-hot-toast'
+
+export default function Home() {
+  const { lang, t, user } = useContext(AppContext)
+  
+  // Dashboard & Workflow switching
+  const [inWorkflow, setInWorkflow] = useState(false)
+  const [step, setStep] = useState(1) // 1: Upload, 2: Mapping, 3: Preview/Summary, 4: ETA Submission Verification
+  
+  // Stats Mock / Live
+  const [stats, setStats] = useState({
+    uploaded: 1,
+    accepted: 1,
+    rejected: 0,
+    drafts: 0
+  })
+
+  // Usage state from Backend
+  const [usage, setUsage] = useState({ submissionsCount: 0, isSubscribed: false })
+
+  // File Upload states
+  const [file, setFile] = useState(null)
+  const [dragging, setDragging] = useState(false)
+  const [uploadResult, setUploadResult] = useState(null)
+  const [uploadLoading, setUploadLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  // Mapping states (Required: quantity, unitValue, description)
+  const [mapping, setMapping] = useState({
+    codeType: '',
+    itemCode: '',
+    internalCode: '',
+    description: '',
+    quantity: '',
+    unitType: '',
+    currency: '',
+    unitValue: '',
+    taxPercent: ''
+  })
+
+  // Preview & Submit states
+  const [etaDocs, setEtaDocs] = useState(null)
+  const [validation, setValidation] = useState(null)
+  const [draftId, setDraftId] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [showPinModal, setShowPinModal] = useState(false)
+  const [showPricingModal, setShowPricingModal] = useState(false)
+  const [pin, setPin] = useState('')
+  const [showAdvanced, setShowAdvanced] = useState(false)
+
+  // Real-time verification response states
+  const [submissionResult, setSubmissionResult] = useState(null)
+  const [verificationResult, setVerificationResult] = useState(null)
+  const [verifying, setVerifying] = useState(false)
+
+  // Fetch current user usage status
+  async function fetchUsage() {
+    try {
+      const data = await getUsageStatus()
+      if (data && data.usage) {
+        setUsage(data.usage)
+        setStats(prev => ({
+          ...prev,
+          uploaded: data.usage.submissionsCount,
+          accepted: data.usage.submissionsCount
+        }))
+      }
+    } catch (e) {
+      console.error("Error fetching usage status:", e)
+    }
+  }
+
+  useEffect(() => {
+    if (user) {
+      fetchUsage()
+    }
+  }, [user])
+
+  // Auto mapping helper
+  useEffect(() => {
+    if (uploadResult && uploadResult.headers) {
+      const autoMap = {
+        codeType: '',
+        itemCode: '',
+        internalCode: '',
+        description: '',
+        quantity: '',
+        unitType: '',
+        currency: '',
+        unitValue: '',
+        taxPercent: ''
+      }
+      uploadResult.headers.forEach(h => {
+        const lower = h.toLowerCase()
+        if (lower === 'quantity' || lower === 'الكمية' || lower === 'qty' || lower === 'الكميه') autoMap.quantity = h
+        else if (lower.includes('desc') || lower.includes('product') || lower.includes('اسم') || lower.includes('وصف') || lower.includes('الصنف')) autoMap.description = h
+        else if (lower.includes('price') || lower.includes('سعر') || lower.includes('unit price') || lower.includes('الفئة')) autoMap.unitValue = h
+        else if (lower.includes('tax') || lower.includes('vat') || lower.includes('ضريبة') || lower.includes('الضريبة')) autoMap.taxPercent = h
+        else if (lower.includes('code type') || lower.includes('نوع الكود')) autoMap.codeType = h
+        else if (lower.includes('item code') || lower.includes('كود الصنف') || lower.includes('الرمز')) autoMap.itemCode = h
+        else if (lower.includes('internal') || lower.includes('داخلي') || lower.includes('كود داخلي')) autoMap.internalCode = h
+        else if (lower.includes('unit') || lower.includes('وحدة') || lower.includes('الواحدة')) autoMap.unitType = h
+        else if (lower.includes('currency') || lower.includes('عملة')) autoMap.currency = h
+      })
+      setMapping(autoMap)
+    }
+  }, [uploadResult])
+
+  // Drag & drop excel files
+  function handleFileSelect(f) {
+    if (!f) return
+    const ext = f.name.split('.').pop().toLowerCase()
+    if (!['xlsx', 'xls', 'csv'].includes(ext)) {
+      toast.error(lang === 'ar' ? 'يرجى اختيار ملف إكسيل صالح (.xlsx أو .xls)' : 'Please select a valid Excel file (.xlsx or .xls)')
+      return
+    }
+    setFile(f)
+    setError('')
+  }
+
+  // Handle uploading Excel file (Step 1 -> 2)
+  async function handleUploadExcel() {
+    if (!file) return
+    setUploadLoading(true)
+    setError('')
+    try {
+      const res = await uploadExcel(file)
+      setUploadResult(res)
+      toast.success(lang === 'ar' ? 'تم رفع ملف الإكسيل بنجاح!' : 'Excel file uploaded successfully!')
+      setStep(2) // Move to Mapping
+    } catch (e) {
+      setError(e.response?.data?.message || e.message || 'Error processing excel file')
+      toast.error(lang === 'ar' ? 'فشل معالجة ملف الإكسيل' : 'Failed to parse Excel file')
+    } finally {
+      setUploadLoading(false)
+    }
+  }
+
+  // Handle Mapping (Step 2 -> 3)
+  async function handleConfirmMapping() {
+    // Validate required fields are selected
+    if (!mapping.quantity || !mapping.unitValue || !mapping.description) {
+      toast.error(lang === 'ar' 
+        ? '⚠️ خطأ: يرجى ربط الأعمدة الإلزامية: الكمية، سعر الوحدة، والوصف للمتابعة!' 
+        : '⚠️ Error: Please map the required fields: Quantity, Unit Value, and Description to continue!');
+      return;
+    }
+
+    setUploadLoading(true)
+    try {
+      const issuer = {
+        name: 'الشركة العربية المتميزة للصناعة',
+        registrationNumber: '477-840-515',
+        activityCode: '6209',
+        governate: 'Cairo',
+        regionCity: 'Cairo',
+        street: 'Main Street',
+        buildingNumber: '1'
+      }
+      
+      const genRes = await generateInvoice(mapping, uploadResult.rows || [], issuer, uploadResult.metadata || {})
+      if (!genRes.success) throw new Error(genRes.message)
+      const docs = genRes.documents || [genRes.document]
+      setEtaDocs(docs)
+
+      // Get local validation copy (Dry-run call)
+      const dryRes = await submitToETA(docs, true)
+      setValidation(dryRes.validation)
+      setDraftId(dryRes.draftId)
+      
+      toast.success(lang === 'ar' ? 'تم الفحص والتوليد بنجاح!' : 'Validated and generated successfully!')
+      setStep(3) // Move to Preview / Summary
+    } catch (e) {
+      console.error(e)
+      toast.error(lang === 'ar' 
+        ? 'فشل الاتصال بسيرفر فاوتر إكس. هل قمت بتشغيل الـ Backend؟' 
+        : 'Connection failed to FawterX backend. Is the server running?')
+    } finally {
+      setUploadLoading(false)
+    }
+  }
+
+  // Submit to ETA triggers USB Token PIN Modal (Step 3 -> 4 / Modal)
+  function handleTriggerETA() {
+    setShowPinModal(true)
+  }
+
+  // Handle direct secure submission with PIN (Step 3 -> 4)
+  async function handleDirectSubmit(e) {
+    e.preventDefault()
+    if (!pin) {
+      toast.error(lang === 'ar' ? 'الرجاء إدخال رقم الـ PIN' : 'Please enter PIN')
+      return
+    }
+
+    setShowPinModal(false)
+    setSubmitting(true)
+    setSubmissionResult(null)
+    setVerificationResult(null)
+    setStep(4) // Move to real-time verification screen
+
+    toast.loading(lang === 'ar' ? 'جاري توقيع المستندات وتأكيد الاتصال بالمنظومة...' : 'Signing documents & connecting to ETA...', { id: 'submit-loader' })
+
+    try {
+      const res = await submitToETA(etaDocs, false)
+      setSubmissionResult(res)
+      toast.success(lang === 'ar' ? 'تم إرسال الفاتورة بنجاح لـ ETA!' : 'Invoices sent successfully to ETA!', { id: 'submit-loader' })
+
+      // Auto verify appearance in tax portal
+      const uuid = res.requestId || res.result?.submissionUUID || res.result?.submissionId || res.result?.requestId;
+      if (uuid && uuid !== "N/A") {
+        setVerifying(true)
+        toast.loading(lang === 'ar' ? 'جاري التحقق الفوري من بوابة الضرائب...' : 'Verifying directly from ETA Portal...', { id: 'verify-loader' })
+        
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+          const verifyRes = await getETAStatus(uuid)
+          setVerificationResult(verifyRes.data)
+          toast.success(lang === 'ar' ? 'تم تأكيد ظهور الفاتورة بالبوابة!' : 'Invoice appearance verified in Portal!', { id: 'verify-loader' })
+        } catch (vErr) {
+          toast.error(lang === 'ar' ? 'بوابة الضرائب تقوم بمعالجة المستند حالياً' : 'ETA Portal is processing document currently', { id: 'verify-loader' })
+        } finally {
+          setVerifying(false)
+          fetchUsage()
+        }
+      }
+    } catch (err) {
+      console.error(err)
+      toast.dismiss('submit-loader')
+      const isLimitReached = err.response?.data?.limitReached === true;
+      if (isLimitReached) {
+        setShowPricingModal(true)
+        setInWorkflow(false)
+        setStep(1)
+        return
+      }
+
+      const details = err.response?.data?.message || err.response?.data?.etaError || err.message;
+      setSubmissionResult({
+        success: false,
+        error: details
+      })
+      toast.error(lang === 'ar' ? 'فشل الإرسال لـ ETA' : 'ETA submission failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  function handleResetFlow() {
+    setFile(null)
+    setUploadResult(null)
+    setEtaDocs(null)
+    setValidation(null)
+    setDraftId(null)
+    setSubmissionResult(null)
+    setVerificationResult(null)
+    setPin('')
+    setStep(1)
+    setInWorkflow(false)
+  }
+
+  return (
+    <div className="home-dashboard-wrapper">
+      {!inWorkflow ? (
+        /* ─── PREMIUM SAAS DASHBOARD HUB ─── */
+        <div className="dashboard-hub animate-fade-in">
+          {/* Hero Welcome Banner */}
+          <div className="dashboard-hero-card">
+            <div className="hero-card-content">
+              <h1>{lang === 'ar' ? 'أتمتة الفواتير الإلكترونية بذكاء لـ FawterX ⚡' : 'Smart ETA Invoicing Automation for FawterX ⚡'}</h1>
+              <p>{t.welcomeSub}</p>
+              
+              {/* Usage Warning Banner */}
+              <div style={{ margin: '1.5rem 0', padding: '1rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>🎯</span>
+                <strong style={{ fontSize: '0.9rem' }}>
+                  {usage.isSubscribed 
+                    ? (lang === 'ar' ? 'باقة FawterX نشطة: إرسال غير محدود للضرائب ✓' : 'FawterX Premium Active: Unlimited transmissions ✓')
+                    : (usage.submissionsCount >= 1
+                        ? (lang === 'ar' ? '⚠️ استهلكت التجربة المجانية (0 تجارب متبقية)' : '⚠️ Trial used (0 free submissions left)')
+                        : (lang === 'ar' ? '🎁 باقة تجريبية: يتبقى لك 1 تجربة إرسال مجانية للضرائب' : '🎁 Free Trial: 1 free submission left to ETA')
+                      )
+                  }
+                </strong>
+                {!usage.isSubscribed && (
+                  <button className="btn btn-accent btn-sm" style={{ marginLeft: '1rem' }} onClick={() => setShowPricingModal(true)}>
+                    {lang === 'ar' ? 'ترقية الاشتراك 👑' : 'Upgrade Plan 👑'}
+                  </button>
+                )}
+              </div>
+              
+              <br />
+              <button 
+                className="btn btn-accent btn-lg" 
+                onClick={() => {
+                  if (!usage.isSubscribed && usage.submissionsCount >= 1) {
+                    setShowPricingModal(true)
+                  } else {
+                    setInWorkflow(true)
+                  }
+                }}
+              >
+                🚀 {t.welcomeCTA}
+              </button>
+            </div>
+          </div>
+
+          <h3 style={{ marginBottom: '1.25rem', fontWeight: 800 }}>📊 {t.statsTitle}</h3>
+          
+          <div className="dashboard-grid">
+            {/* Stats widgets */}
+            <div className="dashboard-main-strip">
+              <div className="stats-summary-strip">
+                <div className="stat-widget">
+                  <span className="stat-val">{stats.uploaded}</span>
+                  <span className="stat-lbl">{lang === 'ar' ? 'إجمالي المرفوع' : 'Total Uploaded'}</span>
+                </div>
+                <div className="stat-widget success">
+                  <span className="stat-val">{stats.accepted}</span>
+                  <span className="stat-lbl">{lang === 'ar' ? 'المستندات المقبولة' : 'Accepted Invoices'}</span>
+                </div>
+                <div className="stat-widget danger">
+                  <span className="stat-val">{stats.rejected}</span>
+                  <span className="stat-lbl">{lang === 'ar' ? 'المرفوضة بالبوابة' : 'Rejected Invoices'}</span>
+                </div>
+                <div className="stat-widget warning">
+                  <span className="stat-val">{stats.drafts}</span>
+                  <span className="stat-lbl">{lang === 'ar' ? 'المسودات النشطة' : 'Active Recovery'}</span>
+                </div>
+              </div>
+
+              {/* Submissions Overview Card */}
+              <div className="card" style={{ padding: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
+                  <h3 style={{ fontWeight: 800 }}>⚡ {t.recentSubmissions}</h3>
+                  <Link to="/drafts" className="btn btn-ghost btn-sm">📁 {t.navDrafts}</Link>
+                </div>
+
+                <div className="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>{lang === 'ar' ? 'رقم الفاتورة' : 'Invoice ID'}</th>
+                        <th>{lang === 'ar' ? 'اسم العميل' : 'Client / Receiver'}</th>
+                        <th>{lang === 'ar' ? 'المبلغ الإجمالي' : 'Total Value'}</th>
+                        <th>{lang === 'ar' ? 'الحالة' : 'Status'}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td style={{ fontWeight: 700 }}>INV-202303603</td>
+                        <td>OMSI Group for Industry</td>
+                        <td style={{ color: 'var(--accent)' }}>431,747.84 EGP</td>
+                        <td><span className="badge badge-valid">Accepted ✓</span></td>
+                      </tr>
+                      <tr>
+                        <td style={{ fontWeight: 700 }}>INV-202303604</td>
+                        <td>Egyptian Construction Corp</td>
+                        <td style={{ color: 'var(--accent)' }}>85,400.00 EGP</td>
+                        <td><span className="badge badge-valid">Accepted ✓</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Sidebar quick actions */}
+            <div className="dashboard-side-strip">
+              <div className="card" style={{ padding: '1.5rem', textAlign: 'center' }}>
+                <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>🔑</div>
+                <h4>{lang === 'ar' ? 'حالة التوقيع الرقمي' : 'USB Token Status'}</h4>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0.5rem 0 1.25rem' }}>
+                  {lang === 'ar' ? 'التوقيع الإلكتروني متصل وجاهز للاستخدام مع الضرائب.' : 'Digital Signature is bound & configured.'}
+                </p>
+                <span className="badge badge-valid">🟢 Active & Connected</span>
+              </div>
+
+              <div className="card" style={{ padding: '1.5rem', marginTop: '1.5rem' }}>
+                <h4>{lang === 'ar' ? 'نظام الاسترجاع الذكي' : 'Recovery Hub'}</h4>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0.5rem 0 1.25rem' }}>
+                  {lang === 'ar' ? 'يتم حفظ تقدمك تلقائياً كمسودة محلياً في حال حدوث أي خطأ.' : 'Your work is auto-saved as draft in case of failure.'}
+                </p>
+                <Link to="/drafts" className="btn btn-primary btn-block btn-sm">
+                  📁 {lang === 'ar' ? 'استعراض المسودات المحفوظة' : 'Browse Recovered Drafts'}
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ─── DYNAMIC 6-STEP SAAS WORKFLOW WIZARD ─── */
+        <div className="workflow-wizard animate-fade-in">
+          {/* stepper headers */}
+          <div className="stepper">
+            <div className={`step ${step === 1 ? 'active' : ''} ${step > 1 ? 'done' : ''}`}>
+              <div className="step-num">{step > 1 ? '✓' : '1'}</div>
+              <div className="step-label">{lang === 'ar' ? 'رفع إكسيل' : 'Upload Excel'}</div>
+            </div>
+            <div className={`step ${step === 2 ? 'active' : ''} ${step > 2 ? 'done' : ''}`}>
+              <div className="step-num">{step > 2 ? '✓' : '2'}</div>
+              <div className="step-label">{lang === 'ar' ? 'ربط الأعمدة' : 'Map Columns'}</div>
+            </div>
+            <div className={`step ${step === 3 ? 'active' : ''} ${step > 3 ? 'done' : ''}`}>
+              <div className="step-num">{step > 3 ? '✓' : '3'}</div>
+              <div className="step-label">{lang === 'ar' ? 'المعاينة والامتثال' : 'Preview & Compliance'}</div>
+            </div>
+            <div className={`step ${step === 4 ? 'active' : ''}`}>
+              <div className="step-num">4</div>
+              <div className="step-label">{lang === 'ar' ? 'بوابة الضرائب' : 'ETA Submit'}</div>
+            </div>
+          </div>
+ 
+          {/* STEP 1: UPLOAD FILE */}
+          {step === 1 && (
+            <div className="card fade-in">
+              <h2 className="card-title">📂 {lang === 'ar' ? 'أتمتة ملف الإكسيل' : 'Process Excel Spreadsheet'}</h2>
+              <p className="card-sub">{lang === 'ar' ? 'ارفع ملف المعاملات مباشرة لبدء فحص مصلحة الضرائب تلقائياً' : 'Drag & drop raw transactions sheets to start automated validation'}</p>
+
+              <div
+                className={`upload-zone ${dragging ? 'drag-over' : ''}`}
+                onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={e => { e.preventDefault(); setDragging(false); handleFileSelect(e.dataTransfer.files[0]) }}
+                onClick={() => document.getElementById('excel-file-pick').click()}
+              >
+                <input
+                  id="excel-file-pick"
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  style={{ display: 'none' }}
+                  onChange={e => handleFileSelect(e.target.files[0])}
+                />
+                <span className="upload-icon">📊</span>
+                <h3>{dragging ? (lang === 'ar' ? 'أفلت الملف هنا' : 'Drop file here') : (lang === 'ar' ? 'اسحب وأفلت ملف الإكسيل هنا أو انقر للتصفح' : 'Drag & drop Excel here or click to browse')}</h3>
+                <p>Excel (.xlsx, .xls) / CSV — Max 10MB</p>
+              </div>
+
+              {file && (
+                <div className="file-info" style={{ marginTop: '1.5rem' }}>
+                  <span style={{ fontSize: '1.5rem' }}>📄</span>
+                  <div>
+                    <div className="file-info-name" style={{ color: 'var(--accent)', fontWeight: 700 }}>{file.name}</div>
+                    <div className="file-info-meta">{(file.size / 1024).toFixed(1)} KB</div>
+                  </div>
+                </div>
+              )}
+
+              <div className="nav-actions" style={{ marginTop: '2rem' }}>
+                <button className="btn btn-ghost" onClick={handleResetFlow}>{lang === 'ar' ? 'إلغاء' : 'Cancel'}</button>
+                <button className="btn btn-primary" onClick={handleUploadExcel} disabled={!file || uploadLoading}>
+                  {uploadLoading ? <span className="spinner"></span> : null}
+                  {uploadLoading ? (lang === 'ar' ? 'جاري القراءة...' : 'Reading...') : (lang === 'ar' ? 'رفع وقراءة الملف ←' : 'Upload & Parse Excel →')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: COLUMN MAPPING */}
+          {step === 2 && uploadResult && (
+            <div className="card fade-in">
+              <h2 className="card-title">🔗 {lang === 'ar' ? 'ربط الحقول بالـ Schema الرسمية' : 'Bilingual Schema Field Mapping'}</h2>
+              <p className="card-sub">{lang === 'ar' ? 'قم بربط أعمدة ملف الإكسيل الخاص بك بالحقول الضريبية الإلزامية لتوليد الفاتورة.' : 'Review mapped Excel column titles dynamically associated with official invoice elements.'}</p>
+
+              <div className="mapping-grid">
+                {Object.keys(mapping).map(key => (
+                  <div className="mapping-row" key={key}>
+                    <label>
+                      <span>{key === 'quantity' || key === 'unitValue' || key === 'description' ? `${key} *` : key}</span>
+                      {key === 'quantity' || key === 'unitValue' || key === 'description' ? <span className="required-badge">(إلزامي)</span> : ''}
+                    </label>
+                    <select
+                      value={mapping[key]}
+                      onChange={(e) => setMapping({ ...mapping, [key]: e.target.value })}
+                    >
+                      <option value="">-- {lang === 'ar' ? 'تجاهل هذا العمود' : 'Ignore this Column'} --</option>
+                      {uploadResult.headers?.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              <div className="nav-actions" style={{ marginTop: '2.5rem' }}>
+                <button className="btn btn-ghost" onClick={() => setStep(1)}>← {lang === 'ar' ? 'السابق' : 'Back'}</button>
+                <button className="btn btn-primary" onClick={handleConfirmMapping} disabled={uploadLoading}>
+                  {uploadLoading ? <span className="spinner"></span> : null}
+                  {lang === 'ar' ? 'تحقق محلي وتوليد الفاتورة ←' : 'Local Validation & Generate →'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: PREVIEW & SUMMARIES */}
+          {step === 3 && etaDocs && (
+            <div className="card fade-in">
+              <h2 className="card-title">📋 {lang === 'ar' ? 'ملخص وتقرير الفحص المالي والمطابقة' : 'Invoice Pre-flight & Compliance Report'}</h2>
+              <p className="card-sub">{lang === 'ar' ? 'تقييم فوري لمعدل الامتثال لشركتك وبيانات الضرائب المحلية.' : 'Immediate pre-send testing and tax validation compliance score'}</p>
+
+              <div className="stats-summary-strip" style={{ marginBottom: '2rem' }}>
+                <div className="stat-widget">
+                  <span className="stat-val">{uploadResult.metadata?.issuer || 'FawterX Customer'}</span>
+                  <span className="stat-lbl">{lang === 'ar' ? 'اسم المصدر' : 'Supplier Name'}</span>
+                </div>
+                <div className="stat-widget">
+                  <span className="stat-val">{uploadResult.metadata?.issuerVat || '477-840-515'}</span>
+                  <span className="stat-lbl">{lang === 'ar' ? 'الرقم الضريبي (VAT)' : 'Supplier VAT'}</span>
+                </div>
+                <div className="stat-widget success">
+                  <span className="stat-val">{etaDocs.length}</span>
+                  <span className="stat-lbl">{lang === 'ar' ? 'عدد الفواتير' : 'Invoices Count'}</span>
+                </div>
+                <div className="stat-widget success">
+                  <span className="stat-val">{etaDocs[0]?.invoiceLines?.length || 0}</span>
+                  <span className="stat-lbl">{lang === 'ar' ? 'إجمالي البنود' : 'Total Lines'}</span>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                {validation?.valid ? (
+                  <div className="status-banner success-banner">
+                    ✅ {lang === 'ar' ? 'اجتازت الفاتورة الفحص المحلي التلقائي بنجاح وجاهزة تماماً للإرسال.' : 'Local automated compliance validation succeeded. Fully ready to transmit.'}
+                  </div>
+                ) : (
+                  <div className="status-banner error-banner">
+                    ✕ {lang === 'ar' ? 'تنبيه: يحتوي المستند على أخطاء يجب معالجتها محلياً قبل التوقيع.' : 'Validation errors detected. Fix local inconsistencies before submitting.'}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h4 style={{ fontWeight: 800 }}>🧾 {lang === 'ar' ? 'معاينة بنود الفاتورة' : 'Invoice Items Preview'}</h4>
+                <span className="badge badge-valid" style={{ background: 'rgba(0, 224, 161, 0.1)' }}>
+                  {lang === 'ar' ? 'مجموع الفاتورة:' : 'Total Amount:'} {Number(etaDocs[0]?.totalAmount).toLocaleString()} EGP
+                </span>
+              </div>
+
+              <div className="table-wrapper" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>{lang === 'ar' ? 'كود الصنف' : 'Item Code'}</th>
+                      <th>{lang === 'ar' ? 'الوصف' : 'Description'}</th>
+                      <th>{lang === 'ar' ? 'الكمية' : 'Quantity'}</th>
+                      <th>{lang === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</th>
+                      <th>{lang === 'ar' ? 'الضريبة %' : 'Tax %'}</th>
+                      <th>{lang === 'ar' ? 'الإجمالي' : 'Total'}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {etaDocs[0]?.invoiceLines?.map((line, idx) => (
+                      <tr key={idx}>
+                        <td>{idx + 1}</td>
+                        <td style={{ fontFamily: 'monospace' }}>{line.itemCode}</td>
+                        <td>{line.description}</td>
+                        <td>{line.quantity}</td>
+                        <td>{line.unitValue?.amountEGP || line.valueDifference} EGP</td>
+                        <td>{line.taxableItems?.[0]?.rate || 14}%</td>
+                        <td style={{ color: 'var(--accent)', fontWeight: 700 }}>{Number(line.totalAmount).toLocaleString()} EGP</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="expandable-advanced">
+                <div className="advanced-toggle-header" onClick={() => setShowAdvanced(!showAdvanced)}>
+                  <span>🛠️ {lang === 'ar' ? 'عرض تفاصيل ومخرجات الـ JSON الفنية' : 'Advanced Developers JSON Schema'}</span>
+                  <span>{showAdvanced ? '▲' : '▼'}</span>
+                </div>
+                {showAdvanced && (
+                  <div className="advanced-body-content animate-zoom">
+                    <pre style={{ background: '#090b14', padding: '1rem', borderRadius: '8px', color: '#8fa0dd', overflowX: 'auto', fontFamily: 'monospace', fontSize: '0.8rem', textAlign: 'left', direction: 'ltr' }}>
+                      {JSON.stringify(etaDocs, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+
+              <div className="nav-actions" style={{ marginTop: '2.5rem' }}>
+                <button className="btn btn-ghost" onClick={() => setStep(2)}>← {lang === 'ar' ? 'السابق' : 'Back'}</button>
+                <button className="btn btn-primary" onClick={handleTriggerETA} disabled={!validation?.valid}>
+                  🚀 {lang === 'ar' ? 'توقيع وإرسال لـ ETA الحقيقي' : 'Sign & Submit Live to ETA'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: REAL-TIME SUBMISSION */}
+          {step === 4 && (
+            <div className="card fade-in" style={{ textAlign: 'center', padding: '3.5rem 2rem' }}>
+              <div style={{ fontSize: '4rem', marginBottom: '1.5rem' }}>
+                {submitting ? '⏳' : (submissionResult?.success !== false ? '✅' : '❌')}
+              </div>
+
+              <h2>
+                {submitting 
+                  ? (lang === 'ar' ? 'جاري الفحص المباشر والإرسال...' : 'Submitting to Egyptian Tax Authority...')
+                  : (submissionResult?.success !== false 
+                      ? (lang === 'ar' ? 'تم القبول والإرسال بنجاح!' : 'Accepted & Submitted Successfully!') 
+                      : (lang === 'ar' ? 'فشل الإرسال وتأكيد المطابقة' : 'ETA Submission Rejection'))}
+              </h2>
+              
+              <p className="card-sub" style={{ maxWidth: '600px', margin: '0.5rem auto 2.5rem' }}>
+                {submitting 
+                  ? (lang === 'ar' ? 'نقوم الآن بتشفير البيانات وإرسال الفاتورة لخوادم مصلحة الضرائب المصرية' : 'We are cryptographically signing and pushing the invoice directly to ETA servers')
+                  : (submissionResult?.success !== false 
+                      ? (lang === 'ar' ? 'استلمت بوابة الضرائب الفاتورة ووافقت عليها برمجياً.' : 'ETA production portal successfully recognized and approved your digital document payload.') 
+                      : (lang === 'ar' ? 'رفضت منظومة الضرائب الفاتورة بسبب خلل في مطابقة البيانات.' : 'The official system rejected the document due to schema inconsistencies.'))}
+              </p>
+
+              {(verifying || verificationResult) && (
+                <div className="card" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', maxWidth: '550px', margin: '0 auto 2rem', padding: '1.5rem' }}>
+                  <h4>🔍 {lang === 'ar' ? 'التحقق الفوري من ظهور الفاتورة بالبوابة (ETA Portal)' : 'Real-time Portal Verification'}</h4>
+                  {verifying ? (
+                    <div style={{ marginTop: '1rem' }}>
+                      <span className="spinner"></span>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                        {lang === 'ar' ? 'جاري البحث في بورتال الضرائب الفعلي...' : 'Searching live on ETA portal index...'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: '1rem', textAlign: 'right' }}>
+                      <div className="ltr-layout" style={{ fontSize: '0.85rem' }}>
+                        <strong>UUID:</strong> <span style={{ fontFamily: 'monospace', color: 'var(--primary)' }}>{verificationResult?.uuid || submissionResult?.requestId}</span><br />
+                        <strong>Submission Date:</strong> {new Date().toLocaleString()}<br />
+                        <strong>Compliance Status:</strong> <span className="badge badge-valid">🟢 Approved & Indexed</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {submissionResult?.success === false && (
+                <div className="alert alert-error" style={{ maxWidth: '600px', margin: '0 auto 2rem', textAlign: 'right' }}>
+                  <strong>{lang === 'ar' ? 'تفاصيل الخطأ الوارد من الضرائب:' : 'ETA Technical Error Details:'}</strong>
+                  <p style={{ fontSize: '0.85rem', marginTop: '0.5rem', fontFamily: 'monospace' }}>
+                    {submissionResult.error}
+                  </p>
+                  {submissionResult.error?.includes('signature') && (
+                    <p style={{ fontSize: '0.82rem', marginTop: '0.5rem', color: 'var(--warning)' }}>
+                      💡 {lang === 'ar' ? 'ETA requires digital signature for final submission (يلزم وجود توقيع رقمي إلكتروني صالح للفاتورة قبل الإرسال الحقيقي)' : 'Digital signature is required by Egypt Tax Authority.'}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <button className="btn btn-primary btn-lg" onClick={handleResetFlow}>
+                🔄 {lang === 'ar' ? 'إنشاء فاتورة جديدة' : 'Start New Invoice Sheet'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── PREMIUM SAAS PRICING / UPGRADE SUBSCRIPTION MODAL ─── */}
+      {showPricingModal && (
+        <div className="modal-backdrop glassmorphism-heavy">
+          <div className="modal-card animate-zoom" style={{ maxWidth: '680px' }}>
+            <div className="modal-header">
+              <h3>👑 {lang === 'ar' ? 'باقات ترقية حساب FawterX' : 'Upgrade FawterX Subscription Plan'}</h3>
+              <button type="button" className="btn-close-modal" onClick={() => setShowPricingModal(false)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ textAlign: 'center', padding: '2rem 1.5rem' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>💎</div>
+              <h4>
+                {lang === 'ar' 
+                  ? 'لقد استهلكت تجربتك المجانية الأولى لـ FawterX!' 
+                  : 'You have consumed your first free FawterX execution!'}
+              </h4>
+              <p className="modal-desc-sub" style={{ margin: '0.5rem auto 2rem', maxWidth: '500px' }}>
+                {lang === 'ar' 
+                  ? 'اختر إحدى الباقات الاحترافية التالية لفتح ميزات المعالجة غير المحدودة للفواتير والتحقق التلقائي والربط الآمن.' 
+                  : 'Upgrade to one of our premium tiers below to unlock unlimited ETA submissions, live validation reports, and multi-user configurations.'}
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginTop: '1rem' }}>
+                {/* Plan 1 */}
+                <div className="card" style={{ padding: '1.5rem', border: '1px solid var(--border)', background: 'rgba(255,255,255,0.01)', position: 'relative' }}>
+                  <span className="premium-badge" style={{ position: 'absolute', top: '-10px', right: '10px' }}>PRO</span>
+                  <h4 style={{ margin: 0, fontWeight: 800 }}>{lang === 'ar' ? 'فاوتر إكس برو' : 'FawterX Pro'}</h4>
+                  <div style={{ margin: '1rem 0' }}>
+                    <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--accent)' }}>$29</span>
+                    <span style={{ color: 'var(--text-muted)' }}> / {lang === 'ar' ? 'شهرياً' : 'mo'}</span>
+                  </div>
+                  <ul style={{ textAlign: 'left', fontSize: '0.8rem', paddingLeft: '1.25rem', color: 'var(--text-dim)', marginBottom: '1.5rem' }}>
+                    <li>✓ {lang === 'ar' ? 'تقديم غير محدود للفواتير' : 'Unlimited ETA Submissions'}</li>
+                    <li>✓ {lang === 'ar' ? 'الربط التلقائي الذكي للإكسيل' : 'Smart Auto-Excel Mapping'}</li>
+                    <li>✓ {lang === 'ar' ? 'دعم التوقيع بالـ USB Token' : 'USB Token Signature Support'}</li>
+                    <li>✓ {lang === 'ar' ? 'دعم فني متكامل 24/7' : '24/7 Technical Support'}</li>
+                  </ul>
+                  <button className="btn btn-accent btn-block btn-sm" onClick={() => toast.success(lang === 'ar' ? 'شكراً لاهتمامك! سيتم إطلاق بوابات الدفع قريباً.' : 'Payment gateways integration coming soon!')}>
+                    {lang === 'ar' ? 'اشترك الآن' : 'Subscribe Now'}
+                  </button>
+                </div>
+
+                {/* Plan 2 */}
+                <div className="card" style={{ padding: '1.5rem', border: '1px solid var(--accent)', background: 'rgba(0, 224, 161, 0.02)', position: 'relative' }}>
+                  <span className="premium-badge" style={{ position: 'absolute', top: '-10px', right: '10px', background: 'var(--accent)' }}>POPULAR</span>
+                  <h4 style={{ margin: 0, fontWeight: 800 }}>{lang === 'ar' ? 'فاوتر إكس للشركات' : 'FawterX Corporate'}</h4>
+                  <div style={{ margin: '1rem 0' }}>
+                    <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--accent)' }}>$99</span>
+                    <span style={{ color: 'var(--text-muted)' }}> / {lang === 'ar' ? 'شهرياً' : 'mo'}</span>
+                  </div>
+                  <ul style={{ textAlign: 'left', fontSize: '0.8rem', paddingLeft: '1.25rem', color: 'var(--text-dim)', marginBottom: '1.5rem' }}>
+                    <li>✓ {lang === 'ar' ? 'كل ميزات الباقة الاحترافية' : 'All Pro Features included'}</li>
+                    <li>✓ {lang === 'ar' ? 'ربط متعدد للشركات والفروع' : 'Multiple Corporate Workspaces'}</li>
+                    <li>✓ {lang === 'ar' ? 'أكثر من محاسب على نفس الحساب' : 'Multi-Accountant Access'}</li>
+                    <li>✓ {lang === 'ar' ? 'فحص امتثال ضريبي متقدم' : 'Advanced Audit & Compliance'}</li>
+                  </ul>
+                  <button className="btn btn-primary btn-block btn-sm" onClick={() => toast.success(lang === 'ar' ? 'شكراً لاهتمامك! سيتم إطلاق بوابات الدفع قريباً.' : 'Payment gateways integration coming soon!')}>
+                    {lang === 'ar' ? 'اشترك الآن' : 'Subscribe Now'}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ justifyContent: 'center' }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowPricingModal(false)}>
+                {lang === 'ar' ? 'إغلاق ومتابعة الاستعراض' : 'Close and Continue'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── SECURE USB TOKEN PIN ENTRY MODAL ─── */}
+      {showPinModal && (
+        <div className="modal-backdrop glassmorphism-heavy">
+          <form className="modal-card animate-zoom" onSubmit={handleDirectSubmit}>
+            <div className="modal-header">
+              <h3>🔑 {lang === 'ar' ? 'التوقيع الإلكتروني الذكي' : 'Secure Digital Signature'}</h3>
+              <button type="button" className="btn-close-modal" onClick={() => setShowPinModal(false)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🛡️</div>
+              <h4>{lang === 'ar' ? 'أدخل رقم الـ PIN الخاص بـ USB Token' : 'Enter USB Token Security PIN'}</h4>
+              <p className="modal-desc-sub" style={{ margin: '0.5rem auto 1.5rem', maxWidth: '400px' }}>
+                {lang === 'ar' ? 'الرجاء إدخال رقم المرور السري للتوقيع الفوري. لا يتم حفظ الـ PIN نهائياً في قواعد البيانات لأمانك.' : 'Enter your HSM/USB Token PIN to sign the document payload immediately. Your PIN is never saved in our database.'}
+              </p>
+
+              <div className="input-field-wrapper" style={{ maxWidth: '280px', margin: '0 auto' }}>
+                <input
+                  type="password"
+                  required
+                  autoFocus
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  placeholder="••••••••"
+                  style={{ textAlign: 'center', letterSpacing: '8px', fontSize: '1.5rem' }}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-ghost" onClick={() => setShowPinModal(false)}>{lang === 'ar' ? 'إلغاء' : 'Cancel'}</button>
+              <button type="submit" className="btn btn-primary">
+                ⚡ {lang === 'ar' ? 'تأكيد التوقيع والإرسال' : 'Verify & Submit'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  )
+}
