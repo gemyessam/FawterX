@@ -31,15 +31,11 @@ export default function Home() {
 
   // ETA mapping fields constant
   const ETA_FIELDS = [
-    { key: 'invoiceNumber', labelAr: 'رقم الفاتورة (Invoice No)', labelEn: 'Invoice No', required: false },
-    { key: 'receiverName',  labelAr: 'اسم المشتري (Buyer Name)', labelEn: 'Buyer Name', required: false },
-    { key: 'receiverId',    labelAr: 'رقم تسجيل المشتري (Buyer ID/VAT)', labelEn: 'Buyer ID/VAT', required: false },
     { key: 'codeType',      labelAr: 'نوع الكود (Code Type EGS/GS1)', labelEn: 'Code Type EGS/GS1', required: false },
     { key: 'itemCode',      labelAr: 'كود المنتج (Item Code)', labelEn: 'Item Code', required: true },
     { key: 'internalCode',  labelAr: 'الكود الداخلي (Internal Code)', labelEn: 'Internal Code', required: false },
     { key: 'description',   labelAr: 'وصف المنتج (Item Description)', labelEn: 'Item Description', required: true },
     { key: 'quantity',      labelAr: 'الكمية (Quantity)', labelEn: 'Quantity', required: true },
-    { key: 'unitType',      labelAr: 'وحدة القياس (Unit)', labelEn: 'Unit', required: false },
     { key: 'currency',      labelAr: 'العملة (Currency)', labelEn: 'Currency', required: false },
     { key: 'unitValue',     labelAr: 'سعر الوحدة بالجنيه (Price EGP)', labelEn: 'Price EGP', required: true },
     { key: 'taxPercent',    labelAr: 'نسبة الضريبة % (Tax %)', labelEn: 'Tax %', required: false },
@@ -483,29 +479,68 @@ export default function Home() {
           {/* STEP 2: COLUMN MAPPING */}
           {step === 2 && uploadResult && (
             <div className="card fade-in">
-              <h2 className="card-title">🔗 {lang === 'ar' ? 'ربط الحقول بالـ Schema الرسمية' : 'Bilingual Schema Field Mapping'}</h2>
+              <h2 className="card-title">🔗 {lang === 'ar' ? 'ربط الأعمدة بالـ Schema الرسمية' : 'Schema Field Mapping'}</h2>
               <p className="card-sub">{lang === 'ar' ? 'قم بربط أعمدة ملف الإكسيل الخاص بك بالحقول الضريبية الإلزامية لتوليد الفاتورة.' : 'Review mapped Excel column titles dynamically associated with official invoice elements.'}</p>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-                {ETA_FIELDS.map(field => (
-                  <div key={field.key} style={{ background: 'var(--bg-lighter)', padding: '1rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
-                    <div style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
-                      <span>{lang === 'ar' ? field.labelAr : field.labelEn}</span>
-                      {field.required && <span style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>{lang === 'ar' ? 'إلزامي *' : 'Required *'}</span>}
-                    </div>
-                    <select
-                      className="input"
-                      style={{ width: '100%', padding: '0.5rem', fontSize: '0.85rem' }}
-                      value={mapping[field.key] || ''}
-                      onChange={(e) => setMapping({ ...mapping, [field.key]: e.target.value })}
-                    >
-                      <option value="">-- {lang === 'ar' ? 'تجاهل هذا العمود' : 'Ignore this Column'} --</option>
-                      {uploadResult.headers?.map(h => (
-                        <option key={h} value={h}>{h}</option>
-                      ))}
-                    </select>
+              <div className="mapping-layout-container">
+                {/* Left: Mapping grid cards */}
+                <div>
+                  <h3 style={{ marginBottom: '1.25rem', fontSize: '1.1rem', color: 'var(--primary)', textAlign: 'right' }}>
+                    {lang === 'ar' ? '🛠️ ربط أعمدة الجدول:' : '🛠️ Table Field Mapping:'}
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1rem' }}>
+                    {ETA_FIELDS.map(field => (
+                      <div key={field.key} style={{ background: 'var(--bg-lighter)', padding: '1rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                        <div style={{ marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+                          <span>{lang === 'ar' ? field.labelAr : field.labelEn}</span>
+                          {field.required && <span style={{ color: 'var(--danger)', fontSize: '0.75rem' }}>{lang === 'ar' ? 'إلزامي *' : 'Required *'}</span>}
+                        </div>
+                        <select
+                          className="input"
+                          style={{ width: '100%', padding: '0.5rem', fontSize: '0.8rem' }}
+                          value={mapping[field.key] || ''}
+                          onChange={(e) => setMapping({ ...mapping, [field.key]: e.target.value })}
+                        >
+                          <option value="">-- {lang === 'ar' ? 'تجاهل هذا العمود' : 'Ignore this Column'} --</option>
+                          {uploadResult.headers?.map(h => (
+                            <option key={h} value={h}>{h}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+
+                {/* Right: Extracted Document & Buyer Metadata Box */}
+                <div className="card" style={{ padding: '1.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)', alignSelf: 'start', borderRadius: 'var(--radius)' }}>
+                  <h3 style={{ marginBottom: '1.25rem', fontSize: '1.05rem', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'right' }}>
+                    <span>📄</span>
+                    {lang === 'ar' ? 'بيانات الفاتورة والعميل المستخرجة' : 'Extracted Invoice & Buyer Info'}
+                  </h3>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', textAlign: 'right' }}>
+                    <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>{lang === 'ar' ? 'رقم الفاتورة' : 'Invoice Number'}</span>
+                      <strong style={{ fontSize: '1.1rem', color: 'var(--text)', fontFamily: 'monospace' }}>{uploadResult.metadata?.internalID || 'INV-XXXX'}</strong>
+                    </div>
+                    <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>{lang === 'ar' ? 'اسم المشتري' : 'Buyer Name'}</span>
+                      <strong style={{ fontSize: '0.95rem', color: 'var(--accent)' }}>{uploadResult.metadata?.receiver || uploadResult.metadata?.receiverName || 'N/A'}</strong>
+                    </div>
+                    <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>{lang === 'ar' ? 'الرقم الضريبي للمشتري' : 'Buyer VAT/ID'}</span>
+                      <strong style={{ fontSize: '0.95rem', color: 'var(--text)', fontFamily: 'monospace' }}>{uploadResult.metadata?.receiverVat || uploadResult.metadata?.receiverId || 'N/A'}</strong>
+                    </div>
+                    <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>{lang === 'ar' ? 'تاريخ الإصدار' : 'Issue Date'}</span>
+                      <strong style={{ fontSize: '0.9rem', color: 'var(--text)' }}>{uploadResult.metadata?.dateTimeIssued ? new Date(uploadResult.metadata?.dateTimeIssued).toLocaleString() : 'N/A'}</strong>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>{lang === 'ar' ? 'اسم الشركة البائعة (المصدر)' : 'Seller Company Name'}</span>
+                      <strong style={{ fontSize: '0.9rem', color: 'var(--text)' }}>{uploadResult.metadata?.issuer || 'الشركة العربية المتميزة'}</strong>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="nav-actions" style={{ marginTop: '2.5rem' }}>
