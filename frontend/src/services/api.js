@@ -19,10 +19,17 @@ api.interceptors.request.use(async (config) => {
     }
 
     const settings = JSON.parse(localStorage.getItem('companySettings') || '{}')
-    if (settings.clientId && !config.headers['X-ETA-Client-Id']) {
+    
+    // Case-insensitive header existence check to prevent Axios case normalization from bypassing the check
+    const hasHeader = (name) => {
+      const lower = name.toLowerCase()
+      return Object.keys(config.headers || {}).some(k => k.toLowerCase() === lower)
+    }
+
+    if (settings.clientId && !hasHeader('X-ETA-Client-Id')) {
       config.headers['X-ETA-Client-Id'] = settings.clientId
     }
-    if (settings.clientSecret1 && !config.headers['X-ETA-Client-Secret']) {
+    if (settings.clientSecret1 && !hasHeader('X-ETA-Client-Secret')) {
       config.headers['X-ETA-Client-Secret'] = settings.clientSecret1
     }
   } catch (e) {
