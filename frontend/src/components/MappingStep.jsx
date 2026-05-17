@@ -2,17 +2,20 @@ import { useState, useEffect } from 'react'
 import { previewInvoice } from '../services/api'
 import toast from 'react-hot-toast'
 
-// حقول ETA المطلوبة للـ Mapping حسب طلب المستخدم
+// حقول ETA للـ Mapping
 const ETA_FIELDS = [
+  { key: 'invoiceNumber', label: 'رقم الفاتورة (Invoice No)', required: false },
+  { key: 'receiverName',  label: 'اسم المشتري (Buyer Name)', required: false },
+  { key: 'receiverId',    label: 'رقم تسجيل المشتري (Buyer ID/VAT)', required: false },
   { key: 'codeType',      label: 'نوع الكود (Code Type EGS/GS1)', required: false },
   { key: 'itemCode',      label: 'كود المنتج (Item Code)', required: true },
   { key: 'internalCode',  label: 'الكود الداخلي (Internal Code)', required: false },
   { key: 'description',   label: 'وصف المنتج (Item Description)', required: true },
   { key: 'quantity',      label: 'الكمية (Quantity)', required: true },
-  { key: 'unitType',      label: 'وحدة القياس (Quantity Measurement)', required: true },
-  { key: 'currency',      label: 'العملة (Currency)', required: true },
-  { key: 'unitValue',     label: 'سعر الوحدة بالجنيه (Unit Price EGP)', required: true },
-  { key: 'taxPercent',    label: 'نسبة الضريبة % (Tax)', required: true },
+  { key: 'unitType',      label: 'وحدة القياس (Unit)', required: false },
+  { key: 'currency',      label: 'العملة (Currency)', required: false },
+  { key: 'unitValue',     label: 'سعر الوحدة بالجنيه (Price EGP)', required: true },
+  { key: 'taxPercent',    label: 'نسبة الضريبة % (Tax %)', required: false },
 ]
 
 export default function MappingStep({ uploadResult, onConfirm, onBack }) {
@@ -114,36 +117,26 @@ export default function MappingStep({ uploadResult, onConfirm, onBack }) {
         </div>
       )}
 
-      <div className="table-wrapper" style={{ marginBottom: '2rem' }}>
-        <table>
-          <thead>
-            <tr>
-              <th>حقل ETA (النظام)</th>
-              <th>العمود المقابل في ملفك</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ETA_FIELDS.map(field => (
-              <tr key={field.key}>
-                <td>
-                  {field.label} {field.required && <span style={{ color: 'var(--danger)' }}>*</span>}
-                </td>
-                <td>
-                  <select
-                    className="input"
-                    value={mapping[field.key] || ''}
-                    onChange={(e) => handleSelect(field.key, e.target.value)}
-                  >
-                    <option value="">-- اختر عمود --</option>
-                    {headers.map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+        {ETA_FIELDS.map(field => (
+          <div key={field.key} style={{ background: 'var(--bg-lighter)', padding: '1rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+            <div style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+              <span>{field.label}</span>
+              {field.required && <span style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>إلزامي *</span>}
+            </div>
+            <select
+              className="input"
+              style={{ width: '100%', padding: '0.5rem', fontSize: '0.85rem' }}
+              value={mapping[field.key] || ''}
+              onChange={(e) => handleSelect(field.key, e.target.value)}
+            >
+              <option value="">-- تجاهل هذا العمود --</option>
+              {headers.map(h => (
+                <option key={h} value={h}>{h}</option>
+              ))}
+            </select>
+          </div>
+        ))}
       </div>
 
       <div className="nav-actions">

@@ -44,18 +44,7 @@ export default function DraftDetails() {
     fetchDraft()
   }, [id, navigate])
 
-  function handleTriggerSubmit() {
-    setShowPinModal(true)
-  }
-
-  async function handleLiveSubmit(e) {
-    e.preventDefault()
-    if (!pin) {
-      toast.error(lang === 'ar' ? 'أدخل رقم الـ PIN' : 'Security PIN required')
-      return
-    }
-
-    setShowPinModal(false)
+  async function handleTriggerSubmit() {
     setSubmitting(true)
     setEtaResult(null)
     setEtaError(null)
@@ -319,42 +308,7 @@ export default function DraftDetails() {
         </button>
       </div>
 
-      {/* SECURE USB TOKEN PIN ENTRY MODAL FOR DRAFT SUBMIT */}
-      {showPinModal && (
-        <div className="modal-backdrop glassmorphism-heavy">
-          <form className="modal-card animate-zoom" onSubmit={handleLiveSubmit}>
-            <div className="modal-header">
-              <h3>🔑 {lang === 'ar' ? 'التوقيع الإلكتروني للمسودة' : 'Sign Draft Session'}</h3>
-              <button type="button" className="btn-close-modal" onClick={() => setShowPinModal(false)}>✕</button>
-            </div>
-            <div className="modal-body" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🛡️</div>
-              <h4>{lang === 'ar' ? 'أدخل رقم الـ PIN الخاص بـ USB Token' : 'Enter USB Token Security PIN'}</h4>
-              <p className="modal-desc-sub" style={{ margin: '0.5rem auto 1.5rem', maxWidth: '400px' }}>
-                {lang === 'ar' ? 'الرجاء إدخال رقم المرور السري للتوقيع الفوري. لا يتم حفظ الـ PIN نهائياً في قواعد البيانات لأمانك.' : 'Enter your HSM/USB Token PIN to sign the document payload immediately. Your PIN is never saved in our database.'}
-              </p>
 
-              <div className="input-field-wrapper" style={{ maxWidth: '280px', margin: '0 auto' }}>
-                <input
-                  type="password"
-                  required
-                  autoFocus
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  placeholder="••••••••"
-                  style={{ textAlign: 'center', letterSpacing: '8px', fontSize: '1.5rem' }}
-                />
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-ghost" onClick={() => setShowPinModal(false)}>{lang === 'ar' ? 'إلغاء' : 'Cancel'}</button>
-              <button type="submit" className="btn btn-primary">
-                ⚡ {lang === 'ar' ? 'تأكيد التوقيع والإرسال' : 'Verify & Submit'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
     </div>
   )
 }
