@@ -20,22 +20,23 @@ api.interceptors.request.use(async (config) => {
 
     const settings = JSON.parse(localStorage.getItem('companySettings') || '{}')
     
-    // Case-insensitive header existence check to prevent Axios case normalization from bypassing the check
-    const hasHeader = (name) => {
-      if (!config.headers) return false
-      // Axios v1 AxiosHeaders has a .has() method
-      if (typeof config.headers.has === 'function') {
-        return config.headers.has(name)
+    // Case-insensitive header value extraction to prevent Axios case normalization from bypassing checks
+    const getHeader = (name) => {
+      if (!config.headers) return null
+      // Axios v1 AxiosHeaders has a .get() method
+      if (typeof config.headers.get === 'function') {
+        return config.headers.get(name)
       }
       const lower = name.toLowerCase()
-      return Object.keys(config.headers).some(k => k.toLowerCase() === lower)
+      const foundKey = Object.keys(config.headers).find(k => k.toLowerCase() === lower)
+      return foundKey ? config.headers[foundKey] : null
     }
 
-    if (settings.clientId && !hasHeader('X-ETA-Client-Id')) {
+    if (settings.clientId && !getHeader('X-ETA-Client-Id')) {
       config.headers['X-ETA-Client-Id'] = settings.clientId
     }
     const activeSecret = settings.clientSecret1 || settings.clientSecret2
-    if (activeSecret && !hasHeader('X-ETA-Client-Secret')) {
+    if (activeSecret && !getHeader('X-ETA-Client-Secret')) {
       config.headers['X-ETA-Client-Secret'] = activeSecret
     }
   } catch (e) {
@@ -68,22 +69,37 @@ export async function previewInvoice(mapping, rows, metadata = {}) {
 
 /** اختبار الاتصال بـ ETA */
 export async function testETAAuth(customSettings = null) {
-  if (!customSettings) return { success: false }
+  if (!customSettings) {
+    throw new Error('❌ لا توجد إعدادات لاختبارها')
+  }
+
+  const { clientId, clientSecret1, clientSecret2 } = customSettings
+
+  if (!clientId || !clientId.trim()) {
+    throw new Error('❌ يرجى إدخال معرف العميل (Client ID) أولاً!')
+  }
+
+  const hasSecret1 = clientSecret1 && clientSecret1.trim()
+  const hasSecret2 = clientSecret2 && clientSecret2.trim()
+
+  if (!hasSecret1 && !hasSecret2) {
+    throw new Error('❌ يجب إدخال السر الأول (Secret 1) أو السر الثاني (Secret 2) لاختبار الاتصال!')
+  }
 
   // 1. Test Client Secret 1 if provided
-  if (customSettings.clientSecret1) {
+  if (hasSecret1) {
     const headers = {
-      'X-ETA-Client-Id': customSettings.clientId,
-      'X-ETA-Client-Secret': customSettings.clientSecret1
+      'X-ETA-Client-Id': clientId,
+      'X-ETA-Client-Secret': clientSecret1
     }
     await api.get('/eta/test-auth', { headers })
   }
 
   // 2. Test Client Secret 2 if provided
-  if (customSettings.clientSecret2) {
+  if (hasSecret2) {
     const headers = {
-      'X-ETA-Client-Id': customSettings.clientId,
-      'X-ETA-Client-Secret': customSettings.clientSecret2
+      'X-ETA-Client-Id': clientId,
+      'X-ETA-Client-Secret': clientSecret2
     }
     await api.get('/eta/test-auth', { headers })
   }

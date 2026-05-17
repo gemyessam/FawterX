@@ -125,7 +125,8 @@ function Layout({ children }) {
       })
     } catch (err) {
       setConnStatus('failed')
-      toast.error(t.etaFailed)
+      const msg = err.response?.data?.message || err.message || t.etaFailed
+      toast.error(msg)
       setSettings(prev => {
         const next = { ...prev, isVerified: false }
         localStorage.setItem('companySettings', JSON.stringify(next))
