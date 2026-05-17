@@ -19,10 +19,10 @@ api.interceptors.request.use(async (config) => {
     }
 
     const settings = JSON.parse(localStorage.getItem('companySettings') || '{}')
-    if (settings.clientId) {
+    if (settings.clientId && !config.headers['X-ETA-Client-Id']) {
       config.headers['X-ETA-Client-Id'] = settings.clientId
     }
-    if (settings.clientSecret1) {
+    if (settings.clientSecret1 && !config.headers['X-ETA-Client-Secret']) {
       config.headers['X-ETA-Client-Secret'] = settings.clientSecret1
     }
   } catch (e) {
