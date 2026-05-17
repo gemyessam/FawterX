@@ -94,6 +94,36 @@ function Layout({ children }) {
     }
   }, [showSettingsModal])
 
+  // Silent background verification check on mount to ensure credentials remain active and verified
+  useEffect(() => {
+    const saved = localStorage.getItem('companySettings')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (parsed.clientId && parsed.clientSecret1 && parsed.clientSecret2) {
+          testETAAuth(parsed)
+            .then(() => {
+              setSettings(prev => {
+                const next = { ...prev, isVerified: true }
+                localStorage.setItem('companySettings', JSON.stringify(next))
+                return next
+              })
+            })
+            .catch(() => {
+              setSettings(prev => {
+                const next = { ...prev, isVerified: false }
+                localStorage.setItem('companySettings', JSON.stringify(next))
+                return next
+              })
+              toast.error(lang === 'ar'
+                ? '⚠️ تنبيه: انتهت صلاحية مفاتيح ربط الضرائب أو تم إلغاؤها! يرجى مراجعة إعدادات الشركة وإعادة المصادقة.'
+                : '⚠️ Warning: ETA credentials have expired or been revoked! Please review company setup and re-verify.')
+            })
+        }
+      } catch (e) {}
+    }
+  }, [])
+
   // Click outside to close the user profile dropdown cleanly
   useEffect(() => {
     if (!showUserDropdown) return;

@@ -150,7 +150,7 @@ export default function Home() {
     // Enforce configured ETA credentials check and successful connection verification before any file upload processing
     const saved = localStorage.getItem('companySettings')
     const config = saved ? JSON.parse(saved) : {}
-    if (!config.clientId || (!config.clientSecret1 && !config.clientSecret2) || !config.isVerified) {
+    if (!config.clientId || !config.clientSecret1 || !config.clientSecret2 || !config.isVerified) {
       toast.error(lang === 'ar' 
         ? '⚠️ خطأ: يجب إدخال واختبار بيانات ربط مصلحة الضرائب (ETA) بنجاح أولاً من قائمة "إعدادات الشركة" قبل معالجة أي فواتير!' 
         : '⚠️ Error: You must enter and successfully test valid ETA connection credentials from "Company Setup" before processing invoices!')
@@ -448,7 +448,11 @@ export default function Home() {
               <h2 className="card-title">📂 {lang === 'ar' ? 'أتمتة ملف الإكسيل' : 'Process Excel Spreadsheet'}</h2>
               <p className="card-sub">{lang === 'ar' ? 'ارفع ملف المعاملات مباشرة لبدء فحص مصلحة الضرائب تلقائياً' : 'Drag & drop raw transactions sheets to start automated validation'}</p>
 
-              {(!localStorage.getItem('companySettings') || !JSON.parse(localStorage.getItem('companySettings') || '{}').isVerified) && (
+              {(() => {
+                const settings = JSON.parse(localStorage.getItem('companySettings') || '{}')
+                const hasKeys = settings.clientId && settings.clientSecret1 && settings.clientSecret2
+                return !hasKeys || !settings.isVerified
+              })() && (
                 <div style={{ background: 'rgba(231, 76, 60, 0.1)', border: '1px solid var(--danger)', padding: '1rem', borderRadius: 'var(--radius)', color: '#fff', fontSize: '0.9rem', marginBottom: '1.5rem', textAlign: 'right', display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'right' }}>
                   <div>
                     <strong>{lang === 'ar' ? '⚠️ يلزم تهيئة واختبار إعدادات الاتصال:' : '⚠️ Connection credentials validation required:'}</strong>
