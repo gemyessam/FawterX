@@ -27,20 +27,26 @@ router.get("/usage", async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════════
-// GET /api/eta/test-auth
-// يختبر الـ credentials فقط — بدون إرسال فواتير
-// ══════════════════════════════════════════════════════════════════
 router.get("/test-auth", async (req, res) => {
   try {
     const clientId = req.headers["x-eta-client-id"] || req.query.clientId || null;
     const clientSecret = req.headers["x-eta-client-secret"] || req.query.clientSecret || null;
-    const customCredentials = (clientId && clientSecret) ? { clientId, clientSecret } : null;
+    
+    if (!clientId || !clientSecret) {
+      return res.status(400).json({
+        success: false,
+        message: "❌ يرجى إدخال معرف العميل والسر المشترك لاختبار الاتصال"
+      });
+    }
+
+    const customCredentials = { clientId, clientSecret };
 
     console.log(`\n[/test-auth] ====== Testing ETA Authentication for User: ${req.user.uid} ======`);
-    console.log("[/test-auth] CLIENT_ID:", clientId || process.env.CLIENT_ID);
+    console.log("[/test-auth] CLIENT_ID:", clientId);
     console.log("[/test-auth] Environment: PRODUCTION");
 
     try {
+      // Enforce direct token fetch from real ETA production without falling back to system keys
       const token = await getAccessToken(customCredentials);
       console.log("[/test-auth] ✅ Authentication successful\n");
 
@@ -48,7 +54,7 @@ router.get("/test-auth", async (req, res) => {
         success:      true,
         message:      "✅ تم الاتصال بـ ETA Production بنجاح",
         environment:  "production",
-        clientId:     clientId || process.env.CLIENT_ID,
+        clientId:     clientId,
         tokenPreview: token.slice(0, 30) + "...",
       });
     } catch (err) {
@@ -56,9 +62,9 @@ router.get("/test-auth", async (req, res) => {
       const errDetail = err.response?.data || err.message;
       return res.status(401).json({
         success:     false,
-        message:     "❌ فشل الاتصال بـ ETA",
+        message:     "❌ فشل الاتصال بـ ETA! يرجى التحقق من صحة المفاتيح والاتصال بالإنترنت.",
         environment: "production",
-        clientId:    clientId || process.env.CLIENT_ID,
+        clientId:    clientId,
         error:       errDetail,
       });
     }

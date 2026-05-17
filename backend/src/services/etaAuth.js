@@ -13,8 +13,15 @@ let tokenExpiry = null;
 async function getAccessToken(customCredentials = null) {
   const now = Date.now();
 
-  const clientId = customCredentials?.clientId || process.env.CLIENT_ID;
-  const clientSecret = customCredentials?.clientSecret || process.env.CLIENT_SECRET;
+  // Enforce strict mapping of credentials without fallback if customCredentials is provided
+  let clientId, clientSecret;
+  if (customCredentials) {
+    clientId = customCredentials.clientId;
+    clientSecret = customCredentials.clientSecret;
+  } else {
+    clientId = process.env.CLIENT_ID;
+    clientSecret = process.env.CLIENT_SECRET;
+  }
 
   const isDefault = !customCredentials;
   if (isDefault && cachedToken && tokenExpiry && now < tokenExpiry - 60_000) {
