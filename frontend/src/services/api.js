@@ -18,6 +18,11 @@ api.interceptors.request.use(async (config) => {
       config.headers['Authorization'] = `Bearer ${token}`
     }
 
+    // For test authentication requests, strictly bypass localStorage injection to test EXACT typed keys
+    if (config.url && config.url.includes('/eta/test-auth')) {
+      return config
+    }
+
     const settings = JSON.parse(localStorage.getItem('companySettings') || '{}')
     
     // Case-insensitive header value extraction to prevent Axios case normalization from bypassing checks
