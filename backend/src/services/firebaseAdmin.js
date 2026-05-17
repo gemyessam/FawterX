@@ -9,9 +9,9 @@ try {
     });
     console.log("=== Firebase Admin initialized successfully via env service account ===");
   } else {
-    // محاولة التهيئة الافتراضية
+    // محاولة التهيئة الافتراضية باستخدام المشروع الفعلي لـ FawterX لتسهيل عملية التحقق التلقائي
     admin.initializeApp({
-      projectId: process.env.FIREBASE_PROJECT_ID || "mock-eta-saas-project"
+      projectId: process.env.FIREBASE_PROJECT_ID || "fawterx"
     });
     console.log("=== Firebase Admin initialized via default or project ID ===");
   }

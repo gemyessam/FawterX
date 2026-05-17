@@ -4,9 +4,8 @@ module.exports = async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    console.warn("[Auth Middleware] Missing or malformed Authorization header.");
-    // إذا لم تكن هناك تهيئة حقيقية لـ Firebase Admin، نسمح بالمرور في بيئة التطوير كمستخدم تجريبي
-    if (process.env.NODE_ENV === "development" || !process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // Only allow mock bypass in local development
+    if (process.env.NODE_ENV !== "production") {
       req.user = {
         uid: "mock-saas-user-uid",
         email: "accountant@company.com",
@@ -30,8 +29,8 @@ module.exports = async function authMiddleware(req, res, next) {
   } catch (error) {
     console.error("[Auth Middleware] Token verification failed:", error.message);
     
-    // وضع المطورين المرن
-    if (process.env.NODE_ENV === "development" || !process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // Only allow mock bypass in local development
+    if (process.env.NODE_ENV !== "production") {
       console.warn("[Auth Middleware] Sandbox bypass: using mock user.");
       req.user = {
         uid: "mock-saas-user-uid",
