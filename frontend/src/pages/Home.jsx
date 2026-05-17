@@ -147,13 +147,13 @@ export default function Home() {
   async function handleUploadExcel() {
     if (!file) return
 
-    // Enforce configured ETA credentials check before any file upload processing
+    // Enforce configured ETA credentials check and successful connection verification before any file upload processing
     const saved = localStorage.getItem('companySettings')
     const config = saved ? JSON.parse(saved) : {}
-    if (!config.clientId || !config.clientSecret1) {
+    if (!config.clientId || !config.clientSecret1 || !config.isVerified) {
       toast.error(lang === 'ar' 
-        ? '⚠️ خطأ: يجب إدخال واختبار بيانات ربط مصلحة الضرائب (ETA) أولاً من قائمة "إعدادات الشركة" قبل معالجة أي فواتير!' 
-        : '⚠️ Error: You must enter and save valid ETA connection credentials from "Company Setup" before processing invoices!')
+        ? '⚠️ خطأ: يجب إدخال واختبار بيانات ربط مصلحة الضرائب (ETA) بنجاح أولاً من قائمة "إعدادات الشركة" قبل معالجة أي فواتير!' 
+        : '⚠️ Error: You must enter and successfully test valid ETA connection credentials from "Company Setup" before processing invoices!')
       return
     }
 
@@ -448,12 +448,12 @@ export default function Home() {
               <h2 className="card-title">📂 {lang === 'ar' ? 'أتمتة ملف الإكسيل' : 'Process Excel Spreadsheet'}</h2>
               <p className="card-sub">{lang === 'ar' ? 'ارفع ملف المعاملات مباشرة لبدء فحص مصلحة الضرائب تلقائياً' : 'Drag & drop raw transactions sheets to start automated validation'}</p>
 
-              {(!localStorage.getItem('companySettings') || !JSON.parse(localStorage.getItem('companySettings') || '{}').clientId) && (
+              {(!localStorage.getItem('companySettings') || !JSON.parse(localStorage.getItem('companySettings') || '{}').isVerified) && (
                 <div style={{ background: 'rgba(231, 76, 60, 0.1)', border: '1px solid var(--danger)', padding: '1rem', borderRadius: 'var(--radius)', color: '#fff', fontSize: '0.9rem', marginBottom: '1.5rem', textAlign: 'right', display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'right' }}>
                   <div>
-                    <strong>{lang === 'ar' ? '⚠️ يلزم تهيئة إعدادات الاتصال:' : '⚠️ Connection credentials required:'}</strong>
+                    <strong>{lang === 'ar' ? '⚠️ يلزم تهيئة واختبار إعدادات الاتصال:' : '⚠️ Connection credentials validation required:'}</strong>
                     <span style={{ display: 'block', fontSize: '0.8rem', opacity: 0.85, marginTop: '0.2rem' }}>
-                      {lang === 'ar' ? 'الرجاء الضغط على "إعدادات الشركة" في الشريط العلوي وإدخال مفاتيح ربط مصلحة الضرائب (ETA) واختبار الاتصال المباشر بنجاح أولاً.' : 'Please open "Company Setup" at the top to configure and verify Egypt Tax Authority gateway keys.'}
+                      {lang === 'ar' ? 'الرجاء الضغط على "إعدادات الشركة" في الشريط العلوي، وإدخال مفاتيح ربط مصلحة الضرائب (ETA)، ثم الضغط على "اختبار الاتصال المباشر" وحفظ الإعدادات بنجاح أولاً.' : 'Please open "Company Setup" at the top, enter your ETA keys, and click "Test Direct Connection" to successfully verify connection first.'}
                     </span>
                   </div>
                 </div>

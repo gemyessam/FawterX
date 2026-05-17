@@ -106,6 +106,10 @@ function Layout({ children }) {
     return () => document.removeEventListener('click', closeDropdown);
   }, [showUserDropdown]);
 
+  const updateSetting = (key, value) => {
+    setSettings(prev => ({ ...prev, [key]: value, isVerified: false }))
+  }
+
   async function handleTestConnection() {
     setTesting(true)
     setConnStatus(null)
@@ -113,9 +117,19 @@ function Layout({ children }) {
       await testETAAuth(settings)
       setConnStatus('connected')
       toast.success(t.etaConnected)
+      setSettings(prev => {
+        const next = { ...prev, isVerified: true }
+        localStorage.setItem('companySettings', JSON.stringify(next))
+        return next
+      })
     } catch (err) {
       setConnStatus('failed')
       toast.error(t.etaFailed)
+      setSettings(prev => {
+        const next = { ...prev, isVerified: false }
+        localStorage.setItem('companySettings', JSON.stringify(next))
+        return next
+      })
     } finally {
       setTesting(false)
     }
@@ -199,7 +213,7 @@ function Layout({ children }) {
                   <input
                     type="text"
                     value={settings.clientId}
-                    onChange={(e) => setSettings({ ...settings, clientId: e.target.value })}
+                    onChange={(e) => updateSetting('clientId', e.target.value)}
                     placeholder="e.g. c892db2c-8aa8..."
                   />
                 </div>
@@ -209,7 +223,7 @@ function Layout({ children }) {
                   <input
                     type="password"
                     value={settings.clientSecret1}
-                    onChange={(e) => setSettings({ ...settings, clientSecret1: e.target.value })}
+                    onChange={(e) => updateSetting('clientSecret1', e.target.value)}
                     placeholder="••••••••••••••••"
                   />
                 </div>
@@ -219,7 +233,7 @@ function Layout({ children }) {
                   <input
                     type="password"
                     value={settings.clientSecret2}
-                    onChange={(e) => setSettings({ ...settings, clientSecret2: e.target.value })}
+                    onChange={(e) => updateSetting('clientSecret2', e.target.value)}
                     placeholder="••••••••••••••••"
                   />
                 </div>
@@ -229,7 +243,7 @@ function Layout({ children }) {
                   <input
                     type="text"
                     value={settings.taxpayerActivityCode}
-                    onChange={(e) => setSettings({ ...settings, taxpayerActivityCode: e.target.value })}
+                    onChange={(e) => updateSetting('taxpayerActivityCode', e.target.value)}
                     placeholder="e.g. 6209"
                   />
                 </div>
