@@ -94,6 +94,18 @@ function Layout({ children }) {
     }
   }, [showSettingsModal])
 
+  // Click outside to close the user profile dropdown cleanly
+  useEffect(() => {
+    if (!showUserDropdown) return;
+    const closeDropdown = (e) => {
+      if (!e.target.closest('.user-profile-widget')) {
+        setShowUserDropdown(false);
+      }
+    };
+    document.addEventListener('click', closeDropdown);
+    return () => document.removeEventListener('click', closeDropdown);
+  }, [showUserDropdown]);
+
   async function handleTestConnection() {
     setTesting(true)
     setConnStatus(null)
@@ -145,7 +157,6 @@ function Layout({ children }) {
             <div 
               className="user-profile-widget" 
               onClick={() => setShowUserDropdown(!showUserDropdown)}
-              onMouseLeave={() => setShowUserDropdown(false)}
             >
               <div className="user-avatar" style={{ backgroundImage: user.photoURL ? `url(${user.photoURL})` : 'none', backgroundSize: 'cover' }}>
                 {!user.photoURL && (user.displayName?.slice(0, 2).toUpperCase() || 'US')}
