@@ -108,6 +108,7 @@ function Layout({ children }) {
 
   const updateSetting = (key, value) => {
     setSettings(prev => ({ ...prev, [key]: value, isVerified: false }))
+    setConnStatus(null) // Reset connection test status immediately on editing input
   }
 
   async function handleTestConnection() {
