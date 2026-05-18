@@ -122,7 +122,7 @@ export default function Home() {
         else if (lower.includes('code type') || lower.includes('نوع الكود')) autoMap.codeType = h
         else if (lower.includes('item code') || lower.includes('كود الصنف') || lower.includes('كود المنتج')) autoMap.itemCode = h
         else if (lower.includes('internal') || lower.includes('داخلي') || lower.includes('كود داخلي')) autoMap.internalCode = h
-        else if (lower.includes('unit') || lower.includes('وحدة') || lower.includes('الواحدة') || lower.includes('مقياس') || lower.includes('قياس')) autoMap.unitType = h
+        else if (lower.includes('unit') || lower.includes('وحدة') || lower.includes('الواحدة') || lower.includes('مقياس') || lower.includes('قياس') || lower.includes('quantity measurement') || lower.includes('measurement')) autoMap.unitType = h
         else if (lower.includes('currency') || lower.includes('عملة')) autoMap.currency = h
         else if (lower.includes('invoice') || lower.includes('رقم الفاتورة') || lower.includes('رقم الفاتوره')) autoMap.invoiceNumber = h
         else if (lower.includes('buyer') || lower.includes('receiver name') || lower.includes('اسم المشتري') || lower.includes('العميل')) autoMap.receiverName = h
@@ -690,37 +690,84 @@ export default function Home() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <h4 style={{ fontWeight: 800 }}>🧾 {lang === 'ar' ? 'معاينة بنود الفاتورة' : 'Invoice Items Preview'}</h4>
                 <span className="badge badge-valid" style={{ background: 'rgba(0, 224, 161, 0.1)' }}>
-                  {lang === 'ar' ? 'مجموع الفاتورة:' : 'Total Amount:'} {Number(etaDocs[0]?.totalAmount).toLocaleString()} EGP
+                  {lang === 'ar' ? 'رقم الفاتورة:' : 'Invoice ID:'} {etaDocs[0]?.internalID}
                 </span>
               </div>
 
-              <div className="table-wrapper" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              <div className="table-wrapper" style={{ maxHeight: '350px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
                 <table>
                   <thead>
                     <tr>
                       <th>#</th>
-                      <th>{lang === 'ar' ? 'كود الصنف' : 'Item Code'}</th>
-                      <th>{lang === 'ar' ? 'الوصف' : 'Description'}</th>
-                      <th>{lang === 'ar' ? 'الكمية' : 'Quantity'}</th>
+                      <th>{lang === 'ar' ? 'بيانات الصنف' : 'Item Details'}</th>
+                      <th>{lang === 'ar' ? 'الكمية' : 'Qty'}</th>
                       <th>{lang === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</th>
-                      <th>{lang === 'ar' ? 'الضريبة %' : 'Tax %'}</th>
-                      <th>{lang === 'ar' ? 'الإجمالي' : 'Total'}</th>
+                      <th>{lang === 'ar' ? 'قبل الضريبة' : 'Net Total'}</th>
+                      <th>{lang === 'ar' ? 'الضريبة %' : 'VAT %'}</th>
+                      <th>{lang === 'ar' ? 'قيمة الضريبة' : 'VAT Amount'}</th>
+                      <th>{lang === 'ar' ? 'الإجمالي الكلي' : 'Total Amount'}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {etaDocs[0]?.invoiceLines?.map((line, idx) => (
                       <tr key={idx}>
                         <td>{idx + 1}</td>
-                        <td style={{ fontFamily: 'monospace' }}>{line.itemCode}</td>
-                        <td>{line.description}</td>
+                        <td>
+                          <div style={{ fontWeight: 700, color: '#fff' }}>{line.description}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'monospace', marginTop: '0.2rem' }}>
+                            {line.itemCode}
+                          </div>
+                        </td>
                         <td>{line.quantity}</td>
-                        <td>{line.unitValue?.amountEGP || line.valueDifference} EGP</td>
-                        <td>{line.taxableItems?.[0]?.rate || 14}%</td>
-                        <td style={{ color: 'var(--accent)', fontWeight: 700 }}>{Number(line.total || line.totalAmount || 0).toLocaleString()} EGP</td>
+                        <td>{Number(line.unitValue?.amountEGP || 0).toLocaleString()} EGP</td>
+                        <td>{Number(line.netTotal || line.salesTotal || 0).toLocaleString()} EGP</td>
+                        <td><span className="badge badge-warning" style={{ fontSize: '0.75rem', background: 'rgba(241, 196, 15, 0.1)', color: '#f1c40f', border: '1px solid rgba(241, 196, 15, 0.2)' }}>{line.taxableItems?.[0]?.rate || 14}%</span></td>
+                        <td>{Number(line.taxableItems?.[0]?.amount || 0).toLocaleString()} EGP</td>
+                        <td style={{ color: 'var(--accent)', fontWeight: 700 }}>{Number(line.total || 0).toLocaleString()} EGP</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Gorgeous Portal-Style Totals Panel */}
+              <div style={{ 
+                marginTop: '1.5rem', 
+                padding: '1.5rem', 
+                background: 'rgba(255, 255, 255, 0.01)', 
+                border: '1px solid var(--border)', 
+                borderRadius: 'var(--radius)',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '1.5rem',
+                textAlign: lang === 'ar' ? 'right' : 'left'
+              }}>
+                <div style={{ borderLeft: lang === 'ar' ? '1px solid var(--border)' : 'none', borderRight: lang !== 'ar' ? '1px solid var(--border)' : 'none', paddingLeft: lang === 'ar' ? '1.5rem' : '0', paddingRight: lang !== 'ar' ? '1.5rem' : '0' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.3rem' }}>
+                    {lang === 'ar' ? '💵 إجمالي المبيعات (قبل الضريبة)' : '💵 Total Sales (Before Tax)'}
+                  </span>
+                  <strong style={{ fontSize: '1.3rem', color: '#fff' }}>
+                    {Number(etaDocs[0]?.netAmount || etaDocs[0]?.totalSalesAmount || 0).toLocaleString()} <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>EGP</span>
+                  </strong>
+                </div>
+                
+                <div style={{ borderLeft: lang === 'ar' ? '1px solid var(--border)' : 'none', borderRight: lang !== 'ar' ? '1px solid var(--border)' : 'none', paddingLeft: lang === 'ar' ? '1.5rem' : '0', paddingRight: lang !== 'ar' ? '1.5rem' : '0' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.3rem' }}>
+                    {lang === 'ar' ? '⚡ إجمالي ضريبة القيمة المضافة (T1)' : '⚡ Total Value Added Tax (VAT T1)'}
+                  </span>
+                  <strong style={{ fontSize: '1.3rem', color: '#f1c40f' }}>
+                    {Number(etaDocs[0]?.taxTotals?.[0]?.amount || 0).toLocaleString()} <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>EGP</span>
+                  </strong>
+                </div>
+
+                <div>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.3rem' }}>
+                    {lang === 'ar' ? '🏆 الإجمالي الكلي للفاتورة (بالضريبة)' : '🏆 Grand Invoice Total (With VAT)'}
+                  </span>
+                  <strong style={{ fontSize: '1.6rem', color: 'var(--accent)', fontWeight: 800 }}>
+                    {Number(etaDocs[0]?.totalAmount || 0).toLocaleString()} <span style={{ fontSize: '1rem', color: 'var(--text-dim)' }}>EGP</span>
+                  </strong>
+                </div>
               </div>
 
               <div className="expandable-advanced">
