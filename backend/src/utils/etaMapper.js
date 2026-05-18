@@ -90,8 +90,8 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
         unitValue: {
           currencySold:        String(row[mapping.currency] || "EGP").toUpperCase(),
           amountEGP:           unitValue,
-          amountSold:          unitValue,
-          currencyExchangeRate: 1,
+          amountSold:          String(row[mapping.currency] || "EGP").toUpperCase() === "EGP" ? 0 : unitValue,
+          currencyExchangeRate: String(row[mapping.currency] || "EGP").toUpperCase() === "EGP" ? 0 : 1,
         },
         taxableItems: [
           {
@@ -139,7 +139,13 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
         name: issuerName,
       },
       receiver: {
-        address: { country: "EG" },
+        address: {
+          country:        "EG",
+          governate:      metadata.receiverGovernate || "Cairo",
+          regionCity:     metadata.receiverRegionCity || "Cairo",
+          street:         metadata.receiverStreet || "Main Street",
+          buildingNumber: metadata.receiverBuildingNumber || "1"
+        },
         type: receiverType,
         id:   receiverId,
         name: receiverName,
