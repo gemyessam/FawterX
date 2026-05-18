@@ -331,6 +331,9 @@ export default function Home() {
       if (errData?.result) {
         errorStr += "\n\n[ETA Rejection Details]:\n" + JSON.stringify(errData.result, null, 2);
       }
+      if (errData?.details) {
+        errorStr += "\n\n[ETA Rejection Details]:\n" + JSON.stringify(errData.details, null, 2);
+      }
       setSubmissionResult({
         success: false,
         error: errorStr
