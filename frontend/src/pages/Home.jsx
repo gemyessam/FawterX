@@ -236,21 +236,155 @@ export default function Home() {
     }
   }
 
-  // Handle live updating and validation of itemCode changes in Step 3
-  async function handleItemCodeChange(idx, val) {
+  // تحديث بنود الفاتورة وإعادة احتساب الإجماليات والـ VAT والتحقق الفوري (Spreadsheet-like reactive updates)
+  async function updateInvoiceLine(idx, field, val) {
     const nextDocs = JSON.parse(JSON.stringify(etaDocs))
-    if (nextDocs[0] && nextDocs[0].invoiceLines && nextDocs[0].invoiceLines[idx]) {
-      nextDocs[0].invoiceLines[idx].itemCode = val
+    const line = nextDocs[0]?.invoiceLines?.[idx]
+    if (!line) return
+
+    if (field === 'description') {
+      line.description = val
+    } else if (field === 'itemCode') {
+      line.itemCode = val
+    } else if (field === 'quantity') {
+      line.quantity = parseFloat(val) || 0
+    } else if (field === 'unitValue') {
+      if (!line.unitValue) line.unitValue = { currencySold: "EGP" }
+      line.unitValue.amountEGP = parseFloat(val) || 0
+    } else if (field === 'taxPercent') {
+      const rate = parseFloat(val) || 0
+      if (line.taxableItems && line.taxableItems[0]) {
+        line.taxableItems[0].rate = rate
+      }
     }
-    setEtaDocs(nextDocs)
+
+    // إعادة احتساب أرقام السطر المالي
+    const qty = line.quantity || 0
+    const unitPrice = line.unitValue?.amountEGP || 0
+    const net = qty * unitPrice
+    line.netTotal = net
+    line.salesTotal = net
     
-    // Silent dry-run validation to update compliance check score
+    const taxRate = line.taxableItems?.[0]?.rate || 14
+    const taxAmt = net * (taxRate / 100)
+    if (line.taxableItems && line.taxableItems[0]) {
+      line.taxableItems[0].amount = taxAmt
+    }
+    line.total = net + taxAmt
+
+    // إعادة احتساب إجماليات الفاتورة بالكامل (Grand Totals Recalculation)
+    let totalSales = 0
+    let totalTax = 0
+    nextDocs[0].invoiceLines.forEach(l => {
+      totalSales += l.netTotal || 0
+      totalTax += (l.taxableItems?.[0]?.amount || 0)
+    })
+
+    nextDocs[0].totalSalesAmount = totalSales
+    nextDocs[0].netAmount = totalSales
+    nextDocs[0].taxTotals = [{
+      taxType: "T1",
+      amount: totalTax
+    }]
+    nextDocs[0].totalAmount = totalSales + totalTax
+
+    setEtaDocs(nextDocs)
+
+    // الفحص الصامت لضمان تحديث بنود مصلحة الضرائب على الخادم فورياً
     try {
       const dryRes = await submitToETA(nextDocs, true)
       setValidation(dryRes.validation)
     } catch (e) {
       console.warn("Silent revalidation failed:", e)
     }
+  }
+
+  // إضافة صنف جديد للفاتورة ببيانات افتراضية
+  async function addInvoiceLine() {
+    if (!etaDocs || !etaDocs[0]) return
+    const nextDocs = JSON.parse(JSON.stringify(etaDocs))
+    
+    const newLine = {
+      description: "Aluminium | قطاع ألومنيوم جديد | 0.00 KG | 0 mm",
+      itemCode: "EG-111111-1111",
+      quantity: 1,
+      unitType: "m",
+      unitValue: {
+        currencySold: "EGP",
+        amountEGP: 100
+      },
+      netTotal: 100,
+      salesTotal: 100,
+      valueDifference: 0,
+      totalTaxableFees: 0,
+      discount: { rate: 0, amount: 0 },
+      taxableItems: [
+        {
+          taxType: "T1",
+          amount: 14,
+          subType: "V009",
+          rate: 14
+        }
+      ],
+      total: 114
+    }
+
+    nextDocs[0].invoiceLines.push(newLine)
+
+    // إعادة احتساب إجماليات الفاتورة بالكامل
+    let totalSales = 0
+    let totalTax = 0
+    nextDocs[0].invoiceLines.forEach(l => {
+      totalSales += l.netTotal || 0
+      totalTax += (l.taxableItems?.[0]?.amount || 0)
+    })
+
+    nextDocs[0].totalSalesAmount = totalSales
+    nextDocs[0].netAmount = totalSales
+    nextDocs[0].taxTotals = [{ taxType: "T1", amount: totalTax }]
+    nextDocs[0].totalAmount = totalSales + totalTax
+
+    setEtaDocs(nextDocs)
+    toast.success(lang === 'ar' ? 'تم إضافة بند جديد للفاتورة!' : 'New item line added to invoice!')
+
+    try {
+      const dryRes = await submitToETA(nextDocs, true)
+      setValidation(dryRes.validation)
+    } catch (e) {}
+  }
+
+  // حذف صنف من الفاتورة بالكامل
+  async function deleteInvoiceLine(idx) {
+    if (!etaDocs || !etaDocs[0]) return
+    const nextDocs = JSON.parse(JSON.stringify(etaDocs))
+    
+    if (nextDocs[0].invoiceLines.length <= 1) {
+      toast.error(lang === 'ar' ? '⚠️ يجب أن تحتوي الفاتورة على بند واحد على الأعل!' : '⚠️ Invoice must contain at least one line!')
+      return
+    }
+
+    nextDocs[0].invoiceLines.splice(idx, 1)
+
+    // إعادة احتساب إجماليات الفاتورة بالكامل
+    let totalSales = 0
+    let totalTax = 0
+    nextDocs[0].invoiceLines.forEach(l => {
+      totalSales += l.netTotal || 0
+      totalTax += (l.taxableItems?.[0]?.amount || 0)
+    })
+
+    nextDocs[0].totalSalesAmount = totalSales
+    nextDocs[0].netAmount = totalSales
+    nextDocs[0].taxTotals = [{ taxType: "T1", amount: totalTax }]
+    nextDocs[0].totalAmount = totalSales + totalTax
+
+    setEtaDocs(nextDocs)
+    toast.success(lang === 'ar' ? 'تم حذف الصنف من الفاتورة!' : 'Item line deleted from invoice!')
+
+    try {
+      const dryRes = await submitToETA(nextDocs, true)
+      setValidation(dryRes.validation)
+    } catch (e) {}
   }
 
   // Handle Mapping (Step 2 -> 3)
@@ -910,25 +1044,31 @@ export default function Home() {
                 )}
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem' }}>
-                <h4 style={{ fontWeight: 800, fontSize: '1.1rem' }}>🧾 {lang === 'ar' ? 'معاينة بنود الفاتورة' : 'Invoice Items Preview'}</h4>
-                <span className="badge badge-valid" style={{ background: 'rgba(0, 224, 161, 0.1)', padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
-                  {lang === 'ar' ? 'رقم الفاتورة:' : 'Invoice ID:'} {etaDocs[0]?.internalID}
-                </span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
+                <h4 style={{ fontWeight: 800, fontSize: '1.1rem', margin: 0 }}>🧾 {lang === 'ar' ? 'مراجعة وتعديل بنود الفاتورة (بيئة عمل تفاعلية)' : 'Accountant Invoice Workspace (Editable Grid)'}</h4>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                  <button type="button" className="btn btn-accent btn-sm" onClick={addInvoiceLine}>
+                    ➕ {lang === 'ar' ? 'إضافة صنف جديد' : 'Add New Item'}
+                  </button>
+                  <span className="badge badge-valid" style={{ background: 'rgba(0, 224, 161, 0.1)', padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+                    {lang === 'ar' ? 'رقم الفاتورة:' : 'Invoice ID:'} {etaDocs[0]?.internalID}
+                  </span>
+                </div>
               </div>
 
-              <div className="table-wrapper" style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '2.5rem' }}>
+              <div className="table-wrapper" style={{ maxHeight: '550px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '2.5rem' }}>
                 <table>
                   <thead>
                     <tr>
-                      <th>#</th>
+                      <th style={{ width: '60px' }}>#</th>
                       <th>{lang === 'ar' ? 'بيانات الصنف' : 'Item Details'}</th>
-                      <th>{lang === 'ar' ? 'الكمية' : 'Qty'}</th>
-                      <th>{lang === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</th>
+                      <th style={{ width: '120px' }}>{lang === 'ar' ? 'الكمية' : 'Qty'}</th>
+                      <th style={{ width: '150px' }}>{lang === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</th>
                       <th>{lang === 'ar' ? 'قبل الضريبة' : 'Net Total'}</th>
-                      <th>{lang === 'ar' ? 'الضريبة %' : 'VAT %'}</th>
+                      <th style={{ width: '100px' }}>{lang === 'ar' ? 'الضريبة %' : 'VAT %'}</th>
                       <th>{lang === 'ar' ? 'قيمة الضريبة' : 'VAT Amount'}</th>
                       <th>{lang === 'ar' ? 'الإجمالي الكلي' : 'Total Amount'}</th>
+                      <th style={{ width: '50px' }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -939,12 +1079,30 @@ export default function Home() {
                       const rowMissing = rawRow.missingFields || [];
 
                       return (
-                        <tr key={idx}>
-                          <td>{idx + 1}</td>
+                        <tr key={idx} className="animate-fade-in">
+                          <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{idx + 1}</td>
                           <td>
-                            <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                              <span>{line.description}</span>
-                              
+                            {/* Editable Description */}
+                            <input 
+                              type="text" 
+                              className="input" 
+                              style={{ 
+                                width: '100%', 
+                                background: 'rgba(255, 255, 255, 0.02)', 
+                                border: rowConfidence < 75 ? '1px solid #f1c40f' : '1px solid var(--border)', 
+                                color: '#fff', 
+                                fontSize: '0.85rem', 
+                                padding: '0.4rem', 
+                                borderRadius: '4px',
+                                marginBottom: '0.5rem',
+                                outline: 'none'
+                              }} 
+                              value={line.description || ''} 
+                              onChange={(e) => updateInvoiceLine(idx, 'description', e.target.value)} 
+                              placeholder={lang === 'ar' ? 'ادخل وصف الصنف هنا...' : 'Enter item description...'}
+                            />
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                               {/* Confidence Badge */}
                               <span style={{ 
                                 fontSize: '0.7rem', 
@@ -956,11 +1114,35 @@ export default function Home() {
                               }}>
                                 🎯 {rowConfidence}%
                               </span>
+
+                              {/* Editable Item Code */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>🔑 GPC/EGS:</span>
+                                <input 
+                                  type="text" 
+                                  className="input" 
+                                  style={{ 
+                                    background: 'rgba(9, 11, 20, 0.6)', 
+                                    border: '1px solid var(--border)', 
+                                    borderRadius: '6px', 
+                                    color: '#00e0a1', 
+                                    fontSize: '0.8rem', 
+                                    padding: '0.25rem 0.5rem', 
+                                    width: '180px', 
+                                    fontFamily: 'monospace',
+                                    fontWeight: 'bold',
+                                    outline: 'none'
+                                  }} 
+                                  value={line.itemCode || ''} 
+                                  onChange={(e) => updateInvoiceLine(idx, 'itemCode', e.target.value)} 
+                                  placeholder="EG-111111-..."
+                                />
+                              </div>
                             </div>
 
                             {/* Warnings / Missing fields inline */}
                             {(rowWarnings.length > 0 || rowMissing.length > 0) && (
-                              <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                              <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                                 {rowMissing.map(m => (
                                   <span key={m} style={{ fontSize: '0.65rem', padding: '0.05rem 0.3rem', borderRadius: '4px', background: 'rgba(231, 76, 60, 0.1)', color: '#e74c3c', border: '1px solid rgba(231, 76, 60, 0.2)' }}>
                                     🔍 مفقود: {m}
@@ -973,37 +1155,90 @@ export default function Home() {
                                 ))}
                               </div>
                             )}
-
-                            <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>🔑 {lang === 'ar' ? 'كود السلعة (EGS/GPC):' : 'Item Code:'}</span>
+                          </td>
+                          <td>
+                            {/* Editable Quantity */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                               <input 
-                                type="text"
-                                className="input"
+                                type="number" 
+                                className="input" 
                                 style={{ 
-                                  background: 'rgba(9, 11, 20, 0.6)', 
+                                  width: '100%', 
+                                  background: 'rgba(255, 255, 255, 0.02)', 
                                   border: '1px solid var(--border)', 
-                                  borderRadius: '6px', 
-                                  color: '#00e0a1', 
-                                  fontSize: '0.8rem', 
-                                  padding: '0.25rem 0.5rem', 
-                                  width: '220px', 
-                                  fontFamily: 'monospace',
-                                  fontWeight: 'bold' 
-                                }}
-                                value={line.itemCode || ''}
-                                onChange={(e) => handleItemCodeChange(idx, e.target.value)}
-                                placeholder="EG-111111-..."
+                                  color: '#fff', 
+                                  padding: '0.4rem', 
+                                  borderRadius: '4px', 
+                                  textAlign: 'center', 
+                                  fontWeight: 'bold',
+                                  outline: 'none'
+                                }} 
+                                value={line.quantity || 0} 
+                                onChange={(e) => updateInvoiceLine(idx, 'quantity', e.target.value)} 
                               />
+                              <span style={{ fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 'bold' }}>{line.unitType || 'm'}</span>
                             </div>
                           </td>
-                          <td style={{ fontWeight: 800 }}>
-                            {line.quantity} <span style={{ fontSize: '0.75rem', color: 'var(--accent)' }}>{line.unitType || 'm'}</span>
+                          <td>
+                            {/* Editable Unit Price */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <input 
+                                type="number" 
+                                className="input" 
+                                style={{ 
+                                  width: '100%', 
+                                  background: 'rgba(255, 255, 255, 0.02)', 
+                                  border: '1px solid var(--border)', 
+                                  color: '#fff', 
+                                  padding: '0.4rem', 
+                                  borderRadius: '4px', 
+                                  textAlign: 'center', 
+                                  fontWeight: 'bold',
+                                  outline: 'none'
+                                }} 
+                                value={line.unitValue?.amountEGP || 0} 
+                                onChange={(e) => updateInvoiceLine(idx, 'unitValue', e.target.value)} 
+                              />
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>EGP</span>
+                            </div>
                           </td>
-                          <td>{Number(line.unitValue?.amountEGP || 0).toLocaleString()} EGP</td>
-                          <td>{Number(line.netTotal || line.salesTotal || 0).toLocaleString()} EGP</td>
-                          <td><span className="badge badge-warning" style={{ fontSize: '0.75rem', background: 'rgba(241, 196, 15, 0.1)', color: '#f1c40f', border: '1px solid rgba(241, 196, 15, 0.2)' }}>{line.taxableItems?.[0]?.rate || 14}%</span></td>
+                          <td style={{ fontWeight: 'bold' }}>{Number(line.netTotal || line.salesTotal || 0).toLocaleString()} EGP</td>
+                          <td>
+                            {/* Editable Tax % Selector */}
+                            <select 
+                              className="input" 
+                              style={{ 
+                                background: '#0b0d19', 
+                                border: '1px solid var(--border)', 
+                                color: '#f1c40f', 
+                                padding: '0.4rem', 
+                                borderRadius: '4px', 
+                                fontWeight: 'bold',
+                                outline: 'none',
+                                cursor: 'pointer'
+                              }} 
+                              value={line.taxableItems?.[0]?.rate || 14} 
+                              onChange={(e) => updateInvoiceLine(idx, 'taxPercent', e.target.value)}
+                            >
+                              <option value="14">14%</option>
+                              <option value="5">5%</option>
+                              <option value="0">0%</option>
+                            </select>
+                          </td>
                           <td>{Number(line.taxableItems?.[0]?.amount || 0).toLocaleString()} EGP</td>
-                          <td style={{ color: 'var(--accent)', fontWeight: 700 }}>{Number(line.total || 0).toLocaleString()} EGP</td>
+                          <td style={{ color: 'var(--accent)', fontWeight: 800 }}>{Number(line.total || 0).toLocaleString()} EGP</td>
+                          <td style={{ textAlign: 'center' }}>
+                            {/* Delete Line Action */}
+                            <button 
+                              type="button" 
+                              className="btn btn-ghost btn-sm" 
+                              style={{ color: 'var(--danger)', fontSize: '1.1rem', padding: '0.3rem' }} 
+                              onClick={() => deleteInvoiceLine(idx)}
+                              title={lang === 'ar' ? 'حذف هذا الصنف' : 'Delete this item'}
+                            >
+                              ✕
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
