@@ -19,11 +19,11 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.3.1 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.4.0 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.3.1 (Egypt ETA)  ");
-            Console.WriteLine("    [STATUS] Chain Injection: Custom ExcludeRoot Active ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.4.0 (Egypt ETA)  ");
+            Console.WriteLine("    [STATUS] Chain Validation: Full ExcludeRoot Active  ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
             
@@ -34,7 +34,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.3.1 (Manual Chain Resolution Active)");
+                Console.WriteLine("[INFO] Version 1.4.0 (ITIDA Approved Chain Signing Active)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -236,29 +236,7 @@ namespace FawterXSigner
             SignedCms signedCms = new SignedCms(contentInfo, true); // true = detached signature
 
             CmsSigner cmsSigner = new CmsSigner(cert);
-            cmsSigner.IncludeOption = X509IncludeOption.EndCertOnly; // Bypass local trust chain exception!
-
-            // Manually resolve and embed intermediate CA certificates in the signature
-            try
-            {
-                X509Chain chain = new X509Chain();
-                chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllFlags;
-                chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-                chain.Build(cert);
-
-                foreach (X509ChainElement element in chain.ChainElements)
-                {
-                    if (element.Certificate.Thumbprint != cert.Thumbprint)
-                    {
-                        Console.WriteLine("[INFO] Embedding intermediate certificate in signature: " + element.Certificate.Subject);
-                        cmsSigner.Certificates.Add(element.Certificate);
-                    }
-                }
-            }
-            catch (Exception chainEx)
-            {
-                Console.WriteLine("[WARN] Chain resolution warning: " + chainEx.Message);
-            }
+            cmsSigner.IncludeOption = X509IncludeOption.ExcludeRoot;
             
             // Specify SHA-256 for the digest hashing algorithm (ETA Mandatory)
             cmsSigner.DigestAlgorithm = new Oid("2.16.840.1.101.3.4.2.1"); // SHA-256 Oid
