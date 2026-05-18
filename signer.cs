@@ -20,10 +20,10 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.6.2 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.6.3 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.6.2 (Egypt ETA)  ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.6.3 (Egypt ETA)  ");
             Console.WriteLine("    [STATUS] CAdES-BES Explicit Hash OID & Chain: Active ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
@@ -35,7 +35,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.6.2 (CAdES-BES Explicit Hash OID + Offline Chain Active)");
+                Console.WriteLine("[INFO] Version 1.6.3 (CAdES-BES Explicit Hash OID + Offline Chain Active)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -97,7 +97,7 @@ namespace FawterXSigner
                 if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/")
                 {
                     response.ContentType = "application/json; charset=utf-8";
-                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.6.2\",\"message\":\"FawterX local signer v1.6.2 is running with IssuerAndSerialNumber and ExcludeRoot chain!\"}";
+                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.6.3\",\"message\":\"FawterX local signer v1.6.3 is running with IssuerAndSerialNumber and ExcludeRoot chain!\"}";
                     byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                     response.ContentLength64 = buffer.Length;
                     response.OutputStream.Write(buffer, 0, buffer.Length);
@@ -409,60 +409,57 @@ namespace FawterXSigner
                 certHash = sha256.ComputeHash(cert.RawData);
             }
 
-            // Create DER structure manually with explicit NULL parameters for SHA-256 OID:
+            // Create DER structure manually with absent parameters for SHA-256 OID:
+            // Under DER encoding rules, if SHA-256 algorithm parameters are absent, they must not be NULL (05 00).
             // SigningCertificateV2 ::= SEQUENCE { certs SEQUENCE OF ESSCertIDv2 }
             // ESSCertIDv2 ::= SEQUENCE { hashAlgorithm AlgorithmIdentifier, certHash Hash }
-            // AlgorithmIdentifier ::= SEQUENCE { algorithm OBJECT IDENTIFIER (SHA-256), parameters ANY DEFINED BY algorithm OPTIONAL }
-
+            // AlgorithmIdentifier ::= SEQUENCE { algorithm OBJECT IDENTIFIER (SHA-256) } -- parameters omitted!
+            
             byte[] hashAlgoOid = { 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01 };
 
-            // Total AlgorithmIdentifier content = 11 (OID) + 2 (NULL parameters: 05 00) = 13 bytes
-            // AlgorithmIdentifier SEQUENCE header = 30 0D (length 13)
-            // Total AlgorithmIdentifier TLV = 15 bytes
+            // Total AlgorithmIdentifier content = 11 bytes (OID TLV)
+            // AlgorithmIdentifier SEQUENCE header = 30 0B (length 11)
+            // Total AlgorithmIdentifier TLV = 13 bytes
             
-            // Total ESSCertIDv2 content = 15 (AlgorithmIdentifier) + 34 (certHash TLV) = 49 bytes
-            // ESSCertIDv2 SEQUENCE header = 30 31 (length 49)
-            // Total ESSCertIDv2 TLV = 51 bytes
+            // Total ESSCertIDv2 content = 13 (AlgorithmIdentifier TLV) + 34 (certHash TLV) = 47 bytes
+            // ESSCertIDv2 SEQUENCE header = 30 2F (length 47 = 0x2F)
+            // Total ESSCertIDv2 TLV = 49 bytes
             
-            // Total certs content = 51 bytes (ESSCertIDv2 TLV)
-            // certs SEQUENCE header = 30 33 (length 51)
-            // Total certs TLV = 53 bytes
+            // Total certs content = 49 bytes (ESSCertIDv2 TLV)
+            // certs SEQUENCE header = 30 31 (length 49 = 0x31)
+            // Total certs TLV = 51 bytes
 
-            // Total SigningCertificateV2 content = 53 bytes (certs TLV)
-            // SigningCertificateV2 SEQUENCE header = 30 35 (length 53)
-            // Total SigningCertificateV2 TLV = 55 bytes
+            // Total SigningCertificateV2 content = 51 bytes (certs TLV)
+            // SigningCertificateV2 SEQUENCE header = 30 33 (length 51 = 0x33)
+            // Total SigningCertificateV2 TLV = 53 bytes
 
-            byte[] der = new byte[55];
+            byte[] der = new byte[53];
             
             // SigningCertificateV2 header
             der[0] = 0x30;
-            der[1] = 0x35; // Length 53
+            der[1] = 0x33; // Length 51
             
             // certs header
             der[2] = 0x30;
-            der[3] = 0x33; // Length 51
+            der[3] = 0x31; // Length 49
             
             // ESSCertIDv2 header
             der[4] = 0x30;
-            der[5] = 0x31; // Length 49
+            der[5] = 0x2F; // Length 47
             
             // hashAlgorithm SEQUENCE header (AlgorithmIdentifier)
             der[6] = 0x30;
-            der[7] = 0x0D; // Length 13 (11 bytes OID + 2 bytes NULL parameters)
+            der[7] = 0x0B; // Length 11 (OID TLV only, parameters omitted)
             
             // hashAlgorithm OID
             Array.Copy(hashAlgoOid, 0, der, 8, 11);
             
-            // hashAlgorithm parameters: NULL (05 00)
-            der[19] = 0x05; // Tag: NULL
-            der[20] = 0x00; // Length: 0
-            
             // certHash OCTET STRING header
-            der[21] = 0x04; // Tag: OCTET STRING
-            der[22] = 0x20; // Length 32
+            der[19] = 0x04; // Tag: OCTET STRING
+            der[20] = 0x20; // Length 32
             
             // certHash value
-            Array.Copy(certHash, 0, der, 23, 32);
+            Array.Copy(certHash, 0, der, 21, 32);
 
             return der;
         }
