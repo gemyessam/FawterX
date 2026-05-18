@@ -301,6 +301,50 @@ export default function Home() {
     }
   }
 
+  // تحديث البيانات الفوقية للفاتورة (Invoice Header/Metadata)
+  async function updateInvoiceMetadata(field, val) {
+    if (!etaDocs || !etaDocs[0]) return
+    const nextDocs = JSON.parse(JSON.stringify(etaDocs))
+    const doc = nextDocs[0]
+
+    if (field === 'internalID') {
+      doc.internalID = val
+    } else if (field === 'dateTimeIssued') {
+      doc.dateTimeIssued = val
+    } else if (field === 'documentType') {
+      doc.documentType = val
+    } else if (field === 'issuerName') {
+      if (!doc.issuer) doc.issuer = {}
+      doc.issuer.name = val
+    } else if (field === 'issuerVat') {
+      if (!doc.issuer) doc.issuer = {}
+      doc.issuer.id = val
+    } else if (field === 'receiverName') {
+      if (!doc.receiver) doc.receiver = {}
+      doc.receiver.name = val
+    } else if (field === 'receiverVat') {
+      if (!doc.receiver) doc.receiver = {}
+      doc.receiver.id = val
+    } else if (field === 'taxpayerActivityCode') {
+      doc.taxpayerActivityCode = val
+    } else if (field === 'currency') {
+      // currency sold updates on unitValue inside lines
+      doc.invoiceLines.forEach(l => {
+        if (l.unitValue) l.unitValue.currencySold = val
+      })
+    } else if (field === 'codeType') {
+      doc.codeType = val // EGS / GS1
+    }
+
+    setEtaDocs(nextDocs)
+
+    // Silent dry-run validation to update compliance check score
+    try {
+      const dryRes = await submitToETA(nextDocs, true)
+      setValidation(dryRes.validation)
+    } catch (e) {}
+  }
+
   // إضافة صنف جديد للفاتورة ببيانات افتراضية
   async function addInvoiceLine() {
     if (!etaDocs || !etaDocs[0]) return
@@ -1046,6 +1090,214 @@ export default function Home() {
                 )}
               </div>
 
+              {/* Gorgeous AI Review Mode vs Excel Mode Indicator */}
+              <div className="card animate-fade-in" style={{
+                padding: '1.5rem',
+                background: 'linear-gradient(135deg, rgba(124, 77, 255, 0.08) 0%, rgba(24, 255, 255, 0.02) 100%)',
+                border: '1px solid rgba(124, 77, 255, 0.25)',
+                borderRadius: 'var(--radius)',
+                marginBottom: '2rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '1rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <span style={{ fontSize: '2rem' }}>🤖</span>
+                  <div style={{ textAlign: lang === 'ar' ? 'right' : 'left' }}>
+                    <h4 style={{ margin: 0, fontWeight: 900, color: '#fff', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {lang === 'ar' ? 'وضع المراجعة الذكية للـ PDF نشط' : 'AI PDF Accountant Review Mode Active'}
+                      <span className="badge badge-accent" style={{ background: '#7c4dff', color: '#fff', border: 'none', fontSize: '0.75rem', padding: '0.2rem 0.6rem' }}>
+                        {lang === 'ar' ? 'مسودة موثوقة' : 'AI Draft'}
+                      </span>
+                    </h4>
+                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+                      {lang === 'ar'
+                        ? 'تم استخلاص مسودة الفاتورة تلقائياً. يرجى مراجعة وتأكيد البيانات الفوقية والبنود أدناه قبل الإرسال.'
+                        : 'Draft extracted. Please verify the metadata and invoice lines below for 100% compliance.'}
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', padding: '0.4rem 0.8rem', fontWeight: 'bold' }}>
+                    {lang === 'ar' ? 'دقة المدقق: محاسبية بالكامل' : 'Auditor logic: Strict Business Rules'}
+                  </span>
+                </div>
+              </div>
+
+              {/* SECTION A: INVOICE METADATA & COMPANY INFO REVIEW (HEADER SECTION) */}
+              <div className="card animate-fade-in" style={{
+                padding: '2rem',
+                background: 'rgba(255, 255, 255, 0.01)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                marginBottom: '2.5rem',
+                textAlign: lang === 'ar' ? 'right' : 'left'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+                  <h4 style={{ margin: 0, fontWeight: 900, color: 'var(--accent)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    🏢 {lang === 'ar' ? 'البيانات الفوقية ومعلومات الأطراف (القسم الرئيسي)' : 'Invoice Metadata & Parties (Header Section)'}
+                  </h4>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    {lang === 'ar' ? 'يرجى مراجعة وتعديل الحقول للتأكد من مطابقة الضرائب المصرية' : 'Review and correct fields to guarantee Egyptian ETA compliance'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
+                  
+                  {/* Invoice Number */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      🔢 {lang === 'ar' ? 'رقم الفاتورة' : 'Invoice Number'}
+                    </label>
+                    <input 
+                      type="text" 
+                      className="input" 
+                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      value={etaDocs[0]?.internalID || ''} 
+                      onChange={(e) => updateInvoiceMetadata('internalID', e.target.value)} 
+                    />
+                  </div>
+
+                  {/* Date Issued */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      📅 {lang === 'ar' ? 'تاريخ الإصدار' : 'Date Issued'}
+                    </label>
+                    <input 
+                      type="text" 
+                      className="input" 
+                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      value={etaDocs[0]?.dateTimeIssued || ''} 
+                      onChange={(e) => updateInvoiceMetadata('dateTimeIssued', e.target.value)} 
+                    />
+                  </div>
+
+                  {/* Invoice Type */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      📄 {lang === 'ar' ? 'نوع المستند' : 'Document Type'}
+                    </label>
+                    <select
+                      className="input"
+                      style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      value={etaDocs[0]?.documentType || 'I'}
+                      onChange={(e) => updateInvoiceMetadata('documentType', e.target.value)}
+                    >
+                      <option value="I">{lang === 'ar' ? 'فاتورة (Invoice)' : 'Invoice (I)'}</option>
+                      <option value="C">{lang === 'ar' ? 'إشعار دائن (Credit Note)' : 'Credit Note (C)'}</option>
+                      <option value="D">{lang === 'ar' ? 'إشعار مدين (Debit Note)' : 'Debit Note (D)'}</option>
+                    </select>
+                  </div>
+
+                  {/* Currency */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      💵 {lang === 'ar' ? 'العملة' : 'Currency'}
+                    </label>
+                    <select
+                      className="input"
+                      style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      value={etaDocs[0]?.invoiceLines?.[0]?.unitValue?.currencySold || 'EGP'}
+                      onChange={(e) => updateInvoiceMetadata('currency', e.target.value)}
+                    >
+                      <option value="EGP">EGP (جنيه مصري)</option>
+                      <option value="USD">USD (دولار أمريكي)</option>
+                      <option value="EUR">EUR (يورو)</option>
+                    </select>
+                  </div>
+
+                  {/* Code Type */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      🔑 {lang === 'ar' ? 'نوع الكود الموحد' : 'ETA Code Type'}
+                    </label>
+                    <select
+                      className="input"
+                      style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      value={etaDocs[0]?.codeType || 'EGS'}
+                      onChange={(e) => updateInvoiceMetadata('codeType', e.target.value)}
+                    >
+                      <option value="EGS">EGS (المصري الموحد)</option>
+                      <option value="GS1">GS1 (العالمي المشترك)</option>
+                    </select>
+                  </div>
+
+                  {/* Taxpayer Activity Code */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      ⚡ {lang === 'ar' ? 'كود النشاط الضريبي' : 'Taxpayer Activity Code'}
+                    </label>
+                    <input 
+                      type="text" 
+                      className="input" 
+                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
+                      value={etaDocs[0]?.taxpayerActivityCode || '2410'} 
+                      onChange={(e) => updateInvoiceMetadata('taxpayerActivityCode', e.target.value)} 
+                    />
+                  </div>
+
+                  {/* Issuer Name */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      🏢 {lang === 'ar' ? 'اسم الشركة المصدرة (المورد)' : 'Issuer Company Name'}
+                    </label>
+                    <input 
+                      type="text" 
+                      className="input" 
+                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      value={etaDocs[0]?.issuer?.name || ''} 
+                      onChange={(e) => updateInvoiceMetadata('issuerName', e.target.value)} 
+                    />
+                  </div>
+
+                  {/* Issuer VAT */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      🆔 {lang === 'ar' ? 'الرقم الضريبي للمصدر' : 'Issuer VAT ID'}
+                    </label>
+                    <input 
+                      type="text" 
+                      className="input" 
+                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
+                      value={etaDocs[0]?.issuer?.id || ''} 
+                      onChange={(e) => updateInvoiceMetadata('issuerVat', e.target.value)} 
+                    />
+                  </div>
+
+                  {/* Receiver Name */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      🤝 {lang === 'ar' ? 'اسم العميل (المشتري)' : 'Receiver Client Name'}
+                    </label>
+                    <input 
+                      type="text" 
+                      className="input" 
+                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      value={etaDocs[0]?.receiver?.name || ''} 
+                      onChange={(e) => updateInvoiceMetadata('receiverName', e.target.value)} 
+                    />
+                  </div>
+
+                  {/* Receiver VAT */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      🆔 {lang === 'ar' ? 'الرقم الضريبي للمشتري' : 'Receiver VAT ID'}
+                    </label>
+                    <input 
+                      type="text" 
+                      className="input" 
+                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
+                      value={etaDocs[0]?.receiver?.id || ''} 
+                      onChange={(e) => updateInvoiceMetadata('receiverVat', e.target.value)} 
+                    />
+                  </div>
+
+                </div>
+              </div>
+
+              {/* SECTION B: INVOICE LINES SECTION (Editable Lines Grid) */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
                 <h4 style={{ fontWeight: 800, fontSize: '1.1rem', margin: 0 }}>🧾 {lang === 'ar' ? 'مراجعة وتعديل بنود الفاتورة (بيئة عمل تفاعلية)' : 'Accountant Invoice Workspace (Editable Grid)'}</h4>
                 <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>

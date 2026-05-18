@@ -227,17 +227,25 @@ async function parseSmartDocument(filePath, isPdf = false) {
     const internalCode = codeMach ? codeMach[1] : `ART-${100 + blockIdx}`;
 
     // ح. استخلاص اسم المنتج الحقيقي بطريقة نظيفة
-    let productName = blockText
-      .replace(/[^a-zA-Z\u0600-\u06FF\s]/g, " ")
-      .replace(/\b(?:LM|KG|BAR|mm|INV|VAT|TOTAL|SUBTOTAL|EGP|USD)\b/gi, "")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (!productName || productName.length < 3) {
-      productName = `قطاع ألومنيوم طراز ${internalCode}`;
+    let productName = "";
+    // البحث عن كلمات شهيرة لقطاعات الألومنيوم مثل Transom أو Mullion يتبعها رقم طراز
+    const profileMatch = blockText.match(/\b(transom|mullion|frame|sash|profile|door|window|section|قطاع|حلق|ضلفة|قائم|عارض)\s*(\d{2,4})\b/i);
+    if (profileMatch) {
+      productName = `${profileMatch[1].charAt(0).toUpperCase() + profileMatch[1].slice(1).toLowerCase()} ${profileMatch[2]}`;
     } else {
-      // تنظيف من الكلمات المبعثرة
-      productName = productName.split(" ").slice(0, 5).join(" ");
+      // استخلاص الاسم بطريقة الكلمات العادية النظيفة
+      productName = blockText
+        .replace(/[^a-zA-Z\u0600-\u06FF\s]/g, " ")
+        .replace(/\b(?:LM|KG|BAR|mm|INV|VAT|TOTAL|SUBTOTAL|EGP|USD|EUR)\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (!productName || productName.length < 3) {
+        productName = `قطاع ألومنيوم طراز ${internalCode}`;
+      } else {
+        // تنظيف الكلمات وحذف أي أرقام زائدة
+        productName = productName.split(" ").slice(0, 3).join(" ");
+      }
     }
 
     // ط. تطبيق لوجيك الكميات الضريبية (Quantity logic: LM is the true ETA Quantity)
