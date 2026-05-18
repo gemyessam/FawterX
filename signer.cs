@@ -20,11 +20,11 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.5.3 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.6.0 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.5.3 (Egypt ETA)  ");
-            Console.WriteLine("    [STATUS] Offline Chain Embedding: Active (Custom None) ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.6.0 (Egypt ETA)  ");
+            Console.WriteLine("    [STATUS] CAdES-BES & Offline Chain Injection: Active ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
             
@@ -35,7 +35,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.5.3 (Custom Offline Chain Embedding Active)");
+                Console.WriteLine("[INFO] Version 1.6.0 (CAdES-BES ESS-Signing-Cert-V2 + Offline Chain Active)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -291,6 +291,21 @@ namespace FawterXSigner
             // Include signing time attribute
             cmsSigner.SignedAttributes.Add(new Pkcs9SigningTime(DateTime.UtcNow));
 
+            // Add mandatory ESS-Signing-Certificate-V2 attribute (OID 1.2.840.113549.1.9.16.2.47) for CAdES-BES compliance
+            try
+            {
+                byte[] signingCertV2Der = ConstructSigningCertificateV2Der(cert);
+                Oid oid = new Oid("1.2.840.113549.1.9.16.2.47");
+                AsnEncodedData asnEncodedData = new AsnEncodedData(oid, signingCertV2Der);
+                CryptographicAttributeObject attr = new CryptographicAttributeObject(oid, new AsnEncodedDataCollection(asnEncodedData));
+                cmsSigner.SignedAttributes.Add(attr);
+                Console.WriteLine("[INFO] Successfully injected mandatory ESS-Signing-Certificate-V2 (CAdES-BES) attribute!");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[WARN] Failed to inject ESS-Signing-Certificate-V2 attribute: " + ex.Message);
+            }
+
             // Compute signature (Windows automatically prompts the user for PIN if required by USB CSP)
             signedCms.ComputeSignature(cmsSigner, false); // false = do not prompt if already cached, but will prompt PIN if needed by hardware token
 
@@ -376,6 +391,33 @@ namespace FawterXSigner
             {
                 Console.WriteLine("[WARN] Chain chasing and trust installation note: " + ex.Message);
             }
+        }
+
+        private static byte[] ConstructSigningCertificateV2Der(X509Certificate2 cert)
+        {
+            // Compute SHA-256 of the certificate
+            byte[] certHash;
+            using (var sha256 = System.Security.Cryptography.SHA256.Create())
+            {
+                certHash = sha256.ComputeHash(cert.RawData);
+            }
+
+            // Create DER structure manually: SEQUENCE -> SEQUENCE -> SEQUENCE -> OCTET STRING
+            byte[] der = new byte[40];
+            der[0] = 0x30; // SEQUENCE (SigningCertificateV2)
+            der[1] = 0x26; // Length (38)
+            
+            der[2] = 0x30; // SEQUENCE (certs)
+            der[3] = 0x24; // Length (36)
+            
+            der[4] = 0x30; // SEQUENCE (ESSCertIDv2)
+            der[5] = 0x22; // Length (34)
+            
+            der[6] = 0x04; // OCTET STRING (certHash)
+            der[7] = 0x20; // Length (32)
+
+            Array.Copy(certHash, 0, der, 8, 32);
+            return der;
         }
 
         // Lightweight helper to extract JSON values without external libraries
