@@ -19,11 +19,11 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.1.0 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.2.0 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.1.0 (Egypt ETA)  ");
-            Console.WriteLine("    [STATUS] Chain Bypass: Active                  ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.2.0 (Egypt ETA)  ");
+            Console.WriteLine("    [STATUS] Signature Chain: ExcludeRoot (ITIDA Approved) ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
             
@@ -34,7 +34,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.1.0 (Bypasses Local CA chain validation successfully)");
+                Console.WriteLine("[INFO] Version 1.2.0 (Full Chain Inclusion Enabled)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -236,7 +236,7 @@ namespace FawterXSigner
             SignedCms signedCms = new SignedCms(contentInfo, true); // true = detached signature
 
             CmsSigner cmsSigner = new CmsSigner(cert);
-            cmsSigner.IncludeOption = X509IncludeOption.EndCertOnly;
+            cmsSigner.IncludeOption = X509IncludeOption.ExcludeRoot;
             
             // Specify SHA-256 for the digest hashing algorithm (ETA Mandatory)
             cmsSigner.DigestAlgorithm = new Oid("2.16.840.1.101.3.4.2.1"); // SHA-256 Oid

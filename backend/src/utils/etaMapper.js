@@ -1,6 +1,11 @@
 const UNIT_MAP = {
   "m": "MTR",
+  "lm": "MTR",
+  "meter": "MTR",
+  "متر": "MTR",
   "kg": "KGM",
+  "kgm": "KGM",
+  "كيلو": "KGM",
   "ea": "EA",
   "ton": "TNE",
   "bar": "BAR"
@@ -58,7 +63,7 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       const quantity   = parseFloat(row[mapping.quantity]  || 1);
       const taxPercent = parseFloat(row[mapping.taxPercent] || 14);
 
-      const salesTotal = unitValue * quantity;
+      const salesTotal = parseFloat((unitValue * quantity).toFixed(5));
       const taxAmount  = parseFloat(((salesTotal * taxPercent) / 100).toFixed(5));
       const netTotal   = parseFloat(salesTotal.toFixed(5));
       const total      = parseFloat((netTotal + taxAmount).toFixed(5));
@@ -73,10 +78,15 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       const codeTypeMapped = String(row[mapping.codeType] || "EGS").toUpperCase().trim();
       const itemType = codeTypeMapped === "EGS" || codeTypeMapped === "GS1" ? codeTypeMapped : "EGS";
 
+      let itemCode = String(row[mapping.itemCode] || "EG-XXXXX-XXXXX").trim();
+      if (itemType === "EGS" && itemCode && !itemCode.toUpperCase().startsWith("EG-")) {
+        itemCode = "EG-" + itemCode;
+      }
+
       return {
         description:       desc,
         itemType:          itemType,
-        itemCode:          String(row[mapping.itemCode] || "EG-XXXXX-XXXXX"),
+        itemCode:          itemCode,
         unitType:          unitType,
         quantity,
         internalCode:      String(row[mapping.internalCode] || `ITEM-${idx + 1}`),
