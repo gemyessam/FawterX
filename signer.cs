@@ -20,10 +20,10 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.6.3 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.7.0 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.6.3 (Egypt ETA)  ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.7.0 (Egypt ETA)  ");
             Console.WriteLine("    [STATUS] CAdES-BES Explicit Hash OID & Chain: Active ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
@@ -35,7 +35,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.6.3 (CAdES-BES Explicit Hash OID + Offline Chain Active)");
+                Console.WriteLine("[INFO] Version 1.7.0 (CAdES-BES Explicit Hash OID + Offline Chain Active)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -97,7 +97,7 @@ namespace FawterXSigner
                 if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/")
                 {
                     response.ContentType = "application/json; charset=utf-8";
-                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.6.3\",\"message\":\"FawterX local signer v1.6.3 is running with IssuerAndSerialNumber and ExcludeRoot chain!\"}";
+                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.7.0\",\"message\":\"FawterX local signer v1.7.0 is running with IssuerAndSerialNumber and ExcludeRoot chain!\"}";
                     byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                     response.ContentLength64 = buffer.Length;
                     response.OutputStream.Write(buffer, 0, buffer.Length);
@@ -232,8 +232,19 @@ namespace FawterXSigner
         {
             byte[] dataToSign = Encoding.UTF8.GetBytes(canonicalString);
             
-            // Setup ContentInfo for detached signature (which Egypt ETA requires)
-            ContentInfo contentInfo = new ContentInfo(dataToSign);
+            // CRITICAL FIX for ITIDA Error 4062:
+            // ETA/ITIDA requires ContentType = DigestData (OID 1.2.840.113549.1.7.5), NOT Data (1.2.840.113549.1.7.1).
+            // We must hash the canonical string first, then pass the hash as DigestData.
+            byte[] hash;
+            using (var sha256 = SHA256.Create())
+            {
+                hash = sha256.ComputeHash(dataToSign);
+            }
+            Console.WriteLine("[SIGNING] SHA-256 Hash (hex): " + BitConverter.ToString(hash).Replace("-", "").ToLower());
+            
+            // Setup ContentInfo with DigestData OID for detached CAdES-BES signature
+            Oid digestDataOid = new Oid("1.2.840.113549.1.7.5"); // DigestData
+            ContentInfo contentInfo = new ContentInfo(digestDataOid, hash);
             SignedCms signedCms = new SignedCms(contentInfo, true); // true = detached signature
 
             CmsSigner cmsSigner = new CmsSigner(cert);
