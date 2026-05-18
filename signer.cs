@@ -20,11 +20,11 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.6.0 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.6.1 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.6.0 (Egypt ETA)  ");
-            Console.WriteLine("    [STATUS] CAdES-BES & Offline Chain Injection: Active ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.6.1 (Egypt ETA)  ");
+            Console.WriteLine("    [STATUS] CAdES-BES Explicit Hash OID & Chain: Active ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
             
@@ -35,7 +35,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.6.0 (CAdES-BES ESS-Signing-Cert-V2 + Offline Chain Active)");
+                Console.WriteLine("[INFO] Version 1.6.1 (CAdES-BES Explicit Hash OID + Offline Chain Active)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -402,21 +402,50 @@ namespace FawterXSigner
                 certHash = sha256.ComputeHash(cert.RawData);
             }
 
-            // Create DER structure manually: SEQUENCE -> SEQUENCE -> SEQUENCE -> OCTET STRING
-            byte[] der = new byte[40];
-            der[0] = 0x30; // SEQUENCE (SigningCertificateV2)
-            der[1] = 0x26; // Length (38)
-            
-            der[2] = 0x30; // SEQUENCE (certs)
-            der[3] = 0x24; // Length (36)
-            
-            der[4] = 0x30; // SEQUENCE (ESSCertIDv2)
-            der[5] = 0x22; // Length (34)
-            
-            der[6] = 0x04; // OCTET STRING (certHash)
-            der[7] = 0x20; // Length (32)
+            // Create DER structure manually:
+            // SigningCertificateV2 ::= SEQUENCE { certs SEQUENCE OF ESSCertIDv2 }
+            // ESSCertIDv2 ::= SEQUENCE { hashAlgorithm AlgorithmIdentifier, certHash Hash }
+            // AlgorithmIdentifier ::= SEQUENCE { algorithm OBJECT IDENTIFIER (SHA-256) }
 
-            Array.Copy(certHash, 0, der, 8, 32);
+            byte[] hashAlgoOid = { 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01 };
+
+            // Total ESSCertIDv2 content = 13 (hashAlgorithm) + 34 (certHash) = 47 bytes
+            // ESSCertIDv2 SEQUENCE header = 30 2D (length 47)
+            
+            // Total certs content = 49 bytes (ESSCertIDv2 header + content)
+            // certs SEQUENCE header = 30 2F (length 49)
+
+            // Total SigningCertificateV2 content = 51 bytes (certs header + content)
+            // SigningCertificateV2 SEQUENCE header = 30 31 (length 51)
+
+            byte[] der = new byte[53];
+            
+            // SigningCertificateV2 header
+            der[0] = 0x30;
+            der[1] = 0x31; // Length 51
+            
+            // certs header
+            der[2] = 0x30;
+            der[3] = 0x2F; // Length 49
+            
+            // ESSCertIDv2 header
+            der[4] = 0x30;
+            der[5] = 0x2D; // Length 47
+            
+            // hashAlgorithm SEQUENCE header
+            der[6] = 0x30;
+            der[7] = 0x0B; // Length 11
+            
+            // hashAlgorithm OID
+            Array.Copy(hashAlgoOid, 0, der, 8, 11);
+            
+            // certHash OCTET STRING header
+            der[19] = 0x04;
+            der[20] = 0x20; // Length 32
+            
+            // certHash value
+            Array.Copy(certHash, 0, der, 21, 32);
+
             return der;
         }
 

@@ -656,7 +656,7 @@ export default function Home() {
               <h2 className="card-title">📋 {lang === 'ar' ? 'ملخص وتقرير الفحص المالي والمطابقة' : 'Invoice Pre-flight & Compliance Report'}</h2>
               <p className="card-sub">{lang === 'ar' ? 'تقييم فوري لمعدل الامتثال لشركتك وبيانات الضرائب المحلية.' : 'Immediate pre-send testing and tax validation compliance score'}</p>
 
-              <div className="stats-summary-strip" style={{ marginBottom: '2rem' }}>
+              <div className="stats-summary-strip" style={{ marginBottom: '3rem' }}>
                 <div className="stat-widget">
                   <span className="stat-val">{uploadResult.metadata?.issuer || 'FawterX Customer'}</span>
                   <span className="stat-lbl">{lang === 'ar' ? 'اسم المصدر' : 'Supplier Name'}</span>
@@ -675,26 +675,26 @@ export default function Home() {
                 </div>
               </div>
 
-              <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ marginBottom: '2.5rem' }}>
                 {validation?.valid ? (
-                  <div className="status-banner success-banner">
+                  <div className="status-banner success-banner" style={{ padding: '1.25rem' }}>
                     ✅ {lang === 'ar' ? 'اجتازت الفاتورة الفحص المحلي التلقائي بنجاح وجاهزة تماماً للإرسال.' : 'Local automated compliance validation succeeded. Fully ready to transmit.'}
                   </div>
                 ) : (
-                  <div className="status-banner error-banner">
+                  <div className="status-banner error-banner" style={{ padding: '1.25rem' }}>
                     ✕ {lang === 'ar' ? 'تنبيه: يحتوي المستند على أخطاء يجب معالجتها محلياً قبل التوقيع.' : 'Validation errors detected. Fix local inconsistencies before submitting.'}
                   </div>
                 )}
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h4 style={{ fontWeight: 800 }}>🧾 {lang === 'ar' ? 'معاينة بنود الفاتورة' : 'Invoice Items Preview'}</h4>
-                <span className="badge badge-valid" style={{ background: 'rgba(0, 224, 161, 0.1)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem' }}>
+                <h4 style={{ fontWeight: 800, fontSize: '1.1rem' }}>🧾 {lang === 'ar' ? 'معاينة بنود الفاتورة' : 'Invoice Items Preview'}</h4>
+                <span className="badge badge-valid" style={{ background: 'rgba(0, 224, 161, 0.1)', padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
                   {lang === 'ar' ? 'رقم الفاتورة:' : 'Invoice ID:'} {etaDocs[0]?.internalID}
                 </span>
               </div>
 
-              <div className="table-wrapper" style={{ maxHeight: '350px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+              <div className="table-wrapper" style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '2.5rem' }}>
                 <table>
                   <thead>
                     <tr>
@@ -713,8 +713,8 @@ export default function Home() {
                       <tr key={idx}>
                         <td>{idx + 1}</td>
                         <td>
-                          <div style={{ fontWeight: 700, color: '#fff' }}>{line.description}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'monospace', marginTop: '0.2rem' }}>
+                          <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>{line.description}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'monospace', marginTop: '0.25rem' }}>
                             {line.itemCode}
                           </div>
                         </td>
@@ -732,45 +732,46 @@ export default function Home() {
 
               {/* Gorgeous Portal-Style Totals Panel */}
               <div style={{ 
-                marginTop: '1.5rem', 
-                padding: '1.5rem', 
-                background: 'rgba(255, 255, 255, 0.01)', 
+                marginTop: '2.5rem', 
+                marginBottom: '2.5rem', 
+                padding: '2rem', 
+                background: 'rgba(255, 255, 255, 0.015)', 
                 border: '1px solid var(--border)', 
                 borderRadius: 'var(--radius)',
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '1.5rem',
+                gap: '2.5rem',
                 textAlign: lang === 'ar' ? 'right' : 'left'
               }}>
-                <div style={{ borderLeft: lang === 'ar' ? '1px solid var(--border)' : 'none', borderRight: lang !== 'ar' ? '1px solid var(--border)' : 'none', paddingLeft: lang === 'ar' ? '1.5rem' : '0', paddingRight: lang !== 'ar' ? '1.5rem' : '0' }}>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.3rem' }}>
+                <div style={{ borderLeft: lang === 'ar' ? '1px solid var(--border)' : 'none', borderRight: lang !== 'ar' ? '1px solid var(--border)' : 'none', paddingLeft: lang === 'ar' ? '2rem' : '0', paddingRight: lang !== 'ar' ? '2rem' : '0' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.5rem' }}>
                     {lang === 'ar' ? '💵 إجمالي المبيعات (قبل الضريبة)' : '💵 Total Sales (Before Tax)'}
                   </span>
-                  <strong style={{ fontSize: '1.3rem', color: '#fff' }}>
+                  <strong style={{ fontSize: '1.45rem', color: '#fff' }}>
                     {Number(etaDocs[0]?.netAmount || etaDocs[0]?.totalSalesAmount || 0).toLocaleString()} <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>EGP</span>
                   </strong>
                 </div>
                 
-                <div style={{ borderLeft: lang === 'ar' ? '1px solid var(--border)' : 'none', borderRight: lang !== 'ar' ? '1px solid var(--border)' : 'none', paddingLeft: lang === 'ar' ? '1.5rem' : '0', paddingRight: lang !== 'ar' ? '1.5rem' : '0' }}>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.3rem' }}>
+                <div style={{ borderLeft: lang === 'ar' ? '1px solid var(--border)' : 'none', borderRight: lang !== 'ar' ? '1px solid var(--border)' : 'none', paddingLeft: lang === 'ar' ? '2rem' : '0', paddingRight: lang !== 'ar' ? '2rem' : '0' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.5rem' }}>
                     {lang === 'ar' ? '⚡ إجمالي ضريبة القيمة المضافة (T1)' : '⚡ Total Value Added Tax (VAT T1)'}
                   </span>
-                  <strong style={{ fontSize: '1.3rem', color: '#f1c40f' }}>
+                  <strong style={{ fontSize: '1.45rem', color: '#f1c40f' }}>
                     {Number(etaDocs[0]?.taxTotals?.[0]?.amount || 0).toLocaleString()} <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>EGP</span>
                   </strong>
                 </div>
 
                 <div>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.3rem' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.5rem' }}>
                     {lang === 'ar' ? '🏆 الإجمالي الكلي للفاتورة (بالضريبة)' : '🏆 Grand Invoice Total (With VAT)'}
                   </span>
-                  <strong style={{ fontSize: '1.6rem', color: 'var(--accent)', fontWeight: 800 }}>
-                    {Number(etaDocs[0]?.totalAmount || 0).toLocaleString()} <span style={{ fontSize: '1rem', color: 'var(--text-dim)' }}>EGP</span>
+                  <strong style={{ fontSize: '1.8rem', color: 'var(--accent)', fontWeight: 800 }}>
+                    {Number(etaDocs[0]?.totalAmount || 0).toLocaleString()} <span style={{ fontSize: '1.1rem', color: 'var(--text-dim)' }}>EGP</span>
                   </strong>
                 </div>
               </div>
 
-              <div className="expandable-advanced">
+              <div className="expandable-advanced" style={{ marginTop: '2.5rem', marginBottom: '1.5rem' }}>
                 <div className="advanced-toggle-header" onClick={() => setShowAdvanced(!showAdvanced)}>
                   <span>🛠️ {lang === 'ar' ? 'عرض تفاصيل ومخرجات الـ JSON الفنية' : 'Advanced Developers JSON Schema'}</span>
                   <span>{showAdvanced ? '▲' : '▼'}</span>
@@ -784,7 +785,7 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="nav-actions" style={{ marginTop: '2.5rem' }}>
+              <div className="nav-actions" style={{ marginTop: '4rem' }}>
                 <button className="btn btn-ghost" onClick={() => setStep(2)}>← {lang === 'ar' ? 'السابق' : 'Back'}</button>
                 <button className="btn btn-primary" onClick={handleTriggerETA} disabled={!validation?.valid}>
                   🚀 {lang === 'ar' ? 'توقيع وإرسال لـ ETA الحقيقي' : 'Sign & Submit Live to ETA'}
