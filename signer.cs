@@ -19,10 +19,10 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.3.0 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.3.1 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.3.0 (Egypt ETA)  ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.3.1 (Egypt ETA)  ");
             Console.WriteLine("    [STATUS] Chain Injection: Custom ExcludeRoot Active ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
@@ -34,7 +34,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.3.0 (Manual Chain Resolution Active)");
+                Console.WriteLine("[INFO] Version 1.3.1 (Manual Chain Resolution Active)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();

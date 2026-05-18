@@ -36,6 +36,7 @@ export default function Home() {
     { key: 'internalCode',  labelAr: 'الكود الداخلي (Internal Code)', labelEn: 'Internal Code', required: false },
     { key: 'description',   labelAr: 'وصف المنتج (Item Description)', labelEn: 'Item Description', required: true },
     { key: 'quantity',      labelAr: 'الكمية (Quantity)', labelEn: 'Quantity', required: true },
+    { key: 'unitType',      labelAr: 'وحدة القياس (Unit Type)', labelEn: 'Unit Type', required: false },
     { key: 'currency',      labelAr: 'العملة (Currency)', labelEn: 'Currency', required: false },
     { key: 'unitValue',     labelAr: 'سعر الوحدة بالجنيه (Price EGP)', labelEn: 'Price EGP', required: true },
     { key: 'taxPercent',    labelAr: 'نسبة الضريبة % (Tax %)', labelEn: 'Tax %', required: false },
