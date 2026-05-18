@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AppContext } from '../App'
 import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations } from '../services/api'
 import toast from 'react-hot-toast'
+import { parseProductDescription, buildEtaDescription } from '../utils/productParser'
 
 export default function Home() {
   const { lang, t, user } = useContext(AppContext)
@@ -244,6 +245,26 @@ export default function Home() {
 
     if (field === 'description') {
       line.description = val
+    } else if (field === 'specProductName') {
+      const specs = parseProductDescription(line.description)
+      specs.productName = val
+      line.description = buildEtaDescription(specs)
+    } else if (field === 'specWeight') {
+      const specs = parseProductDescription(line.description)
+      specs.weight = parseFloat(val) || 0
+      line.description = buildEtaDescription(specs)
+    } else if (field === 'specLength') {
+      const specs = parseProductDescription(line.description)
+      specs.length = parseFloat(val) || 0
+      line.description = buildEtaDescription(specs)
+    } else if (field === 'specFinish') {
+      const specs = parseProductDescription(line.description)
+      specs.finish = val
+      line.description = buildEtaDescription(specs)
+    } else if (field === 'specMaterial') {
+      const specs = parseProductDescription(line.description)
+      specs.material = val
+      line.description = buildEtaDescription(specs)
     } else if (field === 'itemCode') {
       line.itemCode = val
     } else if (field === 'quantity') {
@@ -1341,79 +1362,227 @@ export default function Home() {
                         }}>
                           <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{idx + 1}</td>
                           <td>
-                            {/* Editable Description */}
-                            <input 
-                              type="text" 
-                              className="input" 
-                              style={{ 
-                                width: '100%', 
-                                background: 'rgba(255, 255, 255, 0.02)', 
-                                border: rowConfidence < 75 ? '1px solid #f1c40f' : '1px solid var(--border)', 
-                                color: '#fff', 
-                                fontSize: '0.85rem', 
-                                padding: '0.4rem', 
-                                borderRadius: '4px',
-                                marginBottom: '0.5rem',
-                                outline: 'none'
-                              }} 
-                              value={line.description || ''} 
-                              onChange={(e) => updateInvoiceLine(idx, 'description', e.target.value)} 
-                              placeholder={lang === 'ar' ? 'ادخل وصف الصنف هنا...' : 'Enter item description...'}
-                            />
+                            {/* Smart Specifications & Naming Layer */}
+                            {(() => {
+                              const specs = parseProductDescription(line.description);
+                              const hasNoWeight = !specs.weight || specs.weight === 0;
+                              const hasNoLength = !specs.length || specs.length === 0;
+                              const hasNoFinish = !specs.finish;
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                              {/* Confidence Badge */}
-                              <span style={{ 
-                                fontSize: '0.7rem', 
-                                padding: '0.1rem 0.4rem', 
-                                borderRadius: '4px',
-                                background: rowConfidence > 80 ? 'rgba(0, 224, 161, 0.1)' : 'rgba(241, 196, 15, 0.1)',
-                                color: rowConfidence > 80 ? '#00e0a1' : '#f1c40f',
-                                border: rowConfidence > 80 ? '1px solid rgba(0, 224, 161, 0.2)' : '1px solid rgba(241, 196, 15, 0.2)'
-                              }}>
-                                🎯 {rowConfidence}%
-                              </span>
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                  
+                                  {/* Beautiful Visual Card displaying the structured product */}
+                                  <div style={{
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                                    borderRadius: '8px',
+                                    padding: '0.75rem 1rem',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '0.5rem'
+                                  }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <span className="badge" style={{
+                                          background: 'linear-gradient(135deg, #7c4dff, #18ffff)',
+                                          color: '#0b0d19',
+                                          fontWeight: '900',
+                                          fontSize: '0.8rem',
+                                          padding: '0.2rem 0.6rem',
+                                          border: 'none'
+                                        }}>
+                                          🔩 {specs.material} {specs.productName}
+                                        </span>
+                                      </div>
+                                      
+                                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                        {hasNoWeight && (
+                                          <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(231, 76, 60, 0.1)', color: '#e74c3c', border: '1px solid rgba(231, 76, 60, 0.2)', fontWeight: 'bold' }}>
+                                            ⚠️ Missing KG
+                                          </span>
+                                        )}
+                                        {hasNoLength && (
+                                          <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(231, 76, 60, 0.1)', color: '#e74c3c', border: '1px solid rgba(231, 76, 60, 0.2)', fontWeight: 'bold' }}>
+                                            ⚠️ Missing Length
+                                          </span>
+                                        )}
+                                        {hasNoFinish && (
+                                          <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(241, 196, 15, 0.1)', color: '#f1c40f', border: '1px solid rgba(241, 196, 15, 0.2)', fontWeight: 'bold' }}>
+                                            ⚠️ Missing Finish
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
 
-                              {/* Editable Item Code */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>🔑 GPC/EGS:</span>
-                                <input 
-                                  type="text" 
-                                  className="input" 
-                                  style={{ 
-                                    background: 'rgba(9, 11, 20, 0.6)', 
-                                    border: '1px solid var(--border)', 
-                                    borderRadius: '6px', 
-                                    color: '#00e0a1', 
-                                    fontSize: '0.8rem', 
-                                    padding: '0.25rem 0.5rem', 
-                                    width: '180px', 
-                                    fontFamily: 'monospace',
-                                    fontWeight: 'bold',
-                                    outline: 'none'
-                                  }} 
-                                  value={line.itemCode || ''} 
-                                  onChange={(e) => updateInvoiceLine(idx, 'itemCode', e.target.value)} 
-                                  placeholder="EG-111111-..."
-                                />
-                              </div>
-                            </div>
+                                    {/* Readable specs summary strip */}
+                                    <div style={{
+                                      display: 'grid',
+                                      gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+                                      gap: '0.5rem',
+                                      background: 'rgba(9, 11, 20, 0.4)',
+                                      padding: '0.5rem',
+                                      borderRadius: '6px',
+                                      border: '1px solid rgba(255, 255, 255, 0.02)'
+                                    }}>
+                                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                                        📏 Length: <strong style={{ color: '#fff' }}>{specs.length > 0 ? `${specs.length.toLocaleString()} mm` : 'N/A'}</strong>
+                                      </div>
+                                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                                        ⚖️ Weight: <strong style={{ color: '#fff' }}>{specs.weight > 0 ? `${specs.weight.toFixed(2)} KG` : 'N/A'}</strong>
+                                      </div>
+                                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                                        🎨 Finish: <strong style={{ color: '#00e0a1' }}>{specs.finish || 'N/A'}</strong>
+                                      </div>
+                                    </div>
+                                  </div>
 
-                            {/* Warnings / Missing fields inline */}
-                            {(rowWarnings.length > 0 || rowMissing.length > 0) && (
-                              <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                                {rowMissing.map(m => (
-                                  <span key={m} style={{ fontSize: '0.65rem', padding: '0.05rem 0.3rem', borderRadius: '4px', background: 'rgba(231, 76, 60, 0.1)', color: '#e74c3c', border: '1px solid rgba(231, 76, 60, 0.2)' }}>
-                                    🔍 مفقود: {m}
-                                  </span>
-                                ))}
-                                {rowWarnings.map((w, wIdx) => (
-                                  <span key={wIdx} style={{ fontSize: '0.65rem', padding: '0.05rem 0.3rem', borderRadius: '4px', background: 'rgba(241, 196, 15, 0.1)', color: '#f1c40f', border: '1px solid rgba(241, 196, 15, 0.2)' }}>
-                                    ⚠️ {w}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
+                                  {/* SPECIFICATIONS EDITOR GRID */}
+                                  <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                                    gap: '0.5rem',
+                                    marginTop: '0.25rem'
+                                  }}>
+                                    
+                                    {/* 1. Profile Name Selector */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                      <label style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>Product Type</label>
+                                      <select
+                                        className="input"
+                                        style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', fontSize: '0.75rem', padding: '0.3rem', borderRadius: '4px' }}
+                                        value={specs.productName.split(" ")[0]}
+                                        onChange={(e) => {
+                                          const model = specs.productName.split(" ").slice(1).join(" ") || "";
+                                          updateInvoiceLine(idx, 'specProductName', `${e.target.value} ${model}`.trim());
+                                        }}
+                                      >
+                                        <option value="Mullion">Mullion (قائم)</option>
+                                        <option value="Transom">Transom (عارض)</option>
+                                        <option value="Vent">Vent (ضلفة)</option>
+                                        <option value="Track">Track (سكة)</option>
+                                        <option value="T-Cleat">T-Cleat (زاوية)</option>
+                                        <option value="Frame">Frame (حلق)</option>
+                                        <option value="Adaptor">Adaptor (محول)</option>
+                                        <option value="Profile">Profile (قطاع)</option>
+                                      </select>
+                                    </div>
+
+                                    {/* Model/Model Number Input */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                      <label style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>Model / Size</label>
+                                      <input
+                                        type="text"
+                                        className="input"
+                                        placeholder="e.g. 155, 81/69"
+                                        style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.75rem', padding: '0.3rem', borderRadius: '4px' }}
+                                        value={specs.productName.split(" ").slice(1).join(" ") || ""}
+                                        onChange={(e) => {
+                                          const type = specs.productName.split(" ")[0] || "Profile";
+                                          updateInvoiceLine(idx, 'specProductName', `${type} ${e.target.value}`.trim());
+                                        }}
+                                      />
+                                    </div>
+
+                                    {/* 2. Weight input */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                      <label style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>Weight (KG)</label>
+                                      <input
+                                        type="number"
+                                        className="input"
+                                        placeholder="KG"
+                                        style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.75rem', padding: '0.3rem', borderRadius: '4px' }}
+                                        value={specs.weight || ''}
+                                        onChange={(e) => updateInvoiceLine(idx, 'specWeight', e.target.value)}
+                                      />
+                                    </div>
+
+                                    {/* 3. Length input */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                      <label style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>Length (mm)</label>
+                                      <input
+                                        type="number"
+                                        className="input"
+                                        placeholder="mm"
+                                        style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.75rem', padding: '0.3rem', borderRadius: '4px' }}
+                                        value={specs.length || ''}
+                                        onChange={(e) => updateInvoiceLine(idx, 'specLength', e.target.value)}
+                                      />
+                                    </div>
+
+                                    {/* 4. Finish input */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                      <label style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>Finish/Color</label>
+                                      <input
+                                        type="text"
+                                        className="input"
+                                        placeholder="e.g. RAL8019SD"
+                                        style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.75rem', padding: '0.3rem', borderRadius: '4px' }}
+                                        value={specs.finish || ''}
+                                        onChange={(e) => updateInvoiceLine(idx, 'specFinish', e.target.value)}
+                                      />
+                                    </div>
+
+                                  </div>
+
+                                  {/* Item Code & Meta Badges */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                                    <span style={{ 
+                                      fontSize: '0.7rem', 
+                                      padding: '0.1rem 0.4rem', 
+                                      borderRadius: '4px',
+                                      background: rowConfidence > 80 ? 'rgba(0, 224, 161, 0.1)' : 'rgba(241, 196, 15, 0.1)',
+                                      color: rowConfidence > 80 ? '#00e0a1' : '#f1c40f',
+                                      border: rowConfidence > 80 ? '1px solid rgba(0, 224, 161, 0.2)' : '1px solid rgba(241, 196, 15, 0.2)'
+                                    }}>
+                                      🎯 Confidence: {rowConfidence}%
+                                    </span>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>🔑 GPC/EGS:</span>
+                                      <input 
+                                        type="text" 
+                                        className="input" 
+                                        style={{ 
+                                          background: 'rgba(9, 11, 20, 0.6)', 
+                                          border: '1px solid var(--border)', 
+                                          borderRadius: '6px', 
+                                          color: '#00e0a1', 
+                                          fontSize: '0.75rem', 
+                                          padding: '0.2rem 0.4rem', 
+                                          width: '160px', 
+                                          fontFamily: 'monospace',
+                                          fontWeight: 'bold',
+                                          outline: 'none'
+                                        }} 
+                                        value={line.itemCode || ''} 
+                                        onChange={(e) => updateInvoiceLine(idx, 'itemCode', e.target.value)} 
+                                      />
+                                    </div>
+
+                                    {/* Raw extracted description display */}
+                                    <details style={{ cursor: 'pointer' }}>
+                                      <summary style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 'bold' }}>
+                                        {lang === 'ar' ? '🔍 عرض النص الأصلي المستخلص' : '🔍 View Raw Extracted Text'}
+                                      </summary>
+                                      <p style={{
+                                        margin: '0.25rem 0 0',
+                                        fontSize: '0.7rem',
+                                        color: 'var(--text-dim)',
+                                        background: 'rgba(0, 0, 0, 0.2)',
+                                        padding: '0.4rem',
+                                        borderRadius: '4px',
+                                        whiteSpace: 'pre-wrap',
+                                        maxWidth: '450px'
+                                      }}>
+                                        {rawRow.rawText || line.description}
+                                      </p>
+                                    </details>
+                                  </div>
+
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td>
                             {/* Editable Quantity */}
