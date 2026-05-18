@@ -1,5 +1,5 @@
 const fs = require("fs");
-const pdf = require("pdf-parse");
+const pdfParseModule = require("pdf-parse");
 const XLSX = require("xlsx");
 
 /**
@@ -23,8 +23,18 @@ async function parseSmartDocument(filePath, isPdf = false) {
   if (isPdf) {
     // 1. معالجة ملفات الـ PDF واستخراج النصوص
     const dataBuffer = fs.readFileSync(filePath);
-    const pdfData = await pdf(dataBuffer);
-    text = pdfData.text || "";
+    
+    let pdfDataText = "";
+    if (typeof pdfParseModule === "function") {
+      const pdfData = await pdfParseModule(dataBuffer);
+      pdfDataText = pdfData.text || "";
+    } else if (pdfParseModule && pdfParseModule.PDFParse) {
+      const pdfInstance = new pdfParseModule.PDFParse({ data: dataBuffer });
+      const parsed = await pdfInstance.getText();
+      pdfDataText = parsed.text || "";
+    }
+    
+    text = pdfDataText;
     
     console.log("[SmartParser] Raw PDF text extracted (Length):", text.length);
     
