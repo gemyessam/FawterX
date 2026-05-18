@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppContext } from '../App'
-import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus } from '../services/api'
+import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations } from '../services/api'
 import toast from 'react-hot-toast'
 
 export default function Home() {
@@ -13,11 +13,14 @@ export default function Home() {
   
   // Stats Mock / Live
   const [stats, setStats] = useState({
-    uploaded: 1,
-    accepted: 1,
+    uploaded: 0,
+    accepted: 0,
     rejected: 0,
     drafts: 0
   })
+
+  // Operations history from Firestore
+  const [operations, setOperations] = useState([])
 
   // Usage state from Backend
   const [usage, setUsage] = useState({ submissionsCount: 0, isSubscribed: false })
@@ -93,8 +96,29 @@ export default function Home() {
   useEffect(() => {
     if (user) {
       fetchUsage()
+      fetchOperations()
     }
   }, [user])
+
+  // Fetch operations history from Firestore
+  async function fetchOperations() {
+    try {
+      const data = await getOperations()
+      if (data && data.operations) {
+        setOperations(data.operations)
+        const accepted = data.operations.filter(op => op.status === 'accepted').length
+        const rejected = data.operations.filter(op => op.status === 'rejected' || op.status === 'error').length
+        setStats(prev => ({
+          ...prev,
+          uploaded: data.operations.length,
+          accepted,
+          rejected
+        }))
+      }
+    } catch (e) {
+      console.error('Error fetching operations:', e)
+    }
+  }
 
   // Auto mapping helper
   useEffect(() => {
@@ -442,21 +466,31 @@ export default function Home() {
                         <th>{lang === 'ar' ? 'اسم العميل' : 'Client / Receiver'}</th>
                         <th>{lang === 'ar' ? 'المبلغ الإجمالي' : 'Total Value'}</th>
                         <th>{lang === 'ar' ? 'الحالة' : 'Status'}</th>
+                        <th>{lang === 'ar' ? 'التاريخ' : 'Date'}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr>
-                        <td style={{ fontWeight: 700 }}>INV-202303603</td>
-                        <td>OMSI Group for Industry</td>
-                        <td style={{ color: 'var(--accent)' }}>431,747.84 EGP</td>
-                        <td><span className="badge badge-valid">Accepted ✓</span></td>
-                      </tr>
-                      <tr>
-                        <td style={{ fontWeight: 700 }}>INV-202303604</td>
-                        <td>Egyptian Construction Corp</td>
-                        <td style={{ color: 'var(--accent)' }}>85,400.00 EGP</td>
-                        <td><span className="badge badge-valid">Accepted ✓</span></td>
-                      </tr>
+                      {operations.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                            {lang === 'ar' ? 'لا توجد عمليات حتى الآن — ابدأ بإرسال أول فاتورة!' : 'No operations yet — submit your first invoice!'}
+                          </td>
+                        </tr>
+                      ) : (
+                        operations.slice(0, 10).map((op, idx) => (
+                          <tr key={op.operationId || idx}>
+                            <td style={{ fontWeight: 700 }}>{op.internalID || 'N/A'}</td>
+                            <td>{op.receiverName || '—'}</td>
+                            <td style={{ color: 'var(--accent)' }}>{op.totalAmount ? `${op.totalAmount.toLocaleString()} EGP` : '—'}</td>
+                            <td>
+                              {op.status === 'accepted' && <span className="badge badge-valid">{lang === 'ar' ? 'مقبولة ✓' : 'Accepted ✓'}</span>}
+                              {op.status === 'rejected' && <span className="badge badge-invalid">{lang === 'ar' ? 'مرفوضة ✗' : 'Rejected ✗'}</span>}
+                              {op.status === 'error' && <span className="badge badge-invalid">{lang === 'ar' ? 'خطأ ⚠' : 'Error ⚠'}</span>}
+                            </td>
+                            <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{op.timestamp ? new Date(op.timestamp).toLocaleDateString('ar-EG') : '—'}</td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
