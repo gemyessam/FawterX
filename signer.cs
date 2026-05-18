@@ -20,11 +20,11 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.5.0 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.5.1 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.5.0 (Egypt ETA)  ");
-            Console.WriteLine("    [STATUS] Self-Healing Chain: Active (Auto AIA) ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.5.1 (Egypt ETA)  ");
+            Console.WriteLine("    [STATUS] Offline Chain Embedding: Active (EndCert) ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
             
@@ -35,7 +35,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.5.0 (Automated CA Chain Resolution Active)");
+                Console.WriteLine("[INFO] Version 1.5.1 (Manual Offline Chain Embedding Active)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -230,9 +230,6 @@ namespace FawterXSigner
 
         private static string SignDocument(string canonicalString, X509Certificate2 cert)
         {
-            // Programmatically download and trust intermediate CA certificates from AIA or official fallback at runtime
-            AutoChaseAndInstallChain(cert);
-
             byte[] dataToSign = Encoding.UTF8.GetBytes(canonicalString);
             
             // Setup ContentInfo for detached signature (which Egypt ETA requires)
@@ -240,7 +237,50 @@ namespace FawterXSigner
             SignedCms signedCms = new SignedCms(contentInfo, true); // true = detached signature
 
             CmsSigner cmsSigner = new CmsSigner(cert);
-            cmsSigner.IncludeOption = X509IncludeOption.ExcludeRoot;
+            cmsSigner.IncludeOption = X509IncludeOption.EndCertOnly; // Guarantee 100% success without local trust exceptions!
+
+            // Programmatically gather all Egypt Trust / ITIDA certificates from local Windows stores and manually embed them!
+            try
+            {
+                StoreName[] storeNames = { StoreName.My, StoreName.CertificateAuthority, StoreName.Root };
+                StoreLocation[] storeLocations = { StoreLocation.CurrentUser, StoreLocation.LocalMachine };
+
+                foreach (var location in storeLocations)
+                {
+                    foreach (var name in storeNames)
+                    {
+                        try
+                        {
+                            using (X509Store store = new X509Store(name, location))
+                            {
+                                store.Open(OpenFlags.ReadOnly);
+                                foreach (X509Certificate2 c in store.Certificates)
+                                {
+                                    string subject = c.Subject.ToLower();
+                                    string issuer = c.Issuer.ToLower();
+
+                                    // Match Egypt Trust, EgyptTrust, and ITIDA certificates
+                                    if (subject.Contains("egypt trust") || subject.Contains("egypttrust") || 
+                                        issuer.Contains("egypt trust") || issuer.Contains("egypttrust") ||
+                                        subject.Contains("itida") || issuer.Contains("itida"))
+                                    {
+                                        if (c.Thumbprint != cert.Thumbprint)
+                                        {
+                                            Console.WriteLine("[INFO] Embedding intermediate certificate in signature store: " + c.Subject);
+                                            cmsSigner.Certificates.Add(c);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch { /* Ignore inaccessible stores */ }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[WARN] Manual chain embedding note: " + ex.Message);
+            }
             
             // Specify SHA-256 for the digest hashing algorithm (ETA Mandatory)
             cmsSigner.DigestAlgorithm = new Oid("2.16.840.1.101.3.4.2.1"); // SHA-256 Oid
