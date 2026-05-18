@@ -159,3 +159,8 @@ export async function getUsageStatus() {
   return data
 }
 
+/** جلب سجل العمليات الخاص بالمستخدم (مقبولة/مرفوضة/خطأ) */
+export async function getOperations() {
+  const { data } = await api.get('/eta/operations')
+  return data
+}

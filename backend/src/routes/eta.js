@@ -3,7 +3,7 @@ const express              = require("express");
 const { getAccessToken }   = require("../services/etaAuth");
 const { submitDocuments, getDocumentStatus } = require("../services/etaSubmit");
 const { validateETADocument } = require("../utils/etaValidator");
-const { saveDraft, getDraft, getAllDrafts, deleteDraft } = require("../services/draftStore");
+const { saveDraft, getDraft, getAllDrafts, deleteDraft, recordOperation, getAllOperations } = require("../services/draftStore");
 const { canUserSubmit, recordSubmission, getUserUsage } = require("../services/userStatsStore");
 const authMiddleware       = require("../middleware/auth");
 
@@ -95,7 +95,7 @@ router.post("/submit", async (req, res) => {
       console.log("[/submit] InternalID:", document.internalID);
 
       const validation = validateETADocument(document);
-      const draft = saveDraft(req.user.uid, document, validation);
+      const draft = await saveDraft(req.user.uid, document, validation);
 
       console.log("[/submit] Draft saved:", draft.draftId, "\n");
 
@@ -159,9 +159,20 @@ router.post("/submit", async (req, res) => {
       }
     }
 
+    // استخراج بيانات الفاتورة لسجل العمليات
+    const docsArr = Array.isArray(document) ? document : [document];
+    const opMeta = {
+      internalID:   docsArr.map(d => d.internalID).filter(Boolean).join(", "),
+      issuerName:   docsArr[0]?.issuer?.name || "",
+      receiverName: docsArr.map(d => d.receiver?.name).filter(Boolean).join(", "),
+      totalAmount:  docsArr.reduce((s, d) => s + (d.totalAmount || 0), 0),
+      linesCount:   docsArr.reduce((s, d) => s + (d.invoiceLines?.length || 0), 0),
+    };
+
     try {
       const result    = await submitDocuments(document, false, customCredentials);
       const isAccepted = result && (result.submissionUUID || (result.acceptedDocuments && result.acceptedDocuments.length > 0));
+      const requestId = result?.submissionUUID || result?.submissionId || result?.requestId || "N/A";
       
       if (!isAccepted) {
         let errMsg = "فشلت عملية الإرسال: لم تقبل مصلحة الضرائب الفاتورة أو لم ترجع معرف تقديم صالح (submissionUUID)";
@@ -169,6 +180,10 @@ router.post("/submit", async (req, res) => {
         if (resultString.includes("signature") || resultString.includes("token") || resultString.includes("key") || resultString.includes("sign")) {
           errMsg = "ETA رفضت الفاتورة بسبب عدم وجود توقيع إلكتروني";
         }
+
+        // تسجيل العملية كرفض
+        await recordOperation(req.user.uid, { ...opMeta, type: "submission", status: "rejected", requestId, errorDetails: errMsg, etaResponse: result });
+
         return res.status(400).json({
           success: false,
           message: errMsg,
@@ -179,7 +194,9 @@ router.post("/submit", async (req, res) => {
       // زيادة عداد الاستهلاك بنجاح
       await recordSubmission(req.user.uid);
 
-      const requestId = result?.submissionUUID || result?.submissionId || result?.requestId || "N/A";
+      // تسجيل العملية كقبول
+      await recordOperation(req.user.uid, { ...opMeta, type: "submission", status: "accepted", requestId, etaResponse: { submissionUUID: requestId } });
+
       console.log("[/submit] ✅ Success | RequestID:", requestId, "\n");
 
       return res.json({
@@ -200,6 +217,9 @@ router.post("/submit", async (req, res) => {
         errMsg = "ETA رفضت الفاتورة بسبب عدم وجود توقيع إلكتروني";
       }
 
+      // تسجيل العملية كخطأ
+      await recordOperation(req.user.uid, { ...opMeta, type: "submission", status: "error", requestId, errorDetails: errMsg, etaResponse: etaError });
+
       return res.status(status).json({
         success:    false,
         dryRun:     false,
@@ -217,9 +237,9 @@ router.post("/submit", async (req, res) => {
 // ══════════════════════════════════════════════════════════════════
 // GET /api/eta/drafts
 // ══════════════════════════════════════════════════════════════════
-router.get("/drafts", (req, res) => {
+router.get("/drafts", async (req, res) => {
   try {
-    const drafts = getAllDrafts(req.user.uid);
+    const drafts = await getAllDrafts(req.user.uid);
     console.log(`[/drafts] Returning ${drafts.length} drafts for User: ${req.user.uid}`);
     return res.json({ success: true, count: drafts.length, drafts });
   } catch (error) {
@@ -231,9 +251,9 @@ router.get("/drafts", (req, res) => {
 // ══════════════════════════════════════════════════════════════════
 // GET /api/eta/drafts/:draftId
 // ══════════════════════════════════════════════════════════════════
-router.get("/drafts/:draftId", (req, res) => {
+router.get("/drafts/:draftId", async (req, res) => {
   try {
-    const draft = getDraft(req.user.uid, req.params.draftId);
+    const draft = await getDraft(req.user.uid, req.params.draftId);
     if (!draft) {
       return res.status(404).json({ success: false, message: "Draft غير موجود أو غير تابع لك" });
     }
@@ -254,7 +274,7 @@ router.post("/drafts/:draftId/submit", async (req, res) => {
     const customCredentials = (clientId && clientSecret) ? { clientId, clientSecret } : null;
 
     // التحقق من الاستهلاك المجاني
-    if (!canUserSubmit(req.user.uid)) {
+    if (!(await canUserSubmit(req.user.uid))) {
       return res.status(403).json({
         success: false,
         limitReached: true,
@@ -262,7 +282,7 @@ router.post("/drafts/:draftId/submit", async (req, res) => {
       });
     }
 
-    const draft = getDraft(req.user.uid, req.params.draftId);
+    const draft = await getDraft(req.user.uid, req.params.draftId);
     if (!draft) {
       return res.status(404).json({ success: false, message: "Draft غير موجود أو غير تابع لك" });
     }
@@ -335,9 +355,9 @@ router.post("/drafts/:draftId/submit", async (req, res) => {
 // ══════════════════════════════════════════════════════════════════
 // DELETE /api/eta/drafts/:draftId
 // ══════════════════════════════════════════════════════════════════
-router.delete("/drafts/:draftId", (req, res) => {
+router.delete("/drafts/:draftId", async (req, res) => {
   try {
-    const deleted = deleteDraft(req.user.uid, req.params.draftId);
+    const deleted = await deleteDraft(req.user.uid, req.params.draftId);
     if (!deleted) {
       return res.status(404).json({ success: false, message: "Draft غير موجود أو غير تابع لك" });
     }
@@ -368,6 +388,21 @@ router.get("/status/:uuid", async (req, res) => {
   } catch (outerErr) {
     console.error("=== SERVER ERROR ===", outerErr);
     return res.status(500).json({ success: false, message: outerErr.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// GET /api/eta/operations
+// سجل العمليات — كل عمليات الإرسال الخاصة بالمستخدم (مقبولة/مرفوضة/خطأ)
+// ══════════════════════════════════════════════════════════════════
+router.get("/operations", async (req, res) => {
+  try {
+    const operations = await getAllOperations(req.user.uid);
+    console.log(`[/operations] Returning ${operations.length} operations for User: ${req.user.uid}`);
+    return res.json({ success: true, count: operations.length, operations });
+  } catch (error) {
+    console.error("=== SERVER ERROR ===", error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 

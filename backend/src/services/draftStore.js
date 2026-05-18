@@ -1,26 +1,17 @@
-const fs   = require("fs");
-const path = require("path");
+const admin = require("./firebaseAdmin");
 
-// مسار ملف الـ drafts (JSON file في مجلد backend)
-const DRAFTS_FILE = path.join(__dirname, "../../drafts.json");
+// ═══════════════════════════════════════════════════════════════════
+// Firestore-First Draft & Submission History Store
+// كل البيانات مربوطة بـ userId ومحفوظة في Firestore بشكل آمن ومعزول
+// ═══════════════════════════════════════════════════════════════════
 
-/**
- * يقرأ كل الـ drafts من الـ file
- */
-function loadDrafts() {
-  if (!fs.existsSync(DRAFTS_FILE)) return {};
+function getDb() {
   try {
-    return JSON.parse(fs.readFileSync(DRAFTS_FILE, "utf8"));
-  } catch {
-    return {};
-  }
-}
-
-/**
- * يحفظ الـ drafts على الـ file
- */
-function saveDrafts(drafts) {
-  fs.writeFileSync(DRAFTS_FILE, JSON.stringify(drafts, null, 2), "utf8");
+    if (admin && admin.apps && admin.apps.length > 0) {
+      return admin.firestore();
+    }
+  } catch (e) {}
+  return null;
 }
 
 /**
@@ -33,14 +24,10 @@ function generateDraftId() {
 }
 
 /**
- * يحفظ draft جديد للمستخدم
- * @param {string} userId          - معرف المستخدم الفريد (Firebase UID)
- * @param {object} document        - ETA Document
- * @param {object} validationResult - نتيجة الـ validation
- * @returns {object} - الـ draft المحفوظ
+ * يحفظ draft جديد للمستخدم في Firestore
  */
-function saveDraft(userId, document, validationResult) {
-  const drafts  = loadDrafts();
+async function saveDraft(userId, document, validationResult) {
+  const db = getDb();
   const draftId = generateDraftId();
   const now     = new Date().toISOString();
 
@@ -66,7 +53,7 @@ function saveDraft(userId, document, validationResult) {
 
   const draft = {
     draftId,
-    userId:           userId || "mock-saas-user-uid", // عزل الجلسات
+    userId,
     createdAt:        now,
     updatedAt:        now,
     status:           validationResult.valid ? "valid" : "invalid",
@@ -79,21 +66,34 @@ function saveDraft(userId, document, validationResult) {
     document,
   };
 
-  drafts[draftId] = draft;
-  saveDrafts(drafts);
+  if (db) {
+    try {
+      await db.collection("users").doc(userId).collection("drafts").doc(draftId).set(draft);
+      console.log(`[DraftStore] ✅ Draft saved to Firestore: ${draftId} for User: ${userId}`);
+      return draft;
+    } catch (e) {
+      console.warn("[DraftStore] Firestore write error:", e.message);
+    }
+  }
 
-  console.log(`[DraftStore] ✅ Draft saved: ${draftId} for User: ${userId}`);
+  console.warn("[DraftStore] ⚠️ Firestore unavailable — draft not persisted");
   return draft;
 }
 
 /**
  * يجيب draft بـ ID معين مع التحقق من هوية المستخدم
  */
-function getDraft(userId, draftId) {
-  const drafts = loadDrafts();
-  const draft = drafts[draftId];
-  if (draft && draft.userId === userId) {
-    return draft;
+async function getDraft(userId, draftId) {
+  const db = getDb();
+  if (db) {
+    try {
+      const docSnap = await db.collection("users").doc(userId).collection("drafts").doc(draftId).get();
+      if (docSnap.exists) {
+        return docSnap.data();
+      }
+    } catch (e) {
+      console.warn("[DraftStore] Firestore read error:", e.message);
+    }
   }
   return null;
 }
@@ -101,35 +101,114 @@ function getDraft(userId, draftId) {
 /**
  * يجيب كل الـ drafts الخاصة بمستخدم محدد
  */
-function getAllDrafts(userId) {
-  const drafts = loadDrafts();
-  return Object.values(drafts)
-    .filter(d => d.userId === userId)
-    .map(d => ({
-      draftId:      d.draftId,
-      createdAt:    d.createdAt,
-      status:       d.status,
-      internalID:   d.internalID,
-      issuerName:   d.issuerName,
-      receiverName: d.receiverName,
-      totalAmount:  d.totalAmount,
-      linesCount:   d.linesCount,
-      errorsCount:  d.validationResult?.errors?.length || 0,
-    }));
+async function getAllDrafts(userId) {
+  const db = getDb();
+  if (db) {
+    try {
+      const snapshot = await db.collection("users").doc(userId).collection("drafts")
+        .orderBy("createdAt", "desc")
+        .limit(100)
+        .get();
+      return snapshot.docs.map(doc => {
+        const d = doc.data();
+        return {
+          draftId:      d.draftId,
+          createdAt:    d.createdAt,
+          status:       d.status,
+          internalID:   d.internalID,
+          issuerName:   d.issuerName,
+          receiverName: d.receiverName,
+          totalAmount:  d.totalAmount,
+          linesCount:   d.linesCount,
+          errorsCount:  d.validationResult?.errors?.length || 0,
+        };
+      });
+    } catch (e) {
+      console.warn("[DraftStore] Firestore query error:", e.message);
+    }
+  }
+  return [];
 }
 
 /**
  * يحذف draft بـ ID معين بعد التحقق من الملكية
  */
-function deleteDraft(userId, draftId) {
-  const drafts = loadDrafts();
-  const draft = drafts[draftId];
-  if (!draft || draft.userId !== userId) return false;
-  
-  delete drafts[draftId];
-  saveDrafts(drafts);
-  console.log(`[DraftStore] 🗑️ Draft deleted: ${draftId} by User: ${userId}`);
-  return true;
+async function deleteDraft(userId, draftId) {
+  const db = getDb();
+  if (db) {
+    try {
+      const docRef = db.collection("users").doc(userId).collection("drafts").doc(draftId);
+      const docSnap = await docRef.get();
+      if (!docSnap.exists) return false;
+      await docRef.delete();
+      console.log(`[DraftStore] 🗑️ Draft deleted from Firestore: ${draftId} by User: ${userId}`);
+      return true;
+    } catch (e) {
+      console.warn("[DraftStore] Firestore delete error:", e.message);
+    }
+  }
+  return false;
 }
 
-module.exports = { saveDraft, getDraft, getAllDrafts, deleteDraft };
+// ═══════════════════════════════════════════════════════════════════
+// سجل العمليات — يحفظ كل عملية إرسال (قبول أو رفض) مع التفاصيل
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * يسجل عملية إرسال في سجل العمليات (سواء نجحت أو فشلت)
+ */
+async function recordOperation(userId, operationData) {
+  const db = getDb();
+  const opId = `OP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const now = new Date().toISOString();
+
+  const operation = {
+    operationId: opId,
+    userId,
+    timestamp:   now,
+    type:        operationData.type || "submission",        // submission | dryRun
+    status:      operationData.status || "unknown",          // accepted | rejected | error
+    internalID:  operationData.internalID || "",
+    issuerName:  operationData.issuerName || "",
+    receiverName: operationData.receiverName || "",
+    totalAmount: operationData.totalAmount || 0,
+    requestId:   operationData.requestId || "",               // submissionUUID from ETA
+    etaResponse: operationData.etaResponse || null,           // ملخص رد ETA
+    errorDetails: operationData.errorDetails || null,         // تفاصيل الخطأ إن وُجد
+    linesCount:  operationData.linesCount || 0,
+  };
+
+  if (db) {
+    try {
+      await db.collection("users").doc(userId).collection("operations").doc(opId).set(operation);
+      console.log(`[Operations] ✅ Operation recorded: ${opId} [${operation.status}] for User: ${userId}`);
+      return operation;
+    } catch (e) {
+      console.warn("[Operations] Firestore write error:", e.message);
+    }
+  }
+
+  console.warn("[Operations] ⚠️ Firestore unavailable — operation not persisted");
+  return operation;
+}
+
+/**
+ * يجيب كل العمليات الخاصة بمستخدم محدد
+ */
+async function getAllOperations(userId) {
+  const db = getDb();
+  if (db) {
+    try {
+      const snapshot = await db.collection("users").doc(userId).collection("operations")
+        .orderBy("timestamp", "desc")
+        .limit(200)
+        .get();
+      return snapshot.docs.map(doc => doc.data());
+    } catch (e) {
+      console.warn("[Operations] Firestore query error:", e.message);
+    }
+  }
+  return [];
+}
+
+module.exports = { saveDraft, getDraft, getAllDrafts, deleteDraft, recordOperation, getAllOperations };

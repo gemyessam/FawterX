@@ -1,36 +1,16 @@
-const path = require("path");
-const fs = require("fs");
 const admin = require("./firebaseAdmin");
 
-const STATS_FILE = path.join(__dirname, "../../userStats.json");
+// ═══════════════════════════════════════════════════════════════════
+// Firestore-First User Stats Store
+// كل البيانات مربوطة بـ userId في Firestore تحت users/{uid}
+// ═══════════════════════════════════════════════════════════════════
 
-// Local fallback store helpers
-function loadLocalStats() {
-  if (!fs.existsSync(STATS_FILE)) return {};
-  try {
-    return JSON.parse(fs.readFileSync(STATS_FILE, "utf8"));
-  } catch {
-    return {};
-  }
-}
-
-function saveLocalStats(stats) {
-  try {
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), "utf8");
-  } catch (e) {
-    console.error("Failed to write local stats:", e);
-  }
-}
-
-// Check if Firestore is available and active
-function getFirestoreDb() {
+function getDb() {
   try {
     if (admin && admin.apps && admin.apps.length > 0) {
       return admin.firestore();
     }
-  } catch (e) {
-    // Firestore not initialized
-  }
+  } catch (e) {}
   return null;
 }
 
@@ -38,64 +18,73 @@ function getFirestoreDb() {
  * جلب حالة اشتراك واستخدام المستخدم الحالي
  */
 async function getUserUsage(userId) {
-  const db = getFirestoreDb();
-  let data = { submissionsCount: 0, isSubscribed: true };
-  
+  const db = getDb();
+  let data = { submissionsCount: 0, isSubscribed: false };
+
   if (db) {
     try {
-      const docRef = db.collection("userStats").doc(userId);
+      const docRef = db.collection("users").doc(userId);
       const docSnap = await docRef.get();
       if (docSnap.exists) {
-        data = docSnap.data();
+        const d = docSnap.data();
+        data.submissionsCount = d.submissionsCount || 0;
+        data.isSubscribed = d.isSubscribed || false;
       }
     } catch (e) {
-      console.warn("Firestore error in getUserUsage, falling back to local store:", e);
-    }
-  } else {
-    // Fallback to local store
-    const stats = loadLocalStats();
-    if (stats[userId]) {
-      data = stats[userId];
+      console.warn("Firestore error in getUserUsage:", e.message);
     }
   }
-  
-  // Force premium subscription for Choco Egypt LLC
-  data.isSubscribed = true;
+
   return data;
 }
 
 /**
- * يتحقق مما إذا كان للمستخدم الحق في الإرسال (هل استهلك التجربة المجانية الأولى؟)
+ * يتحقق مما إذا كان للمستخدم الحق في الإرسال
  */
 async function canUserSubmit(userId) {
   const userStat = await getUserUsage(userId);
-  if (userStat.isSubscribed) return true; // المشتركون لهم إرسال مفتوح
-  return userStat.submissionsCount < 1; // غير المشتركين لديهم مرة واحدة مجانية
+  if (userStat.isSubscribed) return true;
+  return userStat.submissionsCount < 1; // مرة واحدة مجانية
 }
 
 /**
  * يسجل إرسال ناجح للمستخدم ويزيد العداد
  */
 async function recordSubmission(userId) {
-  const userStat = await getUserUsage(userId);
-  userStat.submissionsCount = (userStat.submissionsCount || 0) + 1;
-
-  const db = getFirestoreDb();
+  const db = getDb();
   if (db) {
     try {
-      const docRef = db.collection("userStats").doc(userId);
-      await docRef.set(userStat, { merge: true });
-      return userStat;
+      const docRef = db.collection("users").doc(userId);
+      await docRef.set({
+        submissionsCount: admin.firestore.FieldValue.increment(1),
+        lastSubmission: new Date().toISOString()
+      }, { merge: true });
+      console.log(`[UserStats] ✅ Submission recorded for User: ${userId}`);
+      return;
     } catch (e) {
-      console.warn("Firestore error in recordSubmission, falling back to local store:", e);
+      console.warn("Firestore error in recordSubmission:", e.message);
     }
   }
-
-  // Fallback to local store
-  const stats = loadLocalStats();
-  stats[userId] = userStat;
-  saveLocalStats(stats);
-  return userStat;
 }
 
-module.exports = { canUserSubmit, recordSubmission, getUserUsage };
+/**
+ * يحفظ بيانات الشركة الخاصة بالمستخدم (الإصدار، النشاط، إلخ)
+ */
+async function saveUserProfile(userId, profileData) {
+  const db = getDb();
+  if (db) {
+    try {
+      const docRef = db.collection("users").doc(userId);
+      await docRef.set({
+        profile: profileData,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      return true;
+    } catch (e) {
+      console.warn("Firestore error in saveUserProfile:", e.message);
+    }
+  }
+  return false;
+}
+
+module.exports = { canUserSubmit, recordSubmission, getUserUsage, saveUserProfile };
