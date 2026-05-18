@@ -1,8 +1,8 @@
 const UNIT_MAP = {
-  "m": "MTR",
-  "lm": "MTR",
-  "meter": "MTR",
-  "متر": "MTR",
+  "m": "M",
+  "lm": "M",
+  "meter": "M",
+  "متر": "M",
   "kg": "KGM",
   "kgm": "KGM",
   "كيلو": "KGM",
