@@ -24,8 +24,15 @@ function parseCleanNumber(val) {
   return isNaN(parsed) ? 0 : parsed;
 }
 
+// الكلمات المفتاحية التي تمنع السطر نهائياً من أن يصبح بند صنف (Hard-Stop Rules)
+const HARD_STOP_KEYWORDS = [
+  "net", "subtotal", "vat", "tax", "total", "grand total", "bank", "iban", "swift", "footer", "page",
+  "مجموع", "صافي", "إجمالي", "ضريبة", "البنك", "حساب", "توقيع", "signature", "terms", "conditions",
+  "delivery", "discount", "خصم", "الصافي", "القيمة المضافة", "شروط", "الدفع", "شحن", "نقل", "ملاحظات", "notes"
+];
+
 /**
- * محرك الفحص المالي والمحاسبي الذكي - الجيل الثالث (Smart Industrial Accountant Engine)
+ * محرك الفحص المالي والمحاسبي الذكي - الجيل الرابع (Strict Accountant Business Rules Engine)
  */
 async function parseSmartDocument(filePath, isPdf = false) {
   let text = "";
@@ -145,14 +152,25 @@ async function parseSmartDocument(filePath, isPdf = false) {
   if (totalMatches && totalMatches[1]) metadata.totalAmount = parseCleanNumber(totalMatches[1]);
 
   // ==========================================
-  // 3. التجميع الذكي للكتل المتعددة الأسطر (Visual/Layout Block Builder)
+  // 3. التجميع الذكي للكتل المتعددة الأسطر مع فلاتر الاستبعاد الصارمة (Hard-Stop Block Detection)
   // ==========================================
   let itemBlocks = [];
   let currentBlock = [];
 
   lines.forEach(line => {
-    // يبدأ البلوك الجديد عند الكشف عن بداية صنف صناعي:
-    // مثل وجود كود صنف (حروف وأرقام)، أو أرقام تسلسلية صريحة كبداية سطر، أو تواجد كلمات الألومنيوم الأساسية
+    // 1. تطبيق شروط الاستبعاد الصارمة (Hard Stop Rules)
+    const lowerLine = line.toLowerCase();
+    const isHardStop = HARD_STOP_KEYWORDS.some(k => lowerLine.includes(k));
+
+    if (isHardStop) {
+      if (currentBlock.length > 0) {
+        itemBlocks.push(currentBlock.join(" \n "));
+        currentBlock = [];
+      }
+      return; // تجاهل هذا السطر نهائياً ولا تضعه في أي بند
+    }
+
+    // 2. الكشف عن سطر بداية منتج جديد
     const isNewItem = /^[0-9]+\s+[A-Za-z0-9]/.test(line) || 
                        /^[A-Z0-9]{4,12}$/.test(line.split(/\s/)[0]) ||
                        line.includes("LM") ||
@@ -160,7 +178,6 @@ async function parseSmartDocument(filePath, isPdf = false) {
                        line.includes("KG");
 
     if (isNewItem && currentBlock.length > 0) {
-      // دمج الكتل السابقة وتصفيتها
       itemBlocks.push(currentBlock.join(" \n "));
       currentBlock = [line];
     } else {
@@ -172,10 +189,13 @@ async function parseSmartDocument(filePath, isPdf = false) {
   }
 
   // ==========================================
-  // 4. تحليل كل كتلة كصنف متكامل (Industrial Parsing Engine)
+  // 4. تحليل كل كتلة كصنف متكامل (Strict Business Rules Extraction)
   // ==========================================
   itemBlocks.forEach((blockText, blockIdx) => {
-    // فحص المحتويات واستخراج الأنماط بمرونة كاملة
+    // التحقق من خلو الكتلة تماماً من أي كلمة مفتاحية تابعة للنهائيات
+    const isBlockHardStop = HARD_STOP_KEYWORDS.some(k => blockText.toLowerCase().includes(k));
+    if (isBlockHardStop) return;
+
     // أ. الأمتار الطولية (LM) - وهي الكمية الفعلية لـ ETA
     const lmMach = blockText.match(/(\d+(?:\.\d+)?)\s*(?:LM|L\.M|linear\s*meter|متر\s*طولي|متر)/i);
     const lmVal = lmMach ? parseCleanNumber(lmMach[1]) : 0;
@@ -206,7 +226,7 @@ async function parseSmartDocument(filePath, isPdf = false) {
     const codeMach = blockText.match(/\b([A-Z0-9]{5,12})\b/);
     const internalCode = codeMach ? codeMach[1] : `ART-${100 + blockIdx}`;
 
-    // ح. تنظيف واستخلاص اسم المنتج من الكتل النصية
+    // ح. استخلاص اسم المنتج الحقيقي بطريقة نظيفة
     let productName = blockText
       .replace(/[^a-zA-Z\u0600-\u06FF\s]/g, " ")
       .replace(/\b(?:LM|KG|BAR|mm|INV|VAT|TOTAL|SUBTOTAL|EGP|USD)\b/gi, "")
@@ -215,6 +235,9 @@ async function parseSmartDocument(filePath, isPdf = false) {
 
     if (!productName || productName.length < 3) {
       productName = `قطاع ألومنيوم طراز ${internalCode}`;
+    } else {
+      // تنظيف من الكلمات المبعثرة
+      productName = productName.split(" ").slice(0, 5).join(" ");
     }
 
     // ط. تطبيق لوجيك الكميات الضريبية (Quantity logic: LM is the true ETA Quantity)
@@ -223,7 +246,7 @@ async function parseSmartDocument(filePath, isPdf = false) {
 
     if (lmVal > 0) {
       finalQty = lmVal;
-      finalUnitType = "m"; // وحدة المتر
+      finalUnitType = "m"; // وحدة المتر الرسمية لـ ETA
     } else if (barVal > 0) {
       finalQty = barVal;
       finalUnitType = "BAR";
@@ -236,7 +259,6 @@ async function parseSmartDocument(filePath, isPdf = false) {
     // 5. المراجعة الحسابية لسطر الصنف (Line Math Audit)
     // ==========================================
     if (finalQty > 0) {
-      // إذا لم يستخلص السعر ولكن الإجمالي موجود، نقوم باحتسابه محاسبياً
       if (unitPrice === 0 && lineTotal > 0) {
         unitPrice = lineTotal / finalQty;
       } else if (unitPrice > 0 && lineTotal === 0) {
@@ -244,9 +266,9 @@ async function parseSmartDocument(filePath, isPdf = false) {
       }
     }
 
-    // إنشاء الوصف المعياري المطلوب
+    // إنشاء الوصف المعياري المطلوب بدقة بالغة
     const descriptionParts = ["Aluminium"];
-    descriptionParts.push(productName.split(" ").slice(0, 4).join(" "));
+    descriptionParts.push(productName);
     if (kgVal > 0) descriptionParts.push(`${kgVal.toFixed(2)} KG`);
     if (mmVal) descriptionParts.push(`${mmVal} mm`);
     const cleanDescription = descriptionParts.join(" | ");
@@ -263,7 +285,7 @@ async function parseSmartDocument(filePath, isPdf = false) {
       rowConfidence += 20;
     } else if (lineTotal > 0) {
       warnings.push(`فارق حسابي: حاصل ضرب الكمية (${finalQty}) × السعر (${unitPrice}) = ${computedTotal}، بينما المصرح به هو ${lineTotal}.`);
-      rowConfidence -= 10;
+      rowConfidence -= 15;
     }
 
     if (lmVal > 0) rowConfidence += 10;
@@ -295,7 +317,6 @@ async function parseSmartDocument(filePath, isPdf = false) {
   // 6. مراجعة إجماليات الفاتورة بالكامل (Grand Math Audit)
   // ==========================================
   if (rows.length === 0) {
-    // سطر حماية افتراضي
     rows.push({
       itemCode: "EG-111111-1111",
       internalCode: "ALUM-SYS",
@@ -331,13 +352,13 @@ async function parseSmartDocument(filePath, isPdf = false) {
 
   if (Math.abs(sumItemTotals - metadata.netAmount) > 5) {
     totalsMatched = false;
-    accountantWarnings.push(`فارق حسابي في إجمالي الفاتورة: مجموع البنود (${sumItemTotals}) لا يتطابق مع الإجمالي الصافي المصرح به (${metadata.netAmount}).`);
+    accountantWarnings.push(`فارق حسابي في إجمالي الفاتورة: مجموع البنود (${sumItemTotals.toFixed(2)}) لا يتطابق مع الإجمالي الصافي المصرح به (${metadata.netAmount.toFixed(2)}).`);
   }
 
   const expectedVat = metadata.netAmount * 0.14;
   if (Math.abs(expectedVat - metadata.taxAmount) > 5) {
     totalsMatched = false;
-    accountantWarnings.push(`فارق في ضريبة القيمة المضافة: المحسوبة (${expectedVat.toFixed(2)}) لا تتطابق مع المصرح بها بالفاتورة (${metadata.taxAmount}).`);
+    accountantWarnings.push(`فارق في ضريبة القيمة المضافة: المحسوبة (${expectedVat.toFixed(2)}) لا تتطابق مع المصرح بها بالفاتورة (${metadata.taxAmount.toFixed(2)}).`);
   }
 
   const overallConfidence = Math.round(rows.reduce((acc, r) => acc + (r.confidence || 0), 0) / rows.length);
@@ -348,8 +369,8 @@ async function parseSmartDocument(filePath, isPdf = false) {
     rows,
     headers: ["itemCode", "internalCode", "description", "quantity", "unitType", "unitValue", "taxPercent"],
     parserDebugInfo: {
-      mode: "AI Accountant Smart Layer v3.0",
-      confidenceScore: totalsMatched ? Math.min(overallConfidence + 10, 99) : Math.max(overallConfidence - 15, 40),
+      mode: "Strict Accountant Smart Layer v4.0",
+      confidenceScore: totalsMatched ? Math.min(overallConfidence + 10, 99) : Math.max(overallConfidence - 20, 40),
       totalsMatched,
       lineCount: rows.length,
       debugWarnings: [...debugWarnings, ...accountantWarnings]

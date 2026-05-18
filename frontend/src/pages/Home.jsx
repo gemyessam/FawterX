@@ -248,6 +248,8 @@ export default function Home() {
       line.itemCode = val
     } else if (field === 'quantity') {
       line.quantity = parseFloat(val) || 0
+    } else if (field === 'unitType') {
+      line.unitType = val
     } else if (field === 'unitValue') {
       if (!line.unitValue) line.unitValue = { currencySold: "EGP" }
       line.unitValue.amountEGP = parseFloat(val) || 0
@@ -1078,8 +1080,13 @@ export default function Home() {
                       const rowWarnings = rawRow.warnings || [];
                       const rowMissing = rawRow.missingFields || [];
 
+                      const isRowWarning = rowConfidence < 75 || rowWarnings.length > 0 || rowMissing.length > 0;
+
                       return (
-                        <tr key={idx} className="animate-fade-in">
+                        <tr key={idx} className="animate-fade-in" style={{ 
+                          background: isRowWarning ? 'rgba(241, 196, 15, 0.03)' : 'transparent',
+                          borderLeft: isRowWarning ? '3px solid #f1c40f' : 'none'
+                        }}>
                           <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{idx + 1}</td>
                           <td>
                             {/* Editable Description */}
@@ -1158,7 +1165,7 @@ export default function Home() {
                           </td>
                           <td>
                             {/* Editable Quantity */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                               <input 
                                 type="number" 
                                 className="input" 
@@ -1176,7 +1183,58 @@ export default function Home() {
                                 value={line.quantity || 0} 
                                 onChange={(e) => updateInvoiceLine(idx, 'quantity', e.target.value)} 
                               />
-                              <span style={{ fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 'bold' }}>{line.unitType || 'm'}</span>
+
+                              {/* Editable Unit Type Selector */}
+                              <select
+                                className="input"
+                                style={{ 
+                                  background: '#0b0d19', 
+                                  border: '1px solid var(--border)', 
+                                  color: 'var(--accent)', 
+                                  fontSize: '0.75rem',
+                                  padding: '0.2rem', 
+                                  borderRadius: '4px', 
+                                  fontWeight: 'bold',
+                                  outline: 'none',
+                                  cursor: 'pointer'
+                                }}
+                                value={['m', 'KG', 'EA', 'BAR', 'TNE'].includes(line.unitType) ? line.unitType : 'custom'}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val !== 'custom') {
+                                    updateInvoiceLine(idx, 'unitType', val);
+                                  } else {
+                                    updateInvoiceLine(idx, 'unitType', 'custom_unit');
+                                  }
+                                }}
+                              >
+                                <option value="m">{lang === 'ar' ? 'متر (m)' : 'Meter (m)'}</option>
+                                <option value="KG">{lang === 'ar' ? 'كجم (KG)' : 'Kilogram (KG)'}</option>
+                                <option value="EA">{lang === 'ar' ? 'عدد (EA)' : 'Each (EA)'}</option>
+                                <option value="BAR">{lang === 'ar' ? 'بار (BAR)' : 'Bar (BAR)'}</option>
+                                <option value="TNE">{lang === 'ar' ? 'طن (TNE)' : 'Tonne (TNE)'}</option>
+                                <option value="custom">{lang === 'ar' ? '✍️ وحدة مخصصة' : '✍️ Custom Unit'}</option>
+                              </select>
+
+                              {(!['m', 'KG', 'EA', 'BAR', 'TNE'].includes(line.unitType) || line.unitType === 'custom_unit') && (
+                                <input 
+                                  type="text"
+                                  className="input"
+                                  style={{ 
+                                    background: 'rgba(255, 255, 255, 0.02)', 
+                                    border: '1px solid var(--border)', 
+                                    color: 'var(--accent)', 
+                                    fontSize: '0.75rem',
+                                    padding: '0.25rem', 
+                                    borderRadius: '4px',
+                                    textAlign: 'center',
+                                    outline: 'none'
+                                  }}
+                                  placeholder={lang === 'ar' ? 'اسم الوحدة' : 'Unit code'}
+                                  value={line.unitType === 'custom_unit' ? '' : line.unitType}
+                                  onChange={(e) => updateInvoiceLine(idx, 'unitType', e.target.value)}
+                                />
+                              )}
                             </div>
                           </td>
                           <td>
