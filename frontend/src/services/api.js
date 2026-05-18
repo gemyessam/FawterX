@@ -164,3 +164,15 @@ export async function getOperations() {
   const { data } = await api.get('/eta/operations')
   return data
 }
+
+/** جلب إعدادات الشركة الخاصة بحساب المستخدم من Firestore */
+export async function getCompanySettings() {
+  const { data } = await api.get('/eta/settings')
+  return data
+}
+
+/** حفظ إعدادات الشركة الخاصة بحساب المستخدم في Firestore */
+export async function saveCompanySettings(settings) {
+  const { data } = await api.post('/eta/settings', settings)
+  return data
+}

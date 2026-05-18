@@ -4,7 +4,7 @@ const { getAccessToken }   = require("../services/etaAuth");
 const { submitDocuments, getDocumentStatus } = require("../services/etaSubmit");
 const { validateETADocument } = require("../utils/etaValidator");
 const { saveDraft, getDraft, getAllDrafts, deleteDraft, recordOperation, getAllOperations } = require("../services/draftStore");
-const { canUserSubmit, recordSubmission, getUserUsage } = require("../services/userStatsStore");
+const { canUserSubmit, recordSubmission, getUserUsage, saveUserSettings, getUserSettings } = require("../services/userStatsStore");
 const authMiddleware       = require("../middleware/auth");
 
 const router = express.Router();
@@ -21,6 +21,39 @@ router.get("/usage", async (req, res) => {
   try {
     const usage = await getUserUsage(req.user.uid);
     return res.json({ success: true, usage });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// GET /api/eta/settings
+// جلب إعدادات العميل (ClientId/Secrets) المخزنة بأمان في Firestore
+// ══════════════════════════════════════════════════════════════════
+router.get("/settings", async (req, res) => {
+  try {
+    const settings = await getUserSettings(req.user.uid);
+    return res.json({ success: true, settings });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// POST /api/eta/settings
+// حفظ أو تحديث إعدادات العميل (ClientId/Secrets) بأمان في Firestore
+// ══════════════════════════════════════════════════════════════════
+router.post("/settings", async (req, res) => {
+  try {
+    const settingsData = req.body;
+    if (!settingsData) {
+      return res.status(400).json({ success: false, message: "بيانات الإعدادات مطلوبة" });
+    }
+    const success = await saveUserSettings(req.user.uid, settingsData);
+    if (!success) {
+      return res.status(500).json({ success: false, message: "فشل حفظ الإعدادات في قاعدة البيانات" });
+    }
+    return res.json({ success: true, message: "✅ تم حفظ الإعدادات بنجاح في حسابك" });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

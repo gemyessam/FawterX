@@ -4,7 +4,7 @@ import { Toaster, toast } from 'react-hot-toast'
 import Home from './pages/Home'
 import Drafts from './pages/Drafts'
 import DraftDetails from './pages/DraftDetails'
-import { testETAAuth } from './services/api'
+import { testETAAuth, getCompanySettings, saveCompanySettings } from './services/api'
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase'
 
 // bilingual context
@@ -87,42 +87,72 @@ function Layout({ children }) {
   const [testing, setTesting] = useState(false)
   const [connStatus, setConnStatus] = useState(null) // 'connected' or 'failed'
 
+  // Load settings from Firestore (primary source of truth) when user logs in
   useEffect(() => {
-    const saved = localStorage.getItem('companySettings')
-    if (saved) {
-      try { setSettings(JSON.parse(saved)) } catch (e) {}
+    if (user) {
+      getCompanySettings()
+        .then((res) => {
+          if (res && res.success && res.settings) {
+            setSettings(res.settings)
+            localStorage.setItem('companySettings', JSON.stringify(res.settings))
+          } else {
+            // Fallback to local storage if no firestore setting exists yet
+            const saved = localStorage.getItem('companySettings')
+            if (saved) {
+              try { setSettings(JSON.parse(saved)) } catch (e) {}
+            }
+          }
+        })
+        .catch(() => {
+          const saved = localStorage.getItem('companySettings')
+          if (saved) {
+            try { setSettings(JSON.parse(saved)) } catch (e) {}
+          }
+        })
+    } else {
+      // Clear settings state when logged out
+      setSettings({
+        clientId: '',
+        clientSecret1: '',
+        clientSecret2: '',
+        taxpayerActivityCode: '6209'
+      })
     }
-  }, [showSettingsModal])
+  }, [user, showSettingsModal])
 
   // Silent background verification check on mount to ensure credentials remain active and verified
   useEffect(() => {
-    const saved = localStorage.getItem('companySettings')
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        if (parsed.clientId && parsed.clientSecret1 && parsed.clientSecret2) {
-          testETAAuth(parsed)
-            .then(() => {
-              setSettings(prev => {
-                const next = { ...prev, isVerified: true }
-                localStorage.setItem('companySettings', JSON.stringify(next))
-                return next
+    if (user) {
+      getCompanySettings()
+        .then((res) => {
+          const activeSettings = (res && res.success && res.settings) ? res.settings : null
+          const saved = localStorage.getItem('companySettings')
+          const finalSettings = activeSettings || (saved ? JSON.parse(saved) : null)
+          
+          if (finalSettings && finalSettings.clientId && finalSettings.clientSecret1 && finalSettings.clientSecret2) {
+            testETAAuth(finalSettings)
+              .then(() => {
+                setSettings(prev => {
+                  const next = { ...finalSettings, isVerified: true }
+                  localStorage.setItem('companySettings', JSON.stringify(next))
+                  return next
+                })
               })
-            })
-            .catch(() => {
-              setSettings(prev => {
-                const next = { ...prev, isVerified: false }
-                localStorage.setItem('companySettings', JSON.stringify(next))
-                return next
+              .catch(() => {
+                setSettings(prev => {
+                  const next = { ...finalSettings, isVerified: false }
+                  localStorage.setItem('companySettings', JSON.stringify(next))
+                  return next
+                })
+                toast.error(lang === 'ar'
+                  ? '⚠️ تنبيه: انتهت صلاحية مفاتيح ربط الضرائب أو تم إلغاؤها! يرجى مراجعة إعدادات الشركة وإعادة المصادقة.'
+                  : '⚠️ Warning: ETA credentials have expired or been revoked! Please review company setup and re-verify.')
               })
-              toast.error(lang === 'ar'
-                ? '⚠️ تنبيه: انتهت صلاحية مفاتيح ربط الضرائب أو تم إلغاؤها! يرجى مراجعة إعدادات الشركة وإعادة المصادقة.'
-                : '⚠️ Warning: ETA credentials have expired or been revoked! Please review company setup and re-verify.')
-            })
-        }
-      } catch (e) {}
+          }
+        })
+        .catch(() => {})
     }
-  }, [])
+  }, [user])
 
   // Click outside to close the user profile dropdown cleanly
   useEffect(() => {
@@ -148,30 +178,42 @@ function Layout({ children }) {
       await testETAAuth(settings)
       setConnStatus('connected')
       toast.success(t.etaConnected)
-      setSettings(prev => {
-        const next = { ...prev, isVerified: true }
-        localStorage.setItem('companySettings', JSON.stringify(next))
-        return next
-      })
+      
+      const next = { ...settings, isVerified: true }
+      setSettings(next)
+      localStorage.setItem('companySettings', JSON.stringify(next))
+      if (user) {
+        await saveCompanySettings(next)
+      }
     } catch (err) {
       setConnStatus('failed')
       const msg = err.response?.data?.message || err.message || t.etaFailed
       toast.error(msg)
-      setSettings(prev => {
-        const next = { ...prev, isVerified: false }
-        localStorage.setItem('companySettings', JSON.stringify(next))
-        return next
-      })
+      
+      const next = { ...settings, isVerified: false }
+      setSettings(next)
+      localStorage.setItem('companySettings', JSON.stringify(next))
+      if (user) {
+        await saveCompanySettings(next)
+      }
     } finally {
       setTesting(false)
     }
   }
 
-  function handleSaveSettings() {
-    localStorage.setItem('companySettings', JSON.stringify(settings))
-    toast.success(lang === 'ar' ? 'تم حفظ الإعدادات وتشفيرها بأمان' : 'Settings saved and encrypted securely')
-    setShowSettingsModal(false)
+  async function handleSaveSettings() {
+    try {
+      localStorage.setItem('companySettings', JSON.stringify(settings))
+      if (user) {
+        await saveCompanySettings(settings)
+      }
+      toast.success(lang === 'ar' ? 'تم حفظ وتزامن إعداداتك بأمان في حسابك' : 'Settings saved and synced securely in your account')
+      setShowSettingsModal(false)
+    } catch (e) {
+      toast.error(lang === 'ar' ? 'فشل حفظ الإعدادات في الحساب' : 'Failed to save settings to account')
+    }
   }
+
 
   return (
     <div className={`app-wrapper ${lang === 'en' ? 'ltr-layout' : ''}`}>
@@ -364,11 +406,13 @@ export default function App() {
   async function handleLogout() {
     try {
       localStorage.removeItem('useQuickLogin')
+      localStorage.removeItem('companySettings')
       await signOut(auth)
       setUser(null)
       toast.success(lang === 'ar' ? 'تم تسجيل الخروج بأمان' : 'Logged out safely')
     } catch (error) {
       localStorage.removeItem('useQuickLogin')
+      localStorage.removeItem('companySettings')
       setUser(null)
       toast.success(lang === 'ar' ? 'تم تسجيل الخروج بأمان' : 'Logged out safely')
     }

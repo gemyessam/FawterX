@@ -87,4 +87,44 @@ async function saveUserProfile(userId, profileData) {
   return false;
 }
 
-module.exports = { canUserSubmit, recordSubmission, getUserUsage, saveUserProfile };
+/**
+ * يحفظ إعدادات العميل (ClientId/Secrets) الخاصة بالمستخدم في Firestore بشكل آمن
+ */
+async function saveUserSettings(userId, settingsData) {
+  const db = getDb();
+  if (db) {
+    try {
+      const docRef = db.collection("users").doc(userId);
+      await docRef.set({
+        companySettings: settingsData,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      return true;
+    } catch (e) {
+      console.warn("Firestore error in saveUserSettings:", e.message);
+    }
+  }
+  return false;
+}
+
+/**
+ * يجلب إعدادات العميل (ClientId/Secrets) الخاصة بالمستخدم من Firestore
+ */
+async function getUserSettings(userId) {
+  const db = getDb();
+  if (db) {
+    try {
+      const docRef = db.collection("users").doc(userId);
+      const docSnap = await docRef.get();
+      if (docSnap.exists) {
+        const data = docSnap.data();
+        return data.companySettings || null;
+      }
+    } catch (e) {
+      console.warn("Firestore error in getUserSettings:", e.message);
+    }
+  }
+  return null;
+}
+
+module.exports = { canUserSubmit, recordSubmission, getUserUsage, saveUserProfile, saveUserSettings, getUserSettings };
