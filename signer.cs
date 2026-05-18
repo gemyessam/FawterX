@@ -237,10 +237,8 @@ namespace FawterXSigner
             SignedCms signedCms = new SignedCms(contentInfo, true); // true = detached signature
 
             CmsSigner cmsSigner = new CmsSigner(cert);
-            cmsSigner.IncludeOption = X509IncludeOption.None; // Bypass all chain-building exceptions!
-
-            // Add the leaf certificate manually
-            cmsSigner.Certificates.Add(cert);
+            cmsSigner.SignerIdentifierType = SubjectIdentifierType.IssuerAndSerialNumber;
+            cmsSigner.IncludeOption = X509IncludeOption.ExcludeRoot;
 
             // Programmatically gather all Egypt Trust / ITIDA certificates from local Windows stores and manually embed them!
             try
@@ -307,7 +305,16 @@ namespace FawterXSigner
             }
 
             // Compute signature (Windows automatically prompts the user for PIN if required by USB CSP)
-            signedCms.ComputeSignature(cmsSigner, false); // false = do not prompt if already cached, but will prompt PIN if needed by hardware token
+            try
+            {
+                signedCms.ComputeSignature(cmsSigner, false);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[WARN] ExcludeRoot chain building failed: " + ex.Message + ". Falling back to leaf certificate only.");
+                cmsSigner.IncludeOption = X509IncludeOption.EndCertOnly;
+                signedCms.ComputeSignature(cmsSigner, false);
+            }
 
             byte[] encodedSignature = signedCms.Encode();
             return Convert.ToBase64String(encodedSignature);
