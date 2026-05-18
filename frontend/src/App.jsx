@@ -317,6 +317,17 @@ export default function App() {
   const t = TRANSLATIONS[lang]
 
   useEffect(() => {
+    const isQuick = localStorage.getItem('useQuickLogin') === 'true'
+    if (isQuick) {
+      setUser({
+        uid: "choco-egypt-uid-custom-bypass",
+        email: "chocoegypt@saas.com",
+        displayName: "شوكو ايجيبت ال ال سي (دخول سريع)"
+      })
+      setLoadingAuth(false)
+      return
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser)
@@ -340,12 +351,24 @@ export default function App() {
     }
   }
 
+  function handleQuickLogin() {
+    localStorage.setItem('useQuickLogin', 'true')
+    setUser({
+      uid: "choco-egypt-uid-custom-bypass",
+      email: "chocoegypt@saas.com",
+      displayName: "شوكو ايجيبت ال ال سي (دخول سريع)"
+    })
+    toast.success(lang === 'ar' ? 'تم تسجيل الدخول السريع بنجاح (وضع الاختبار)' : 'Quick login successful (Test Mode)')
+  }
+
   async function handleLogout() {
     try {
+      localStorage.removeItem('useQuickLogin')
       await signOut(auth)
       setUser(null)
       toast.success(lang === 'ar' ? 'تم تسجيل الخروج بأمان' : 'Logged out safely')
     } catch (error) {
+      localStorage.removeItem('useQuickLogin')
       setUser(null)
       toast.success(lang === 'ar' ? 'تم تسجيل الخروج بأمان' : 'Logged out safely')
     }
@@ -402,7 +425,7 @@ export default function App() {
                   type="button" 
                   className="btn btn-primary btn-block btn-lg" 
                   onClick={handleGoogleLogin}
-                  style={{ background: '#ffffff', color: '#000000', border: '1px solid #cccccc', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}
+                  style={{ background: '#ffffff', color: '#000000', border: '1px solid #cccccc', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '1rem' }}
                 >
                   <svg width="24" height="24" viewBox="0 0 48 48">
                     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -411,6 +434,15 @@ export default function App() {
                     <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
                   </svg>
                   {t.googleBtn}
+                </button>
+
+                <button 
+                  type="button" 
+                  className="btn btn-accent btn-block btn-lg" 
+                  onClick={handleQuickLogin}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', background: 'linear-gradient(135deg, #7c4dff, #18ffff)', color: '#0b0d19', border: 'none', fontWeight: 'bold' }}
+                >
+                  🔑 {lang === 'ar' ? 'دخول مباشر سريع (بدون جوجل)' : 'Quick Direct Login (No Google)'}
                 </button>
               </div>
             </div>

