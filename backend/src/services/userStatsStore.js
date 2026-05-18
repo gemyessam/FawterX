@@ -39,23 +39,29 @@ function getFirestoreDb() {
  */
 async function getUserUsage(userId) {
   const db = getFirestoreDb();
+  let data = { submissionsCount: 0, isSubscribed: true };
+  
   if (db) {
     try {
       const docRef = db.collection("userStats").doc(userId);
       const docSnap = await docRef.get();
       if (docSnap.exists) {
-        return docSnap.data();
-      } else {
-        // Return default structure
-        return { submissionsCount: 0, isSubscribed: false };
+        data = docSnap.data();
       }
     } catch (e) {
       console.warn("Firestore error in getUserUsage, falling back to local store:", e);
     }
+  } else {
+    // Fallback to local store
+    const stats = loadLocalStats();
+    if (stats[userId]) {
+      data = stats[userId];
+    }
   }
-  // Fallback to local store
-  const stats = loadLocalStats();
-  return stats[userId] || { submissionsCount: 0, isSubscribed: false };
+  
+  // Force premium subscription for Choco Egypt LLC
+  data.isSubscribed = true;
+  return data;
 }
 
 /**
