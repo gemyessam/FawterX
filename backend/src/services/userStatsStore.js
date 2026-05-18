@@ -92,19 +92,20 @@ async function saveUserProfile(userId, profileData) {
  */
 async function saveUserSettings(userId, settingsData) {
   const db = getDb();
-  if (db) {
-    try {
-      const docRef = db.collection("users").doc(userId);
-      await docRef.set({
-        companySettings: settingsData,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-      return true;
-    } catch (e) {
-      console.warn("Firestore error in saveUserSettings:", e.message);
-    }
+  if (!db) {
+    throw new Error("لم يتم تهيئة قاعدة بيانات Firebase Admin SDK. يرجى التأكد من توفير مفتاح حساب الخدمة (Service Account JSON) بشكل صحيح.");
   }
-  return false;
+  try {
+    const docRef = db.collection("users").doc(userId);
+    await docRef.set({
+      companySettings: settingsData,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    return true;
+  } catch (e) {
+    console.error("Firestore error in saveUserSettings:", e);
+    throw new Error(`خطأ أثناء الحفظ في Firestore: ${e.message}`);
+  }
 }
 
 /**
@@ -112,17 +113,19 @@ async function saveUserSettings(userId, settingsData) {
  */
 async function getUserSettings(userId) {
   const db = getDb();
-  if (db) {
-    try {
-      const docRef = db.collection("users").doc(userId);
-      const docSnap = await docRef.get();
-      if (docSnap.exists) {
-        const data = docSnap.data();
-        return data.companySettings || null;
-      }
-    } catch (e) {
-      console.warn("Firestore error in getUserSettings:", e.message);
+  if (!db) {
+    throw new Error("لم يتم تهيئة قاعدة بيانات Firebase Admin SDK. يرجى التأكد من توفير مفتاح حساب الخدمة (Service Account JSON) بشكل صحيح.");
+  }
+  try {
+    const docRef = db.collection("users").doc(userId);
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
+      const data = docSnap.data();
+      return data.companySettings || null;
     }
+  } catch (e) {
+    console.error("Firestore error in getUserSettings:", e);
+    throw new Error(`خطأ أثناء جلب البيانات من Firestore: ${e.message}`);
   }
   return null;
 }

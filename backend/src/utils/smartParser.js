@@ -144,52 +144,64 @@ async function parseSmartDocument(filePath, isPdf = false) {
     let bestPriceCol = -1;
     let bestDescCol = -1;
 
-    // مسح أول 15 صف لتخمين طبيعة كل عمود
+    // مسح أول 30 صف لتخمين طبيعة كل عمود (مع تأمين الحساب من المصفوفات الفارغة)
     const colStats = [];
-    const maxCols = Math.max(...rawData.slice(0, 30).map(r => r.length));
+    const maxCols = rawData.length > 0 
+      ? Math.max(...rawData.slice(0, 30).map(r => Array.isArray(r) ? r.length : 0)) 
+      : 0;
     
-    for (let c = 0; c < maxCols; c++) {
-      let numberCount = 0;
-      let textCount = 0;
-      let totalLength = 0;
-      
-      rawData.slice(0, 30).forEach(row => {
-        const cell = row[c];
-        if (cell === "" || cell === undefined) return;
-        if (!isNaN(Number(cell)) && Number(cell) > 0) {
-          numberCount++;
-        } else {
-          textCount++;
-          totalLength += String(cell).length;
+    if (maxCols > 0) {
+      for (let c = 0; c < maxCols; c++) {
+        let numberCount = 0;
+        let textCount = 0;
+        let totalLength = 0;
+        
+        rawData.slice(0, 30).forEach(row => {
+          if (!Array.isArray(row)) return;
+          const cell = row[c];
+          if (cell === "" || cell === undefined || cell === null) return;
+          if (!isNaN(Number(cell)) && Number(cell) > 0) {
+            numberCount++;
+          } else {
+            textCount++;
+            totalLength += String(cell).length;
+          }
+        });
+
+        colStats.push({ colIdx: c, numberCount, textCount, avgLength: textCount > 0 ? totalLength / textCount : 0 });
+      }
+
+      // العمود النصفي الأطول هو الأغلب الوصف
+      const textCols = colStats.filter(s => s.textCount > s.numberCount).sort((a,b) => b.avgLength - a.avgLength);
+      if (textCols.length > 0) bestDescCol = textCols[0].colIdx;
+
+      // الأعمدة الرقمية (خفضنا الحد الأدنى لـ 1 ليدعم الفواتير الصغيرة ذات السطر الواحد!)
+      const numCols = colStats.filter(s => s.numberCount > 0).sort((a,b) => b.numberCount - a.numberCount);
+      if (numCols.length > 0) {
+        bestQtyCol = numCols[numCols.length - 1]?.colIdx ?? -1; 
+        bestPriceCol = numCols[0]?.colIdx ?? -1; 
+        if (bestQtyCol === bestPriceCol && numCols[1]) {
+          bestPriceCol = numCols[1].colIdx;
         }
-      });
-
-      colStats.push({ colIdx: c, numberCount, textCount, avgLength: textCount > 0 ? totalLength / textCount : 0 });
-    }
-
-    // العمود النصفي الأطول هو الأغلب الوصف
-    const textCols = colStats.filter(s => s.textCount > s.numberCount).sort((a,b) => b.avgLength - a.avgLength);
-    if (textCols.length > 0) bestDescCol = textCols[0].colIdx;
-
-    // الأعمدة الرقمية
-    const numCols = colStats.filter(s => s.numberCount > 3).sort((a,b) => b.numberCount - a.numberCount);
-    if (numCols.length > 0) {
-      bestQtyCol = numCols[numCols.length - 1].colIdx; // العمود الرقمي الأقل تكراراً أو ذو القيم الأصغر غالباً الكمية
-      bestPriceCol = numCols[0].colIdx; // الأول هو سعر الوحدة أو الإجمالي
-      if (bestQtyCol === bestPriceCol && numCols[1]) {
-        bestPriceCol = numCols[1].colIdx;
       }
     }
 
+    // قيم افتراضية آمنة جداً في حال فشل الكشف التلقائي عن الأعمدة لمنع الانهيار
+    if (bestDescCol === -1) bestDescCol = 0;
+    if (bestQtyCol === -1) bestQtyCol = 1;
+    if (bestPriceCol === -1) bestPriceCol = 2;
+
     // قراءة البيانات بناءً على التخمين الذكي
     rawData.forEach((row, rIdx) => {
-      // تخطي الصفوف الفوقية
-      if (rIdx < 5) return;
-      const desc = bestDescCol !== -1 ? String(row[bestDescCol] || "").trim() : "";
-      const qty = bestQtyCol !== -1 ? parseFloat(row[bestQtyCol] || 0) : 0;
-      const price = bestPriceCol !== -1 ? parseFloat(row[bestPriceCol] || 0) : 0;
+      if (!Array.isArray(row)) return;
+      // تخطي الصفوف الفوقية التعريفية
+      if (rIdx < 2) return; 
+      
+      const desc = String(row[bestDescCol] || "").trim();
+      const qty = parseFloat(row[bestQtyCol] || 0);
+      const price = parseFloat(row[bestPriceCol] || 0);
 
-      if (desc && qty > 0 && price > 0 && desc.length > 2) {
+      if (desc && qty > 0 && price > 0 && desc.length > 1) {
         rows.push({
           itemCode: "EG-111111-1111",
           description: desc,
