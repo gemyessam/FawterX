@@ -31,6 +31,7 @@ export default function Home() {
   const [uploadResult, setUploadResult] = useState(null)
   const [uploadLoading, setUploadLoading] = useState(false)
   const [error, setError] = useState('')
+  const [parseMode, setParseMode] = useState('template') // 'template' or 'smart'
 
   // ETA mapping fields constant
   const ETA_FIELDS = [
@@ -160,15 +161,18 @@ export default function Home() {
   function handleFileSelect(f) {
     if (!f) return
     const ext = f.name.split('.').pop().toLowerCase()
-    if (!['xlsx', 'xls', 'csv'].includes(ext)) {
-      toast.error(lang === 'ar' ? 'يرجى اختيار ملف إكسيل صالح (.xlsx أو .xls)' : 'Please select a valid Excel file (.xlsx or .xls)')
+    const allowed = parseMode === 'smart' ? ['xlsx', 'xls', 'csv', 'pdf'] : ['xlsx', 'xls', 'csv']
+    if (!allowed.includes(ext)) {
+      toast.error(lang === 'ar' 
+        ? `يرجى اختيار ملف صالح (${allowed.join(', ')})` 
+        : `Please select a valid file (${allowed.join(', ')})`)
       return
     }
     setFile(f)
     setError('')
   }
 
-  // Handle uploading Excel file (Step 1 -> 2)
+  // Handle uploading Excel / PDF file (Step 1 -> 2 or 3)
   async function handleUploadExcel() {
     if (!file) return
 
@@ -185,15 +189,67 @@ export default function Home() {
     setUploadLoading(true)
     setError('')
     try {
-      const res = await uploadExcel(file)
+      const res = await uploadExcel(file, parseMode)
       setUploadResult(res)
-      toast.success(lang === 'ar' ? 'تم رفع ملف الإكسيل بنجاح!' : 'Excel file uploaded successfully!')
-      setStep(2) // Move to Mapping
+      toast.success(lang === 'ar' ? 'تم رفع وقراءة المستند بنجاح!' : 'Document uploaded and parsed successfully!')
+
+      if (parseMode === 'smart') {
+        // AI Smart mode: Bypass manual column mapping completely!
+        const issuer = {
+          name: config.companyName || 'الشركة العربية المتميزة للصناعة',
+          registrationNumber: config.taxId || '477-840-515',
+          activityCode: config.taxpayerActivityCode || '6209',
+          governate: 'Cairo',
+          regionCity: 'Cairo',
+          street: 'Main Street',
+          buildingNumber: '1'
+        }
+
+        const smartMapping = {
+          itemCode: 'itemCode',
+          description: 'description',
+          quantity: 'quantity',
+          unitValue: 'unitValue',
+          taxPercent: 'taxPercent'
+        }
+
+        const genRes = await generateInvoice(smartMapping, res.rows || [], issuer, res.metadata || {})
+        if (!genRes.success) throw new Error(genRes.message)
+        const docs = genRes.documents || [genRes.document]
+        setEtaDocs(docs)
+
+        // Get local validation copy (Dry-run call)
+        const dryRes = await submitToETA(docs, true)
+        setValidation(dryRes.validation)
+        setDraftId(dryRes.draftId)
+
+        toast.success(lang === 'ar' ? 'تمت المطابقة والتحقق بالذكاء الاصطناعي بنجاح!' : 'AI Auto-Mapping and validation succeeded!')
+        setStep(3) // Skip step 2, move straight to Preview!
+      } else {
+        setStep(2) // Standard template mode: Move to manual Mapping
+      }
     } catch (e) {
-      setError(e.response?.data?.message || e.message || 'Error processing excel file')
-      toast.error(lang === 'ar' ? 'فشل معالجة ملف الإكسيل' : 'Failed to parse Excel file')
+      setError(e.response?.data?.message || e.message || 'Error processing document')
+      toast.error(lang === 'ar' ? 'فشل تحليل ومعالجة المستند بالذكاء الاصطناعي' : 'Failed to parse document with AI')
     } finally {
       setUploadLoading(false)
+    }
+  }
+
+  // Handle live updating and validation of itemCode changes in Step 3
+  async function handleItemCodeChange(idx, val) {
+    const nextDocs = JSON.parse(JSON.stringify(etaDocs))
+    if (nextDocs[0] && nextDocs[0].invoiceLines && nextDocs[0].invoiceLines[idx]) {
+      nextDocs[0].invoiceLines[idx].itemCode = val
+    }
+    setEtaDocs(nextDocs)
+    
+    // Silent dry-run validation to update compliance check score
+    try {
+      const dryRes = await submitToETA(nextDocs, true)
+      setValidation(dryRes.validation)
+    } catch (e) {
+      console.warn("Silent revalidation failed:", e)
     }
   }
 
@@ -209,10 +265,12 @@ export default function Home() {
 
     setUploadLoading(true)
     try {
+      const saved = localStorage.getItem('companySettings')
+      const config = saved ? JSON.parse(saved) : {}
       const issuer = {
-        name: 'الشركة العربية المتميزة للصناعة',
-        registrationNumber: '477-840-515',
-        activityCode: '6209',
+        name: config.companyName || 'الشركة العربية المتميزة للصناعة',
+        registrationNumber: config.taxId || '477-840-515',
+        activityCode: config.taxpayerActivityCode || '6209',
         governate: 'Cairo',
         regionCity: 'Cairo',
         street: 'Main Street',
@@ -553,8 +611,54 @@ export default function Home() {
           {/* STEP 1: UPLOAD FILE */}
           {step === 1 && (
             <div className="card fade-in">
-              <h2 className="card-title">📂 {lang === 'ar' ? 'أتمتة ملف الإكسيل' : 'Process Excel Spreadsheet'}</h2>
-              <p className="card-sub">{lang === 'ar' ? 'ارفع ملف المعاملات مباشرة لبدء فحص مصلحة الضرائب تلقائياً' : 'Drag & drop raw transactions sheets to start automated validation'}</p>
+              <h2 className="card-title">📂 {lang === 'ar' ? 'أتمتة الفواتير والمعاملات الذكية' : 'Intelligent Document Automation'}</h2>
+              <p className="card-sub">{lang === 'ar' ? 'ارفع فواتيرك ومعاملاتك مباشرة ليتم تحليلها والتحقق من امتثالها فورياً مصلحة الضرائب' : 'Upload transaction spreadsheets or raw PDF invoices to parse and validate them instantly'}</p>
+
+              {/* Segmented Mode Selector */}
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.75rem', background: '#090b14', padding: '0.4rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                <button 
+                  type="button"
+                  style={{ 
+                    flex: 1, 
+                    padding: '0.75rem', 
+                    borderRadius: '8px', 
+                    border: 'none', 
+                    background: parseMode === 'template' ? 'var(--primary)' : 'transparent', 
+                    color: '#fff', 
+                    cursor: 'pointer', 
+                    fontWeight: 600, 
+                    transition: 'all 0.25s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem'
+                  }}
+                  onClick={() => { setParseMode('template'); setFile(null); }}
+                >
+                  📊 {lang === 'ar' ? 'الوضع القياسي (Excel mapping)' : 'Standard Excel Template'}
+                </button>
+                <button 
+                  type="button"
+                  style={{ 
+                    flex: 1, 
+                    padding: '0.75rem', 
+                    borderRadius: '8px', 
+                    border: 'none', 
+                    background: parseMode === 'smart' ? 'linear-gradient(135deg, #7c4dff, #18ffff)' : 'transparent', 
+                    color: parseMode === 'smart' ? '#0b0d19' : '#fff', 
+                    cursor: 'pointer', 
+                    fontWeight: 700, 
+                    transition: 'all 0.25s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem'
+                  }}
+                  onClick={() => { setParseMode('smart'); setFile(null); }}
+                >
+                  🧠 {lang === 'ar' ? 'وضع الذكاء الاصطناعي الأذكى (PDF / Excel)' : 'AI Smart Auto-Parse (PDF / Excel)'}
+                </button>
+              </div>
 
               {(() => {
                 const settings = JSON.parse(localStorage.getItem('companySettings') || '{}')
@@ -581,13 +685,19 @@ export default function Home() {
                 <input
                   id="excel-file-pick"
                   type="file"
-                  accept=".xlsx,.xls,.csv"
+                  accept={parseMode === 'smart' ? ".xlsx,.xls,.csv,.pdf" : ".xlsx,.xls,.csv"}
                   style={{ display: 'none' }}
                   onChange={e => handleFileSelect(e.target.files[0])}
                 />
-                <span className="upload-icon">📊</span>
-                <h3>{dragging ? (lang === 'ar' ? 'أفلت الملف هنا' : 'Drop file here') : (lang === 'ar' ? 'اسحب وأفلت ملف الإكسيل هنا أو انقر للتصفح' : 'Drag & drop Excel here or click to browse')}</h3>
-                <p>Excel (.xlsx, .xls) / CSV — Max 10MB</p>
+                <span className="upload-icon">{parseMode === 'smart' ? '🧠' : '📊'}</span>
+                <h3>
+                  {dragging 
+                    ? (lang === 'ar' ? 'أفلت الملف هنا' : 'Drop file here') 
+                    : (parseMode === 'smart'
+                        ? (lang === 'ar' ? 'اسحب وأفلت فاتورة الـ PDF أو Excel هنا أو انقر للتصفح' : 'Drag & drop PDF or Excel invoice here or click to browse')
+                        : (lang === 'ar' ? 'اسحب وأفلت ملف الإكسيل هنا أو انقر للتصفح' : 'Drag & drop Excel sheet here or click to browse'))}
+                </h3>
+                <p>{parseMode === 'smart' ? 'PDF / Excel (.xlsx, .xls, .csv) — Max 10MB' : 'Excel (.xlsx, .xls, .csv) — Max 10MB'}</p>
               </div>
 
               {file && (
@@ -604,7 +714,9 @@ export default function Home() {
                 <button className="btn btn-ghost" onClick={handleResetFlow}>{lang === 'ar' ? 'إلغاء' : 'Cancel'}</button>
                 <button className="btn btn-primary" onClick={handleUploadExcel} disabled={!file || uploadLoading}>
                   {uploadLoading ? <span className="spinner"></span> : null}
-                  {uploadLoading ? (lang === 'ar' ? 'جاري القراءة...' : 'Reading...') : (lang === 'ar' ? 'رفع وقراءة الملف ←' : 'Upload & Parse Excel →')}
+                  {uploadLoading 
+                    ? (lang === 'ar' ? 'جاري التحليل واستخراج البيانات...' : 'Analyzing & extracting...') 
+                    : (lang === 'ar' ? 'تحليل وقراءة المستند الذكي ←' : 'Parse & Process Document →')}
                 </button>
               </div>
             </div>
@@ -751,8 +863,26 @@ export default function Home() {
                         <td>{idx + 1}</td>
                         <td>
                           <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>{line.description}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'monospace', marginTop: '0.25rem' }}>
-                            {line.itemCode}
+                          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>🔑 {lang === 'ar' ? 'كود السلعة (EGS/GPC):' : 'Item Code:'}</span>
+                            <input 
+                              type="text"
+                              className="input"
+                              style={{ 
+                                background: 'rgba(9, 11, 20, 0.6)', 
+                                border: '1px solid var(--border)', 
+                                borderRadius: '6px', 
+                                color: '#00e0a1', 
+                                fontSize: '0.8rem', 
+                                padding: '0.25rem 0.5rem', 
+                                width: '220px', 
+                                fontFamily: 'monospace',
+                                fontWeight: 'bold' 
+                              }}
+                              value={line.itemCode || ''}
+                              onChange={(e) => handleItemCodeChange(idx, e.target.value)}
+                              placeholder="EG-111111-..."
+                            />
                           </div>
                         </td>
                         <td>{line.quantity}</td>

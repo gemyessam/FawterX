@@ -58,9 +58,10 @@ api.interceptors.request.use(async (config) => {
 })
 
 /** رفع ملف Excel وجلب الـ headers والـ preview */
-export async function uploadExcel(file) {
+export async function uploadExcel(file, mode = 'template') {
   const form = new FormData()
   form.append('file', file)
+  form.append('mode', mode)
   const { data } = await api.post('/excel/upload', form)
   return data
 }

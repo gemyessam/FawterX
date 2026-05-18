@@ -3,6 +3,7 @@ const multer   = require("multer");
 const path     = require("path");
 const fs       = require("fs");
 const { parseExcel, getSheetNames } = require("../utils/excelParser");
+const { parseSmartDocument } = require("../utils/smartParser");
 const authMiddleware = require("../middleware/auth");
 
 const router = express.Router();
@@ -26,10 +27,10 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   fileFilter: (_req, file, cb) => {
-    const allowed = [".xlsx", ".xls", ".csv"];
+    const allowed = [".xlsx", ".xls", ".csv", ".pdf"];
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowed.includes(ext)) cb(null, true);
-    else cb(new Error("الملف يجب أن يكون Excel أو CSV"));
+    else cb(new Error("الملف يجب أن يكون Excel أو CSV أو PDF"));
   },
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
 });
@@ -51,23 +52,36 @@ const uploadMiddleware = (req, res, next) => {
 
 // ——— POST /api/excel/upload ———
 // رفع الملف وإرجاع الـ headers + أول 10 rows للـ preview
-router.post("/upload", uploadMiddleware, (req, res) => {
+router.post("/upload", uploadMiddleware, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: "لم يتم رفع أي ملف" });
     }
 
-    const { headers, rows, sheetName, parserDebugInfo, metadata } = parseExcel(req.file.path);
-    console.log(`[Excel Upload] User: ${req.user.uid} uploaded file: ${req.file.originalname}`);
+    const mode = req.body.mode || req.query.mode || "template";
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const isPdf = ext === ".pdf";
+
+    console.log(`[Smart/Excel Upload] Mode: ${mode}, Is PDF: ${isPdf}`);
+
+    let result;
+    if (isPdf || mode === "smart") {
+      result = await parseSmartDocument(req.file.path, isPdf);
+    } else {
+      result = parseExcel(req.file.path);
+    }
+
+    const { headers, rows, sheetName, parserDebugInfo, metadata } = result;
+    console.log(`[Excel Uploaded & Mapped] User: ${req.user.uid} file: ${req.file.originalname}`);
 
     return res.json({
       success:   true,
       filePath:  req.file.path,
       fileName:  req.file.originalname,
-      sheetName,
+      sheetName: sheetName || "Sheet1",
       headers,
       totalRows: rows.length,
-      preview:   rows.slice(0, 10), // أول 10 rows
+      preview:   rows.slice(0, 10),
       rows,
       parserDebugInfo,
       metadata,
