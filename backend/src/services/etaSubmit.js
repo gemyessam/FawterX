@@ -65,7 +65,7 @@ async function submitDocuments(documents, dryRun = false, customCredentials = nu
         Authorization:  `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      timeout: 30000 // 30 seconds timeout
+      timeout: 90000 // 90 seconds timeout to prevent read ETIMEDOUT during slow ETA responses
     });
 
     console.log("=== ETA REAL SUBMIT RESPONSE ===", response.data);

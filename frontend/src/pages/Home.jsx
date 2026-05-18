@@ -322,10 +322,17 @@ export default function Home() {
         return
       }
 
-      const details = err.response?.data?.message || err.response?.data?.etaError || err.message;
+      const errData = err.response?.data;
+      let errorStr = errData?.message || err.message;
+      if (errData?.errors && Array.isArray(errData.errors)) {
+        errorStr += "\n\n[قائمة الأخطاء المكتشفة في الفاتورة]:\n" + errData.errors.map((e, idx) => `${idx + 1}. ${e}`).join("\n");
+      }
+      if (errData?.result) {
+        errorStr += "\n\n[ETA Rejection Details]:\n" + JSON.stringify(errData.result, null, 2);
+      }
       setSubmissionResult({
         success: false,
-        error: typeof details === 'object' ? JSON.stringify(details, null, 2) : String(details)
+        error: errorStr
       })
       toast.error(lang === 'ar' ? 'فشل الإرسال لـ ETA' : 'ETA submission failed')
     } finally {
