@@ -218,28 +218,77 @@ export default function Home() {
 
   // Submit to ETA directly with automated cloud mock signature (no PIN modal required)
   async function handleTriggerETA() {
-    // 1. Auto-inject the mock signature to all documents in etaDocs
-    const updatedDocs = etaDocs.map(d => {
-      if (!d.signatures || !Array.isArray(d.signatures) || d.signatures.length === 0) {
-        return {
-          ...d,
-          signatures: [{
-            signatureType: "I",
-            value: "MOCK_SIGNATURE_BYPASS_FOR_TESTING_" + Math.random().toString(36).substring(7)
-          }]
-        };
-      }
-      return d;
-    });
-
     setSubmitting(true)
     setSubmissionResult(null)
     setVerificationResult(null)
-    setStep(4) // Move to real-time verification screen
+    
+    toast.loading(lang === 'ar' ? 'جاري التحقق من أداة التوقيع المحلية...' : 'Checking local signer tool...', { id: 'submit-loader' })
 
-    toast.loading(lang === 'ar' ? 'جاري توقيع المستندات وتأكيد الاتصال بالمنظومة...' : 'Signing documents & connecting to ETA...', { id: 'submit-loader' })
-
+    let updatedDocs = [];
     try {
+      // 1. Health check to local signer at http://localhost:8585/
+      let localSignerActive = false;
+      try {
+        const pingRes = await fetch("http://localhost:8585/", { method: "GET" });
+        if (pingRes.ok) {
+          localSignerActive = true;
+        }
+      } catch (pingErr) {
+        console.warn("Local signer is not running:", pingErr);
+      }
+
+      if (!localSignerActive) {
+        toast.dismiss('submit-loader');
+        setSubmitting(false);
+        // Show an explicit beautiful warning that they need to download/run the signer
+        toast.error(
+          lang === 'ar' 
+            ? '⚠️ لم يتم الكشف عن أداة التوقيع! يرجى تحميل وتشغيل برنامج FawterX Signer أولاً والتأكد من توصيل الدونجل.' 
+            : '⚠️ Local signer app not detected! Please download & run FawterX Signer and ensure your USB Token is plugged in.',
+          { duration: 7000 }
+        );
+        return;
+      }
+
+      // 2. Local signer is active! Let's sign each document
+      toast.loading(lang === 'ar' ? 'يرجى اختيار الشهادة وإدخال رقم الـ PIN في نافذة التوقيع...' : 'Please choose certificate & enter PIN in signer popup...', { id: 'submit-loader' });
+      
+      for (let i = 0; i < etaDocs.length; i++) {
+        const doc = etaDocs[i];
+        
+        // Generate the canonical serialized string for this document
+        const canonicalString = serializeToken(doc);
+        
+        // Request the local signer to sign the canonicalized string
+        const signRes = await fetch("http://localhost:8585/sign", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ canonicalString })
+        });
+        
+        if (!signRes.ok) {
+          throw new Error(lang === 'ar' ? 'فشلت عملية التوقيع محلياً.' : 'Local signing request failed.');
+        }
+        
+        const signData = await signRes.json();
+        if (!signData.success) {
+          throw new Error(signData.error || 'Unknown signing error');
+        }
+        
+        updatedDocs.push({
+          ...doc,
+          signatures: [{
+            signatureType: "I",
+            value: signData.signature
+          }]
+        });
+      }
+
+      toast.loading(lang === 'ar' ? 'تم التوقيع بنجاح! جاري إرسال الفواتير لمنظومة الضرائب المصرية...' : 'Signed successfully! Submitting to ETA...', { id: 'submit-loader' })
+      setStep(4) // Move to real-time verification screen
+
       const res = await submitToETA(updatedDocs, false)
       setSubmissionResult(res)
       toast.success(lang === 'ar' ? 'تم إرسال الفاتورة بنجاح لـ ETA!' : 'Invoices sent successfully to ETA!', { id: 'submit-loader' })
@@ -406,6 +455,20 @@ export default function Home() {
             {/* Sidebar quick actions */}
             <div className="dashboard-side-strip">
 
+              {/* FawterX Signer Download Card */}
+              <div className="card" style={{ padding: '1.5rem', border: '1px solid rgba(0, 224, 161, 0.2)', background: 'rgba(0, 224, 161, 0.02)' }}>
+                <h4 style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
+                  🔑 {lang === 'ar' ? 'برنامج التوقيع المحلي' : 'Local E-Signer Bridge'}
+                </h4>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0.5rem 0 1.25rem' }}>
+                  {lang === 'ar' 
+                    ? 'يلزم تشغيل برنامج FawterX Signer للربط وتوقيع الفواتير بالدونجل (USB Token) الحقيقي الخاص بك.' 
+                    : 'Download and run FawterX Signer to sign invoices using your E-Invoicing USB Token.'}
+                </p>
+                <a href="/FawterX-Signer.exe" download className="btn btn-accent btn-block btn-sm" style={{ textDecoration: 'none', textAlign: 'center', display: 'block' }}>
+                  📥 {lang === 'ar' ? 'تحميل برنامج التوقيع (EXE)' : 'Download Signer (EXE)'}
+                </a>
+              </div>
 
               <div className="card" style={{ padding: '1.5rem', marginTop: '1.5rem' }}>
                 <h4>{lang === 'ar' ? 'نظام الاسترجاع الذكي' : 'Recovery Hub'}</h4>
@@ -850,4 +913,31 @@ export default function Home() {
       )}
     </div>
   )
+}
+
+function serializeToken(object) {
+  let serialized = "";
+  const keys = Object.keys(object).sort();
+  for (const key of keys) {
+    const val = object[key];
+    if (key === "signatures" || val === null || val === undefined) {
+      continue;
+    }
+    serialized += `"${key.toUpperCase()}"`;
+    if (Array.isArray(val)) {
+      for (const item of val) {
+        serialized += `"${key.toUpperCase()}"`;
+        if (typeof item === "object") {
+          serialized += serializeToken(item);
+        } else {
+          serialized += `"${item.toString()}"`;
+        }
+      }
+    } else if (typeof val === "object") {
+      serialized += serializeToken(val);
+    } else {
+      serialized += `"${val.toString()}"`;
+    }
+  }
+  return serialized;
 }

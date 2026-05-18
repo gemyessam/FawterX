@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { AppContext } from '../App'
-import { getDraftById, submitDraft, getETAStatus } from '../services/api'
+import { getDraftById, submitDraft, getETAStatus, submitToETA, deleteDraft } from '../services/api'
 import toast from 'react-hot-toast'
 
 function fmt(n) {
@@ -50,13 +50,82 @@ export default function DraftDetails() {
     setEtaError(null)
     setVerificationResult(null)
 
-    toast.loading(lang === 'ar' ? 'جاري توقيع المستندات والتوصيل بمنظومة الضرائب...' : 'Cryptographically signing and submitting to ETA...', { id: 'draft-submit' })
+    toast.loading(lang === 'ar' ? 'جاري التحقق من أداة التوقيع المحلية...' : 'Checking local signer tool...', { id: 'draft-submit' })
     
     try {
-      const res = await submitDraft(id)
+      // 1. Health check to local signer at http://localhost:8585/
+      let localSignerActive = false;
+      try {
+        const pingRes = await fetch("http://localhost:8585/", { method: "GET" });
+        if (pingRes.ok) {
+          localSignerActive = true;
+        }
+      } catch (pingErr) {
+        console.warn("Local signer is not running:", pingErr);
+      }
+
+      if (!localSignerActive) {
+        toast.dismiss('draft-submit');
+        setSubmitting(false);
+        toast.error(
+          lang === 'ar' 
+            ? '⚠️ لم يتم الكشف عن أداة التوقيع! يرجى تحميل وتشغيل برنامج FawterX Signer أولاً والتأكد من توصيل الدونجل.' 
+            : '⚠️ Local signer app not detected! Please download & run FawterX Signer and ensure your USB Token is plugged in.',
+          { duration: 7000 }
+        );
+        return;
+      }
+
+      // 2. Sign the draft document
+      toast.loading(lang === 'ar' ? 'يرجى اختيار الشهادة وإدخال رقم الـ PIN في نافذة التوقيع...' : 'Please choose certificate & enter PIN in signer popup...', { id: 'draft-submit' });
+      
+      const docs = Array.isArray(docPayload) ? docPayload : (docPayload._batchDocuments || [docPayload]);
+      const signedDocs = [];
+      
+      for (let i = 0; i < docs.length; i++) {
+        const doc = docs[i];
+        const canonicalString = serializeToken(doc);
+        
+        const signRes = await fetch("http://localhost:8585/sign", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ canonicalString })
+        });
+        
+        if (!signRes.ok) {
+          throw new Error(lang === 'ar' ? 'فشلت عملية التوقيع محلياً.' : 'Local signing request failed.');
+        }
+        
+        const signData = await signRes.json();
+        if (!signData.success) {
+          throw new Error(signData.error || 'Unknown signing error');
+        }
+        
+        signedDocs.push({
+          ...doc,
+          signatures: [{
+            signatureType: "I",
+            value: signData.signature
+          }]
+        });
+      }
+
+      toast.loading(lang === 'ar' ? 'تم التوقيع بنجاح! جاري إرسال الفواتير لمنظومة الضرائب المصرية...' : 'Signed successfully! Submitting to ETA...', { id: 'draft-submit' })
+
+      // 3. Submit directly to ETA
+      const res = await submitToETA(signedDocs, false)
       console.log("Draft Submit Success:", res)
       setEtaResult(res)
       toast.success(lang === 'ar' ? 'تم إرسال وقبول المستندات بنجاح من الضرائب!' : 'Documents successfully accepted by ETA!', { id: 'draft-submit' })
+
+      // Delete this draft since it has been successfully signed and submitted!
+      try {
+        await deleteDraft(id);
+      } catch (delErr) {
+        console.warn("Could not delete draft after submission:", delErr);
+      }
 
       const uuid = res.requestId || res.result?.submissionUUID || res.result?.submissionId || res.result?.requestId;
       if (uuid && uuid !== "N/A") {
@@ -311,4 +380,31 @@ export default function DraftDetails() {
 
     </div>
   )
+}
+
+function serializeToken(object) {
+  let serialized = "";
+  const keys = Object.keys(object).sort();
+  for (const key of keys) {
+    const val = object[key];
+    if (key === "signatures" || val === null || val === undefined) {
+      continue;
+    }
+    serialized += `"${key.toUpperCase()}"`;
+    if (Array.isArray(val)) {
+      for (const item of val) {
+        serialized += `"${key.toUpperCase()}"`;
+        if (typeof item === "object") {
+          serialized += serializeToken(item);
+        } else {
+          serialized += `"${item.toString()}"`;
+        }
+      }
+    } else if (typeof val === "object") {
+      serialized += serializeToken(val);
+    } else {
+      serialized += `"${val.toString()}"`;
+    }
+  }
+  return serialized;
 }
