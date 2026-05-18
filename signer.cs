@@ -20,11 +20,11 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.5.2 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.5.3 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.5.2 (Egypt ETA)  ");
-            Console.WriteLine("    [STATUS] Offline Chain Embedding: Active (EndCert) ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.5.3 (Egypt ETA)  ");
+            Console.WriteLine("    [STATUS] Offline Chain Embedding: Active (Custom None) ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
             
@@ -35,7 +35,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.5.2 (Manual Offline Chain Embedding Active)");
+                Console.WriteLine("[INFO] Version 1.5.3 (Custom Offline Chain Embedding Active)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -237,7 +237,10 @@ namespace FawterXSigner
             SignedCms signedCms = new SignedCms(contentInfo, true); // true = detached signature
 
             CmsSigner cmsSigner = new CmsSigner(cert);
-            cmsSigner.IncludeOption = X509IncludeOption.EndCertOnly; // Guarantee 100% success without local trust exceptions!
+            cmsSigner.IncludeOption = X509IncludeOption.None; // Bypass all chain-building exceptions!
+
+            // Add the leaf certificate manually
+            cmsSigner.Certificates.Add(cert);
 
             // Programmatically gather all Egypt Trust / ITIDA certificates from local Windows stores and manually embed them!
             try
