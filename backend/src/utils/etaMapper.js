@@ -3,6 +3,8 @@ const UNIT_MAP = {
   "lm": "M",
   "meter": "M",
   "متر": "M",
+  "متر طولي": "M",
+  "متر طول": "M",
   "kg": "KGM",
   "kgm": "KGM",
   "كيلو": "KGM",
@@ -72,7 +74,21 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
 
       // Unit Type Mapping
       const rawUnit = String(row[mapping.unitType] || "EA").toLowerCase().trim();
-      const unitType = UNIT_MAP[rawUnit] || rawUnit.toUpperCase();
+      let unitType = "EA";
+      
+      if (rawUnit.includes("متر") || rawUnit === "m" || rawUnit === "lm" || rawUnit === "meter" || rawUnit === "mtr") {
+        unitType = "M";
+      } else if (rawUnit.includes("كيلو") || rawUnit.includes("كجم") || rawUnit === "kg" || rawUnit === "kgm" || rawUnit === "kgms") {
+        unitType = "KGM";
+      } else if (rawUnit.includes("طن") || rawUnit === "ton" || rawUnit === "tne") {
+        unitType = "TNE";
+      } else if (rawUnit.includes("بار") || rawUnit === "bar") {
+        unitType = "BAR";
+      } else if (rawUnit.includes("قطعة") || rawUnit.includes("حبة") || rawUnit.includes("عدد") || rawUnit === "ea") {
+        unitType = "EA";
+      } else {
+        unitType = UNIT_MAP[rawUnit] || rawUnit.toUpperCase();
+      }
 
       // Code Type
       const codeTypeMapped = String(row[mapping.codeType] || "EGS").toUpperCase().trim();
