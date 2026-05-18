@@ -473,7 +473,7 @@ export default function Home() {
                     ? 'يلزم تشغيل برنامج FawterX Signer للربط وتوقيع الفواتير بالدونجل (USB Token) الحقيقي الخاص بك.' 
                     : 'Download and run FawterX Signer to sign invoices using your E-Invoicing USB Token.'}
                 </p>
-                <a href="/FawterX-Signer.zip" download className="btn btn-accent btn-block btn-sm" style={{ textDecoration: 'none', textAlign: 'center', display: 'block' }}>
+                <a href={`/FawterX-Signer.zip?t=${Date.now()}`} download className="btn btn-accent btn-block btn-sm" style={{ textDecoration: 'none', textAlign: 'center', display: 'block' }}>
                   📥 {lang === 'ar' ? 'تحميل برنامج التوقيع (ZIP)' : 'Download Signer (ZIP)'}
                 </a>
               </div>
