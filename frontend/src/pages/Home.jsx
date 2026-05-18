@@ -824,6 +824,52 @@ export default function Home() {
                 </div>
               </div>
 
+              {uploadResult?.parserDebugInfo && (
+                <div className="card animate-fade-in" style={{ 
+                  padding: '1.5rem', 
+                  background: 'rgba(124, 77, 255, 0.04)', 
+                  border: '1px solid rgba(124, 77, 255, 0.15)', 
+                  borderRadius: 'var(--radius)', 
+                  marginBottom: '2.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '2rem',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+                    <div style={{ fontSize: '2.5rem' }}>🧠</div>
+                    <div style={{ textAlign: lang === 'ar' ? 'right' : 'left' }}>
+                      <h4 style={{ color: '#fff', margin: 0, fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {lang === 'ar' ? 'محرك الفحص والاستخراج الصناعي بالذكاء الاصطناعي نشط' : 'AI Industrial Smart Extraction Active'}
+                        <span className="badge badge-accent" style={{ background: 'linear-gradient(135deg, #7c4dff, #18ffff)', color: '#0b0d19', border: 'none', fontWeight: 800, padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>
+                          {uploadResult.parserDebugInfo.mode}
+                        </span>
+                      </h4>
+                      <p style={{ margin: '0.4rem 0 0', fontSize: '0.85rem', color: 'var(--text-dim)' }}>
+                        {lang === 'ar' 
+                          ? 'تم مطابقة قطاعات الألومنيوم وفهم علاقات الوزن (KG) والطول (mm) والامتثال الضريبي (ETA).' 
+                          : 'Successfully segmented aluminium profiles, weights, lengths and Egyptian ETA unit scales.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ 
+                        fontSize: '1.8rem', 
+                        fontWeight: 900, 
+                        color: uploadResult.parserDebugInfo.confidenceScore > 80 ? 'var(--accent)' : '#f1c40f' 
+                      }}>
+                        {uploadResult.parserDebugInfo.confidenceScore || 90}%
+                      </div>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        {lang === 'ar' ? 'معدل ثقة الذكاء الاصطناعي' : 'Extraction Confidence'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div style={{ marginBottom: '2.5rem' }}>
                 {validation?.valid ? (
                   <div className="status-banner success-banner" style={{ padding: '1.25rem' }}>
@@ -858,41 +904,81 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody>
-                    {etaDocs[0]?.invoiceLines?.map((line, idx) => (
-                      <tr key={idx}>
-                        <td>{idx + 1}</td>
-                        <td>
-                          <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>{line.description}</div>
-                          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>🔑 {lang === 'ar' ? 'كود السلعة (EGS/GPC):' : 'Item Code:'}</span>
-                            <input 
-                              type="text"
-                              className="input"
-                              style={{ 
-                                background: 'rgba(9, 11, 20, 0.6)', 
-                                border: '1px solid var(--border)', 
-                                borderRadius: '6px', 
-                                color: '#00e0a1', 
-                                fontSize: '0.8rem', 
-                                padding: '0.25rem 0.5rem', 
-                                width: '220px', 
-                                fontFamily: 'monospace',
-                                fontWeight: 'bold' 
-                              }}
-                              value={line.itemCode || ''}
-                              onChange={(e) => handleItemCodeChange(idx, e.target.value)}
-                              placeholder="EG-111111-..."
-                            />
-                          </div>
-                        </td>
-                        <td>{line.quantity}</td>
-                        <td>{Number(line.unitValue?.amountEGP || 0).toLocaleString()} EGP</td>
-                        <td>{Number(line.netTotal || line.salesTotal || 0).toLocaleString()} EGP</td>
-                        <td><span className="badge badge-warning" style={{ fontSize: '0.75rem', background: 'rgba(241, 196, 15, 0.1)', color: '#f1c40f', border: '1px solid rgba(241, 196, 15, 0.2)' }}>{line.taxableItems?.[0]?.rate || 14}%</span></td>
-                        <td>{Number(line.taxableItems?.[0]?.amount || 0).toLocaleString()} EGP</td>
-                        <td style={{ color: 'var(--accent)', fontWeight: 700 }}>{Number(line.total || 0).toLocaleString()} EGP</td>
-                      </tr>
-                    ))}
+                    {etaDocs[0]?.invoiceLines?.map((line, idx) => {
+                      const rawRow = uploadResult?.rows?.[idx] || {};
+                      const rowConfidence = rawRow.confidence || 90;
+                      const rowWarnings = rawRow.warnings || [];
+                      const rowMissing = rawRow.missingFields || [];
+
+                      return (
+                        <tr key={idx}>
+                          <td>{idx + 1}</td>
+                          <td>
+                            <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                              <span>{line.description}</span>
+                              
+                              {/* Confidence Badge */}
+                              <span style={{ 
+                                fontSize: '0.7rem', 
+                                padding: '0.1rem 0.4rem', 
+                                borderRadius: '4px',
+                                background: rowConfidence > 80 ? 'rgba(0, 224, 161, 0.1)' : 'rgba(241, 196, 15, 0.1)',
+                                color: rowConfidence > 80 ? '#00e0a1' : '#f1c40f',
+                                border: rowConfidence > 80 ? '1px solid rgba(0, 224, 161, 0.2)' : '1px solid rgba(241, 196, 15, 0.2)'
+                              }}>
+                                🎯 {rowConfidence}%
+                              </span>
+                            </div>
+
+                            {/* Warnings / Missing fields inline */}
+                            {(rowWarnings.length > 0 || rowMissing.length > 0) && (
+                              <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                {rowMissing.map(m => (
+                                  <span key={m} style={{ fontSize: '0.65rem', padding: '0.05rem 0.3rem', borderRadius: '4px', background: 'rgba(231, 76, 60, 0.1)', color: '#e74c3c', border: '1px solid rgba(231, 76, 60, 0.2)' }}>
+                                    🔍 مفقود: {m}
+                                  </span>
+                                ))}
+                                {rowWarnings.map((w, wIdx) => (
+                                  <span key={wIdx} style={{ fontSize: '0.65rem', padding: '0.05rem 0.3rem', borderRadius: '4px', background: 'rgba(241, 196, 15, 0.1)', color: '#f1c40f', border: '1px solid rgba(241, 196, 15, 0.2)' }}>
+                                    ⚠️ {w}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>🔑 {lang === 'ar' ? 'كود السلعة (EGS/GPC):' : 'Item Code:'}</span>
+                              <input 
+                                type="text"
+                                className="input"
+                                style={{ 
+                                  background: 'rgba(9, 11, 20, 0.6)', 
+                                  border: '1px solid var(--border)', 
+                                  borderRadius: '6px', 
+                                  color: '#00e0a1', 
+                                  fontSize: '0.8rem', 
+                                  padding: '0.25rem 0.5rem', 
+                                  width: '220px', 
+                                  fontFamily: 'monospace',
+                                  fontWeight: 'bold' 
+                                }}
+                                value={line.itemCode || ''}
+                                onChange={(e) => handleItemCodeChange(idx, e.target.value)}
+                                placeholder="EG-111111-..."
+                              />
+                            </div>
+                          </td>
+                          <td style={{ fontWeight: 800 }}>
+                            {line.quantity} <span style={{ fontSize: '0.75rem', color: 'var(--accent)' }}>{line.unitType || 'm'}</span>
+                          </td>
+                          <td>{Number(line.unitValue?.amountEGP || 0).toLocaleString()} EGP</td>
+                          <td>{Number(line.netTotal || line.salesTotal || 0).toLocaleString()} EGP</td>
+                          <td><span className="badge badge-warning" style={{ fontSize: '0.75rem', background: 'rgba(241, 196, 15, 0.1)', color: '#f1c40f', border: '1px solid rgba(241, 196, 15, 0.2)' }}>{line.taxableItems?.[0]?.rate || 14}%</span></td>
+                          <td>{Number(line.taxableItems?.[0]?.amount || 0).toLocaleString()} EGP</td>
+                          <td style={{ color: 'var(--accent)', fontWeight: 700 }}>{Number(line.total || 0).toLocaleString()} EGP</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
