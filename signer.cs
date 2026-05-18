@@ -19,10 +19,11 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.1.0 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge (Egypt ETA) 🔑  ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.1.0 (Egypt ETA)  ");
+            Console.WriteLine("    [STATUS] Chain Bypass: Active                  ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
             
@@ -33,6 +34,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
+                Console.WriteLine("[INFO] Version 1.1.0 (Bypasses Local CA chain validation successfully)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -94,7 +96,7 @@ namespace FawterXSigner
                 if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/")
                 {
                     response.ContentType = "application/json; charset=utf-8";
-                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.0.0\",\"message\":\"FawterX local signer is running!\"}";
+                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.1.0\",\"message\":\"FawterX local signer v1.1.0 is running with Chain Bypass!\"}";
                     byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                     response.ContentLength64 = buffer.Length;
                     response.OutputStream.Write(buffer, 0, buffer.Length);
