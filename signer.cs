@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Windows.Forms;
+using System.Text.RegularExpressions;
 
 namespace FawterXSigner
 {
@@ -19,11 +20,11 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.4.0 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.5.0 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.4.0 (Egypt ETA)  ");
-            Console.WriteLine("    [STATUS] Chain Validation: Full ExcludeRoot Active  ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.5.0 (Egypt ETA)  ");
+            Console.WriteLine("    [STATUS] Self-Healing Chain: Active (Auto AIA) ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
             
@@ -34,7 +35,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.4.0 (ITIDA Approved Chain Signing Active)");
+                Console.WriteLine("[INFO] Version 1.5.0 (Automated CA Chain Resolution Active)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -229,6 +230,9 @@ namespace FawterXSigner
 
         private static string SignDocument(string canonicalString, X509Certificate2 cert)
         {
+            // Programmatically download and trust intermediate CA certificates from AIA or official fallback at runtime
+            AutoChaseAndInstallChain(cert);
+
             byte[] dataToSign = Encoding.UTF8.GetBytes(canonicalString);
             
             // Setup ContentInfo for detached signature (which Egypt ETA requires)
@@ -249,6 +253,86 @@ namespace FawterXSigner
 
             byte[] encodedSignature = signedCms.Encode();
             return Convert.ToBase64String(encodedSignature);
+        }
+
+        private static void AutoChaseAndInstallChain(X509Certificate2 cert)
+        {
+            try
+            {
+                X509Chain chain = new X509Chain();
+                chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+                chain.Build(cert);
+
+                // If chain is fully trusted, nothing to do!
+                if (chain.ChainStatus.Length == 0) return;
+
+                string aiaUrl = null;
+                foreach (var ext in cert.Extensions)
+                {
+                    if (ext.Oid.Value == "1.3.6.1.5.5.7.1.1") // AIA Extension OID
+                    {
+                        AsnEncodedData asnData = new AsnEncodedData(ext.Oid, ext.RawData);
+                        string formattedData = asnData.Format(true);
+                        var match = Regex.Match(formattedData, @"URL=(http[^\s\r\n\x00-\x1F]+)", RegexOptions.IgnoreCase);
+                        if (match.Success)
+                        {
+                            aiaUrl = match.Groups[1].Value.Trim();
+                            break;
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(aiaUrl))
+                {
+                    Console.WriteLine("[INFO] Bypassing chain validation by downloading issuer certificate from AIA: " + aiaUrl);
+                    byte[] certBytes;
+                    using (WebClient wc = new WebClient())
+                    {
+                        certBytes = wc.DownloadData(aiaUrl);
+                    }
+
+                    if (certBytes != null && certBytes.Length > 0)
+                    {
+                        X509Certificate2 parentCert = new X509Certificate2(certBytes);
+                        
+                        // Silently register intermediate CA into Current User Intermediate Store (requires no prompt!)
+                        using (X509Store store = new X509Store(StoreName.CertificateAuthority, StoreLocation.CurrentUser))
+                        {
+                            store.Open(OpenFlags.ReadWrite);
+                            store.Add(parentCert);
+                            Console.WriteLine("[INFO] Automatically imported Intermediate CA: " + parentCert.Subject);
+                        }
+
+                        // Recursively chase the chain for parent certs
+                        AutoChaseAndInstallChain(parentCert);
+                    }
+                }
+                else
+                {
+                    // Fallback to direct ITIDA Root CA download
+                    string fallbackRootUrl = "http://rootca.itida.gov.eg/home_files/EgyptRootCAG1.cer";
+                    Console.WriteLine("[INFO] Downloading fallback Egyptian Root CA: " + fallbackRootUrl);
+                    byte[] rootBytes;
+                    using (WebClient wc = new WebClient())
+                    {
+                        rootBytes = wc.DownloadData(fallbackRootUrl);
+                    }
+                    if (rootBytes != null && rootBytes.Length > 0)
+                    {
+                        X509Certificate2 rootCert = new X509Certificate2(rootBytes);
+                        using (X509Store store = new X509Store(StoreName.Root, StoreLocation.CurrentUser))
+                        {
+                            store.Open(OpenFlags.ReadWrite);
+                            store.Add(rootCert);
+                            Console.WriteLine("[INFO] Automatically imported fallback Root CA: " + rootCert.Subject);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[WARN] Chain chasing and trust installation note: " + ex.Message);
+            }
         }
 
         // Lightweight helper to extract JSON values without external libraries
