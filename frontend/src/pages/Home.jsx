@@ -122,7 +122,7 @@ export default function Home() {
         else if (lower.includes('code type') || lower.includes('نوع الكود')) autoMap.codeType = h
         else if (lower.includes('item code') || lower.includes('كود الصنف') || lower.includes('كود المنتج')) autoMap.itemCode = h
         else if (lower.includes('internal') || lower.includes('داخلي') || lower.includes('كود داخلي')) autoMap.internalCode = h
-        else if (lower.includes('unit') || lower.includes('وحدة') || lower.includes('الواحدة')) autoMap.unitType = h
+        else if (lower.includes('unit') || lower.includes('وحدة') || lower.includes('الواحدة') || lower.includes('مقياس') || lower.includes('قياس')) autoMap.unitType = h
         else if (lower.includes('currency') || lower.includes('عملة')) autoMap.currency = h
         else if (lower.includes('invoice') || lower.includes('رقم الفاتورة') || lower.includes('رقم الفاتوره')) autoMap.invoiceNumber = h
         else if (lower.includes('buyer') || lower.includes('receiver name') || lower.includes('اسم المشتري') || lower.includes('العميل')) autoMap.receiverName = h
