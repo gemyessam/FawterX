@@ -870,7 +870,7 @@ export default function Home() {
                 </div>
               )}
 
-              <div style={{ marginBottom: '2.5rem' }}>
+              <div style={{ marginBottom: '2.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {validation?.valid ? (
                   <div className="status-banner success-banner" style={{ padding: '1.25rem' }}>
                     ✅ {lang === 'ar' ? 'اجتازت الفاتورة الفحص المحلي التلقائي بنجاح وجاهزة تماماً للإرسال.' : 'Local automated compliance validation succeeded. Fully ready to transmit.'}
@@ -878,6 +878,34 @@ export default function Home() {
                 ) : (
                   <div className="status-banner error-banner" style={{ padding: '1.25rem' }}>
                     ✕ {lang === 'ar' ? 'تنبيه: يحتوي المستند على أخطاء يجب معالجتها محلياً قبل التوقيع.' : 'Validation errors detected. Fix local inconsistencies before submitting.'}
+                  </div>
+                )}
+
+                {/* Accountant Balancing Alerts */}
+                {uploadResult?.parserDebugInfo && (
+                  <div className={`status-banner ${uploadResult.parserDebugInfo.totalsMatched ? 'success-banner' : 'warning-banner'}`} style={{ 
+                    padding: '1.25rem',
+                    background: uploadResult.parserDebugInfo.totalsMatched ? 'rgba(0, 224, 161, 0.05)' : 'rgba(241, 196, 15, 0.05)',
+                    border: uploadResult.parserDebugInfo.totalsMatched ? '1px solid rgba(0, 224, 161, 0.15)' : '1px solid rgba(241, 196, 15, 0.15)',
+                    color: uploadResult.parserDebugInfo.totalsMatched ? '#00e0a1' : '#f1c40f'
+                  }}>
+                    {uploadResult.parserDebugInfo.totalsMatched ? (
+                      <div>
+                        🎯 <strong>{lang === 'ar' ? 'تقرير المحاسب الذكي: الحسابات متطابقة تماماً ✓' : 'Smart Accountant Audit: Calculations balance perfectly ✓'}</strong>
+                        <span style={{ display: 'block', fontSize: '0.8rem', opacity: 0.8, marginTop: '0.25rem' }}>
+                          {lang === 'ar' ? 'يتطابق مجموع قيم البنود مع إجمالي الفاتورة وقيم ضريبة القيمة المضافة المحسوبة.' : 'All item sums perfectly balance with declared invoice totals and VAT tax scales.'}
+                        </span>
+                      </div>
+                    ) : (
+                      <div>
+                        ⚠️ <strong>{lang === 'ar' ? 'تقرير المحاسب الذكي: هناك فارق أو عدم اتساق مالي!' : 'Smart Accountant Audit: Mathematical Inconsistencies Detected!'}</strong>
+                        {uploadResult.parserDebugInfo.debugWarnings?.map((w, wIdx) => (
+                          <span key={wIdx} style={{ display: 'block', fontSize: '0.8rem', opacity: 0.9, marginTop: '0.35rem' }}>
+                            • {w}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

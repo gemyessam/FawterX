@@ -226,7 +226,7 @@ function Layout({ children }) {
             <span>{t.logoSub}</span>
           </div>
           <span className="premium-badge">{t.badge}</span>
-          <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v1.9.0</span>
+          <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v2.0.0</span>
         </div>
 
         <nav className="header-nav">
