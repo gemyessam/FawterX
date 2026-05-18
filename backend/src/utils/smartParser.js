@@ -201,19 +201,69 @@ async function parseSmartDocument(filePath, isPdf = false) {
     if (bestQtyCol === -1) bestQtyCol = 1;
     if (bestPriceCol === -1) bestPriceCol = 2;
 
-    // قراءة البيانات بناءً على التخمين الذكي
+    // قراءة البيانات بناءً على التخمين الذكي والـ scan المرن لكامل الصفوف
     rawData.forEach((row, rIdx) => {
       if (!Array.isArray(row)) return;
-      // تخطي الصفوف الفوقية التعريفية
-      if (rIdx < 2) return; 
       
-      const desc = String(row[bestDescCol] || "").trim();
-      const qty = parseFloat(row[bestQtyCol] || 0);
-      const price = parseFloat(row[bestPriceCol] || 0);
+      // نستخلص جميع النصوص في الصف للبحث عن الوصف
+      let desc = "";
+      if (bestDescCol !== -1 && row[bestDescCol] !== undefined && row[bestDescCol] !== null) {
+        desc = String(row[bestDescCol]).trim();
+      }
+      
+      // إذا لم يكن الوصف المكتشف مناسباً، نبحث عن أطول قيمة نصية في الصف بأكمله كـ Description
+      if (!desc || desc.length <= 1 || !isNaN(Number(desc))) {
+        let longestText = "";
+        row.forEach(cell => {
+          if (cell === undefined || cell === null || cell === "") return;
+          const str = String(cell).trim();
+          if (isNaN(Number(str)) && str.length > longestText.length && !str.includes("فاتورة") && !str.includes("ضريب")) {
+            longestText = str;
+          }
+        });
+        if (longestText) desc = longestText;
+      }
 
-      if (desc && qty > 0 && price > 0 && desc.length > 1) {
+      // تنظيف الأرقام بمرونة فائقة (إزالة العملات، الكوما، النصوص التابعة كـ Pcs/Units)
+      const getNum = (val) => {
+        if (typeof val === "number") return val;
+        if (!val) return 0;
+        const cleaned = String(val).replace(/[^0-9.-]/g, "");
+        const parsed = parseFloat(cleaned);
+        return isNaN(parsed) ? 0 : parsed;
+      };
+
+      let qty = getNum(row[bestQtyCol]);
+      let price = getNum(row[bestPriceCol]);
+
+      // إذا لم تكتشف الكمية أو السعر بشكل صحيح، نبحث عن أي أرقام في الصف بأكمله
+      if (qty === 0 || price === 0) {
+        const foundNumbers = [];
+        row.forEach((cell, idx) => {
+          if (idx === bestDescCol) return; // تخطي عمود الوصف
+          const num = getNum(cell);
+          if (num > 0) foundNumbers.push(num);
+        });
+        
+        if (foundNumbers.length >= 2) {
+          qty = Math.min(...foundNumbers);
+          price = Math.max(...foundNumbers);
+        } else if (foundNumbers.length === 1) {
+          qty = 1; // كمية افتراضية
+          price = foundNumbers[0];
+        }
+      }
+
+      // فحص أخير وصارم للوصف والقيم قبل الحفظ
+      if (desc && desc.length > 1 && price > 0 && qty > 0) {
+        // حماية ضد إضافة العناوين كأصناف (مثل "الكمية" أو "السعر")
+        const descLower = desc.toLowerCase();
+        if (descLower.includes("desc") || descLower.includes("product") || descLower.includes("البيان") || descLower.includes("الصنف") || descLower.includes("الوصف")) {
+          return; // تخطي صف العناوين الهيدر
+        }
+
         rows.push({
-          itemCode: "EG-111111-1111",
+          itemCode: "EG-111111-1111", // كود السلعة الافتراضي
           description: desc,
           quantity: qty,
           unitValue: price,
