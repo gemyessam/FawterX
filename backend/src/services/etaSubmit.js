@@ -30,16 +30,20 @@ async function submitDocuments(documents, dryRun = false, customCredentials = nu
   }
 
   // تنظيف الـ Payload من الخصائص القديمة (مهم جداً للمسودات القديمة المحفوظة بـ schema سابقة)
+  // تحذير: لا تقم بتعديل أي مستند إذا كان موقعاً بالفعل لتجنب خطأ 4043 (مخالفة الـ hash)
   for (const doc of docsArray) {
-    if (doc.totalItemsDiscount !== undefined) {
-      doc.totalItemsDiscountAmount = doc.totalItemsDiscountAmount !== undefined ? doc.totalItemsDiscountAmount : doc.totalItemsDiscount;
-      delete doc.totalItemsDiscount;
-    }
-    if (doc.totalItemsDiscountAmount === undefined) {
-      doc.totalItemsDiscountAmount = 0;
-    }
-    if (doc.totalTaxableFees !== undefined) {
-      delete doc.totalTaxableFees;
+    const isSigned = doc.signatures && Array.isArray(doc.signatures) && doc.signatures.length > 0;
+    if (!isSigned) {
+      if (doc.totalItemsDiscount !== undefined) {
+        doc.totalItemsDiscountAmount = doc.totalItemsDiscountAmount !== undefined ? doc.totalItemsDiscountAmount : doc.totalItemsDiscount;
+        delete doc.totalItemsDiscount;
+      }
+      if (doc.totalItemsDiscountAmount === undefined) {
+        doc.totalItemsDiscountAmount = 0;
+      }
+      if (doc.totalTaxableFees !== undefined) {
+        delete doc.totalTaxableFees;
+      }
     }
   }
 
