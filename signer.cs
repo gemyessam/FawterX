@@ -234,6 +234,7 @@ namespace FawterXSigner
             SignedCms signedCms = new SignedCms(contentInfo, true); // true = detached signature
 
             CmsSigner cmsSigner = new CmsSigner(cert);
+            cmsSigner.IncludeOption = X509IncludeOption.EndCertOnly;
             
             // Specify SHA-256 for the digest hashing algorithm (ETA Mandatory)
             cmsSigner.DigestAlgorithm = new Oid("2.16.840.1.101.3.4.2.1"); // SHA-256 Oid
