@@ -20,10 +20,10 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.6.1 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.6.2 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.6.1 (Egypt ETA)  ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.6.2 (Egypt ETA)  ");
             Console.WriteLine("    [STATUS] CAdES-BES Explicit Hash OID & Chain: Active ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
@@ -35,7 +35,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.6.1 (CAdES-BES Explicit Hash OID + Offline Chain Active)");
+                Console.WriteLine("[INFO] Version 1.6.2 (CAdES-BES Explicit Hash OID + Offline Chain Active)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -97,7 +97,7 @@ namespace FawterXSigner
                 if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/")
                 {
                     response.ContentType = "application/json; charset=utf-8";
-                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.1.0\",\"message\":\"FawterX local signer v1.1.0 is running with Chain Bypass!\"}";
+                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.6.2\",\"message\":\"FawterX local signer v1.6.2 is running with IssuerAndSerialNumber and ExcludeRoot chain!\"}";
                     byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                     response.ContentLength64 = buffer.Length;
                     response.OutputStream.Write(buffer, 0, buffer.Length);
