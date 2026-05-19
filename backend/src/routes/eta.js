@@ -210,7 +210,9 @@ router.post("/submit", async (req, res) => {
       if (!isAccepted) {
         let errMsg = "فشلت عملية الإرسال: لم تقبل مصلحة الضرائب الفاتورة أو لم ترجع معرف تقديم صالح (submissionUUID)";
         const resultString = JSON.stringify(result || "").toLowerCase();
-        if (resultString.includes("signature") || resultString.includes("token") || resultString.includes("key") || resultString.includes("sign")) {
+        // Only flag as signature error if ETA itself returned a signature-related rejection (not network errors)
+        if (!resultString.includes("etimedout") && !resultString.includes("network") &&
+            (resultString.includes("signature") || resultString.includes("signaturetype") || resultString.includes("sign") || resultString.includes("arrayitemnotvalid"))) {
           errMsg = "ETA رفضت الفاتورة بسبب عدم وجود توقيع إلكتروني";
         }
 
@@ -245,9 +247,15 @@ router.post("/submit", async (req, res) => {
       const requestId = err.response?.headers?.["x-request-id"] || "N/A";
 
       let errMsg = err.message || "خطأ من ETA API";
-      const errString = JSON.stringify(etaError || "").toLowerCase();
-      if (errString.includes("signature") || errString.includes("token") || errString.includes("key") || errString.includes("sign")) {
-        errMsg = "ETA رفضت الفاتورة بسبب عدم وجود توقيع إلكتروني";
+      // Check if it's a network/timeout error first
+      const isNetworkError = err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET' || err.code === 'ECONNREFUSED' || err.message?.includes('timeout');
+      if (isNetworkError) {
+        errMsg = `⏱️ انتهت مهلة الاتصال بمنظومة الضرائب المصرية (ETA). يرجى المحاولة مرة أخرى خلال دقيقة. [${err.code || 'ETIMEDOUT'}]`;
+      } else {
+        const errString = JSON.stringify(etaError || "").toLowerCase();
+        if (errString.includes("signature") || errString.includes("signaturetype") || errString.includes("arrayitemnotvalid")) {
+          errMsg = "ETA رفضت الفاتورة بسبب خطأ في التوقيع الإلكتروني";
+        }
       }
 
       // تسجيل العملية كخطأ
