@@ -248,14 +248,14 @@ export default function Home() {
     } else if (field === 'itemCode') {
       line.itemCode = val
     } else if (field === 'quantity') {
-      line.quantity = parseFloat(parseFloat(val).toFixed(5)) || 0
+      line.quantity = parseFloat(parseFloat(val).toFixed(2)) || 0
     } else if (field === 'unitType') {
       line.unitType = val
     } else if (field === 'unitValue') {
       if (!line.unitValue) line.unitValue = { currencySold: "EGP" }
-      line.unitValue.amountEGP = parseFloat(parseFloat(val).toFixed(5)) || 0
+      line.unitValue.amountEGP = parseFloat(parseFloat(val).toFixed(2)) || 0
     } else if (field === 'taxPercent') {
-      const rate = parseFloat(parseFloat(val).toFixed(5)) || 0
+      const rate = parseFloat(parseFloat(val).toFixed(2)) || 0
       if (line.taxableItems && line.taxableItems[0]) {
         line.taxableItems[0].rate = rate
       }
