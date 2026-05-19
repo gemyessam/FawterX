@@ -61,9 +61,14 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
 
   for (const [invoiceNumber, groupRows] of Object.entries(invoiceGroups)) {
     const invoiceLines = groupRows.map(({ row, idx }) => {
-      const unitValue  = parseFloat(row[mapping.unitValue] || 0);
-      const quantity   = parseFloat(row[mapping.quantity]  || 1);
-      const taxPercent = parseFloat(row[mapping.taxPercent] || 14);
+      const parsedVal = parseFloat(row[mapping.unitValue]);
+      const unitValue = parseFloat((isNaN(parsedVal) ? 0 : parsedVal).toFixed(5));
+
+      const parsedQty = parseFloat(row[mapping.quantity]);
+      const quantity  = parseFloat((isNaN(parsedQty) ? 1 : parsedQty).toFixed(5));
+
+      const parsedTax = parseFloat(row[mapping.taxPercent]);
+      const taxPercent = parseFloat((isNaN(parsedTax) ? 14 : parsedTax).toFixed(5));
 
       const salesTotal = parseFloat((unitValue * quantity).toFixed(5));
       const taxAmount  = parseFloat(((salesTotal * taxPercent) / 100).toFixed(5));
