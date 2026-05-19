@@ -20,11 +20,11 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.7.3 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.7.4 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.7.3 (Egypt ETA)  ");
-            Console.WriteLine("    [STATUS] CAdES-BES Explicit Hash OID & Chain: Active ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.7.4 (Egypt ETA)  ");
+            Console.WriteLine("    [STATUS] CAdES-BES Dynamic IssuerSerial & Chain: Active ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
             
@@ -35,7 +35,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.7.3 (CAdES-BES Explicit Hash OID + Offline Chain Active)");
+                Console.WriteLine("[INFO] Version 1.7.4 (CAdES-BES Dynamic IssuerSerial + Offline Chain Active)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -97,7 +97,7 @@ namespace FawterXSigner
                 if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/")
                 {
                     response.ContentType = "application/json; charset=utf-8";
-                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.7.3\",\"message\":\"FawterX local signer v1.7.3 is running with IssuerAndSerialNumber and ExcludeRoot chain!\"}";
+                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.7.4\",\"message\":\"FawterX local signer v1.7.4 is running with Dynamic IssuerSerial and ExcludeRoot chain!\"}";
                     byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                     response.ContentLength64 = buffer.Length;
                     response.OutputStream.Write(buffer, 0, buffer.Length);
@@ -414,66 +414,102 @@ namespace FawterXSigner
 
         private static byte[] ConstructSigningCertificateV2Der(X509Certificate2 cert)
         {
-            // Compute SHA-256 of the certificate
+            // 1. Calculate the SHA-256 hash of the signing certificate's raw data
             byte[] certHash;
             using (var sha256 = System.Security.Cryptography.SHA256.Create())
             {
                 certHash = sha256.ComputeHash(cert.RawData);
             }
+            byte[] certHashDer = WrapAsn1(0x04, certHash); // OCTET STRING Tag = 04
 
-            // Create DER structure manually with absent parameters for SHA-256 OID:
-            // Under DER encoding rules, if SHA-256 algorithm parameters are absent, they must not be NULL (05 00).
-            // SigningCertificateV2 ::= SEQUENCE { certs SEQUENCE OF ESSCertIDv2 }
-            // ESSCertIDv2 ::= SEQUENCE { hashAlgorithm AlgorithmIdentifier, certHash Hash }
-            // AlgorithmIdentifier ::= SEQUENCE { algorithm OBJECT IDENTIFIER (SHA-256) } -- parameters omitted!
+            // 2. Build the IssuerSerial component dynamically!
+            // IssuerSerial ::= SEQUENCE {
+            //   issuer                   GeneralNames,
+            //   serialNumber             CertificateSerialNumber
+            // }
+            // GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
+            // GeneralName ::= CHOICE { directoryName [4] EXPLICIT Name, ... }
             
-            byte[] hashAlgoOid = { 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01 };
+            // Under ASN.1 DER rules, directoryName [4] EXPLICIT tag is 0xA4.
+            // The certificate's Issuer distinguished name (DN) DER structure is stored in cert.IssuerName.RawData.
+            byte[] issuerDnBytes = cert.IssuerName.RawData;
+            byte[] generalNameDer = WrapAsn1(0xA4, issuerDnBytes); // A4 = [4] EXPLICIT DirectoryName
+            byte[] generalNamesDer = WrapAsn1(0x30, generalNameDer); // 30 = SEQUENCE of GeneralNames
+            
+            // Get Serial Number in Big-Endian order
+            byte[] serialBytes = cert.GetSerialNumber();
+            Array.Reverse(serialBytes); // C# GetSerialNumber is little-endian, reverse it to get big-endian!
+            
+            // Handle negative integer encoding in ASN.1 DER (if high bit is set, prepend a 0x00 byte)
+            if (serialBytes.Length > 0 && (serialBytes[0] & 0x80) == 0x80)
+            {
+                byte[] temp = new byte[serialBytes.Length + 1];
+                temp[0] = 0x00;
+                Array.Copy(serialBytes, 0, temp, 1, serialBytes.Length);
+                serialBytes = temp;
+            }
+            byte[] serialDer = WrapAsn1(0x02, serialBytes); // 02 = INTEGER
+            
+            // Combine GeneralNames and SerialNumber inside IssuerSerial SEQUENCE
+            byte[] issuerSerialContent = CombineBytes(generalNamesDer, serialDer);
+            byte[] issuerSerialDer = WrapAsn1(0x30, issuerSerialContent); // 30 = SEQUENCE for IssuerSerial
+            
+            // 3. Build ESSCertIDv2 component
+            // ESSCertIDv2 ::= SEQUENCE {
+            //   hashAlgorithm           AlgorithmIdentifier DEFAULT {algorithm id-sha256},
+            //   certHash                Hash,
+            //   issuerSerial            IssuerSerial OPTIONAL
+            // }
+            
+            // SHA-256 OID: 2.16.840.1.101.3.4.2.1 -> DER: 06 09 60 86 48 01 65 03 04 02 01
+            byte[] sha256Oid = { 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01 };
+            byte[] hashAlgoDer = WrapAsn1(0x30, sha256Oid); // SEQUENCE for AlgorithmIdentifier
+            
+            // Combine hashAlgo, certHash, and issuerSerial inside ESSCertIDv2 SEQUENCE
+            byte[] essCertIdContent = CombineBytes(CombineBytes(hashAlgoDer, certHashDer), issuerSerialDer);
+            byte[] essCertIdDer = WrapAsn1(0x30, essCertIdContent); // SEQUENCE for ESSCertIDv2
+            
+            // 4. Wrap ESSCertIDv2 in certs SEQUENCE OF
+            byte[] certsDer = WrapAsn1(0x30, essCertIdDer); // SEQUENCE of certs
+            
+            // 5. Wrap in final SigningCertificateV2 SEQUENCE
+            byte[] signingCertV2Der = WrapAsn1(0x30, certsDer); // SEQUENCE for SigningCertificateV2
+            
+            return signingCertV2Der;
+        }
 
-            // Total AlgorithmIdentifier content = 11 bytes (OID TLV)
-            // AlgorithmIdentifier SEQUENCE header = 30 0B (length 11)
-            // Total AlgorithmIdentifier TLV = 13 bytes
-            
-            // Total ESSCertIDv2 content = 13 (AlgorithmIdentifier TLV) + 34 (certHash TLV) = 47 bytes
-            // ESSCertIDv2 SEQUENCE header = 30 2F (length 47 = 0x2F)
-            // Total ESSCertIDv2 TLV = 49 bytes
-            
-            // Total certs content = 49 bytes (ESSCertIDv2 TLV)
-            // certs SEQUENCE header = 30 31 (length 49 = 0x31)
-            // Total certs TLV = 51 bytes
+        private static byte[] WrapAsn1(byte tag, byte[] content)
+        {
+            byte[] lengthBytes = EncodeLength(content.Length);
+            byte[] result = new byte[1 + lengthBytes.Length + content.Length];
+            result[0] = tag;
+            Array.Copy(lengthBytes, 0, result, 1, lengthBytes.Length);
+            Array.Copy(content, 0, result, 1 + lengthBytes.Length, content.Length);
+            return result;
+        }
 
-            // Total SigningCertificateV2 content = 51 bytes (certs TLV)
-            // SigningCertificateV2 SEQUENCE header = 30 33 (length 51 = 0x33)
-            // Total SigningCertificateV2 TLV = 53 bytes
+        private static byte[] EncodeLength(int length)
+        {
+            if (length < 128)
+            {
+                return new byte[] { (byte)length };
+            }
+            else if (length <= 255)
+            {
+                return new byte[] { 0x81, (byte)length };
+            }
+            else
+            {
+                return new byte[] { 0x82, (byte)(length >> 8), (byte)(length & 0xFF) };
+            }
+        }
 
-            byte[] der = new byte[53];
-            
-            // SigningCertificateV2 header
-            der[0] = 0x30;
-            der[1] = 0x33; // Length 51
-            
-            // certs header
-            der[2] = 0x30;
-            der[3] = 0x31; // Length 49
-            
-            // ESSCertIDv2 header
-            der[4] = 0x30;
-            der[5] = 0x2F; // Length 47
-            
-            // hashAlgorithm SEQUENCE header (AlgorithmIdentifier)
-            der[6] = 0x30;
-            der[7] = 0x0B; // Length 11 (OID TLV only, parameters omitted)
-            
-            // hashAlgorithm OID
-            Array.Copy(hashAlgoOid, 0, der, 8, 11);
-            
-            // certHash OCTET STRING header
-            der[19] = 0x04; // Tag: OCTET STRING
-            der[20] = 0x20; // Length 32
-            
-            // certHash value
-            Array.Copy(certHash, 0, der, 21, 32);
-
-            return der;
+        private static byte[] CombineBytes(byte[] a, byte[] b)
+        {
+            byte[] result = new byte[a.Length + b.Length];
+            Array.Copy(a, 0, result, 0, a.Length);
+            Array.Copy(b, 0, result, a.Length, b.Length);
+            return result;
         }
 
         // Lightweight helper to extract JSON values without external libraries
