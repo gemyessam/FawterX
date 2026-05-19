@@ -44,7 +44,7 @@ async function getUserUsage(userId) {
 async function canUserSubmit(userId) {
   const userStat = await getUserUsage(userId);
   if (userStat.isSubscribed) return true;
-  return userStat.submissionsCount < 1; // مرة واحدة مجانية
+  return userStat.submissionsCount < 100; // 100 free submissions for testing!
 }
 
 /**
