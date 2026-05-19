@@ -461,10 +461,12 @@ export default function Home() {
       const genRes = await generateInvoice(mapping, uploadResult.rows || [], issuer, uploadResult.metadata || {})
       if (!genRes.success) throw new Error(genRes.message)
       const docs = genRes.documents || [genRes.document]
-      setEtaDocs(docs)
+      // Clean all empty properties, arrays, and objects from the payload to guarantee 100% hash matching
+      const cleanedDocs = docs.map(d => cleanObject(d))
+      setEtaDocs(cleanedDocs)
 
       // Get local validation copy (Dry-run call)
-      const dryRes = await submitToETA(docs, true)
+      const dryRes = await submitToETA(cleanedDocs, true)
       setValidation(dryRes.validation)
       setDraftId(dryRes.draftId)
       
@@ -1838,6 +1840,28 @@ export default function Home() {
       )}
     </div>
   )
+}
+
+function cleanObject(obj) {
+  if (Array.isArray(obj)) {
+    return obj
+      .map(v => (v && typeof v === 'object' ? cleanObject(v) : v))
+      .filter(v => v !== null && v !== undefined && v !== "");
+  } else if (obj !== null && typeof obj === 'object') {
+    return Object.entries(obj).reduce((acc, [key, value]) => {
+      if (value === null || value === undefined || value === "") return acc;
+      if (Array.isArray(value) && value.length === 0) return acc;
+      
+      const cleanedValue = typeof value === 'object' ? cleanObject(value) : value;
+      
+      if (typeof cleanedValue === 'object' && !Array.isArray(cleanedValue) && Object.keys(cleanedValue).length === 0) return acc;
+      if (Array.isArray(cleanedValue) && cleanedValue.length === 0) return acc;
+
+      acc[key] = cleanedValue;
+      return acc;
+    }, {});
+  }
+  return obj;
 }
 
 function serializeToken(object) {
