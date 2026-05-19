@@ -241,9 +241,11 @@ namespace FawterXSigner
             Console.WriteLine("[SIGNING] SHA-256 Hash (hex): " + BitConverter.ToString(hash).Replace("-", "").ToLower());
             
             // Setup ContentInfo with DigestData OID for detached CAdES-BES signature
-            // Pass the pre-hashed 32-byte SHA-256 hash to satisfy ITIDA's custom DigestData requirement.
+            // CRITICAL FIX: Pass the RAW canonical string bytes 'dataToSign' instead of the pre-hashed 'hash'.
+            // This ensures SHA-256 is computed only ONCE by the .NET CMS library to create the message-digest attribute,
+            // while still correctly specifying the mandatory 1.2.840.113549.1.7.5 (DigestData) OID!
             Oid digestDataOid = new Oid("1.2.840.113549.1.7.5"); // DigestData
-            ContentInfo contentInfo = new ContentInfo(digestDataOid, hash);
+            ContentInfo contentInfo = new ContentInfo(digestDataOid, dataToSign);
             SignedCms signedCms = new SignedCms(contentInfo, true); // true = detached signature
 
             CmsSigner cmsSigner = new CmsSigner(cert);
