@@ -1,5 +1,6 @@
 require("dotenv").config();
 const axios = require("axios");
+const https = require("https");
 const { getAccessToken } = require("./etaAuth");
 
 // ─── Production API URL ────────────────────────────────────────────
@@ -69,7 +70,8 @@ async function submitDocuments(documents, dryRun = false, customCredentials = nu
         Authorization:  `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      timeout: 90000 // 90 seconds timeout to prevent read ETIMEDOUT during slow ETA responses
+      timeout: 90000, // 90 seconds timeout
+      httpsAgent: new https.Agent({ family: 4 }) // Force IPv4
     });
 
     console.log("=== ETA REAL SUBMIT RESPONSE ===", response.data);

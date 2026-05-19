@@ -1,5 +1,6 @@
 require("dotenv").config();
 const axios = require("axios");
+const https = require("https");
 
 // ─── Production URLs ───────────────────────────────────────────────
 const ETA_AUTH_URL = "https://id.eta.gov.eg/connect/token";
@@ -27,6 +28,7 @@ async function getAccessToken(customCredentials = null) {
   const response = await axios.post(ETA_AUTH_URL, params, {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     timeout: 30000, // 30 seconds — prevent hanging on slow ETA identity server
+    httpsAgent: new https.Agent({ family: 4 }) // Force IPv4
   });
 
   const { access_token, expires_in, token_type } = response.data;
