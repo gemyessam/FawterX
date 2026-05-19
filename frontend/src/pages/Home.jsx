@@ -1842,7 +1842,14 @@ export default function Home() {
 
 function serializeToken(object) {
   let serialized = "";
-  const keys = Object.keys(object).sort();
+  // CRITICAL ETA RULE: Properties must be sorted by their UPPERCASE property names.
+  const keys = Object.keys(object).sort((a, b) => {
+    const upperA = a.toUpperCase();
+    const upperB = b.toUpperCase();
+    if (upperA < upperB) return -1;
+    if (upperA > upperB) return 1;
+    return 0;
+  });
   for (const key of keys) {
     const val = object[key];
     if (key === "signatures" || val === null || val === undefined) {

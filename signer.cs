@@ -20,11 +20,11 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.7.4 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.7.5 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.7.4 (Egypt ETA)  ");
-            Console.WriteLine("    [STATUS] CAdES-BES Dynamic IssuerSerial & Chain: Active ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.7.5 (Egypt ETA)  ");
+            Console.WriteLine("    [STATUS] CAdES-BES Dynamic IssuerSerial & UTF-8: Active ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
             
@@ -35,7 +35,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.7.4 (CAdES-BES Dynamic IssuerSerial + Offline Chain Active)");
+                Console.WriteLine("[INFO] Version 1.7.5 (CAdES-BES Dynamic IssuerSerial + UTF-8 Arabic Support Active)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -97,7 +97,7 @@ namespace FawterXSigner
                 if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/")
                 {
                     response.ContentType = "application/json; charset=utf-8";
-                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.7.4\",\"message\":\"FawterX local signer v1.7.4 is running with Dynamic IssuerSerial and ExcludeRoot chain!\"}";
+                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.7.5\",\"message\":\"FawterX local signer v1.7.5 is running with Uppercase Sort Fix, UTF-8 Parsing, and Dynamic IssuerSerial!\"}";
                     byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                     response.ContentLength64 = buffer.Length;
                     response.OutputStream.Write(buffer, 0, buffer.Length);
@@ -106,9 +106,9 @@ namespace FawterXSigner
                 {
                     response.ContentType = "application/json; charset=utf-8";
                     
-                    // Read request body
+                    // Read request body forcing UTF-8 to prevent Arabic character corruption
                     string requestBody = "";
-                    using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+                    using (var reader = new StreamReader(request.InputStream, Encoding.UTF8))
                     {
                         requestBody = reader.ReadToEnd();
                     }
