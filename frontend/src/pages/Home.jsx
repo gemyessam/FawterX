@@ -978,6 +978,19 @@ export default function Home() {
                   onClick={() => { setParseMode('smart'); setFile(null); }}
                 >
                   🧠 {lang === 'ar' ? 'وضع الذكاء الاصطناعي الأذكى (PDF / Excel)' : 'AI Smart Auto-Parse (PDF / Excel)'}
+                  <span style={{ 
+                    fontSize: '0.62rem', 
+                    background: parseMode === 'smart' ? 'rgba(11, 13, 25, 0.15)' : 'rgba(255, 255, 255, 0.15)', 
+                    color: parseMode === 'smart' ? '#0b0d19' : 'var(--warning)',
+                    padding: '0.15rem 0.5rem', 
+                    borderRadius: '12px', 
+                    marginLeft: '0.5rem', 
+                    fontWeight: 800,
+                    border: parseMode === 'smart' ? '1px solid rgba(11, 13, 25, 0.2)' : '1px solid rgba(255, 184, 79, 0.3)',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+                  }}>
+                    {lang === 'ar' ? 'تحت التجربة والارتقاء 🧪' : 'Beta / Under Dev 🧪'}
+                  </span>
                 </button>
               </div>
 
@@ -1487,19 +1500,29 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="table-wrapper" style={{ maxHeight: '550px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '2.5rem' }}>
-                <table>
+              <div className="table-wrapper" style={{ 
+                maxHeight: '650px', 
+                overflowY: 'auto', 
+                border: '1px solid rgba(255, 255, 255, 0.08)', 
+                borderRadius: '16px', 
+                marginBottom: '3rem',
+                background: 'rgba(20, 24, 46, 0.35)',
+                backdropFilter: 'blur(20px)',
+                boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.5)',
+                padding: '1.25rem'
+              }}>
+                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 12px' }}>
                   <thead>
-                    <tr>
-                      <th style={{ width: '60px' }}>#</th>
-                      <th>{lang === 'ar' ? 'بيانات الصنف' : 'Item Details'}</th>
-                      <th style={{ width: '120px' }}>{lang === 'ar' ? 'الكمية' : 'Qty'}</th>
-                      <th style={{ width: '150px' }}>{lang === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</th>
-                      <th>{lang === 'ar' ? 'قبل الضريبة' : 'Net Total'}</th>
-                      <th style={{ width: '100px' }}>{lang === 'ar' ? 'الضريبة %' : 'VAT %'}</th>
-                      <th>{lang === 'ar' ? 'قيمة الضريبة' : 'VAT Amount'}</th>
-                      <th>{lang === 'ar' ? 'الإجمالي الكلي' : 'Total Amount'}</th>
-                      <th style={{ width: '50px' }}></th>
+                    <tr style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px' }}>
+                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: 'center', borderBottom: 'none' }}>#</th>
+                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: lang === 'ar' ? 'right' : 'left', borderBottom: 'none' }}>{lang === 'ar' ? 'بيانات الصنف (الوصف والمواصفات الذكية)' : 'Item Details (Smart Description & Specs)'}</th>
+                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: 'center', borderBottom: 'none', width: '130px' }}>{lang === 'ar' ? 'الكمية' : 'Qty'}</th>
+                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: 'center', borderBottom: 'none', width: '160px' }}>{lang === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</th>
+                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: 'center', borderBottom: 'none' }}>{lang === 'ar' ? 'قبل الضريبة' : 'Net Total'}</th>
+                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: 'center', borderBottom: 'none', width: '110px' }}>{lang === 'ar' ? 'الضريبة %' : 'VAT %'}</th>
+                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: 'center', borderBottom: 'none' }}>{lang === 'ar' ? 'قيمة الضريبة' : 'VAT Amount'}</th>
+                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: 'center', borderBottom: 'none' }}>{lang === 'ar' ? 'الإجمالي الكلي' : 'Total Amount'}</th>
+                      <th style={{ padding: '1.2rem 1rem', borderBottom: 'none', width: '60px' }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1513,12 +1536,14 @@ export default function Home() {
 
                       return (
                         <tr key={idx} className="animate-fade-in" style={{ 
-                          background: isRowWarning ? 'rgba(241, 196, 15, 0.03)' : 'transparent',
-                          borderLeft: isRowWarning ? '3px solid #f1c40f' : 'none'
+                          background: isRowWarning ? 'rgba(241, 196, 15, 0.05)' : 'rgba(255, 255, 255, 0.015)',
+                          borderLeft: isRowWarning ? '4px solid #f1c40f' : '1px solid rgba(255, 255, 255, 0.04)',
+                          borderRadius: '12px',
+                          boxShadow: '0 4px 15px rgba(0, 0, 0, 0.25)'
                         }}>
-                          <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{idx + 1}</td>
-                          <td>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                          <td style={{ padding: '1.5rem 1rem', textAlign: 'center', fontWeight: 'bold', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>{idx + 1}</td>
+                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                               
                               {/* 1. Free-form Editable Description (Intelligent ETA-ready text) */}
                               <input 
@@ -1634,7 +1659,7 @@ export default function Home() {
 
                             </div>
                           </td>
-                          <td>
+                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
                             {/* Editable Quantity */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                               <input 
@@ -1708,7 +1733,7 @@ export default function Home() {
                               )}
                             </div>
                           </td>
-                          <td>
+                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
                             {/* Editable Unit Price */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                               <input 
@@ -1731,8 +1756,8 @@ export default function Home() {
                               <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>EGP</span>
                             </div>
                           </td>
-                          <td style={{ fontWeight: 'bold' }}>{Number(line.netTotal || line.salesTotal || 0).toLocaleString()} EGP</td>
-                          <td>
+                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', fontWeight: 'bold', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>{Number(line.netTotal || line.salesTotal || 0).toLocaleString()} EGP</td>
+                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
                             {/* Editable Tax % Selector */}
                             <select 
                               className="input" 
@@ -1754,9 +1779,9 @@ export default function Home() {
                               <option value="0">0%</option>
                             </select>
                           </td>
-                          <td>{Number(line.taxableItems?.[0]?.amount || 0).toLocaleString()} EGP</td>
-                          <td style={{ color: 'var(--accent)', fontWeight: 800 }}>{Number(line.total || 0).toLocaleString()} EGP</td>
-                          <td style={{ textAlign: 'center' }}>
+                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>{Number(line.taxableItems?.[0]?.amount || 0).toLocaleString()} EGP</td>
+                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', color: 'var(--accent)', fontWeight: 800, borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>{Number(line.total || 0).toLocaleString()} EGP</td>
+                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
                             {/* Delete Line Action */}
                             <button 
                               type="button" 
