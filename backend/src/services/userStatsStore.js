@@ -17,9 +17,15 @@ function getDb() {
 /**
  * جلب حالة اشتراك واستخدام المستخدم الحالي
  */
-async function getUserUsage(userId) {
+async function getUserUsage(userId, userEmail) {
   const db = getDb();
-  let data = { submissionsCount: 0, isSubscribed: false };
+  let data = { 
+    submissionsCount: 0, 
+    isSubscribed: false,
+    dailyCount: 0,
+    lastReset: new Date().toISOString().split('T')[0],
+    isGm: userEmail === 'gemy.essam.ge@gmail.com'
+  };
 
   if (db) {
     try {
@@ -29,6 +35,12 @@ async function getUserUsage(userId) {
         const d = docSnap.data();
         data.submissionsCount = d.submissionsCount || 0;
         data.isSubscribed = d.isSubscribed || false;
+        const today = new Date().toISOString().split('T')[0];
+        if (d.lastReset === today) {
+          data.dailyCount = d.dailyCount || 0;
+        } else {
+          data.dailyCount = 0;
+        }
       }
     } catch (e) {
       console.warn("Firestore error in getUserUsage:", e.message);
@@ -41,10 +53,11 @@ async function getUserUsage(userId) {
 /**
  * يتحقق مما إذا كان للمستخدم الحق في الإرسال
  */
-async function canUserSubmit(userId) {
-  const userStat = await getUserUsage(userId);
+async function canUserSubmit(userId, userEmail) {
+  if (userEmail === 'gemy.essam.ge@gmail.com') return true;
+  const userStat = await getUserUsage(userId, userEmail);
   if (userStat.isSubscribed) return true;
-  return userStat.submissionsCount < 100; // 100 free submissions for testing!
+  return userStat.dailyCount < 10;
 }
 
 /**
@@ -54,9 +67,20 @@ async function recordSubmission(userId) {
   const db = getDb();
   if (db) {
     try {
+      const today = new Date().toISOString().split('T')[0];
       const docRef = db.collection("users").doc(userId);
+      const docSnap = await docRef.get();
+      let newDailyCount = 1;
+      if (docSnap.exists) {
+        const d = docSnap.data();
+        if (d.lastReset === today) {
+           newDailyCount = (d.dailyCount || 0) + 1;
+        }
+      }
       await docRef.set({
         submissionsCount: admin.firestore.FieldValue.increment(1),
+        dailyCount: newDailyCount,
+        lastReset: today,
         lastSubmission: new Date().toISOString()
       }, { merge: true });
       console.log(`[UserStats] ✅ Submission recorded for User: ${userId}`);

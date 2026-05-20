@@ -189,11 +189,11 @@ router.post("/submit", async (req, res) => {
 
     // ─── LIVE: Real ETA Submission ─────────────────────────────────
     // التحقق من الاستهلاك المجاني
-    if (!(await canUserSubmit(req.user.uid))) {
+    if (!(await canUserSubmit(req.user.uid, req.user.email))) {
       return res.status(403).json({
         success: false,
         limitReached: true,
-        message: "⚠️ لقد استنفدت التجربة المجانية الأولى لبرنامج FawterX! يرجى الترقية والاشتراك للمتابعة."
+        message: "⚠️ لقد استنفدت الحد المجاني المسموح لك اليوم (10 فواتير)! يرجى الترقية والاشتراك للمتابعة."
       });
     }
 

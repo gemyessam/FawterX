@@ -86,6 +86,7 @@ function Layout({ children }) {
   })
   const [testing, setTesting] = useState(false)
   const [connStatus, setConnStatus] = useState(null) // 'connected' or 'failed'
+  const [saving, setSaving] = useState(false)
 
   // Load settings from Firestore (primary source of truth) when user logs in
   useEffect(() => {
@@ -178,35 +179,24 @@ function Layout({ children }) {
       await testETAAuth(settings)
       setConnStatus('connected')
       toast.success(t.etaConnected)
-      
-      const next = { ...settings, isVerified: true }
-      setSettings(next)
-      localStorage.setItem('companySettings', JSON.stringify(next))
-      if (user) {
-        await saveCompanySettings(next)
-      }
+      setSettings(prev => ({ ...prev, isVerified: true }))
     } catch (err) {
       setConnStatus('failed')
       const msg = err.response?.data?.message || err.message || t.etaFailed
       toast.error(msg)
-      
-      const next = { ...settings, isVerified: false }
-      setSettings(next)
-      localStorage.setItem('companySettings', JSON.stringify(next))
-      if (user) {
-        await saveCompanySettings(next)
-      }
+      setSettings(prev => ({ ...prev, isVerified: false }))
     } finally {
       setTesting(false)
     }
   }
 
   async function handleSaveSettings() {
+    if (!settings.isVerified) {
+      toast.error(lang === 'ar' ? 'يجب اختبار Client ID و Secret 1 و Secret 2 بنجاح قبل حفظ الإعدادات.' : 'Please successfully test the Client ID, Secret 1, and Secret 2 before saving.')
+      return
+    }
+    setSaving(true)
     try {
-      if (!settings.isVerified) {
-        toast.error(lang === 'ar' ? 'يجب اختبار Client ID و Secret 1 و Secret 2 بنجاح قبل حفظ الإعدادات.' : 'Please successfully test the Client ID, Secret 1, and Secret 2 before saving.')
-        return
-      }
       localStorage.setItem('companySettings', JSON.stringify(settings))
       if (user) {
         await saveCompanySettings(settings)
@@ -215,6 +205,8 @@ function Layout({ children }) {
       setShowSettingsModal(false)
     } catch (e) {
       toast.error(lang === 'ar' ? 'فشل حفظ الإعدادات في الحساب' : 'Failed to save settings to account')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -341,11 +333,11 @@ function Layout({ children }) {
               )}
             </div>
             <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={handleTestConnection} disabled={testing}>
+              <button className="btn btn-ghost" onClick={handleTestConnection} disabled={testing || saving}>
                 {testing ? <span className="spinner"></span> : '⚡ ' + t.testConn}
               </button>
-              <button className="btn btn-primary" onClick={handleSaveSettings}>
-                💾 {t.saveConn}
+              <button className="btn btn-primary" onClick={handleSaveSettings} disabled={testing || saving}>
+                {saving ? <span className="spinner"></span> : '💾 ' + t.saveConn}
               </button>
             </div>
           </div>
@@ -362,19 +354,7 @@ export default function App() {
 
   const t = TRANSLATIONS[lang]
 
-  useEffect(() => {
-    const isQuick = localStorage.getItem('useQuickLogin') === 'true'
-    if (isQuick) {
-      setUser({
-        uid: "choco-egypt-uid-custom-bypass",
-        email: "chocoegypt@saas.com",
-        displayName: "شوكو ايجيبت ال ال سي (دخول سريع)"
-      })
-      setLoadingAuth(false)
-      return
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+  useEffect(() => {    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser)
       } else {
@@ -397,25 +377,13 @@ export default function App() {
     }
   }
 
-  function handleQuickLogin() {
-    localStorage.setItem('useQuickLogin', 'true')
-    setUser({
-      uid: "choco-egypt-uid-custom-bypass",
-      email: "chocoegypt@saas.com",
-      displayName: "شوكو ايجيبت ال ال سي (دخول سريع)"
-    })
-    toast.success(lang === 'ar' ? 'تم تسجيل الدخول السريع بنجاح (وضع الاختبار)' : 'Quick login successful (Test Mode)')
-  }
-
   async function handleLogout() {
     try {
-      localStorage.removeItem('useQuickLogin')
       localStorage.removeItem('companySettings')
       await signOut(auth)
       setUser(null)
       toast.success(lang === 'ar' ? 'تم تسجيل الخروج بأمان' : 'Logged out safely')
     } catch (error) {
-      localStorage.removeItem('useQuickLogin')
       localStorage.removeItem('companySettings')
       setUser(null)
       toast.success(lang === 'ar' ? 'تم تسجيل الخروج بأمان' : 'Logged out safely')
@@ -484,14 +452,6 @@ export default function App() {
                   {t.googleBtn}
                 </button>
 
-                <button 
-                  type="button" 
-                  className="btn btn-accent btn-block btn-lg" 
-                  onClick={handleQuickLogin}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', background: 'linear-gradient(135deg, #7c4dff, #18ffff)', color: '#0b0d19', border: 'none', fontWeight: 'bold' }}
-                >
-                  🔑 {lang === 'ar' ? 'دخول مباشر سريع (بدون جوجل)' : 'Quick Direct Login (No Google)'}
-                </button>
               </div>
             </div>
           </div>
