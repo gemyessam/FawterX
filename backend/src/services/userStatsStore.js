@@ -47,6 +47,9 @@ async function getUserUsage(userId, userEmail) {
     }
   }
 
+  if (userEmail === 'gemy.essam.ge@gmail.com') {
+    data.isSubscribed = true;
+  }
   return data;
 }
 

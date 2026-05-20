@@ -13,7 +13,7 @@ export const AppContext = createContext(null)
 const TRANSLATIONS = {
   ar: {
     logo: 'فاوتر إكس',
-    logoSub: 'لأتمتة الفواتير الضريبية',
+    logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
     navCreate: 'أتمتة إكسيل',
@@ -42,7 +42,7 @@ const TRANSLATIONS = {
   },
   en: {
     logo: 'FawterX',
-    logoSub: 'ETA Automation Platform',
+    logoSub: 'ERP Alternative for ETA Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
     navCreate: 'Excel Auto',
@@ -72,7 +72,7 @@ const TRANSLATIONS = {
 }
 
 function Layout({ children }) {
-  const { lang, setLang, t, user, handleLogout } = useContext(AppContext)
+  const { lang, setLang, t, user, handleLogout, triggerReset, showTutorialModal, setShowTutorialModal } = useContext(AppContext)
   const location = useLocation()
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [showUserDropdown, setShowUserDropdown] = useState(false)
@@ -215,21 +215,26 @@ function Layout({ children }) {
     <div className={`app-wrapper ${lang === 'en' ? 'ltr-layout' : ''}`}>
       {/* ─── Modern Premium Header ─── */}
       <header className="header glassmorphism">
-        <div className="header-brand">
-          <div className="header-logo-icon">
-            <img src="/Logo.png" alt="Logo" style={{ height: '36px', objectFit: 'contain' }} />
+        <Link to="/" onClick={triggerReset} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center' }}>
+          <div className="header-brand" style={{ cursor: 'pointer' }}>
+            <div className="header-logo-icon">
+              <img src="/Logo.png" alt="Logo" style={{ height: '36px', objectFit: 'contain' }} />
+            </div>
+            <div className="header-logo-text">
+              <h2>{t.logo}</h2>
+              <span>{t.logoSub}</span>
+            </div>
+            <span className="premium-badge">{t.badge}</span>
+            <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v2.9.0</span>
           </div>
-          <div className="header-logo-text">
-            <h2>{t.logo}</h2>
-            <span>{t.logoSub}</span>
-          </div>
-          <span className="premium-badge">{t.badge}</span>
-          <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v2.8.0</span>
-        </div>
+        </Link>
 
         <nav className="header-nav">
           <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>{t.navHome}</Link>
           <Link to="/drafts" className={`nav-link ${location.pathname.includes('/drafts') ? 'active' : ''}`}>{t.navDrafts}</Link>
+          <button type="button" className="nav-link" onClick={() => setShowTutorialModal(true)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.5rem 0.75rem', fontWeight: 600 }}>
+            💡 {lang === 'ar' ? 'دليل الخطوات' : 'Step Guide'}
+          </button>
           <button className="nav-link btn-settings-trigger" onClick={() => setShowSettingsModal(true)}>
             ⚙️ {t.navSettings}
           </button>
@@ -240,24 +245,70 @@ function Layout({ children }) {
             🌐 {lang === 'ar' ? 'English' : 'العربية'}
           </button>
           
-          {user && (
-            <div 
-              className="user-profile-widget" 
-              onClick={() => setShowUserDropdown(!showUserDropdown)}
-            >
-              <div className="user-avatar" style={{ backgroundImage: user.photoURL ? `url(${user.photoURL})` : 'none', backgroundSize: 'cover' }}>
-                {!user.photoURL && (user.displayName?.slice(0, 2).toUpperCase() || 'US')}
+          {user && (() => {
+            const isMaster = user.email === 'gemy.essam.ge@gmail.com';
+            return (
+              <div 
+                className="user-profile-widget" 
+                onClick={() => setShowUserDropdown(!showUserDropdown)}
+                style={isMaster ? { 
+                  border: '1px solid rgba(255, 215, 0, 0.3)', 
+                  padding: '2px 8px 2px 2px', 
+                  borderRadius: '24px', 
+                  background: 'rgba(255, 215, 0, 0.05)',
+                  boxShadow: '0 0 10px rgba(255, 215, 0, 0.1)'
+                } : {}}
+              >
+                <div 
+                  className="user-avatar" 
+                  style={{ 
+                    backgroundImage: user.photoURL ? `url(${user.photoURL})` : 'none', 
+                    backgroundSize: 'cover',
+                    position: 'relative',
+                    border: isMaster ? '2px solid #FFD700' : 'none',
+                    boxShadow: isMaster ? '0 0 8px rgba(255, 215, 0, 0.5)' : 'none'
+                  }}
+                >
+                  {!user.photoURL && (user.displayName?.slice(0, 2).toUpperCase() || 'US')}
+                  {isMaster && (
+                    <span style={{
+                      position: 'absolute',
+                      top: '-11px',
+                      right: '-6px',
+                      fontSize: '0.85rem',
+                      filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.6))',
+                      zIndex: 5
+                    }}>
+                      👑
+                    </span>
+                  )}
+                </div>
+                <div className={`user-info-dropdown ${showUserDropdown ? 'show-dropdown' : ''}`}>
+                  <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: lang === 'ar' ? 'row-reverse' : 'row' }}>
+                    {user.displayName || 'SaaS User'}
+                    {isMaster && (
+                      <span style={{ 
+                        background: 'linear-gradient(135deg, #FFE066, #F5B041)', 
+                        color: '#120d03', 
+                        padding: '0.15rem 0.5rem', 
+                        borderRadius: '20px', 
+                        fontSize: '0.65rem', 
+                        fontWeight: 900,
+                        border: '1px solid #FFD700',
+                        boxShadow: '0 2px 6px rgba(255, 215, 0, 0.3)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
+                        Master GM 👑
+                      </span>
+                    )}
+                  </h4>
+                  <p>{user.email}</p>
+                  <button className="btn-logout" onClick={(e) => { e.stopPropagation(); handleLogout(); }}>{t.logout} 🚪</button>
+                </div>
               </div>
-              <div className={`user-info-dropdown ${showUserDropdown ? 'show-dropdown' : ''}`}>
-                <h4>
-                  {user.displayName || 'SaaS User'}
-                  {user.email === 'gemy.essam.ge@gmail.com' && <span style={{ marginLeft: '0.5rem', background: 'linear-gradient(135deg, #FFD700, #FFA500)', color: '#000', padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold' }}>Master / GM 👑</span>}
-                </h4>
-                <p>{user.email}</p>
-                <button className="btn-logout" onClick={(e) => { e.stopPropagation(); handleLogout(); }}>{t.logout} 🚪</button>
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       </header>
 
@@ -356,6 +407,11 @@ export default function App() {
   const [lang, setLang] = useState('ar')
   const [user, setUser] = useState(null)
   const [loadingAuth, setLoadingAuth] = useState(true)
+  const [resetTrigger, setResetTrigger] = useState(0)
+  const triggerReset = () => setResetTrigger(prev => prev + 1)
+  const [showTutorialModal, setShowTutorialModal] = useState(() => {
+    return !localStorage.getItem('fawterx_tutorial_seen')
+  })
 
   const t = TRANSLATIONS[lang]
 
@@ -400,7 +456,7 @@ export default function App() {
   }
 
   return (
-    <AppContext.Provider value={{ lang, setLang, t, user, handleLogout }}>
+    <AppContext.Provider value={{ lang, setLang, t, user, handleLogout, resetTrigger, triggerReset, showTutorialModal, setShowTutorialModal }}>
       <BrowserRouter>
         <Toaster position="bottom-center" toastOptions={{ style: { background: '#101223', color: '#e8eaf6', border: '1px solid #202442', borderRadius: '12px' } }} />
         

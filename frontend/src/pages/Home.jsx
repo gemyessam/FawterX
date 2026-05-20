@@ -6,7 +6,70 @@ import toast from 'react-hot-toast'
 import { parseProductDescription, buildEtaDescription } from '../utils/productParser'
 
 export default function Home() {
-  const { lang, t, user } = useContext(AppContext)
+  const { lang, t, user, resetTrigger, showTutorialModal, setShowTutorialModal } = useContext(AppContext)
+
+  const TUTORIAL_STEPS = [
+    {
+      titleAr: "الخطوة 1: الدخول إلى بورتال الضرائب الخاص بك",
+      titleEn: "Step 1: Access Your Official ETA Portal Account",
+      descAr: "قم بتسجيل الدخول إلى حساب شركتك الخاص على بوابة مصلحة الضرائب المصرية الرسمية الفعالة (ETA Portal) باستخدام بيانات اعتمادك المؤمنة.",
+      descEn: "Log in to your corporate business dashboard on the official Egyptian Tax Authority (ETA) Portal using your secured credentials."
+    },
+    {
+      titleAr: "الخطوة 2: الانتقال لخيار ERP والتهيئة",
+      titleEn: "Step 2: Navigate to ERP System Configuration",
+      descAr: "انزل إلى أسفل القائمة الجانبية في بوابة الضرائب واضغط على خيار تسجيل نظام تخطيط موارد المؤسسات (ERP Systems) للبدء في ربط فاوتر إكس.",
+      descEn: "Scroll down the sidebar menu in the official portal and select registration of ERP Systems to integrate FawterX."
+    },
+    {
+      titleAr: "الخطوة 3: إضافة نظام ربط جديد",
+      titleEn: "Step 3: Register a New Integration System",
+      descAr: "قم بالضغط على خيار تسجيل نظام جديد (Register ERP / New) لبدء إدخال بيانات نظام التكامل التلقائي الخارجي.",
+      descEn: "Click on 'Register ERP' or 'Register New' to initialize the external automated integration credentials client."
+    },
+    {
+      titleAr: "الخطوة 4: تسجيل وتسمية نظام FawterX",
+      titleEn: "Step 4: Name and Register Your Connection",
+      descAr: "قم بإدخال الاسم الذي تفضله لنظام التكامل الجديد (مثال: FawterX) ثم اضغط على زر التسجيل الفوري (Register) لتوليد مفاتيح التشفير.",
+      descEn: "Enter any friendly identifier name you prefer for this linkage (e.g. FawterX), then click the Register button to securely generate your keys."
+    },
+    {
+      titleAr: "الخطوة 5: حفظ المفاتيح المستخرجة",
+      titleEn: "Step 5: Save the Generated API Credentials",
+      descAr: "قم بنسخ وحفظ البيانات السرية التي ظهرت لك على البوابة (Client ID & Client Secret 1 & 2) بعناية فائقة لاستخدامها وتفعيلها في فاوتر إكس.",
+      descEn: "Safely copy and save the generated sensitive credentials (Client ID, Client Secret 1 & 2) immediately for the next step."
+    },
+    {
+      titleAr: "الخطوة 6: فتح إعدادات الشركة في فاوتر إكس",
+      titleEn: "Step 6: Open Company Setup in FawterX",
+      descAr: "قم بالضغط على خيار 'إعدادات الشركة' المتواجد بأعلى منصة فاوتر إكس لفتح نافذة إدخال بيانات الارتباط والربط الإلكتروني.",
+      descEn: "Click on 'Company Setup' at the top of the FawterX platform to open the integration credentials window."
+    },
+    {
+      titleAr: "الخطوة 7: لصق البيانات وإجراء اختبار اتصال مباشر",
+      titleEn: "Step 7: Paste Credentials and Test Connection",
+      descAr: "قم بلصق بيانات الربط المستخرجة من بورتال الضرائب (Client ID & Client Secrets) في الخانات المخصصة لها، ثم اضغط على زر 'اختبار الاتصال المباشر' للتحقق الفوري من صحتها.",
+      descEn: "Paste your generated Client ID and Client Secrets into their respective fields, then click the 'Test Direct Connection' button to verify real-time status."
+    },
+    {
+      titleAr: "الخطوة 8: تأكيد الاتصال وحفظ المفاتيح بأمان",
+      titleEn: "Step 8: Save & Update API Credentials",
+      descAr: "بمجرد نجاح الاتصال وتأكيد ارتباط النظام ببوابة الضرائب بنجاح، قم بالضغط على زر 'حفظ وتحديث المفاتيح' لتثبيت بيانات شركتك بشكل آمن والبدء في الفوترة.",
+      descEn: "Once the success indicator confirms a valid live connection to the ETA portal, click the 'Save & Update Credentials' button to finalize your setup securely."
+    },
+    {
+      titleAr: "الخطوة 9: تحميل وتشغيل أداة التوقيع FawterX Signer",
+      titleEn: "Step 9: Download and Run FawterX Signer Bridge",
+      descAr: "قم بتحميل أداة العبور والتوقيع الإلكتروني (Signer Bridge) لتتيح للموقع الاتصال بدونجل التوقيع مباشرة، وتأكد من تركيب الـ USB Token بجهازك ليتم التوقيع والإرسال التلقائي.",
+      descEn: "Download our local digital signing bridge utility to enable the platform to communicate directly with your USB Dongle. Ensure your USB Token is plugged into your PC."
+    },
+    {
+      titleAr: "الخطوة 10: تهانينا! أنت الآن جاهز تماماً للبدء",
+      titleEn: "Step 10: Congratulations! You Are Ready",
+      descAr: "مبروك! لقد أتممت جميع خطوات إعداد وتهيئة الربط مع مصلحة الضرائب المصرية بنجاح كامل. أنت الآن جاهز لرفع فواتيرك وتوقيعها وإرسالها بلمح البصر!",
+      descEn: "Congratulations! You have successfully completed all registration and integration steps. You are now fully ready to upload your Excel files, sign them, and submit them in seconds."
+    }
+  ];
   
   // Dashboard & Workflow switching
   const [inWorkflow, setInWorkflow] = useState(false)
@@ -74,16 +137,33 @@ export default function Home() {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   // Real-time verification response states
-  const [submissionResult, setSubmissionResult] = useState(null)
-  const [verificationResult, setVerificationResult] = useState(null)
-  const [verifying, setVerifying] = useState(false)
+  const [tipSlide, setTipSlide] = useState(0)
+  const [isSlideFading, setIsSlideFading] = useState(false)
+
+  const handleSlideChange = (newIdx) => {
+    setIsSlideFading(true)
+    setTimeout(() => {
+      setTipSlide(newIdx)
+      setIsSlideFading(false)
+    }, 180)
+  }
+
+  useEffect(() => {
+    if (showTutorialModal) {
+      setTipSlide(0)
+    }
+  }, [showTutorialModal])
 
   // Fetch current user usage status
   async function fetchUsage() {
     try {
       const data = await getUsageStatus()
       if (data && data.usage) {
-        setUsage(data.usage)
+        const isMaster = user && user.email === 'gemy.essam.ge@gmail.com';
+        setUsage({
+          ...data.usage,
+          isSubscribed: isMaster ? true : data.usage.isSubscribed
+        })
         setStats(prev => ({
           ...prev,
           uploaded: data.usage.submissionsCount,
@@ -101,6 +181,12 @@ export default function Home() {
       fetchOperations()
     }
   }, [user])
+
+  useEffect(() => {
+    if (resetTrigger > 0) {
+      handleResetFlow()
+    }
+  }, [resetTrigger])
 
   // Fetch operations history from Firestore
   async function fetchOperations() {
@@ -645,9 +731,9 @@ export default function Home() {
                 <strong style={{ fontSize: '0.9rem' }}>
                   {usage.isSubscribed 
                     ? (lang === 'ar' ? 'باقة FawterX نشطة: إرسال غير محدود للضرائب ✓' : 'FawterX Premium Active: Unlimited transmissions ✓')
-                    : (usage.submissionsCount >= 100
+                    : (usage.submissionsCount >= 25
                         ? (lang === 'ar' ? '⚠️ استهلكت التجربة المجانية (0 تجارب متبقية)' : '⚠️ Trial used (0 free submissions left)')
-                        : (lang === 'ar' ? `🎁 باقة تجريبية: يتبقى لك ${100 - usage.submissionsCount} تجربة إرسال مجانية للضرائب` : `🎁 Free Trial: ${100 - usage.submissionsCount} free submissions left to ETA`)
+                        : (lang === 'ar' ? `🎁 باقة تجريبية: يتبقى لك ${25 - usage.submissionsCount} تجربة إرسال مجانية للضرائب` : `🎁 Free Trial: ${25 - usage.submissionsCount} free submissions left to ETA`)
                       )
                   }
                 </strong>
@@ -662,7 +748,7 @@ export default function Home() {
               <button 
                 className="btn btn-accent btn-lg" 
                 onClick={() => {
-                  if (!usage.isSubscribed && usage.submissionsCount >= 100) {
+                  if (!usage.isSubscribed && usage.submissionsCount >= 25) {
                     setShowPricingModal(true)
                   } else {
                     setInWorkflow(true)
@@ -803,6 +889,52 @@ export default function Home() {
               <h2 className="card-title">📂 {lang === 'ar' ? 'أتمتة الفواتير والمعاملات الذكية' : 'Intelligent Document Automation'}</h2>
               <p className="card-sub">{lang === 'ar' ? 'ارفع فواتيرك ومعاملاتك مباشرة ليتم تحليلها والتحقق من امتثالها فورياً مصلحة الضرائب' : 'Upload transaction spreadsheets or raw PDF invoices to parse and validate them instantly'}</p>
 
+              {/* Premium Top Template Download Banner */}
+              {parseMode === 'template' && (
+                <div style={{
+                  background: 'rgba(0, 224, 161, 0.06)',
+                  border: '1px solid rgba(0, 224, 161, 0.2)',
+                  borderRadius: '12px',
+                  padding: '1.25rem 1.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '1.5rem',
+                  marginBottom: '2rem',
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+                  flexDirection: lang === 'ar' ? 'row-reverse' : 'row'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexDirection: lang === 'ar' ? 'row-reverse' : 'row', textAlign: lang === 'ar' ? 'right' : 'left' }}>
+                    <span style={{ fontSize: '2rem', filter: 'drop-shadow(0 2px 8px rgba(0, 224, 161, 0.4))' }}>📥</span>
+                    <div>
+                      <strong style={{ display: 'block', color: 'var(--accent)', fontSize: '1.05rem', fontWeight: 800 }}>
+                        {lang === 'ar' ? 'تحميل قالب الإكسيل المعتمد لرفع الفواتير' : 'Download Approved Excel Template'}
+                      </strong>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginTop: '0.25rem', display: 'block' }}>
+                        {lang === 'ar' ? 'قم بتعبئة فواتيرك في هذا القالب الجاهز لضمان القراءة الآلية والمطابقة بنسبة 100%' : 'Fill your invoicing details in this prepared layout to ensure 100% automated mapping.'}
+                      </span>
+                    </div>
+                  </div>
+                  <a 
+                    href="/ETA_Final_Template.xlsx" 
+                    download 
+                    className="btn btn-accent btn-lg" 
+                    style={{ 
+                      whiteSpace: 'nowrap',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      textDecoration: 'none',
+                      fontWeight: 700,
+                      boxShadow: '0 4px 12px rgba(0, 224, 161, 0.2)',
+                      padding: '0.75rem 1.5rem'
+                    }}
+                  >
+                    <span>{lang === 'ar' ? 'تحميل القالب المعتمد ⬇️' : 'Download Template ⬇️'}</span>
+                  </a>
+                </div>
+              )}
+
               {/* Segmented Mode Selector */}
               <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.75rem', background: '#090b14', padding: '0.4rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
                 <button 
@@ -910,28 +1042,40 @@ export default function Home() {
               </div>
 
 
-              {/* Tutorial Section */}
-              <div style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                <h3 style={{ textAlign: 'center', marginBottom: '1.5rem', color: 'var(--text)' }}>
-                  {lang === 'ar' ? '📖 خطوات الاستخدام السريع' : '📖 Quick Start Guide'}
-                </h3>
-                <div style={{ display: 'flex', overflowX: 'auto', gap: '1rem', paddingBottom: '1rem', scrollSnapType: 'x mandatory' }}>
-                  {[1, 2, 3, 4, 5].map(num => (
-                    <div key={num} style={{ minWidth: '85%', maxWidth: '800px', flex: '0 0 auto', background: '#0b0d19', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)', scrollSnapAlign: 'center' }}>
-                      <img src={`/${num === 1 ? 'Step 1' : `step ${num}`}.png`} alt={`Step ${num}`} style={{ width: '100%', height: 'auto', display: 'block' }} />
-                    </div>
-                  ))}
+              {/* Premium Tutorial Reopen Banner */}
+              <div style={{ 
+                marginTop: '3.5rem', 
+                padding: '1.5rem', 
+                background: 'rgba(255, 255, 255, 0.02)', 
+                border: '1px solid rgba(255,255,255,0.05)', 
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '1.5rem',
+                flexDirection: lang === 'ar' ? 'row-reverse' : 'row',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexDirection: lang === 'ar' ? 'row-reverse' : 'row', textAlign: lang === 'ar' ? 'right' : 'left' }}>
+                  <span style={{ fontSize: '2rem' }}>📖</span>
+                  <div>
+                    <strong style={{ display: 'block', color: 'var(--text)', fontSize: '1.05rem', fontWeight: 800 }}>
+                      {lang === 'ar' ? 'دليل الاستخدام والتشغيل السريع' : 'Platform Operations & Guide'}
+                    </strong>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginTop: '0.25rem', display: 'block' }}>
+                      {lang === 'ar' ? 'بحاجة إلى مساعدة؟ افتح الدليل السريع للتكامل مع الضرائب والتوقيع الإلكتروني.' : 'Need assistance? Browse step-by-step guidance on ETA integration & digital signing.'}
+                    </span>
+                  </div>
                 </div>
-                </div>
-              
-              {/* Template Download Button */}
-              {parseMode === 'template' && (
-                <div style={{ marginTop: '2rem', textAlign: 'center' }}>
-                  <a href="/ETA_Final_Template.xlsx" download className="btn btn-ghost" style={{ border: '1px solid var(--primary)', color: 'var(--primary)', padding: '0.5rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-                    📥 {lang === 'ar' ? 'تحميل قالب الإكسيل المعتمد لرفع الفواتير' : 'Download Official Excel Template'}
-                  </a>
-                </div>
-              )}
+                <button 
+                  type="button"
+                  onClick={() => setShowTutorialModal(true)} 
+                  className="btn btn-ghost" 
+                  style={{ border: '1px solid rgba(255,255,255,0.15)', whiteSpace: 'nowrap', fontWeight: 700 }}
+                >
+                  {lang === 'ar' ? 'افتح دليل الاستخدام ↗️' : 'Open User Guide ↗️'}
+                </button>
+              </div>
             </div>
           )}
 
@@ -1866,6 +2010,189 @@ export default function Home() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* ─── PREMIUM TUTORIAL POP-UP MODAL ─── */}
+      {showTutorialModal && (
+        <div className="modal-backdrop glassmorphism-heavy" style={{ zIndex: 20000 }}>
+          <div className="modal-card animate-zoom" style={{ width: '850px', height: '760px', maxWidth: '95vw', maxHeight: '95vh', display: 'flex', flexDirection: 'column', background: '#090b14', border: '1px solid rgba(255, 255, 255, 0.05)', boxShadow: '0 12px 48px rgba(0, 0, 0, 0.5)', padding: '2rem', borderRadius: '16px' }}>
+            <div className="modal-header" style={{ flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '1rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: lang === 'ar' ? 'row-reverse' : 'row' }}>
+              <h3 style={{ margin: 0, color: 'var(--accent)', fontWeight: 800, fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                📖 {lang === 'ar' ? 'دليل الاستخدام خطوة بخطوة' : 'Step-by-Step Operations Guide'}
+              </h3>
+              <button 
+                type="button" 
+                className="btn-close-modal" 
+                onClick={() => {
+                  setShowTutorialModal(false);
+                  localStorage.setItem('fawterx_tutorial_seen', 'true');
+                }}
+                style={{ cursor: 'pointer', fontSize: '1.2rem', background: 'transparent', border: 'none', color: 'var(--text-muted)' }}
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="modal-body" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0 0.5rem' }}>
+              {/* Smooth Fading Transition Container */}
+              <div style={{ opacity: isSlideFading ? 0 : 1, transform: isSlideFading ? 'scale(0.98)' : 'scale(1)', transition: 'all 0.18s ease-in-out', display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                {/* Step Title Indicator */}
+                <div style={{ 
+                  flexShrink: 0,
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  marginBottom: '1.25rem',
+                  flexDirection: lang === 'ar' ? 'row-reverse' : 'row'
+                }}>
+                  <h4 style={{ color: 'var(--text)', fontWeight: 800, fontSize: '1.1rem', margin: 0 }}>
+                    {lang === 'ar' ? TUTORIAL_STEPS[tipSlide].titleAr : TUTORIAL_STEPS[tipSlide].titleEn}
+                  </h4>
+                  <span style={{ 
+                    background: 'rgba(0, 224, 161, 0.1)', 
+                    color: 'var(--accent)', 
+                    padding: '0.25rem 0.75rem', 
+                    borderRadius: '20px', 
+                    fontSize: '0.85rem', 
+                    fontWeight: 700 
+                  }}>
+                    {lang === 'ar' ? `الخطوة ${tipSlide + 1} من 10` : `Step ${tipSlide + 1} of 10`}
+                  </span>
+                </div>
+
+                {/* Active Step Image */}
+                <div style={{ 
+                  flexShrink: 0,
+                  height: '300px',
+                  position: 'relative', 
+                  borderRadius: '12px', 
+                  overflow: 'hidden', 
+                  background: '#0b0d19', 
+                  border: '1px solid rgba(255,255,255,0.05)', 
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginBottom: '1.5rem'
+                }}>
+                  <img 
+                    src={tipSlide === 0 ? '/Step 1.png' : `/step ${tipSlide + 1}.png`} 
+                    alt={`Step ${tipSlide + 1}`} 
+                    style={{ 
+                      maxHeight: '100%', 
+                      maxWidth: '100%', 
+                      objectFit: 'contain', 
+                      display: 'block',
+                      transition: 'opacity 0.3s ease'
+                    }} 
+                  />
+                </div>
+
+                {/* Step Description */}
+                <p style={{ 
+                  flex: 1,
+                  overflowY: 'auto',
+                  color: 'var(--text)', 
+                  fontSize: '1.05rem', 
+                  lineHeight: '1.75', 
+                  textAlign: lang === 'ar' ? 'right' : 'left',
+                  margin: '0 0 1.25rem 0',
+                  maxHeight: '130px',
+                  padding: '0.75rem 1rem',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255, 255, 255, 0.05)'
+                }}>
+                  {lang === 'ar' ? TUTORIAL_STEPS[tipSlide].descAr : TUTORIAL_STEPS[tipSlide].descEn}
+                </p>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ 
+              flexShrink: 0,
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              borderTop: '1px solid rgba(255,255,255,0.05)',
+              paddingTop: '1.25rem',
+              flexDirection: lang === 'ar' ? 'row-reverse' : 'row'
+            }}>
+              {/* Previous Button */}
+              <button 
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={tipSlide === 0}
+                onClick={() => handleSlideChange(Math.max(0, tipSlide - 1))}
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.5rem',
+                  opacity: tipSlide === 0 ? 0.4 : 1,
+                  cursor: tipSlide === 0 ? 'not-allowed' : 'pointer',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  padding: '0.5rem 1rem'
+                }}
+              >
+                {lang === 'ar' ? '← السابق' : '← Previous'}
+              </button>
+
+              {/* Dot Indicators */}
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {TUTORIAL_STEPS.map((_, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleSlideChange(idx)}
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      border: 'none',
+                      background: tipSlide === idx ? 'var(--accent)' : 'rgba(255, 255, 255, 0.2)',
+                      boxShadow: tipSlide === idx ? '0 0 8px var(--accent)' : 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.25s ease'
+                    }}
+                    title={`Go to Step ${idx + 1}`}
+                  />
+                ))}
+              </div>
+
+              {/* Next Button or Close CTA */}
+              {tipSlide < 9 ? (
+                <button 
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => handleSlideChange(Math.min(9, tipSlide + 1))}
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    padding: '0.5rem 1rem'
+                  }}
+                >
+                  {lang === 'ar' ? 'التالي →' : 'Next →'}
+                </button>
+              ) : (
+                <button 
+                  type="button"
+                  className="btn btn-accent btn-sm"
+                  onClick={() => {
+                    setShowTutorialModal(false);
+                    localStorage.setItem('fawterx_tutorial_seen', 'true');
+                  }}
+                  style={{ 
+                    fontWeight: 700,
+                    boxShadow: '0 4px 12px rgba(0, 224, 161, 0.2)',
+                    padding: '0.5rem 1.25rem'
+                  }}
+                >
+                  {lang === 'ar' ? '🚀 ابدأ التحويل الآن' : '🚀 Start Converting Now'}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
