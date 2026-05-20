@@ -74,6 +74,13 @@ const TRANSLATIONS = {
 function Layout({ children }) {
   const { lang, setLang, t, user, handleLogout, triggerReset, showTutorialModal, setShowTutorialModal } = useContext(AppContext)
   const location = useLocation()
+  const handleLogoClick = (e) => {
+    triggerReset();
+    if (location.pathname === '/') {
+      e.preventDefault();
+      window.location.reload();
+    }
+  };
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [showUserDropdown, setShowUserDropdown] = useState(false)
 
@@ -215,7 +222,7 @@ function Layout({ children }) {
     <div className={`app-wrapper ${lang === 'en' ? 'ltr-layout' : ''}`}>
       {/* ─── Modern Premium Header ─── */}
       <header className="header glassmorphism">
-        <Link to="/" onClick={triggerReset} style={{ textDecoration: 'none', color: '#fff', display: 'flex', alignItems: 'center' }}>
+        <Link to="/" onClick={handleLogoClick} style={{ textDecoration: 'none', color: '#fff', display: 'flex', alignItems: 'center' }}>
           <div className="header-brand" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className="header-logo-icon" style={{ display: 'flex', alignItems: 'center' }}>
               <img src="/Logo.png" alt="Logo" style={{ height: '36px', objectFit: 'contain' }} />
