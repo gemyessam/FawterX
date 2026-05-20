@@ -215,9 +215,9 @@ function Layout({ children }) {
     <div className={`app-wrapper ${lang === 'en' ? 'ltr-layout' : ''}`}>
       {/* ─── Modern Premium Header ─── */}
       <header className="header glassmorphism">
-        <Link to="/" onClick={triggerReset} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center' }}>
-          <div className="header-brand" style={{ cursor: 'pointer' }}>
-            <div className="header-logo-icon">
+        <Link to="/" onClick={triggerReset} style={{ textDecoration: 'none', color: '#fff', display: 'flex', alignItems: 'center' }}>
+          <div className="header-brand" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div className="header-logo-icon" style={{ display: 'flex', alignItems: 'center' }}>
               <img src="/Logo.png" alt="Logo" style={{ height: '36px', objectFit: 'contain' }} />
             </div>
             <div className="header-logo-text">
