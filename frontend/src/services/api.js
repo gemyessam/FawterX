@@ -81,43 +81,45 @@ export async function previewInvoice(mapping, rows, metadata = {}) {
 /** اختبار الاتصال بـ ETA */
 export async function testETAAuth(customSettings = null) {
   if (!customSettings) {
-    throw new Error('❌ لا توجد إعدادات لاختبارها')
+    throw new Error('No ETA settings were provided for testing.')
   }
 
   const { clientId, clientSecret1, clientSecret2 } = customSettings
+  const cleanClientId = clientId ? clientId.trim() : ''
+  const cleanSecret1 = clientSecret1 ? clientSecret1.trim() : ''
+  const cleanSecret2 = clientSecret2 ? clientSecret2.trim() : ''
 
-  if (!clientId || !clientId.trim()) {
-    throw new Error('❌ يرجى إدخال معرف العميل (Client ID) أولاً!')
+  if (!cleanClientId) {
+    throw new Error('Please enter the ETA Client ID first.')
   }
 
-  const hasSecret1 = clientSecret1 && clientSecret1.trim()
-  const hasSecret2 = clientSecret2 && clientSecret2.trim()
-
-  if (!hasSecret1 && !hasSecret2) {
-    throw new Error('❌ يجب إدخال السر الأول (Secret 1) أو السر الثاني (Secret 2) لاختبار الاتصال!')
+  if (!cleanSecret1 || !cleanSecret2) {
+    throw new Error('Please enter both ETA Secret 1 and ETA Secret 2. Each secret will be tested against ETA separately.')
   }
 
-  // 1. Test Client Secret 1 if provided
-  if (hasSecret1) {
-    const headers = {
-      'X-ETA-Client-Id': clientId,
-      'X-ETA-Client-Secret': clientSecret1
+  const testSecret = async (label, secret) => {
+    try {
+      const { data } = await api.get('/eta/test-auth', {
+        headers: {
+          'X-ETA-Client-Id': cleanClientId,
+          'X-ETA-Client-Secret': secret
+        }
+      })
+      if (!data?.success) {
+        throw new Error(data?.message || `${label} failed ETA authentication`)
+      }
+      return data
+    } catch (error) {
+      const serverMessage = error.response?.data?.message || error.response?.data?.error?.error_description || error.message
+      throw new Error(`${label} was rejected by ETA: ${serverMessage}`)
     }
-    await api.get('/eta/test-auth', { headers })
   }
 
-  // 2. Test Client Secret 2 if provided
-  if (hasSecret2) {
-    const headers = {
-      'X-ETA-Client-Id': clientId,
-      'X-ETA-Client-Secret': clientSecret2
-    }
-    await api.get('/eta/test-auth', { headers })
-  }
+  const secret1Result = await testSecret('Secret 1', cleanSecret1)
+  const secret2Result = await testSecret('Secret 2', cleanSecret2)
 
-  return { success: true }
+  return { success: true, secret1: secret1Result, secret2: secret2Result }
 }
-
 /** إرسال الفاتورة لـ ETA أو حفظ Draft */
 export async function submitToETA(document, dryRun = false) {
   const { data } = await api.post('/eta/submit', { document, dryRun })

@@ -203,6 +203,10 @@ function Layout({ children }) {
 
   async function handleSaveSettings() {
     try {
+      if (!settings.isVerified) {
+        toast.error(lang === 'ar' ? 'يجب اختبار Client ID و Secret 1 و Secret 2 بنجاح قبل حفظ الإعدادات.' : 'Please successfully test the Client ID, Secret 1, and Secret 2 before saving.')
+        return
+      }
       localStorage.setItem('companySettings', JSON.stringify(settings))
       if (user) {
         await saveCompanySettings(settings)
@@ -226,7 +230,7 @@ function Layout({ children }) {
             <span>{t.logoSub}</span>
           </div>
           <span className="premium-badge">{t.badge}</span>
-          <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v2.7.0</span>
+          <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v2.7.1</span>
         </div>
 
         <nav className="header-nav">

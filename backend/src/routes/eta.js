@@ -49,6 +49,32 @@ router.post("/settings", async (req, res) => {
     if (!settingsData) {
       return res.status(400).json({ success: false, message: "بيانات الإعدادات مطلوبة" });
     }
+    const clientId = String(settingsData.clientId || "").trim();
+    const clientSecret1 = String(settingsData.clientSecret1 || "").trim();
+    const clientSecret2 = String(settingsData.clientSecret2 || "").trim();
+
+    if (settingsData.isVerified === true) {
+      if (!clientId || !clientSecret1 || !clientSecret2) {
+        return res.status(400).json({
+          success: false,
+          message: "Client ID, Secret 1, and Secret 2 are required before settings can be saved as verified."
+        });
+      }
+
+      try {
+        await getAccessToken({ clientId, clientSecret: clientSecret1 });
+        await getAccessToken({ clientId, clientSecret: clientSecret2 });
+      } catch (authError) {
+        return res.status(401).json({
+          success: false,
+          message: "ETA verification failed. Settings were not saved as verified.",
+          error: authError.response?.data || authError.message
+        });
+      }
+    } else {
+      settingsData.isVerified = false;
+    }
+
     const success = await saveUserSettings(req.user.uid, settingsData);
     if (!success) {
       return res.status(500).json({ success: false, message: "فشل حفظ الإعدادات في قاعدة البيانات" });
@@ -81,6 +107,14 @@ router.get("/test-auth", async (req, res) => {
     try {
       // Enforce direct token fetch from real ETA production without falling back to system keys
       const token = await getAccessToken(customCredentials);
+      if (!token || typeof token !== "string" || token.split(".").length < 3) {
+        return res.status(401).json({
+          success: false,
+          message: "ETA did not return a valid access token for these credentials.",
+          environment: "production",
+          clientId
+        });
+      }
       console.log("[/test-auth] ✅ Authentication successful\n");
 
       return res.json({
