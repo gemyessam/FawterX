@@ -908,6 +908,30 @@ export default function Home() {
                     : (lang === 'ar' ? 'تحليل وقراءة المستند الذكي ←' : 'Parse & Process Document →')}
                 </button>
               </div>
+
+
+              {/* Tutorial Section */}
+              <div style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                <h3 style={{ textAlign: 'center', marginBottom: '1.5rem', color: 'var(--text)' }}>
+                  {lang === 'ar' ? '📖 خطوات الاستخدام السريع' : '📖 Quick Start Guide'}
+                </h3>
+                <div style={{ display: 'flex', overflowX: 'auto', gap: '1rem', paddingBottom: '1rem', scrollSnapType: 'x mandatory' }}>
+                  {[1, 2, 3, 4, 5].map(num => (
+                    <div key={num} style={{ minWidth: '85%', maxWidth: '800px', flex: '0 0 auto', background: '#0b0d19', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)', scrollSnapAlign: 'center' }}>
+                      <img src={`/${num === 1 ? 'Step 1' : `step ${num}`}.png`} alt={`Step ${num}`} style={{ width: '100%', height: 'auto', display: 'block' }} />
+                    </div>
+                  ))}
+                </div>
+                </div>
+              
+              {/* Template Download Button */}
+              {parseMode === 'template' && (
+                <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+                  <a href="/ETA_Final_Template.xlsx" download className="btn btn-ghost" style={{ border: '1px solid var(--primary)', color: 'var(--primary)', padding: '0.5rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                    📥 {lang === 'ar' ? 'تحميل قالب الإكسيل المعتمد لرفع الفواتير' : 'Download Official Excel Template'}
+                  </a>
+                </div>
+              )}
             </div>
           )}
 

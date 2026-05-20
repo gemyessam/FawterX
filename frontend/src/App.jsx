@@ -216,7 +216,9 @@ function Layout({ children }) {
       {/* ─── Modern Premium Header ─── */}
       <header className="header glassmorphism">
         <div className="header-brand">
-          <div className="header-logo-icon">🧾</div>
+          <div className="header-logo-icon">
+            <img src="/Logo.png" alt="Logo" style={{ height: '36px', objectFit: 'contain' }} />
+          </div>
           <div className="header-logo-text">
             <h2>{t.logo}</h2>
             <span>{t.logoSub}</span>
@@ -407,7 +409,9 @@ export default function App() {
           <div className={`auth-full-screen ${lang === 'en' ? 'ltr-layout' : ''}`}>
             <div className="auth-brand-side">
               <div className="brand-side-content">
-                <span className="brand-side-logo-icon">🧾</span>
+                <div className="brand-side-logo-icon">
+                  <img src="/Logo.png" alt="Logo" style={{ height: '70px', objectFit: 'contain', marginBottom: '1rem' }} />
+                </div>
                 <h1>{t.logo}</h1>
                 <p>{t.welcomeSub}</p>
                 <div className="brand-side-features">
