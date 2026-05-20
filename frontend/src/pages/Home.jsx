@@ -207,9 +207,14 @@ export default function Home() {
         }
 
         const smartMapping = {
+          invoiceNumber: 'invoiceNumber',
           itemCode: 'itemCode',
+          codeType: 'codeType',
+          internalCode: 'internalCode',
           description: 'description',
           quantity: 'quantity',
+          unitType: 'unitType',
+          currency: 'currency',
           unitValue: 'unitValue',
           taxPercent: 'taxPercent'
         }

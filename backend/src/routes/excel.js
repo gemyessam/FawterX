@@ -71,7 +71,7 @@ router.post("/upload", uploadMiddleware, async (req, res) => {
       result = parseExcel(req.file.path);
     }
 
-    const { headers, rows, sheetName, parserDebugInfo, metadata } = result;
+    const { headers, rows, sheetName, parserDebugInfo, metadata, invoiceLines, totals, warnings, confidenceScore } = result;
     console.log(`[Excel Uploaded & Mapped] User: ${req.user.uid} file: ${req.file.originalname}`);
 
     return res.json({
@@ -83,6 +83,10 @@ router.post("/upload", uploadMiddleware, async (req, res) => {
       totalRows: rows.length,
       preview:   rows.slice(0, 10),
       rows,
+      invoiceLines: invoiceLines || rows,
+      totals: totals || {},
+      warnings: warnings || parserDebugInfo?.parsingWarnings || [],
+      confidenceScore: confidenceScore || parserDebugInfo?.confidenceScore || 0,
       parserDebugInfo,
       metadata,
     });
