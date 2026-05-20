@@ -75,11 +75,8 @@ function Layout({ children }) {
   const { lang, setLang, t, user, handleLogout, triggerReset, showTutorialModal, setShowTutorialModal } = useContext(AppContext)
   const location = useLocation()
   const handleLogoClick = (e) => {
-    triggerReset();
-    if (location.pathname === '/') {
-      e.preventDefault();
-      window.location.reload();
-    }
+    e.preventDefault();
+    window.location.href = '/';
   };
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [showUserDropdown, setShowUserDropdown] = useState(false)
@@ -237,7 +234,7 @@ function Layout({ children }) {
         </Link>
 
         <nav className="header-nav">
-          <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>{t.navHome}</Link>
+          <Link to="/" onClick={handleLogoClick} className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>{t.navHome}</Link>
           <Link to="/drafts" className={`nav-link ${location.pathname.includes('/drafts') ? 'active' : ''}`}>{t.navDrafts}</Link>
           <button type="button" className="nav-link" onClick={() => setShowTutorialModal(true)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.5rem 0.75rem', fontWeight: 600 }}>
             💡 {lang === 'ar' ? 'دليل الخطوات' : 'Step Guide'}
