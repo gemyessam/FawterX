@@ -173,7 +173,17 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
   const totalLines = etaDocs ? etaDocs.reduce((acc, doc) => acc + doc.invoiceLines.length, 0) : 0;
 
   return (
-    <div className="card">
+    <div className="card fade-in animate-zoom" style={{ 
+      width: '100%', 
+      maxWidth: '1550px', 
+      margin: '0 auto 2.5rem', 
+      padding: '2.5rem 3rem',
+      background: 'rgba(20, 24, 46, 0.45)',
+      backdropFilter: 'blur(20px)',
+      border: '1px solid rgba(255, 255, 255, 0.05)',
+      boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
+      borderRadius: '24px'
+    }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
         <h2 className="card-title" style={{ margin: 0 }}>📋 معاينة وحفظ المسودة</h2>
         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>

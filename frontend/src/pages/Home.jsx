@@ -1171,7 +1171,17 @@ export default function Home() {
 
           {/* STEP 3: PREVIEW & SUMMARIES */}
           {step === 3 && etaDocs && (
-            <div className="card fade-in">
+            <div className="card fade-in animate-zoom" style={{ 
+              width: '100%', 
+              maxWidth: '1550px', 
+              margin: '0 auto 2.5rem', 
+              padding: '2.5rem 3rem',
+              background: 'rgba(20, 24, 46, 0.45)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.05)',
+              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
+              borderRadius: '24px'
+            }}>
               <h2 className="card-title">📋 {lang === 'ar' ? 'ملخص وتقرير الفحص المالي والمطابقة' : 'Invoice Pre-flight & Compliance Report'}</h2>
               <p className="card-sub">{lang === 'ar' ? 'تقييم فوري لمعدل الامتثال لشركتك وبيانات الضرائب المحلية.' : 'Immediate pre-send testing and tax validation compliance score'}</p>
 
