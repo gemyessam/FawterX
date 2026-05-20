@@ -222,7 +222,7 @@ function Layout({ children }) {
             <span>{t.logoSub}</span>
           </div>
           <span className="premium-badge">{t.badge}</span>
-          <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v2.7.1</span>
+          <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v2.8.0</span>
         </div>
 
         <nav className="header-nav">
@@ -247,7 +247,10 @@ function Layout({ children }) {
                 {!user.photoURL && (user.displayName?.slice(0, 2).toUpperCase() || 'US')}
               </div>
               <div className={`user-info-dropdown ${showUserDropdown ? 'show-dropdown' : ''}`}>
-                <h4>{user.displayName || 'SaaS User'}</h4>
+                <h4>
+                  {user.displayName || 'SaaS User'}
+                  {user.email === 'gemy.essam.ge@gmail.com' && <span style={{ marginLeft: '0.5rem', background: 'linear-gradient(135deg, #FFD700, #FFA500)', color: '#000', padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold' }}>Master / GM 👑</span>}
+                </h4>
                 <p>{user.email}</p>
                 <button className="btn-logout" onClick={(e) => { e.stopPropagation(); handleLogout(); }}>{t.logout} 🚪</button>
               </div>
