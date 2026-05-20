@@ -522,8 +522,9 @@ export default function Home() {
       for (let i = 0; i < etaDocs.length; i++) {
         const doc = etaDocs[i];
         
-        // Generate the canonical serialized string for this document
-        const canonicalString = serializeToken(doc);
+        // Clean the document recursively to strip empty optional fields before canonicalization & submission
+        const cleanedDoc = cleanObject(doc);
+        const canonicalString = serializeToken(cleanedDoc);
         
         // Request the local signer to sign the canonicalized string
         const signRes = await fetch("http://localhost:8585/sign", {
@@ -544,7 +545,7 @@ export default function Home() {
         }
         
         updatedDocs.push({
-          ...doc,
+          ...cleanedDoc,
           signatures: [{
             signatureType: "I",
             value: signData.signature
@@ -1864,16 +1865,37 @@ function cleanObject(obj) {
   return obj;
 }
 
+function escapeJsonString(str) {
+  if (typeof str !== 'string') str = String(str);
+  let result = '';
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    const code = str.charCodeAt(i);
+    switch (char) {
+      case '"': result += '\\"'; break;
+      case '\\': result += '\\\\'; break;
+      case '\n': result += '\\n'; break;
+      case '\r': result += '\\r'; break;
+      case '\t': result += '\\t'; break;
+      case '\f': result += '\\f'; break;
+      case '\b': result += '\\b'; break;
+      default:
+        if (code < 32) {
+          result += '\\u' + code.toString(16).padStart(4, '0');
+        } else {
+          result += char;
+        }
+        break;
+    }
+  }
+  return `"${result}"`;
+}
+
 function serializeToken(object) {
   let serialized = "";
-  // CRITICAL ETA RULE: Properties must be sorted by their UPPERCASE property names.
-  const keys = Object.keys(object).sort((a, b) => {
-    const upperA = a.toUpperCase();
-    const upperB = b.toUpperCase();
-    if (upperA < upperB) return -1;
-    if (upperA > upperB) return 1;
-    return 0;
-  });
+  // ETA canonicalization follows the JSON property insertion order. Sorting keys changes
+  // the byte stream that ETA recalculates and causes 4043 message-digest mismatches.
+  const keys = Object.keys(object);
   for (const key of keys) {
     const val = object[key];
     if (key === "signatures" || val === null || val === undefined) {
@@ -1883,16 +1905,16 @@ function serializeToken(object) {
     if (Array.isArray(val)) {
       for (const item of val) {
         serialized += `"${key.toUpperCase()}"`;
-        if (typeof item === "object") {
+        if (item !== null && typeof item === "object") {
           serialized += serializeToken(item);
         } else {
-          serialized += `"${item.toString()}"`;
+          serialized += typeof item === "string" ? escapeJsonString(item) : `"${item.toString()}"`;
         }
       }
     } else if (typeof val === "object") {
       serialized += serializeToken(val);
     } else {
-      serialized += `"${val.toString()}"`;
+      serialized += typeof val === "string" ? escapeJsonString(val) : `"${val.toString()}"`;
     }
   }
   return serialized;

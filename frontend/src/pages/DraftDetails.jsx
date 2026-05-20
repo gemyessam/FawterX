@@ -84,7 +84,8 @@ export default function DraftDetails() {
       
       for (let i = 0; i < docs.length; i++) {
         const doc = docs[i];
-        const canonicalString = serializeToken(doc);
+        const cleanedDoc = cleanObject(doc);
+        const canonicalString = serializeToken(cleanedDoc);
         
         const signRes = await fetch("http://localhost:8585/sign", {
           method: "POST",
@@ -104,7 +105,7 @@ export default function DraftDetails() {
         }
         
         signedDocs.push({
-          ...doc,
+          ...cleanedDoc,
           signatures: [{
             signatureType: "I",
             value: signData.signature
@@ -382,9 +383,37 @@ export default function DraftDetails() {
   )
 }
 
+function escapeJsonString(str) {
+  if (typeof str !== 'string') str = String(str);
+  let result = '';
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    const code = str.charCodeAt(i);
+    switch (char) {
+      case '"': result += '\\"'; break;
+      case '\\': result += '\\\\'; break;
+      case '\n': result += '\\n'; break;
+      case '\r': result += '\\r'; break;
+      case '\t': result += '\\t'; break;
+      case '\f': result += '\\f'; break;
+      case '\b': result += '\\b'; break;
+      default:
+        if (code < 32) {
+          result += '\\u' + code.toString(16).padStart(4, '0');
+        } else {
+          result += char;
+        }
+        break;
+    }
+  }
+  return `"${result}"`;
+}
+
 function serializeToken(object) {
   let serialized = "";
-  const keys = Object.keys(object).sort();
+  // ETA canonicalization follows the JSON property insertion order. Sorting keys changes
+  // the byte stream that ETA recalculates and causes 4043 message-digest mismatches.
+  const keys = Object.keys(object);
   for (const key of keys) {
     const val = object[key];
     if (key === "signatures" || val === null || val === undefined) {
@@ -394,17 +423,39 @@ function serializeToken(object) {
     if (Array.isArray(val)) {
       for (const item of val) {
         serialized += `"${key.toUpperCase()}"`;
-        if (typeof item === "object") {
+        if (item !== null && typeof item === "object") {
           serialized += serializeToken(item);
         } else {
-          serialized += `"${item.toString()}"`;
+          serialized += typeof item === "string" ? escapeJsonString(item) : `"${item.toString()}"`;
         }
       }
     } else if (typeof val === "object") {
       serialized += serializeToken(val);
     } else {
-      serialized += `"${val.toString()}"`;
+      serialized += typeof val === "string" ? escapeJsonString(val) : `"${val.toString()}"`;
     }
   }
   return serialized;
+}
+
+function cleanObject(obj) {
+  if (Array.isArray(obj)) {
+    return obj
+      .map(v => (v && typeof v === 'object' ? cleanObject(v) : v))
+      .filter(v => v !== null && v !== undefined && v !== "");
+  } else if (obj !== null && typeof obj === 'object') {
+    return Object.entries(obj).reduce((acc, [key, value]) => {
+      if (value === null || value === undefined || value === "") return acc;
+      if (Array.isArray(value) && value.length === 0) return acc;
+      
+      const cleanedValue = typeof value === 'object' ? cleanObject(value) : value;
+      
+      if (typeof cleanedValue === 'object' && !Array.isArray(cleanedValue) && Object.keys(cleanedValue).length === 0) return acc;
+      if (Array.isArray(cleanedValue) && cleanedValue.length === 0) return acc;
+
+      acc[key] = cleanedValue;
+      return acc;
+    }, {});
+  }
+  return obj;
 }

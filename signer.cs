@@ -20,10 +20,10 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.7.6 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.7.7 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.7.6 (Egypt ETA)  ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.7.7 (Egypt ETA)  ");
             Console.WriteLine("    [STATUS] CAdES-BES Exact Chain (No Roots/Duplicates): Active ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
@@ -35,7 +35,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.7.6 (CAdES-BES Minimal Profile + Exact Chain No-Root Support Active)");
+                Console.WriteLine("[INFO] Version 1.7.7 (CAdES-BES Minimal Profile + Exact Chain No-Root Support Active)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -97,7 +97,7 @@ namespace FawterXSigner
                 if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/")
                 {
                     response.ContentType = "application/json; charset=utf-8";
-                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.7.6\",\"message\":\"FawterX local signer v1.7.6 is running with Exact Certificate Chain embedding (No Roots/Duplicates)!\"}";
+                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.7.7\",\"message\":\"FawterX local signer v1.7.7 is running with Exact Certificate Chain embedding (No Roots/Duplicates) and UTF-8 Unicode support!\"}";
                     byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                     response.ContentLength64 = buffer.Length;
                     response.OutputStream.Write(buffer, 0, buffer.Length);
@@ -479,14 +479,7 @@ namespace FawterXSigner
             if (endIndex == -1) return null;
 
             string value = json.Substring(startIndex + 1, endIndex - startIndex - 1);
-            try
-            {
-                return System.Text.RegularExpressions.Regex.Unescape(value);
-            }
-            catch
-            {
-                return value.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\n", "\n").Replace("\\r", "\r");
-            }
+            return value.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\t", "\t").Replace("\\f", "\f").Replace("\\b", "\b");
         }
 
         private static string EscapeString(string str)
