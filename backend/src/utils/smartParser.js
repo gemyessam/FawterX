@@ -738,8 +738,8 @@ function parseSchucoInvoice(text) {
       }
     }
 
-    // Build description: Aluminium | Name | weight KG | length mm | Finish
-    const parts = ['Aluminium', block.productName];
+    // Build description: Material | Internal Code | Product Name | Weight | Length | Finish(optional)
+    const parts = ['Aluminium', block.itemCode, block.productName];
     if (weight) parts.push(`${weight.toFixed(2)} KG`);
     // Format length with thousands separator (e.g. 6000 -> "6,000")
     if (length) parts.push(`${Number(length).toLocaleString('en-US')} mm`);

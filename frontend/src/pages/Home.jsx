@@ -446,7 +446,7 @@ export default function Home() {
     const nextDocs = JSON.parse(JSON.stringify(etaDocs))
     
     const newLine = {
-      description: "Aluminium | قطاع ألومنيوم جديد | 0.00 KG | 0 mm",
+      description: "Aluminium | 111111 | قطاع ألومنيوم جديد | 0.00 KG | 0 mm",
       itemCode: "EG-111111-1111",
       quantity: 1,
       unitType: "m",
