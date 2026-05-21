@@ -39,3 +39,26 @@ test('mapToETADocument يتحول بشكل صحيح', () => {
   expect(line.description).toBe('خدمة استشارة');
   expect(line.unitValue.currencySold).toBe('EGP');
 });
+
+test('mapToETADocument EGS itemCode raw preservation', () => {
+  const rows = [
+    {
+      description: 'Test Item',
+      itemCode: '708820883-1',
+      codeType: 'EGS',
+      internalCode: '153000',
+      quantity: 1,
+      unitValue: 100,
+    }
+  ];
+  const customMapping = {
+    ...mapping,
+    codeType: 'codeType',
+    internalCode: 'internalCode'
+  };
+  const docs = mapToETADocument(customMapping, rows, issuer);
+  const line = docs[0].invoiceLines[0];
+  expect(line.itemType).toBe('EGS');
+  expect(line.itemCode).toBe('708820883-1');
+  expect(line.internalCode).toBe('153000');
+});

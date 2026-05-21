@@ -100,10 +100,7 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       const codeTypeMapped = String(row[mapping.codeType] || "EGS").toUpperCase().trim();
       const itemType = codeTypeMapped === "EGS" || codeTypeMapped === "GS1" ? codeTypeMapped : "EGS";
 
-      let itemCode = String(row[mapping.itemCode] || "EG-XXXXX-XXXXX").trim();
-      if (itemType === "EGS" && itemCode && !itemCode.toUpperCase().startsWith("EG-")) {
-        itemCode = "EG-" + itemCode;
-      }
+      const itemCode = String(row[mapping.itemCode] || "").trim();
 
       return {
         description:       desc,
