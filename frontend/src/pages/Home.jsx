@@ -339,6 +339,7 @@ export default function Home() {
 
     if (field === 'description') {
       line.description = val
+      line.name = val.split(" | ")[0] || val
     } else if (field === 'itemCode') {
       line.itemCode = val
     } else if (field === 'quantity') {
@@ -1570,6 +1571,24 @@ export default function Home() {
                           <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                               
+                              {/* Code Name Display */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>
+                                  {lang === 'ar' ? '🏷️ الاسم الحركي (Code Name):' : '🏷️ Code Name:'}
+                                </span>
+                                <span style={{ 
+                                  fontSize: '0.7rem', 
+                                  background: 'rgba(0, 245, 212, 0.08)', 
+                                  color: '#00f5d4', 
+                                  padding: '0.15rem 0.5rem', 
+                                  borderRadius: '4px',
+                                  fontWeight: 'bold',
+                                  border: '1px solid rgba(0, 245, 212, 0.2)'
+                                }}>
+                                  {line.name || line.description?.split(" | ")[0] || "Generic"}
+                                </span>
+                              </div>
+
                               {/* 1. Free-form Editable Description (Intelligent ETA-ready text) */}
                               <input 
                                 type="text" 

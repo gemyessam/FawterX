@@ -59,7 +59,8 @@ test('mapToETADocument EGS itemCode raw preservation', () => {
   const docs = mapToETADocument(customMapping, rows, issuer);
   const line = docs[0].invoiceLines[0];
   expect(line.itemType).toBe('EGS');
-  expect(line.itemCode).toBe('708820883-1');
+  expect(line.itemCode).toBe('EG-708820883-1');
+  expect(line.name).toBe('Test Item');
   expect(line.internalCode).toBe('153000');
 });
 

@@ -100,7 +100,12 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       const codeTypeMapped = String(row[mapping.codeType] || "EGS").toUpperCase().trim();
       const itemType = codeTypeMapped === "EGS" || codeTypeMapped === "GS1" ? codeTypeMapped : "EGS";
 
-      const itemCode = String(row[mapping.itemCode] || "").trim();
+      let itemCode = String(row[mapping.itemCode] || "").trim();
+      if (itemType === "EGS" && itemCode && !itemCode.toUpperCase().startsWith("EG-")) {
+        itemCode = `EG-${itemCode}`;
+      }
+
+      const codeName = desc.split(" | ")[0] || desc;
 
       console.log("ETA ITEM MAPPING", {
         codeType: itemType,
@@ -110,6 +115,7 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       });
 
       return {
+        name:              codeName.trim(),
         description:       desc,
         itemType:          itemType,
         itemCode:          itemCode,

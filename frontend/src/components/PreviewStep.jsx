@@ -489,6 +489,7 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
               <table>
                 <thead>
                   <tr>
+                    <th>{lang === 'ar' ? 'الاسم الحركي (Code Name)' : 'Code Name'}</th>
                     <th>الكود</th>
                     <th>الوصف</th>
                     <th>الكمية</th>
@@ -502,6 +503,7 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
                 <tbody>
                   {etaDocs[selectedDocIndex].invoiceLines.map((line, i) => (
                     <tr key={i}>
+                      <td style={{ fontWeight: 'bold', color: 'var(--accent)' }}>{line.name || line.description?.split(" | ")[0] || ""}</td>
                       <td>{line.itemCode}</td>
                       <td style={{whiteSpace: 'pre-wrap'}}>{line.description}</td>
                       <td>{line.quantity}</td>
