@@ -30,9 +30,18 @@ async function submitDocuments(documents, dryRun = false, customCredentials = nu
     }
   }
 
-  // تنظيف الـ Payload من الخصائص القديمة (مهم جداً للمسودات القديمة المحفوظة بـ schema سابقة)
+  // تنظيف الـ Payload من الخصائص القديمة وغير القياسية
   // تحذير: لا تقم بتعديل أي مستند إذا كان موقعاً بالفعل لتجنب خطأ 4043 (مخالفة الـ hash)
   for (const doc of docsArray) {
+    // نقوم بحذف حقل name المخصص للواجهة قبل الإرسال حتى لا ترفضه بوابة الضرائب
+    if (doc.invoiceLines && Array.isArray(doc.invoiceLines)) {
+      doc.invoiceLines.forEach(line => {
+        if (line.name !== undefined) {
+          delete line.name;
+        }
+      });
+    }
+
     const isSigned = doc.signatures && Array.isArray(doc.signatures) && doc.signatures.length > 0;
     if (!isSigned) {
       if (doc.totalItemsDiscount !== undefined) {
