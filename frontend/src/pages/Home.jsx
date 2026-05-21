@@ -2258,16 +2258,19 @@ export default function Home() {
 }
 
 function cleanObject(obj) {
+  if (typeof obj === 'number') {
+    return parseFloat(obj.toFixed(5));
+  }
   if (Array.isArray(obj)) {
     return obj
-      .map(v => (v && typeof v === 'object' ? cleanObject(v) : v))
+      .map(v => (v !== null && v !== undefined ? cleanObject(v) : v))
       .filter(v => v !== null && v !== undefined && v !== "");
   } else if (obj !== null && typeof obj === 'object') {
     return Object.entries(obj).reduce((acc, [key, value]) => {
       if (value === null || value === undefined || value === "") return acc;
       if (Array.isArray(value) && value.length === 0) return acc;
       
-      const cleanedValue = typeof value === 'object' ? cleanObject(value) : value;
+      const cleanedValue = cleanObject(value);
       
       if (typeof cleanedValue === 'object' && !Array.isArray(cleanedValue) && Object.keys(cleanedValue).length === 0) return acc;
       if (Array.isArray(cleanedValue) && cleanedValue.length === 0) return acc;
