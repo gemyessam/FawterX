@@ -302,7 +302,7 @@ function normalizeLine(raw, idx, metadataCurrency) {
   const attrs = extractAttributes(rawDescription);
   const productType = inferProductType(rawDescription);
   const quantity = parseNumber(raw.quantity) || parseNumber(raw.detectedQuantity) || 1;
-  const unitType = canonicalUnit(raw.unitType || raw.detectedUnit || "EA");
+  const unitType = String(raw.unitType || raw.detectedUnit || "EA").trim();
   const unitValue = parseNumber(raw.unitValue);
   const total = parseNumber(raw.total) || Number((quantity * unitValue).toFixed(5));
   const taxPercent = parseNumber(raw.taxPercent) || 14;
