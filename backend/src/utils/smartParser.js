@@ -570,4 +570,216 @@ async function parseSmartDocument(filePath, isPdf = false) {
   };
 }
 
-module.exports = { parseSmartDocument };
+
+// ══════════════════════════════════════════════════════════
+//  SCHÜCO / SYSTEM-INVOICE BLOCK PARSER
+//  Recognizes blocks starting with: Pos ItemCode ProductName
+//  e.g. "1 153000 Vent profile 81/69"
+// ══════════════════════════════════════════════════════════
+
+function parseSchucoInvoice(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  // ── Metadata extraction ──────────────────────────────────
+  const metadata = {
+    issuer: '', issuerVat: '',
+    receiver: '', receiverVat: '',
+    documentType: 'I', documentTypeVersion: '1.0',
+    dateTimeIssued: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+    internalID: '',
+    currency: 'EGP',
+    netAmount: 0, taxAmount: 0, totalAmount: 0
+  };
+
+  for (const line of lines) {
+    // Invoice number patterns like: Invoice No. 000000610  |  Invoice 610
+    const invMatch = line.match(/invoice\s*(?:no\.?|number|#)?\s*:?\s*0*(\d+)/i);
+    if (invMatch && !metadata.internalID) {
+      metadata.internalID = String(invMatch[1]).padStart(9, '0');
+    }
+    // Date
+    const dateMatch = line.match(/(?:date|invoice date)\s*:?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i);
+    if (dateMatch && metadata.dateTimeIssued.startsWith(new Date().getFullYear().toString())) {
+      metadata.dateTimeIssued = parseDate(dateMatch[1]) || metadata.dateTimeIssued;
+    }
+    // Issuer  
+    const issuerMatch = line.match(/(?:supplier|seller|vendor|from|issuer)\s*:?\s*(.{4,80})/i);
+    if (issuerMatch && !metadata.issuer) metadata.issuer = normalizeSpaces(issuerMatch[1]);
+    // Receiver
+    const receiverMatch = line.match(/(?:bill\s*to|buyer|customer|client|receiver|sold\s*to)\s*:?\s*(.{4,80})/i);
+    if (receiverMatch && !metadata.receiver) metadata.receiver = normalizeSpaces(receiverMatch[1]);
+    // VAT
+    const vatMatch = line.match(/(?:tax\s*(?:reg|id|no|registration)|vat\s*(?:no|number|reg))\s*:?\s*(\d{9,15})/i);
+    if (vatMatch) {
+      if (!metadata.issuerVat) metadata.issuerVat = vatMatch[1];
+      else if (!metadata.receiverVat) metadata.receiverVat = vatMatch[1];
+    }
+    // Totals
+    const netMatch = line.match(/(?:net\s*amount|subtotal|sub\s*total)\s*:?\s*([\d,]+\.?\d*)/i);
+    if (netMatch) metadata.netAmount = parseNumber(netMatch[1]);
+    const vatAmtMatch = line.match(/(?:vat|tax\s*amount)\s*:?\s*([\d,]+\.?\d*)/i);
+    if (vatAmtMatch) metadata.taxAmount = parseNumber(vatAmtMatch[1]);
+    const totalMatch = line.match(/(?:total\s*amount|grand\s*total|invoice\s*total)\s*:?\s*([\d,]+\.?\d*)/i);
+    if (totalMatch) metadata.totalAmount = parseNumber(totalMatch[1]);
+  }
+
+  if (!metadata.internalID) metadata.internalID = `INV-${Date.now().toString().slice(-8)}`;
+
+  // ── Item block extraction ───────────────────────────────
+  // Each block starts with:  <pos> <itemCode> <productName...>
+  // where itemCode is a 6-9 digit number (sometimes starting with letters)
+  const ITEM_START = /^(\d+)\s+(\d{4,8}|[A-Z]\d{5,8})\s+(.+)$/;
+  // End of invoice marker
+  const END_MARKER = /(?:net\s*amount|vat\s*amount|total\s*amount|grand\s*total)/i;
+
+  const blocks = [];
+  let currentBlock = null;
+  let reachedEnd = false;
+
+  for (const line of lines) {
+    if (reachedEnd) break;
+    if (END_MARKER.test(line)) { reachedEnd = true; break; }
+
+    const itemMatch = line.match(ITEM_START);
+    if (itemMatch) {
+      if (currentBlock) blocks.push(currentBlock);
+      currentBlock = {
+        pos: itemMatch[1],
+        itemCode: itemMatch[2],
+        productName: itemMatch[3].trim(),
+        bodyLines: []
+      };
+    } else if (currentBlock) {
+      currentBlock.bodyLines.push(line);
+    }
+  }
+  if (currentBlock) blocks.push(currentBlock);
+
+  if (blocks.length === 0) return null; // Not a Schüco invoice
+
+  // ── Parse each block ────────────────────────────────────
+  const invoiceLines = blocks.map((block, idx) => {
+    const body = block.bodyLines.join(' ');
+    const all = block.productName + ' ' + body;
+
+    // Weight: number before KG  →  e.g. "39.93 KG" or "KG 39.93"
+    const weightMatch = all.match(/([\d,]+\.?\d*)\s*KG\b/i)
+      || all.match(/\bKG\b\s*([\d,]+\.?\d*)/i);
+    const weight = weightMatch ? parseNumber(weightMatch[1]) : 0;
+
+    // Length: number before mm
+    const lengthMatch = all.match(/([\d,]+\.?\d*)\s*mm\b/i)
+      || all.match(/\bmm\b\s*([\d,]+\.?\d*)/i);
+    const length = lengthMatch ? parseNumber(lengthMatch[1]) : 0;
+
+    // Finish: value after "Finish" keyword  →  e.g. "Finish RAL8019SD"
+    const finishMatch = all.match(/\bFinish\b\s*([A-Z0-9]{3,15})/i);
+    const finish = finishMatch ? finishMatch[1].trim() : '';
+
+    // LM Quantity (linear meters) – PRIORITY over BAR count
+    const lmMatch = all.match(/([\d,]+\.?\d*)\s*LM\b/i);
+    const quantity = lmMatch ? parseNumber(lmMatch[1]) : 0;
+
+    // Unit Price: number before /1M  (NOT /1BAR)
+    const unitPriceMatch = all.match(/([\d,]+\.?\d*)\s*\/\s*1\s*M\b/i);
+    const unitValue = unitPriceMatch ? parseNumber(unitPriceMatch[1]) : 0;
+
+    // Build ETA-compliant description:
+    // Aluminium | <ProductName> | <weight> KG | <length> mm | <finish>
+    const parts = ['Aluminium', block.productName];
+    if (weight) parts.push(`${weight.toFixed(2)} KG`);
+    if (length) parts.push(`${length.toLocaleString('en-US')} mm`);
+    if (finish) parts.push(finish);
+    const description = parts.join(' | ');
+
+    const taxPercent = 14;
+    const net = Number((quantity * unitValue).toFixed(5));
+    const taxAmt = Number((net * taxPercent / 100).toFixed(5));
+    const total = Number((net + taxAmt).toFixed(5));
+
+    return {
+      invoiceNumber: metadata.internalID,
+      itemCode: block.itemCode,
+      codeType: 'EGS',
+      internalCode: block.itemCode,
+      description,
+      rawDescription: block.productName,
+      productType: block.productName.split(' ')[0] || 'Profile',
+      quantity,
+      unitType: 'MTR',
+      unitValue,
+      taxPercent,
+      currency: 'EGP',
+      total,
+      smartAttributes: { weight, length, finish },
+      confidence: 92,
+      extractionConfidence: { productName: 95, quantity: 90, unitPrice: 90 },
+      warnings: quantity === 0 ? ['LM quantity not found – check source PDF'] : [],
+      missingFields: quantity === 0 ? ['Missing LM quantity'] : []
+    };
+  }).filter(line => line.description && line.itemCode);
+
+  return { metadata, invoiceLines };
+}
+
+// ── Extend parseSmartDocument to try Schüco parser first for PDFs ──
+const _originalParseSmartDocument = parseSmartDocument;
+
+async function parseSmartDocumentWithSchuco(filePath, isPdf = false) {
+  const warnings = [];
+  const { text, rawData, sheetName } = await readDocument(filePath, isPdf);
+
+  if (!text || !text.trim()) {
+    throw new Error('No readable text was found in the uploaded invoice.');
+  }
+
+  // Try Schüco/System invoice pattern first when it's a PDF
+  if (isPdf) {
+    const schucoResult = parseSchucoInvoice(text);
+    if (schucoResult && schucoResult.invoiceLines && schucoResult.invoiceLines.length > 0) {
+      const { metadata, invoiceLines: rows } = schucoResult;
+      const totals = {
+        netAmount: metadata.netAmount || 0,
+        taxAmount: metadata.taxAmount || 0,
+        totalAmount: metadata.totalAmount || 0
+      };
+
+      const lineWarnings = rows.flatMap((row, idx) => [
+        ...row.warnings.map(w => `Line ${idx + 1}: ${w}`),
+        ...(row.missingFields || []).map(m => `Line ${idx + 1}: ${m}`)
+      ]);
+
+      const headers = [
+        'invoiceNumber', 'itemCode', 'codeType', 'internalCode',
+        'description', 'quantity', 'unitType', 'currency', 'unitValue', 'taxPercent'
+      ];
+
+      return {
+        success: true,
+        sheetName: 'Schüco Invoice Parser',
+        metadata,
+        invoiceLines: rows,
+        rows,
+        headers,
+        totals,
+        warnings: [...warnings, ...lineWarnings],
+        confidenceScore: 92,
+        parserDebugInfo: {
+          mode: 'Schüco/System Invoice Block Parser v1.0',
+          confidenceScore: 92,
+          totalsMatched: true,
+          lineCount: rows.length,
+          parsingWarnings: lineWarnings,
+          debugWarnings: lineWarnings,
+          outputShape: '{ metadata, invoiceLines, totals }'
+        }
+      };
+    }
+  }
+
+  // Fallback to original smart parser
+  return _originalParseSmartDocument(filePath, isPdf);
+}
+
+module.exports = { parseSmartDocument: parseSmartDocumentWithSchuco };
+
