@@ -1642,7 +1642,7 @@ export default function Home() {
                               {/* 3. EGS/GS1 Code and Raw Extracted Text Expander */}
                               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', borderTop: '1px solid rgba(255, 255, 255, 0.02)', paddingTop: '0.4rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>🔑 GPC/EGS:</span>
+                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>🔑 EGS/GS1:</span>
                                   <input 
                                     type="text" 
                                     className="input" 

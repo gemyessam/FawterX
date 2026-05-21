@@ -757,7 +757,7 @@ function parseSchucoInvoice(text) {
 
     return {
       invoiceNumber: metadata.internalID,
-      itemCode:   block.itemCode,
+      itemCode:   "EG-" + (metadata.issuerVat || "708820883") + "-" + block.itemCode,
       codeType:   'EGS',
       internalCode: block.itemCode,
       description,
