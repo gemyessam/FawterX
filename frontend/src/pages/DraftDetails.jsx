@@ -45,6 +45,17 @@ export default function DraftDetails() {
   }, [id, navigate])
 
   async function handleTriggerSubmit() {
+    if (!isValid) {
+      const errs = validationResult?.errors || [];
+      const errListStr = errs.map((e, idx) => `${idx + 1}. ${e}`).join("\n");
+      toast.error(
+        lang === 'ar'
+          ? `⚠️ لا يمكن الإرسال لوجود أخطاء في الفاتورة:\n${errListStr || 'خطأ غير معروف في البيانات'}`
+          : `⚠️ Cannot submit due to validation errors:\n${errListStr || 'Unknown validation error'}`,
+        { duration: 8000 }
+      );
+      return;
+    }
     setSubmitting(true)
     setEtaResult(null)
     setEtaError(null)
@@ -369,8 +380,8 @@ export default function DraftDetails() {
       <div className="nav-actions">
         <Link to="/drafts" className="btn btn-ghost">← {lang === 'ar' ? 'رجوع للمسودات' : 'Back to Drafts'}</Link>
         <button 
-          className="btn btn-accent btn-lg" 
-          disabled={!isValid || submitting}
+          className={`btn ${isValid ? 'btn-accent' : 'btn-warning'} btn-lg`} 
+          disabled={submitting}
           onClick={handleTriggerSubmit}
         >
           {submitting ? <span className="spinner"></span> : null}

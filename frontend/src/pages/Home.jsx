@@ -137,6 +137,9 @@ export default function Home() {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   // Real-time verification response states
+  const [submissionResult, setSubmissionResult] = useState(null)
+  const [verificationResult, setVerificationResult] = useState(null)
+  const [verifying, setVerifying] = useState(false)
   const [tipSlide, setTipSlide] = useState(0)
   const [isSlideFading, setIsSlideFading] = useState(false)
 
@@ -575,6 +578,18 @@ export default function Home() {
 
   // Submit to ETA directly with automated cloud mock signature (no PIN modal required)
   async function handleTriggerETA() {
+    if (validation && !validation.valid) {
+      const errs = validation.errors || [];
+      const errListStr = errs.map((e, idx) => `${idx + 1}. ${e}`).join("\n");
+      toast.error(
+        lang === 'ar'
+          ? `⚠️ لا يمكن الإرسال لوجود أخطاء في الفاتورة:\n${errListStr || 'خطأ غير معروف في البيانات'}`
+          : `⚠️ Cannot submit due to validation errors:\n${errListStr || 'Unknown validation error'}`,
+        { duration: 8000 }
+      );
+      return;
+    }
+
     setSubmitting(true)
     setSubmissionResult(null)
     setVerificationResult(null)
@@ -1867,7 +1882,15 @@ export default function Home() {
 
               <div className="nav-actions" style={{ marginTop: '4rem' }}>
                 <button className="btn btn-ghost" onClick={() => setStep(2)}>← {lang === 'ar' ? 'السابق' : 'Back'}</button>
-                <button className="btn btn-primary" onClick={handleTriggerETA} disabled={!validation?.valid}>
+                <button 
+                  className={`btn ${validation?.valid ? 'btn-primary' : 'btn-warning'}`} 
+                  onClick={handleTriggerETA} 
+                  disabled={submitting}
+                  style={{
+                    opacity: submitting ? 0.7 : 1,
+                    cursor: submitting ? 'not-allowed' : 'pointer'
+                  }}
+                >
                   🚀 {lang === 'ar' ? 'توقيع وإرسال لـ ETA الحقيقي' : 'Sign & Submit Live to ETA'}
                 </button>
               </div>
