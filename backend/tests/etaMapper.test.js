@@ -62,3 +62,23 @@ test('mapToETADocument EGS itemCode raw preservation', () => {
   expect(line.itemCode).toBe('708820883-1');
   expect(line.internalCode).toBe('153000');
 });
+
+test('mapToETADocument meter unit mappings map to M', () => {
+  const rows = [
+    {
+      description: 'Test Item 1',
+      unitType: 'm',
+      quantity: 1,
+      unitValue: 100,
+    },
+    {
+      description: 'Test Item 2',
+      unitType: 'meter',
+      quantity: 1,
+      unitValue: 100,
+    }
+  ];
+  const docs = mapToETADocument(mapping, rows, issuer);
+  expect(docs[0].invoiceLines[0].unitType).toBe('M');
+  expect(docs[0].invoiceLines[1].unitType).toBe('M');
+});

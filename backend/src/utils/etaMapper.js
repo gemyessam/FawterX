@@ -1,8 +1,8 @@
 const UNIT_MAP = {
-  "m": "MTR",
-  "mtr": "MTR",
-  "lm": "MTR",
-  "meter": "MTR",
+  "m": "M",
+  "mtr": "M",
+  "lm": "M",
+  "meter": "M",
   "متر": "M",
   "متر طولي": "M",
   "متر طول": "M",
@@ -83,7 +83,7 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       let unitType = "EA";
       
       if (rawUnit.includes("متر") || rawUnit === "m" || rawUnit === "lm" || rawUnit === "meter" || rawUnit === "mtr") {
-        unitType = "MTR";
+        unitType = "M";
       } else if (rawUnit.includes("كيلو") || rawUnit.includes("كجم") || rawUnit === "kg" || rawUnit === "kgm" || rawUnit === "kgms") {
         unitType = "KGM";
       } else if (rawUnit.includes("طن") || rawUnit === "ton" || rawUnit === "tne") {
