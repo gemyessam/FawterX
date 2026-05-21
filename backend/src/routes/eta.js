@@ -148,6 +148,7 @@ router.get("/test-auth", async (req, res) => {
 router.post("/submit", async (req, res) => {
   try {
     const { document, dryRun = false } = req.body || {};
+    console.log("ETA DOCUMENT", JSON.stringify(document, null, 2));
     const clientId = req.headers["x-eta-client-id"] || null;
     const clientSecret = req.headers["x-eta-client-secret"] || null;
     const customCredentials = (clientId && clientSecret) ? { clientId, clientSecret } : null;
@@ -370,6 +371,7 @@ router.post("/drafts/:draftId/submit", async (req, res) => {
     }
 
     console.log(`\n[/drafts/submit] Submitting draft: ${draft.draftId} for User: ${req.user.uid}`);
+    console.log("ETA DOCUMENT (DRAFT SUBMIT)", JSON.stringify(draft.document, null, 2));
 
     // Auto-inject mock signature if missing
     const docsArray = Array.isArray(draft.document) ? draft.document : [draft.document];

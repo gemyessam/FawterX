@@ -102,11 +102,11 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
 
       const itemCode = String(row[mapping.itemCode] || "").trim();
 
-      console.log({
+      console.log("ETA ITEM MAPPING", {
         codeType: itemType,
-        excelItemCode: row[mapping.itemCode],
+        itemCode: itemCode,
         internalCode: row[mapping.internalCode] || `ITEM-${idx + 1}`,
-        generatedItemCode: itemCode
+        description: desc
       });
 
       return {
