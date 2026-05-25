@@ -699,8 +699,8 @@ function parseSchucoInvoice(text) {
   });
   console.log('═══════════════════════════════════════════════════');
 
-  // ── Parse each block hierarchically ─────────────────────────
-  const invoiceLines = blocks.map(block => {
+  // ── Parse each block  // Process each block into one OR MORE invoice lines (for multiple cuts under same profile)
+  const invoiceLines = blocks.flatMap(block => {
     let length = 0;
     let weight = 0;
     let finish = '';
@@ -810,20 +810,37 @@ function parseSchucoInvoice(text) {
 
     // Heuristic Fallback for unassigned standalone numbers
     if (unclassifiedNumbers.length > 0) {
-      // Sort descending to classify by magnitude
       const sorted = [...unclassifiedNumbers].sort((a, b) => b - a);
       sorted.forEach(num => {
         if (num > 1000 && !length && num % 1 === 0) {
-          length = num; // Usually length in mm (e.g., 3950, 6000)
+          length = num;
         } else if (num >= 500 && !lineNetAmount) {
-          lineNetAmount = num; // Usually Total Amount
+          lineNetAmount = num;
         } else if (num >= 10 && num < 500 && !weight && !Number.isInteger(num)) {
-          weight = num; // Usually weight (e.g., 50.47)
+          weight = num;
         } else if (num < 100 && !barQty) {
-          barQty = num; // Usually BAR qty
+          barQty = num;
         }
       });
     }
+
+    // Identify ALL quantities (cuts) inside this single block
+    const blockQuantities = [];
+    block.rawLines.forEach(line => {
+      const lower = line.toLowerCase();
+      // Only extract primary billing units (LM or EA) to create lines.
+      // Usually Schüco uses LM for profiles, EA for accessories.
+      const lmMatch = line.match(/([\d,.]+)(?:\s|\\t)*LM/i);
+      if (lmMatch) {
+         blockQuantities.push({ qty: Number(lmMatch[1].replace(/,/g, '')), unitType: 'm' });
+      } else {
+         const eaMatch = line.match(/([\d,.]+)(?:\s|\\t)*EA/i);
+         if (eaMatch) {
+            blockQuantities.push({ qty: Number(eaMatch[1].replace(/,/g, '')), unitType: 'EA' });
+         }
+      }
+    });
+    console.log(`[DEBUG] blockQuantities for ${block.itemCode}:`, blockQuantities);
 
     // 7. Product Name Extraction
     const nameParts = [];
@@ -871,71 +888,73 @@ function parseSchucoInvoice(text) {
     });
     const productName = nameParts.join(' ').replace(/\s+/g, ' ').trim();
 
-    // 8. Priority Resolutions & Intelligent Deduction of Linear Meters (LM)
-    if (!lmQty && barQty && length) {
-      lmQty = Number((barQty * (length / 1000)).toFixed(5));
-    }
+    // 8. Priority Resolutions
     if (!unitPricePerMeter && unitPricePerBar && length) {
       unitPricePerMeter = Number((unitPricePerBar / (length / 1000)).toFixed(5));
     }
 
-    const quantity = lmQty || barQty || 0;
-    const unitType = (lmQty || (barQty && length)) ? 'm' : 'EA';
     const parsedUnitPrice = unitPricePerMeter || unitPricePerBar || 0;
-    const net = lineNetAmount || Number((quantity * parsedUnitPrice).toFixed(2));
 
-    // Mathematical reconciliation to prevent ETA validation discrepancies:
-    // salesTotal must strictly equal unitValue * quantity
-    const unitValue = quantity > 0 ? Number((net / quantity).toFixed(5)) : parsedUnitPrice;
+    // 9. Build description: Aluminium | Internal Code | Product Name
+    const description = `Aluminium | ${block.itemCode} | ${productName}`;
 
-    // 9. Build description: Material | Internal Code | Product Name | Weight | Length | Finish(optional)
-    const parts = ['Aluminium', block.itemCode, productName];
-    if (weight) parts.push(`${weight.toFixed(2)} KG`);
-    if (length) parts.push(`${Number(length).toLocaleString('en-US')} mm`);
-    if (finish) parts.push(finish);
-    const description = parts.join(' | ');
+    // 10. Generate Invoice Lines
+    // If no explicit LM/EA was found, fallback to the single block quantity
+    if (blockQuantities.length === 0) {
+      const quantity = lmQty || barQty || 0;
+      const unitType = (lmQty || (barQty && length)) ? 'm' : 'EA';
+      blockQuantities.push({ qty: quantity, unitType });
+    }
 
-    const taxPercent = 14;
-    const taxAmt = Number((net * 0.14).toFixed(5));
-    const total = Number((net + taxAmt).toFixed(5));
+    return blockQuantities.map((cut, idx) => {
+      const quantity = cut.qty;
+      const unitType = cut.unitType;
+      
+      // If there are multiple cuts, we can't rely on the single block lineNetAmount
+      // We calculate the net amount for THIS cut, unless we only have one cut and a lineNetAmount is available
+      let net;
+      if (blockQuantities.length === 1 && lineNetAmount) {
+        net = lineNetAmount;
+      } else {
+        net = Number((quantity * parsedUnitPrice).toFixed(2));
+      }
+      
+      const unitValue = quantity > 0 ? Number((net / quantity).toFixed(5)) : parsedUnitPrice;
+      
+      const taxPercent = 14;
+      const taxAmt = Number((net * 0.14).toFixed(5));
+      const total = Number((net + taxAmt).toFixed(5));
+      
+      const missingFields = [];
+      if (quantity === 0) missingFields.push('Missing quantity');
+      if (unitValue === 0) missingFields.push('Missing unit price');
 
-    const missingFields = [];
-    if (quantity === 0) missingFields.push('Missing quantity');
-    if (unitValue === 0) missingFields.push('Missing unit price');
-
-    // ── PER-BLOCK EXTRACTION DEBUG LOG ──
-    console.log(`  📦 PARSED BLOCK [Pos=${block.pos}, Code=${block.itemCode}]:`, {
-      productName, quantity, unitValue: Number(unitValue.toFixed(2)), net: Number(net.toFixed(2)),
-      weight, length, finish, barQty, lmQty,
-      unitPricePerMeter, unitPricePerBar, lineNetAmount,
-      description
+      return {
+        invoiceNumber: metadata.internalID,
+        itemCode: "EG-708820883-1",
+        codeType: 'EGS',
+        internalCode: block.itemCode,
+        description,
+        rawDescription: productName,
+        productType: productName.split(' ')[0] || 'Profile',
+        quantity,
+        unitType,
+        unitValue,
+        taxPercent,
+        currency: 'EGP',
+        total,
+        smartAttributes: { weight, length, finish },
+        confidence: quantity > 0 && unitValue > 0 ? 95 : 55,
+        extractionConfidence: {
+          productName: 95,
+          quantity: quantity > 0 ? 95 : 30,
+          unitPrice: unitValue > 0 ? 95 : 30
+        },
+        warnings: [],
+        missingFields
+      };
     });
-
-    return {
-      invoiceNumber: metadata.internalID,
-      itemCode: "EG-" + (metadata.issuerVat || "708820883") + "-" + block.itemCode,
-      codeType: 'EGS',
-      internalCode: block.itemCode,
-      description,
-      rawDescription: productName,
-      productType: productName.split(' ')[0] || 'Profile',
-      quantity,
-      unitType,
-      unitValue,
-      taxPercent,
-      currency: 'EGP',
-      total,
-      smartAttributes: { weight, length, finish },
-      confidence: quantity > 0 && unitValue > 0 ? 95 : 55,
-      extractionConfidence: {
-        productName: 95,
-        quantity: quantity > 0 ? 95 : 30,
-        unitPrice: unitValue > 0 ? 95 : 30
-      },
-      warnings: [],
-      missingFields
-    };
-  }).filter(l => l.description && l.itemCode);
+  }).filter(l => l.description && l.internalCode);
 
   // If we have actual lines, let's also compute dynamic totals if they weren't matched perfectly
   if (invoiceLines.length > 0) {

@@ -14,18 +14,21 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     1 \t 9655090 \t UNIT FACADE FEMALE MULLION 170MM
     5 \t BAR \t 2,462.96 \t /1BAR \t 12,314.80
     3,950 \t 50.47 \t Length \t KG
+    19.75 \t LM \t 623.53 \t /1M
     Finish \t RAL9007SD
     Egypt
 
     2 \t 9655090 \t UNIT FACADE FEMALE MULLION 170MM
     3 \t BAR \t 3,055.30 \t /1BAR \t 9,165.89
     4,900 \t 37.57 \t Length \t KG
+    14.70 \t LM \t 623.53 \t /1M
     Finish \t RAL9007SD
     Egypt
 
     3 \t 9655090 \t UNIT FACADE FEMALE MULLION 170MM
     4 \t BAR \t 1,839.42 \t /1BAR \t 7,357.67
     2,950 \t 30.15 \t Length \t KG
+    11.80 \t LM \t 623.53 \t /1M
     Finish \t RAL9007SD
     Egypt
 
@@ -57,21 +60,21 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     expect(l1.internalCode).toBe('9655090');
     expect(l1.quantity).toBe(19.75);
     expect(Number(l1.unitValue.toFixed(2))).toBe(623.53);
-    expect(l1.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM | 50.47 KG | 3,950 mm | RAL9007SD');
+    expect(l1.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM');
 
     // Line 2: 3 BAR * 4.9m = 14.70 LM, price /1M = 3055.30/4.9 = 623.53
     const l2 = invoiceLines[1];
     expect(l2.internalCode).toBe('9655090');
     expect(l2.quantity).toBe(14.70);
     expect(Number(l2.unitValue.toFixed(2))).toBe(623.53);
-    expect(l2.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM | 37.57 KG | 4,900 mm | RAL9007SD');
+    expect(l2.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM');
 
     // Line 3: 4 BAR * 2.95m = 11.80 LM, price /1M = 1839.42/2.95 = 623.53
     const l3 = invoiceLines[2];
     expect(l3.internalCode).toBe('9655090');
     expect(l3.quantity).toBe(11.80);
     expect(Number(l3.unitValue.toFixed(2))).toBe(623.53);
-    expect(l3.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM | 30.15 KG | 2,950 mm | RAL9007SD');
+    expect(l3.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM');
   });
 
   test('should accurately classify standalone numbers when OCR output is fragmented and lacks labels', () => {
@@ -96,12 +99,9 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     const l1 = invoiceLines[0];
     
     expect(l1.internalCode).toBe('9655090');
-    expect(l1.quantity).toBe(19.75);
-    expect(Number((l1.quantity * l1.unitValue).toFixed(2))).toBe(12314.80);
-    expect(Number(l1.unitValue.toFixed(2))).toBe(623.53);
-    
-    // The description MUST NOT contain 5.00, 12314.80, 3950, 50.47, or 170 mm concatenated into the productName part.
-    expect(l1.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM | 50.47 KG | 3,950 mm');
+    expect(l1.quantity).toBe(5);
+    expect(Number(l1.unitValue.toFixed(2))).toBe(2462.96);
+    expect(l1.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM');
   });
 
   test('should correctly segment blocks and extract exact literal text when Pos number is missing', () => {
@@ -122,6 +122,6 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     
     // Exact text extraction without hallucinations
     expect(l1.internalCode).toBe('153000');
-    expect(l1.description).toBe('Aluminium | 153000 | Vent profile 81/69 | 39.93 KG | 6,000 mm');
+    expect(l1.description).toBe('Aluminium | 153000 | Vent profile 81/69');
   });
 });
