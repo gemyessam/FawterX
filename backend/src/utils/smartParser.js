@@ -665,10 +665,9 @@ function parseSchucoInvoice(text) {
   let curBlock = null;
 
   for (const line of rawLines) {
-    // End Of Invoice Detection: Stop parsing item blocks immediately when we hit the invoice footer totals
-    if (/Net Amount/i.test(line) || 
-        /Total Amount/i.test(line) || 
-        (/\bVAT\b/i.test(line) && /[\d,]+\.\d+/.test(line) && !/Receiver|Issuer|No\b/i.test(line))) {
+    // End Of Invoice Detection: Stop parsing item blocks when we hit the final Bank Details
+    // We CANNOT use "Total Amount" because each Schüco item block contains a "Total amount" line.
+    if (/Bank Details/i.test(line) || /IBAN\s*:/i.test(line) || /Account\s*:/i.test(line)) {
       break; 
     }
 
@@ -830,36 +829,39 @@ function parseSchucoInvoice(text) {
     const nameParts = [];
     block.rawLines.forEach((line, idx) => {
       const lower = line.toLowerCase();
-      if (lower.includes('lm') || 
-          lower.includes('bar') || 
-          lower.includes('/1m') || 
-          lower.includes('/1bar') || 
-          lower.includes('length') || 
-          lower.includes('kg') || 
-          lower.includes('finish') || 
-          lower.includes('egypt') || 
-          lower.includes('origin')) {
-        return; // skip spec lines
+      // Skip lines that are purely specs or totals
+      if (lower.includes('total amount') || lower.includes('net amount') || lower.includes('vat') || lower.includes('egypt') || lower.includes('origin')) {
+        return;
       }
       
       let cleanLine = line;
       if (idx === 0) {
-        cleanLine = line;
         if (block.pos) {
           cleanLine = cleanLine.replace(new RegExp(`\\b${block.pos}\\b`, 'g'), '');
         }
         if (block.itemCode) {
           cleanLine = cleanLine.replace(new RegExp(`\\b${block.itemCode}\\b`, 'g'), '');
         }
-        cleanLine = cleanLine
-          .replace(/\t/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
       }
+
+      // Strip out measurement values so they don't pollute the name, but keep the rest of the text (e.g. 170MM)
+      cleanLine = cleanLine
+        .replace(/[\d,.]+(?:\s|\\t)*LM/gi, '')
+        .replace(/[\d,.]+(?:\s|\\t)*KG/gi, '')
+        .replace(/[\d,.]+(?:\s|\\t)*BAR/gi, '')
+        .replace(/[\d,.]+(?:\s|\\t)*\/1M/gi, '')
+        .replace(/[\d,.]+(?:\s|\\t)*\/1KG/gi, '')
+        .replace(/[\d,.]+(?:\s|\\t)*\/1BAR/gi, '')
+        .replace(/\b(?:Length|Finish)\b/gi, '')
+        .replace(/RAL\s*\d{4}[A-Z]*/gi, '')
+        .replace(/\bRAL[A-Za-z0-9]+\b/gi, '')
+        .replace(/\t/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
       
       cleanLine = cleanLine.trim();
-      // Skip purely numeric lines (and optional simple units) to prevent polluting the description
-      if (/^[\d,.\s]+(?:mm|kg|lm|bar|ea|mtr)?$/i.test(cleanLine)) {
+      // Skip purely numeric lines (and optional simple units or slashes left over from prices)
+      if (/^[\d,.\s/]+(?:mm|kg|lm|bar|ea|mtr|length|finish)*$/i.test(cleanLine)) {
         return;
       }
 
