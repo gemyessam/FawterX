@@ -581,6 +581,14 @@ async function parseSmartDocument(filePath, isPdf = false) {
 function parseSchucoInvoice(text) {
   const rawLines = text.split('\n').map(l => l.trim().replace(/\\t/g, '\t')).filter(Boolean);
 
+  // ── RAW TEXT DEBUG LOG ──────────────────────────────────
+  console.log('═══════════════ SCHÜCO RAW OCR TEXT ═══════════════');
+  console.log('Total raw lines:', rawLines.length);
+  rawLines.forEach((line, i) => {
+    console.log(`  [${String(i).padStart(3, '0')}] "${line}"`);
+  });
+  console.log('═══════════════════════════════════════════════════');
+
   // ── Metadata extraction ──────────────────────────────────
   const metadata = {
     issuer: '', issuerVat: '',
@@ -681,6 +689,16 @@ function parseSchucoInvoice(text) {
   if (curBlock) blocks.push(curBlock);
 
   if (blocks.length === 0) return null; // not a Schüco invoice
+
+  // ── BLOCK SEGMENTATION DEBUG LOG ──────────────────────────
+  console.log(`═══════════════ SCHÜCO BLOCKS FOUND: ${blocks.length} ═══════════════`);
+  blocks.forEach((block, i) => {
+    console.log(`  Block ${i + 1}: Pos=${block.pos}, ItemCode=${block.itemCode}, Lines=${block.rawLines.length}`);
+    block.rawLines.forEach((line, j) => {
+      console.log(`    [${j}] "${line}"`);
+    });
+  });
+  console.log('═══════════════════════════════════════════════════');
 
   // ── Parse each block hierarchically ─────────────────────────
   const invoiceLines = blocks.map(block => {
@@ -882,6 +900,14 @@ function parseSchucoInvoice(text) {
     const missingFields = [];
     if (quantity === 0) missingFields.push('Missing quantity');
     if (unitValue === 0) missingFields.push('Missing unit price');
+
+    // ── PER-BLOCK EXTRACTION DEBUG LOG ──
+    console.log(`  📦 PARSED BLOCK [Pos=${block.pos}, Code=${block.itemCode}]:`, {
+      productName, quantity, unitValue: Number(unitValue.toFixed(2)), net: Number(net.toFixed(2)),
+      weight, length, finish, barQty, lmQty,
+      unitPricePerMeter, unitPricePerBar, lineNetAmount,
+      description
+    });
 
     return {
       invoiceNumber: metadata.internalID,
