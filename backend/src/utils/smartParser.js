@@ -651,7 +651,7 @@ function parseSchucoInvoice(text) {
   // ── Hierarchical Item Block Segmenter ───────────────────────
   // A block starts at "Pos. + Item No." like: "1 \t 9655090" or "9655090 \t 1" or "1 9655090"
   // Item No is usually a 5-8 digit code.
-  const blockStartRegex = /^(?:(\d+)(?:\s|\\t)+(\d{5,8})|(\d{5,8})(?:\s|\\t)+(\d+))(?:\s|\\t|$)/i;
+  const blockStartRegex = /^(?:(\d+)(?:\s|\\t)+(\d{5,8})|(\d{5,8})(?:\s|\\t)+(\d+)|(\d{5,8}))(?:\s|\\t|$)/i;
   
   const blocks = [];
   let curBlock = null;
@@ -667,8 +667,8 @@ function parseSchucoInvoice(text) {
     const match = line.match(blockStartRegex);
     if (match) {
       if (curBlock) blocks.push(curBlock);
-      const itemCode = match[2] || match[3];
-      const pos = match[1] || match[4];
+      const itemCode = match[2] || match[3] || match[5];
+      const pos = match[1] || match[4] || '';
       curBlock = {
         itemCode,
         pos,
@@ -826,9 +826,14 @@ function parseSchucoInvoice(text) {
       
       let cleanLine = line;
       if (idx === 0) {
-        cleanLine = line
-          .replace(new RegExp(`\\b${block.pos}\\b`, 'g'), '')
-          .replace(new RegExp(`\\b${block.itemCode}\\b`, 'g'), '')
+        cleanLine = line;
+        if (block.pos) {
+          cleanLine = cleanLine.replace(new RegExp(`\\b${block.pos}\\b`, 'g'), '');
+        }
+        if (block.itemCode) {
+          cleanLine = cleanLine.replace(new RegExp(`\\b${block.itemCode}\\b`, 'g'), '');
+        }
+        cleanLine = cleanLine
           .replace(/\t/g, ' ')
           .replace(/\s+/g, ' ')
           .trim();

@@ -116,4 +116,25 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     // The description MUST NOT contain 5.00, 12314.80, 3950, 50.47, or 170 mm concatenated into the productName part.
     expect(l1.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM | 50.47 KG | 3,950 mm');
   });
+
+  test('should correctly segment blocks and extract exact literal text when Pos number is missing', () => {
+    const textWithoutPos = `
+    153000
+    Vent profile 81/69
+    6000 mm
+    39.93 KG
+    `;
+
+    const result = parseSchucoInvoice(textWithoutPos);
+    expect(result).not.toBeNull();
+    
+    const { invoiceLines } = result;
+    expect(invoiceLines.length).toBe(1);
+
+    const l1 = invoiceLines[0];
+    
+    // Exact text extraction without hallucinations
+    expect(l1.internalCode).toBe('153000');
+    expect(l1.description).toBe('Aluminium | 153000 | Vent profile 81/69 | 39.93 KG | 6,000 mm');
+  });
 });
