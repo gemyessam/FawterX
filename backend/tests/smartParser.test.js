@@ -79,4 +79,41 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     expect(Number(l3.unitValue.toFixed(2))).toBe(623.53);
     expect(l3.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM | 50.47 KG | 3,950 mm | RAL9007SD');
   });
+
+  test('should accurately classify standalone numbers when OCR output is fragmented and lacks labels', () => {
+    const fragmentedOCRText = `
+    1 9655090
+    UNIT FACADE FEMALE MULLION 170MM
+    5.00
+    12314.80
+    3950
+    50.47
+    170 mm
+    
+    12314.80 Net Amount
+    `;
+
+    const result = parseSchucoInvoice(fragmentedOCRText);
+    expect(result).not.toBeNull();
+    
+    const { invoiceLines } = result;
+    expect(invoiceLines.length).toBe(1);
+
+    const l1 = invoiceLines[0];
+    // Expected classifications based on heuristics:
+    // 12314.80 -> lineNetAmount
+    // 3950 -> length
+    // 50.47 -> weight
+    // 5.00 -> barQty
+    // lmQty should be calculated as 5 * 3.95 = 19.75
+    // unitValue should be calculated as 12314.80 / 19.75 = 623.53
+    
+    expect(l1.internalCode).toBe('9655090');
+    expect(l1.quantity).toBe(19.75);
+    expect(Number((l1.quantity * l1.unitValue).toFixed(2))).toBe(12314.80);
+    expect(Number(l1.unitValue.toFixed(2))).toBe(623.53);
+    
+    // The description MUST NOT contain 5.00, 12314.80, 3950, 50.47, or 170 mm concatenated into the productName part.
+    expect(l1.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM | 50.47 KG | 3,950 mm');
+  });
 });

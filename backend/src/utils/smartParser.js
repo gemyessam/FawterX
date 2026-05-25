@@ -693,6 +693,7 @@ function parseSchucoInvoice(text) {
     let unitPricePerBar = 0;
     let lineNetAmount = 0;
     let countryOfOrigin = 'Egypt';
+    const unclassifiedNumbers = [];
 
     // Parse attributes from the block lines
     block.rawLines.forEach(line => {
@@ -716,7 +717,10 @@ function parseSchucoInvoice(text) {
 
       // Standalone Fallbacks for mm and KG
       const mmMatch = line.match(/([\d,]+)\s*(?:\\t)?\s*mm/i);
-      if (mmMatch) length = Number(mmMatch[1].replace(/,/g, ''));
+      if (mmMatch) {
+        const val = Number(mmMatch[1].replace(/,/g, ''));
+        if (val > 1000) length = val;
+      }
 
       const kgMatch = line.match(/([\d,.]+)\s*(?:\\t)?\s*KG/i);
       if (kgMatch) weight = Number(kgMatch[1].replace(/,/g, ''));
@@ -778,7 +782,31 @@ function parseSchucoInvoice(text) {
           lineNetAmount = numbers[numbers.length - 1];
         }
       }
+
+      // Collect standalone numbers that have no labels
+      const cleanLine = line.trim();
+      const pureNumMatch = cleanLine.match(/^([\d,]+(?:\.\d+)?)(?:\s*(?:mm|kg|lm|bar|ea|mtr))?$/i);
+      if (pureNumMatch && !lower.includes('length') && !lower.includes('finish') && !lower.includes('origin')) {
+        unclassifiedNumbers.push(Number(pureNumMatch[1].replace(/,/g, '')));
+      }
     });
+
+    // Heuristic Fallback for unassigned standalone numbers
+    if (unclassifiedNumbers.length > 0) {
+      // Sort descending to classify by magnitude
+      const sorted = [...unclassifiedNumbers].sort((a, b) => b - a);
+      sorted.forEach(num => {
+        if (num > 1000 && !length && num % 1 === 0) {
+          length = num; // Usually length in mm (e.g., 3950, 6000)
+        } else if (num >= 500 && !lineNetAmount) {
+          lineNetAmount = num; // Usually Total Amount
+        } else if (num >= 10 && num < 500 && !weight && !Number.isInteger(num)) {
+          weight = num; // Usually weight (e.g., 50.47)
+        } else if (num < 100 && !barQty) {
+          barQty = num; // Usually BAR qty
+        }
+      });
+    }
 
     // 7. Product Name Extraction
     const nameParts = [];
@@ -805,6 +833,13 @@ function parseSchucoInvoice(text) {
           .replace(/\s+/g, ' ')
           .trim();
       }
+      
+      cleanLine = cleanLine.trim();
+      // Skip purely numeric lines (and optional simple units) to prevent polluting the description
+      if (/^[\d,.\s]+(?:mm|kg|lm|bar|ea|mtr)?$/i.test(cleanLine)) {
+        return;
+      }
+
       if (cleanLine) {
         nameParts.push(cleanLine);
       }
