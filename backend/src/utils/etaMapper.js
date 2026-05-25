@@ -115,7 +115,6 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       });
 
       return {
-        name:              codeName.trim(),
         description:       desc,
         itemType:          itemType,
         itemCode:          itemCode,

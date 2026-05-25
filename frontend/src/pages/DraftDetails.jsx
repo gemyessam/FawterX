@@ -97,6 +97,11 @@ export default function DraftDetails() {
         const doc = docs[i];
         const cleanedDoc = cleanObject(doc);
         const canonicalString = serializeToken(cleanedDoc);
+        console.log("=== JSON BEFORE SIGNING ===");
+        console.log(JSON.stringify(cleanedDoc, null, 2));
+        console.log("=== CANONICAL STRING USED FOR SIGNING ===");
+        console.log(canonicalString);
+
         
         const signRes = await fetch("http://localhost:8585/sign", {
           method: "POST",

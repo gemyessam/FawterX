@@ -30,39 +30,16 @@ async function submitDocuments(documents, dryRun = false, customCredentials = nu
     }
   }
 
-  // تنظيف الـ Payload من الخصائص القديمة وغير القياسية
-  // تحذير: لا تقم بتعديل أي مستند إذا كان موقعاً بالفعل لتجنب خطأ 4043 (مخالفة الـ hash)
-  for (const doc of docsArray) {
-    // نقوم بحذف حقل name المخصص للواجهة قبل الإرسال حتى لا ترفضه بوابة الضرائب
-    if (doc.invoiceLines && Array.isArray(doc.invoiceLines)) {
-      doc.invoiceLines.forEach(line => {
-        if (line.name !== undefined) {
-          delete line.name;
-        }
-      });
-    }
-
-    const isSigned = doc.signatures && Array.isArray(doc.signatures) && doc.signatures.length > 0;
-    if (!isSigned) {
-      if (doc.totalItemsDiscount !== undefined) {
-        doc.totalItemsDiscountAmount = doc.totalItemsDiscountAmount !== undefined ? doc.totalItemsDiscountAmount : doc.totalItemsDiscount;
-        delete doc.totalItemsDiscount;
-      }
-      if (doc.totalItemsDiscountAmount === undefined) {
-        doc.totalItemsDiscountAmount = 0;
-      }
-      if (doc.totalTaxableFees !== undefined) {
-        delete doc.totalTaxableFees;
-      }
-    }
-  }
+  // REMOVED: Post-signing document mutations have been removed to guarantee byte-for-byte 
+  // hash accuracy between the local signer and ETA's recalculation. 
+  // ETA schema compliance is now strictly enforced upstream during generation (etaMapper).
 
   const payload = {
     documents: docsArray,
   };
 
-  console.log("=== FINAL ETA PAYLOAD SENT ===");
-  console.log(JSON.stringify(documents, null, 2));
+  console.log("=== JSON BEFORE SUBMISSION ===");
+  console.log(JSON.stringify(docsArray, null, 2));
 
   const url = dryRun
     ? `${ETA_API_BASE}/documentsubmissions?dryRun=true`
