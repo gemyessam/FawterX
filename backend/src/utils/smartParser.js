@@ -579,7 +579,7 @@ async function parseSmartDocument(filePath, isPdf = false) {
 // ══════════════════════════════════════════════════════════
 
 function parseSchucoInvoice(text) {
-  const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const rawLines = text.split('\n').map(l => l.trim().replace(/\\t/g, '\t')).filter(Boolean);
 
   // ── Metadata extraction ──────────────────────────────────
   const metadata = {
@@ -593,7 +593,7 @@ function parseSchucoInvoice(text) {
   };
 
   for (const line of rawLines) {
-    // Invoice number: e.g. "000000610"
+    // Invoice number: e.g. "000000612" or "202303610"
     const invMatch = line.match(/^0*(\d{3,10})$/) ;
     if (invMatch && !metadata.internalID && parseInt(invMatch[1]) > 100) {
       metadata.internalID = line.trim(); // keep leading zeros
@@ -608,7 +608,9 @@ function parseSchucoInvoice(text) {
       const parsed = parseDate(dateMatch[1]);
       if (parsed) metadata.dateTimeIssued = parsed;
     }
-    const vatMatch = line.match(/VAT\s*[:\-]?\s*([\d\-]{9,15})/i);
+    
+    // VAT matching
+    const vatMatch = line.match(/VAT\s*[:\-]?\s*([\d\-]{9,15})/i) || line.match(/\b(\d{3}-\d{3}-\d{3})\b/);
     if (vatMatch) {
       const clean = vatMatch[1].replace(/[^0-9]/g, '');
       if (!metadata.issuerVat) metadata.issuerVat = clean;
@@ -620,166 +622,264 @@ function parseSchucoInvoice(text) {
     // Issuer name
     if (line.includes('Schüco') && line.toLowerCase().includes('egypt') && !metadata.issuer) metadata.issuer = line.trim();
 
-    // Totals
-    const netMatch = line.match(/^([\d,]+\.\d+)\s*Net Amount/i) || line.match(/Net Amount\s*([\d,]+\.\d+)/i);
+    // Totals from invoice footer
+    const netMatch = line.match(/Net Amount\s*([\d,]+\.\d+)/i) || line.match(/^([\d,]+\.\d+)\s*Net Amount/i);
     if (netMatch) metadata.netAmount = parseNumber(netMatch[1]);
 
-    const vatAmtMatch = line.match(/VAT\s+([\d,]+\.\d+)/i);
+    const vatAmtMatch = line.match(/VAT\s+([\d,]+\.\d+)/i) || line.match(/^([\d,]+\.\d+)\s+VAT/i);
     if (vatAmtMatch && !metadata.taxAmount) metadata.taxAmount = parseNumber(vatAmtMatch[1]);
 
-    const totalMatch = line.match(/Total Amount\s*([\d,]+\.\d+)/i) || line.match(/([\d,]+\.\d+)\s*EGP\s*$/i);
+    const totalMatch = line.match(/Total Amount\s*([\d,]+\.\d+)/i) || line.match(/^([\d,]+\.\d+)\s*Total Amount/i) || line.match(/([\d,]+\.\d+)\s*EGP\s*$/i);
     if (totalMatch && !metadata.totalAmount) {
       const v = parseNumber(totalMatch[1]);
-      if (v > 1000) metadata.totalAmount = v;
+      if (v > 100) metadata.totalAmount = v;
     }
   }
 
-  // In Schüco format: receiver VAT appears first at the top, issuer VAT appears in footer
-  // First VAT seen = receiver (650-535-960), Second VAT seen = issuer (708-820-883)
-  // We need to swap: receiverVat should be 650..., issuerVat should be 708...
-  // The logic already stores first->issuerVat, second->receiverVat so we need to swap them back
+  // Swap VATs as before
   if (metadata.issuerVat && metadata.receiverVat) {
-    // Swap: first found is actually the receiver, second is the issuer
     const tmp = metadata.issuerVat;
     metadata.issuerVat = metadata.receiverVat;
     metadata.receiverVat = tmp;
   } else if (metadata.issuerVat && !metadata.receiverVat) {
-    // Only one VAT found — it's the receiver's (top of page), issuer is unknown
     metadata.receiverVat = metadata.issuerVat;
     metadata.issuerVat = '';
   }
 
   if (!metadata.internalID) metadata.internalID = `INV-${Date.now().toString().slice(-8)}`;
 
-  // ── Item block detection ─────────────────────────────────
-  // Real format from PDF text:
-  //   "153000\t1 \tVent profile 81/69 \t4.00"  → item header line
-  //   then body lines until next item or END_MARKER
-  //
-  // The item header looks like:
-  //   <itemCode>\t<pos>\t<productName>\t<barCount>
-  // where itemCode is 6-7 digits (or like 9656154)
-
-  const ITEM_HEADER = /^(\d{5,8})\t(\d+)\s*\t(.+?)\s*\t([\d,]+\.?\d*)$/;
-  // Only match the invoice footer totals — NOT the column label 'Total amount' inside each block
-  // Footer lines look like: "342,892.53\tNet Amount" or "VAT \t48,004.95"
-  const END_MARKER  = /[\d,]{4,}\.\d+\s*\t\s*Net Amount/i;
-
+  // ── Hierarchical Item Block Segmenter ───────────────────────
+  // A block starts at "Pos. + Item No." like: "1 \t 9655090" or "9655090 \t 1" or "1 9655090"
+  // Item No is usually a 5-8 digit code.
+  const blockStartRegex = /^(?:(\d+)(?:\s|\\t)+(\d{5,8})|(\d{5,8})(?:\s|\\t)+(\d+))(?:\s|\\t|$)/i;
+  
   const blocks = [];
-  let cur = null;
-  let done = false;
+  let curBlock = null;
 
   for (const line of rawLines) {
-    if (done) break;
-    if (END_MARKER.test(line)) { done = true; break; }
+    // End Of Invoice Detection: Stop parsing item blocks immediately when we hit the invoice footer totals
+    if (/Net Amount/i.test(line) || 
+        /Total Amount/i.test(line) || 
+        (/\bVAT\b/i.test(line) && /[\d,]+\.\d+/.test(line) && !/Receiver|Issuer|No\b/i.test(line))) {
+      break; 
+    }
 
-    const m = line.match(ITEM_HEADER);
-    if (m) {
-      if (cur) blocks.push(cur);
-      cur = {
-        itemCode: m[1],
-        pos: m[2],
-        productName: m[3].trim(),
-        barCount: parseNumber(m[4]),
-        bodyLines: []
+    const match = line.match(blockStartRegex);
+    if (match) {
+      if (curBlock) blocks.push(curBlock);
+      const itemCode = match[2] || match[3];
+      const pos = match[1] || match[4];
+      curBlock = {
+        itemCode,
+        pos,
+        rawLines: [line]
       };
-    } else if (cur) {
-      cur.bodyLines.push(line);
+    } else if (curBlock) {
+      curBlock.rawLines.push(line);
     }
   }
-  if (cur) blocks.push(cur);
+  if (curBlock) blocks.push(curBlock);
 
   if (blocks.length === 0) return null; // not a Schüco invoice
 
-  // ── Parse each block ────────────────────────────────────
+  // ── Parse each block hierarchically ─────────────────────────
   const invoiceLines = blocks.map(block => {
-    const bodyArr = block.bodyLines; // each entry = one trimmed line (tabs preserved)
+    let length = 0;
+    let weight = 0;
+    let finish = '';
+    let barQty = 0;
+    let lmQty = 0;
+    let unitPricePerMeter = 0;
+    let unitPricePerBar = 0;
+    let lineNetAmount = 0;
+    let countryOfOrigin = 'Egypt';
 
-    let length = 0, weight = 0, finish = '', quantity = 0, unitValue = 0;
+    // Parse attributes from the block lines
+    block.rawLines.forEach(line => {
+      const lower = line.toLowerCase();
 
-    for (let i = 0; i < bodyArr.length; i++) {
-      const line    = bodyArr[i];
-      const line1   = i + 1 < bodyArr.length ? bodyArr[i + 1] : '';
-      const line2   = i + 2 < bodyArr.length ? bodyArr[i + 2] : '';
-
-      // Actual sequence in PDF body:
-      //   i:   "6,000"    ← length value (integer with thousands-separator comma)
-      //   i+1: "39.93"    ← weight value (decimal)
-      //   i+2: "Length"   ← label
-      //   i+3: "KG"       ← unit label
-      const line3 = i + 3 < bodyArr.length ? bodyArr[i + 3] : '';
-      if (/^Length$/i.test(line2) && /^KG$/i.test(line3)) {
-        // Strip commas FIRST (thousands separator), then parse as integer
-        if (/^[\d,]+$/.test(line))  length = parseNumber(line.replace(/,/g, ''));
-        if (/^[\d,.]+$/.test(line1)) weight = parseNumber(line1);
+      // 1. Length & Weight from: "3,950 \t 50.47 \t Length \t KG"
+      if (lower.includes('length') && lower.includes('kg')) {
+        const tokens = line.split(/(?:[\s]+|\\t)+/).map(t => t.trim()).filter(Boolean);
+        const numbers = tokens
+          .map(t => t.replace(/,/g, ''))
+          .filter(t => !isNaN(t) && t.length > 0)
+          .map(Number);
+        
+        if (numbers.length >= 2) {
+          length = numbers[0];
+          weight = numbers[1];
+        } else if (numbers.length === 1) {
+          weight = numbers[0];
+        }
       }
 
-      // Finish: "Finish \t RAL8019SD" or "Finish \tMF"
-      if (/^Finish\b/i.test(line)) {
-        const parts = line.split(/[\t\s]+/);
+      // Standalone Fallbacks for mm and KG
+      const mmMatch = line.match(/([\d,]+)\s*(?:\\t)?\s*mm/i);
+      if (mmMatch) length = Number(mmMatch[1].replace(/,/g, ''));
+
+      const kgMatch = line.match(/([\d,.]+)\s*(?:\\t)?\s*KG/i);
+      if (kgMatch) weight = Number(kgMatch[1].replace(/,/g, ''));
+
+      // 2. Finish from: "Finish \t RAL9007SD"
+      if (lower.includes('finish')) {
+        const parts = line.split(/(?:[\s]+|\\t)+/);
         if (parts.length >= 2) finish = parts[parts.length - 1].trim();
       }
+      const ralMatch = line.match(/RAL\s*\d{4}[A-Z]*/i) || line.match(/\bRAL[A-Za-z0-9]+\b/i);
+      if (ralMatch && !finish) finish = ralMatch[0].trim();
 
-      // LM + Unit Price on the same line: "24.00 \tLM \t449.26 /1M"
-      const lmLine = line.match(/([\d,]+\.?\d*)\s*\t\s*LM\s*\t\s*([\d,]+\.?\d*)\s*\/1M/i);
-      if (lmLine) {
-        quantity  = parseNumber(lmLine[1]);
-        unitValue = parseNumber(lmLine[2]);
+      // 3. Country of Origin
+      if (lower.includes('egypt') || lower.includes('origin')) {
+        countryOfOrigin = 'Egypt';
       }
-      // Fallback: LM without price
-      if (!quantity) {
-        const lmOnly = line.match(/([\d,]+\.?\d*)\s*LM\b/i);
-        if (lmOnly) quantity = parseNumber(lmOnly[1]);
+
+      // 4. LM Quantity & Unit Price Per Meter from: "19.75 \t LM \t 623.53 \t /1M \t 12,314.80"
+      const lmLineMatch = line.match(/([\d,.]+)(?:\s|\\t)*LM(?:\s|\\t)*([\d,.]+)(?:\s|\\t)*\/1M/i);
+      if (lmLineMatch) {
+        lmQty = Number(lmLineMatch[1].replace(/,/g, ''));
+        unitPricePerMeter = Number(lmLineMatch[2].replace(/,/g, ''));
+      } else {
+        if (lower.includes('lm')) {
+          const match = line.match(/([\d,.]+)\s*(?:\\t)?\s*LM/i);
+          if (match) lmQty = Number(match[1].replace(/,/g, ''));
+        }
+        if (lower.includes('/1m') || lower.includes('/1 m')) {
+          const match = line.match(/([\d,.]+)\s*(?:\\t)?\s*\/1\s*M/i);
+          if (match) unitPricePerMeter = Number(match[1].replace(/,/g, ''));
+        }
       }
-      if (!unitValue) {
-        const priceOnly = line.match(/([\d,]+\.?\d*)\s*\/1M\b/i)
-          || line.match(/([\d,]+\.?\d*)\s*\/\s*1\s*M\b/i);
-        if (priceOnly) unitValue = parseNumber(priceOnly[1]);
+
+      // 5. BAR Quantity & Unit Price Per Bar from: "5 \t BAR \t 2,462.96 \t /1BAR \t 12,314.80"
+      const barLineMatch = line.match(/([\d,.]+)(?:\s|\\t)*BAR(?:\s|\\t)*([\d,.]+)(?:\s|\\t)*\/1BAR/i);
+      if (barLineMatch) {
+        barQty = Number(barLineMatch[1].replace(/,/g, ''));
+        unitPricePerBar = Number(barLineMatch[2].replace(/,/g, ''));
+      } else {
+        if (lower.includes('bar')) {
+          const match = line.match(/([\d,.]+)\s*(?:\\t)?\s*BAR/i);
+          if (match) barQty = Number(match[1].replace(/,/g, ''));
+        }
+        if (lower.includes('/1bar') || lower.includes('/1 bar')) {
+          const match = line.match(/([\d,.]+)\s*(?:\\t)?\s*\/1\s*BAR/i);
+          if (match) unitPricePerBar = Number(match[1].replace(/,/g, ''));
+        }
       }
+
+      // 6. Net Amount from line end token
+      if (lower.includes('lm') || lower.includes('bar')) {
+        const tokens = line.split(/(?:[\s]+|\\t)+/).map(t => t.trim()).filter(Boolean);
+        const numbers = tokens
+          .map(t => t.replace(/,/g, ''))
+          .filter(t => !isNaN(t) && t.length > 0)
+          .map(Number);
+        
+        if (numbers.length >= 3) {
+          lineNetAmount = numbers[numbers.length - 1];
+        }
+      }
+    });
+
+    // 7. Product Name Extraction
+    const nameParts = [];
+    block.rawLines.forEach((line, idx) => {
+      const lower = line.toLowerCase();
+      if (lower.includes('lm') || 
+          lower.includes('bar') || 
+          lower.includes('/1m') || 
+          lower.includes('/1bar') || 
+          lower.includes('length') || 
+          lower.includes('kg') || 
+          lower.includes('finish') || 
+          lower.includes('egypt') || 
+          lower.includes('origin')) {
+        return; // skip spec lines
+      }
+      
+      let cleanLine = line;
+      if (idx === 0) {
+        cleanLine = line
+          .replace(new RegExp(`\\b${block.pos}\\b`, 'g'), '')
+          .replace(new RegExp(`\\b${block.itemCode}\\b`, 'g'), '')
+          .replace(/\t/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+      if (cleanLine) {
+        nameParts.push(cleanLine);
+      }
+    });
+    const productName = nameParts.join(' ').replace(/\s+/g, ' ').trim();
+
+    // 8. Priority Resolutions & Intelligent Deduction of Linear Meters (LM)
+    if (!lmQty && barQty && length) {
+      lmQty = Number((barQty * (length / 1000)).toFixed(5));
+    }
+    if (!unitPricePerMeter && unitPricePerBar && length) {
+      unitPricePerMeter = Number((unitPricePerBar / (length / 1000)).toFixed(5));
     }
 
-    // Build description: Material | Internal Code | Product Name | Weight | Length | Finish(optional)
-    const parts = ['Aluminium', block.itemCode, block.productName];
+    const quantity = lmQty || barQty || 0;
+    const unitType = (lmQty || (barQty && length)) ? 'm' : 'EA';
+    const parsedUnitPrice = unitPricePerMeter || unitPricePerBar || 0;
+    const net = lineNetAmount || Number((quantity * parsedUnitPrice).toFixed(2));
+
+    // Mathematical reconciliation to prevent ETA validation discrepancies:
+    // salesTotal must strictly equal unitValue * quantity
+    const unitValue = quantity > 0 ? Number((net / quantity).toFixed(5)) : parsedUnitPrice;
+
+    // 9. Build description: Material | Internal Code | Product Name | Weight | Length | Finish(optional)
+    const parts = ['Aluminium', block.itemCode, productName];
     if (weight) parts.push(`${weight.toFixed(2)} KG`);
-    // Format length with thousands separator (e.g. 6000 -> "6,000")
     if (length) parts.push(`${Number(length).toLocaleString('en-US')} mm`);
     if (finish) parts.push(finish);
     const description = parts.join(' | ');
 
     const taxPercent = 14;
-    const net   = Number((quantity * unitValue).toFixed(5));
     const taxAmt = Number((net * 0.14).toFixed(5));
-    const total  = Number((net + taxAmt).toFixed(5));
+    const total = Number((net + taxAmt).toFixed(5));
 
     const missingFields = [];
-    if (quantity  === 0) missingFields.push('Missing LM quantity');
-    if (unitValue === 0) missingFields.push('Missing unit price (/1M)');
+    if (quantity === 0) missingFields.push('Missing quantity');
+    if (unitValue === 0) missingFields.push('Missing unit price');
 
     return {
       invoiceNumber: metadata.internalID,
-      itemCode:   "EG-" + (metadata.issuerVat || "708820883") + "-" + block.itemCode,
-      codeType:   'EGS',
+      itemCode: "EG-" + (metadata.issuerVat || "708820883") + "-" + block.itemCode,
+      codeType: 'EGS',
       internalCode: block.itemCode,
       description,
-      rawDescription: block.productName,
-      productType: block.productName.split(' ')[0] || 'Profile',
+      rawDescription: productName,
+      productType: productName.split(' ')[0] || 'Profile',
       quantity,
-      unitType:   'm',
+      unitType,
       unitValue,
       taxPercent,
-      currency:   'EGP',
+      currency: 'EGP',
       total,
       smartAttributes: { weight, length, finish },
-      confidence: quantity > 0 && unitValue > 0 ? 93 : 55,
+      confidence: quantity > 0 && unitValue > 0 ? 95 : 55,
       extractionConfidence: {
         productName: 95,
-        quantity:   quantity   > 0 ? 93 : 30,
-        unitPrice:  unitValue  > 0 ? 93 : 30
+        quantity: quantity > 0 ? 95 : 30,
+        unitPrice: unitValue > 0 ? 95 : 30
       },
       warnings: [],
       missingFields
     };
   }).filter(l => l.description && l.itemCode);
+
+  // If we have actual lines, let's also compute dynamic totals if they weren't matched perfectly
+  if (invoiceLines.length > 0) {
+    const calcNet = invoiceLines.reduce((sum, line) => sum + (line.quantity * line.unitValue), 0);
+    const calcTax = invoiceLines.reduce((sum, line) => sum + (line.quantity * line.unitValue * 0.14), 0);
+    const calcTotal = calcNet + calcTax;
+    if (!metadata.netAmount) {
+      metadata.netAmount = Number(calcNet.toFixed(2));
+      metadata.taxAmount = Number(calcTax.toFixed(2));
+      metadata.totalAmount = Number(calcTotal.toFixed(2));
+    }
+  }
 
   return { metadata, invoiceLines };
 }
@@ -843,5 +943,8 @@ async function parseSmartDocumentWithSchuco(filePath, isPdf = false) {
   return _originalParseSmartDocument(filePath, isPdf);
 }
 
-module.exports = { parseSmartDocument: parseSmartDocumentWithSchuco };
+module.exports = { 
+  parseSmartDocument: parseSmartDocumentWithSchuco,
+  parseSchucoInvoice
+};
 
