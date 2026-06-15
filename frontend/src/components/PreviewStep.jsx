@@ -486,34 +486,59 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
 
           {tab === 'lines' && (
             <div className="table-wrapper">
-              <table>
+              <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                 <thead>
-                  <tr>
-                    <th>{lang === 'ar' ? 'الاسم الحركي (Code Name)' : 'Code Name'}</th>
-                    <th>الكود</th>
-                    <th>الوصف</th>
-                    <th>الكمية</th>
-                    <th>الوحدة</th>
-                    <th>العملة</th>
-                    <th>السعر</th>
-                    <th>الضريبة</th>
-                    <th>الإجمالي</th>
+                  <tr style={{ background: 'linear-gradient(135deg, #1a3a5c 0%, #234e78 100%)', color: '#fff' }}>
+                    <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Code Name / Description</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Coding Scheme</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Item Code / Internal Code</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Quantity / Unit Type</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Unit Price (EGP)</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Total Sales Amount (EGP)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {etaDocs[selectedDocIndex].invoiceLines.map((line, i) => (
-                    <tr key={i}>
-                      <td style={{ fontWeight: 'bold', color: 'var(--accent)' }}>{line.name || line.description?.split(" | ")[0] || ""}</td>
-                      <td>{line.itemCode}</td>
-                      <td style={{whiteSpace: 'pre-wrap'}}>{line.description}</td>
-                      <td>{line.quantity}</td>
-                      <td>{line.unitType}</td>
-                      <td>{line.unitValue.currencySold}</td>
-                      <td>{fmt(line.unitValue.amountEGP)}</td>
-                      <td>{fmt(line.taxableItems?.[0]?.amount || 0)}</td>
-                      <td style={{fontWeight:700,color:'var(--accent)'}}>{fmt(line.total)}</td>
-                    </tr>
-                  ))}
+                  {etaDocs[selectedDocIndex].invoiceLines.map((line, i) => {
+                    const codeName = line.codeName || line.name || line.description?.split(" ")[0] || 'Aluminium';
+                    const desc = line.description || '';
+                    const itemCode = line.itemCode || '';
+                    const internalCode = line.internalCode || '';
+                    const codeType = line.codeType || 'EGS';
+                    const qty = line.quantity || 0;
+                    const unit = line.unitType || 'M';
+                    const unitPrice = typeof line.unitValue === 'object' ? (line.unitValue.amountEGP || 0) : (line.unitValue || 0);
+                    const salesAmt = line.salesTotal || line.net || (qty * unitPrice) || 0;
+                    
+                    return (
+                      <tr key={i} style={{ 
+                        background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)',
+                        borderBottom: '1px solid rgba(255,255,255,0.06)',
+                        transition: 'background 0.15s'
+                      }}>
+                        <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
+                          <div style={{ fontWeight: 700, color: '#4da3ff', fontSize: '0.95rem', marginBottom: '4px' }}>{codeName}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.4, maxWidth: '400px', wordBreak: 'break-word' }}>{desc}</div>
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'top' }}>
+                          <span style={{ background: 'rgba(0, 245, 212, 0.08)', color: '#00f5d4', padding: '3px 10px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>{codeType}</span>
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'top' }}>
+                          <div style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text)' }}>{itemCode}</div>
+                          <div style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>{internalCode}</div>
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'top' }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>{Number(qty).toFixed(5)}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>{unit}</div>
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'top' }}>
+                          <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text)' }}>{fmt(unitPrice)}</div>
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'top' }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#00f5d4' }}>{fmt(salesAmt)}</div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

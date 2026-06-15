@@ -1,7 +1,9 @@
 const { parseSchucoInvoice } = require('../src/utils/smartParser');
 
 describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () => {
-  test('should correctly parse Schüco invoice with DIFFERENT weight/length/qty per line', () => {
+  test('should produce exactly 1 invoice line per block (BAR/KG/LM are same item)', () => {
+    // This mock has 3 blocks (Pos 1, 2, 3) each with BAR + LM rows.
+    // BAR/KG/LM are 3 representations of the SAME item, NOT separate items.
     const mockSchucoText = `
     OMSI Egypt
     Receiver VAT: 650-535-960
@@ -10,31 +12,31 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     Invoice No: 000000612
     Date: 21.05.2026
 
-    Pos. \t Item No. \t Description
-    1 \t 9655090 \t UNIT FACADE FEMALE MULLION 170MM
-    5 \t BAR \t 2,462.96 \t /1BAR \t 12,314.80
-    3,950 \t 50.47 \t Length \t KG
-    19.75 \t LM \t 623.53 \t /1M
-    Finish \t RAL9007SD
+    Pos. \\t Item No. \\t Description
+    1 \\t 9655090 \\t UNIT FACADE FEMALE MULLION 170MM
+    5 \\t BAR \\t 2,462.96 \\t /1BAR \\t 12,314.80
+    3,950 \\t 50.47 \\t Length \\t KG
+    19.75 \\t LM \\t 623.53 \\t /1M \\t 12,314.80
+    Finish \\t RAL9007SD
     Egypt
 
-    2 \t 9655090 \t UNIT FACADE FEMALE MULLION 170MM
-    3 \t BAR \t 3,055.30 \t /1BAR \t 9,165.89
-    4,900 \t 37.57 \t Length \t KG
-    14.70 \t LM \t 623.53 \t /1M
-    Finish \t RAL9007SD
+    2 \\t 9655090 \\t UNIT FACADE FEMALE MULLION 170MM
+    3 \\t BAR \\t 3,055.30 \\t /1BAR \\t 9,165.89
+    4,900 \\t 37.57 \\t Length \\t KG
+    14.70 \\t LM \\t 623.53 \\t /1M \\t 9,165.89
+    Finish \\t RAL9007SD
     Egypt
 
-    3 \t 9655090 \t UNIT FACADE FEMALE MULLION 170MM
-    4 \t BAR \t 1,839.42 \t /1BAR \t 7,357.67
-    2,950 \t 30.15 \t Length \t KG
-    11.80 \t LM \t 623.53 \t /1M
-    Finish \t RAL9007SD
+    3 \\t 9655090 \\t UNIT FACADE FEMALE MULLION 170MM
+    4 \\t BAR \\t 1,839.42 \\t /1BAR \\t 7,357.67
+    2,950 \\t 30.15 \\t Length \\t KG
+    11.80 \\t LM \\t 623.53 \\t /1M \\t 7,357.67
+    Finish \\t RAL9007SD
     Egypt
 
-    28,838.36 \t Net Amount
-    4,037.37 \t VAT
-    32,875.73 \t Total Amount
+    28,838.36 \\t Net Amount
+    4,037.37 \\t VAT
+    32,875.73 \\t Total Amount
 
     Bank Details:
     Account: 1234567890
@@ -52,56 +54,67 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     expect(metadata.receiverVat).toBe('650535960');
     expect(metadata.issuerVat).toBe('708820883');
 
-    // Verify lines count
+    // CRITICAL: Exactly 3 lines (1 per block), NOT 6 or 8
     expect(invoiceLines.length).toBe(3);
 
-    // Line 1: 5 BAR * 3.95m = 19.75 LM, price /1M = 2462.96/3.95 = 623.53
+    // Line 1: LM qty=19.75, unit price from /1M=623.53, net=12,314.80
     const l1 = invoiceLines[0];
     expect(l1.internalCode).toBe('9655090');
+    expect(l1.itemCode).toBe('EG-708820883-1');
+    expect(l1.codeName).toBe('Aluminium');
     expect(l1.quantity).toBe(19.75);
+    expect(l1.unitType).toBe('M');
     expect(Number(l1.unitValue.toFixed(2))).toBe(623.53);
-    expect(l1.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM');
+    expect(l1.net).toBe(12314.80);
+    // Rich description: "Aluminium 9655090 UNIT FACADE FEMALE MULLION 170MM 5 Bar 50.47 KG 3,950 mm RAL9007SD"
+    expect(l1.description).toContain('Aluminium');
+    expect(l1.description).toContain('9655090');
+    expect(l1.description).toContain('UNIT FACADE FEMALE MULLION 170MM');
+    expect(l1.description).toContain('Bar');
+    expect(l1.description).toContain('KG');
+    expect(l1.description).toContain('mm');
+    expect(l1.description).toContain('RAL9007SD');
 
-    // Line 2: 3 BAR * 4.9m = 14.70 LM, price /1M = 3055.30/4.9 = 623.53
+    // Line 2: LM qty=14.70, net=9,165.89
     const l2 = invoiceLines[1];
-    expect(l2.internalCode).toBe('9655090');
     expect(l2.quantity).toBe(14.70);
     expect(Number(l2.unitValue.toFixed(2))).toBe(623.53);
-    expect(l2.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM');
+    expect(l2.net).toBe(9165.89);
 
-    // Line 3: 4 BAR * 2.95m = 11.80 LM, price /1M = 1839.42/2.95 = 623.53
+    // Line 3: LM qty=11.80, net=7,357.67
     const l3 = invoiceLines[2];
-    expect(l3.internalCode).toBe('9655090');
     expect(l3.quantity).toBe(11.80);
     expect(Number(l3.unitValue.toFixed(2))).toBe(623.53);
-    expect(l3.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM');
+    expect(l3.net).toBe(7357.67);
   });
 
-  test('should accurately classify standalone numbers when OCR output is fragmented and lacks labels', () => {
+  test('should derive LM from BAR qty * length when LM line is missing', () => {
     const fragmentedOCRText = `
     1 9655090
     UNIT FACADE FEMALE MULLION 170MM
-    5.00
-    12314.80
-    3950
-    50.47
-    170 mm
+    5 \\t BAR \\t 2,462.96 \\t /1BAR \\t 12,314.80
+    3,950 \\t 50.47 \\t Length \\t KG
+    Finish \\t RAL9007SD
+    Egypt
     
     12314.80 Net Amount
+
+    Bank Details:
+    Account: 123
     `;
 
     const result = parseSchucoInvoice(fragmentedOCRText);
     expect(result).not.toBeNull();
     
     const { invoiceLines } = result;
+    // Only 1 block = only 1 line
     expect(invoiceLines.length).toBe(1);
 
     const l1 = invoiceLines[0];
-    
     expect(l1.internalCode).toBe('9655090');
-    expect(l1.quantity).toBe(5);
-    expect(Number(l1.unitValue.toFixed(2))).toBe(2462.96);
-    expect(l1.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM');
+    // LM derived: 5 BAR * 3.95m = 19.75 LM
+    expect(l1.quantity).toBe(19.75);
+    expect(l1.unitType).toBe('M');
   });
 
   test('should correctly segment blocks and extract exact literal text when Pos number is missing', () => {
@@ -122,6 +135,8 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     
     // Exact text extraction without hallucinations
     expect(l1.internalCode).toBe('153000');
-    expect(l1.description).toBe('Aluminium | 153000 | Vent profile 81/69');
+    expect(l1.description).toContain('Vent profile 81/69');
+    expect(l1.description).toContain('39.93 KG');
+    expect(l1.description).toContain('6,000 mm');
   });
 });
