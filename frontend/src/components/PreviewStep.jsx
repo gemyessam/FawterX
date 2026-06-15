@@ -504,6 +504,7 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
                 <tbody>
                   {etaDocs[selectedDocIndex].invoiceLines.map((line, i) => {
                     const desc = line.description || '';
+                    const packaging = line.smartAttributes?.packagingLabel || '';
                     const itemCode = line.itemCode || '';
                     const internalCode = line.internalCode || '';
                     const codeType = line.codeType || line.itemType || 'EGS';
@@ -538,6 +539,11 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
                         {/* 4. Item Description */}
                         <td style={{ padding: '14px 16px', textAlign: 'left', verticalAlign: 'middle' }}>
                           <div style={{ fontSize: '0.8rem', color: '#fff', lineHeight: 1.4, maxWidth: '400px', wordBreak: 'break-word' }}>{desc}</div>
+                          {packaging && (
+                            <div style={{ fontSize: '0.72rem', color: 'var(--accent)', marginTop: '0.3rem', fontWeight: 600 }}>
+                              {packaging}
+                            </div>
+                          )}
                         </td>
                         {/* 5. Quantity */}
                         <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>

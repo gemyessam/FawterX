@@ -1015,17 +1015,24 @@ function parseSchucoInvoice(text) {
     if (!unitPricePerMeter && unitPricePerBar && length) {
       unitPricePerMeter = Number((unitPricePerBar / (length / 1000)).toFixed(5));
     }
-    if (!lmQty && barQty && length) {
-      lmQty = Number((barQty * (length / 1000)).toFixed(5));
+    const derivedLmQty = barQty && length ? Number((barQty * (length / 1000)).toFixed(5)) : 0;
+    if (!lmQty && derivedLmQty) {
+      lmQty = derivedLmQty;
+    } else if (derivedLmQty && Math.abs(lmQty - derivedLmQty) > Math.max(1, derivedLmQty * 0.05)) {
+      lmQty = derivedLmQty;
     }
 
-    // LM is the primary billing unit for ETA
+    // LM is the primary billing unit for ETA, but keep the bar count as a human hint.
     const quantity = lmQty || barQty || 0;
-    const unitType = lmQty ? 'M' : 'EA';
+    const unitType = lmQty ? 'M' : (barQty ? 'BAR' : 'EA');
     const parsedUnitPrice = unitPricePerMeter || unitPricePerBar || 0;
+    const packagingLabel = barQty && lmQty
+      ? `${Number(barQty).toLocaleString('en-US')} Bar / ${Number(lmQty).toLocaleString('en-US')} LM`
+      : (barQty ? `${Number(barQty).toLocaleString('en-US')} Bar` : (lmQty ? `${Number(lmQty).toLocaleString('en-US')} LM` : ''));
 
     // 9. Build rich description matching template format
     const descParts = ['Aluminium', block.itemCode, productName];
+    if (packagingLabel) descParts.push(packagingLabel);
     if (weight) descParts.push(`${weight.toFixed(2)} KG`);
     if (length) descParts.push(`${Number(length).toLocaleString('en-US')} mm`);
     if (finish) descParts.push(finish);
@@ -1064,7 +1071,7 @@ function parseSchucoInvoice(text) {
       currency: 'EGP',
       net,
       total,
-      smartAttributes: { weight, length, finish, barQty, lmQty, unitPricePerBar, unitPricePerMeter },
+      smartAttributes: { weight, length, finish, barQty, lmQty, packagingLabel, unitPricePerBar, unitPricePerMeter },
       confidence: quantity > 0 && unitValue > 0 ? 95 : 55,
       extractionConfidence: {
         productName: 95,
@@ -1154,4 +1161,3 @@ module.exports = {
   parseSmartDocument: parseSmartDocumentWithSchuco,
   parseSchucoInvoice
 };
-
