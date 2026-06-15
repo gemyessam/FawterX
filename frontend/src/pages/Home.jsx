@@ -1528,6 +1528,7 @@ export default function Home() {
 
               <div className="table-wrapper" style={{ 
                 maxHeight: '650px', 
+                overflowX: 'auto', 
                 overflowY: 'auto', 
                 border: '1px solid rgba(255, 255, 255, 0.08)', 
                 borderRadius: '16px', 
@@ -1537,18 +1538,21 @@ export default function Home() {
                 boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.5)',
                 padding: '1.25rem'
               }}>
-                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 12px' }}>
+                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 12px', minWidth: '1300px' }}>
                   <thead>
                     <tr style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px' }}>
-                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: 'center', borderBottom: 'none' }}>#</th>
-                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: lang === 'ar' ? 'right' : 'left', borderBottom: 'none' }}>{lang === 'ar' ? 'بيانات الصنف (الوصف والمواصفات الذكية)' : 'Item Details (Smart Description & Specs)'}</th>
-                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: 'center', borderBottom: 'none', width: '130px' }}>{lang === 'ar' ? 'الكمية' : 'Qty'}</th>
-                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: 'center', borderBottom: 'none', width: '160px' }}>{lang === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</th>
-                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: 'center', borderBottom: 'none' }}>{lang === 'ar' ? 'قبل الضريبة' : 'Net Total'}</th>
-                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: 'center', borderBottom: 'none', width: '110px' }}>{lang === 'ar' ? 'الضريبة %' : 'VAT %'}</th>
-                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: 'center', borderBottom: 'none' }}>{lang === 'ar' ? 'قيمة الضريبة' : 'VAT Amount'}</th>
-                      <th style={{ padding: '1.2rem 1rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.85rem', textAlign: 'center', borderBottom: 'none' }}>{lang === 'ar' ? 'الإجمالي الكلي' : 'Total Amount'}</th>
-                      <th style={{ padding: '1.2rem 1rem', borderBottom: 'none', width: '60px' }}></th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '40px' }}>#</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '90px' }}>Code Type</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '170px' }}>Item Code</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '110px' }}>Internal Code</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: lang === 'ar' ? 'right' : 'left', borderBottom: 'none', width: '300px' }}>Item Description</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '90px' }}>Quantity</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '100px' }}>Qty Unit</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '70px' }}>Currency</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '110px' }}>Unit Price EGP</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '100px' }}>Tax</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: lang === 'ar' ? 'left' : 'right', borderBottom: 'none', width: '160px' }}>Total</th>
+                      <th style={{ padding: '1.2rem 0.5rem', borderBottom: 'none', width: '50px' }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1567,107 +1571,142 @@ export default function Home() {
                           borderRadius: '12px',
                           boxShadow: '0 4px 15px rgba(0, 0, 0, 0.25)'
                         }}>
-                          <td style={{ padding: '1.5rem 1rem', textAlign: 'center', fontWeight: 'bold', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>{idx + 1}</td>
-                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', minWidth: '350px' }}>
-                              
-                              {/* 1. Code Name & EGS Code Row */}
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>
-                                    {lang === 'ar' ? '🏷️ الاسم الحركي:' : '🏷️ Code Name:'}
-                                  </span>
-                                  <strong style={{ color: '#00f5d4', fontSize: '0.85rem' }}>
-                                    {line.name || line.description?.split(" | ")[0] || "Aluminium"}
-                                  </strong>
-                                </div>
-                                
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>🔑 كود الصنف (EGS):</span>
-                                  <input 
-                                    type="text" 
-                                    className="input" 
-                                    style={{ 
-                                      background: 'rgba(9, 11, 20, 0.6)', 
-                                      border: '1px solid var(--border)', 
-                                      borderRadius: '6px', 
-                                      color: '#00e0a1', 
-                                      fontSize: '0.8rem', 
-                                      padding: '0.2rem 0.4rem', 
-                                      width: '170px', 
-                                      fontFamily: 'monospace',
-                                      fontWeight: 'bold',
-                                      outline: 'none'
-                                    }} 
-                                    value={line.itemCode || ''} 
-                                    onChange={(e) => updateInvoiceLine(idx, 'itemCode', e.target.value)} 
-                                  />
-                                </div>
-                              </div>
-
-                              {/* 2. Free-form Editable Description (Teal-bordered area matching requested layout) */}
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>
-                                  {lang === 'ar' ? '📝 وصف ومواصفات البند (Description):' : '📝 Description:'}
-                                </span>
-                                <textarea 
-                                  className="input" 
-                                  style={{ 
-                                    width: '100%', 
-                                    background: 'rgba(255, 255, 255, 0.015)', 
-                                    border: '1px solid rgba(0, 245, 212, 0.3)', 
-                                    color: '#fff', 
-                                    fontSize: '0.85rem', 
-                                    padding: '0.5rem', 
-                                    borderRadius: '6px',
-                                    outline: 'none',
-                                    resize: 'vertical',
-                                    minHeight: '60px',
-                                    lineHeight: '1.45',
-                                    fontFamily: 'inherit'
-                                  }} 
-                                  value={line.description || ''} 
-                                  onChange={(e) => updateInvoiceLine(idx, 'description', e.target.value)} 
-                                  placeholder={lang === 'ar' ? 'ادخل وصف الصنف هنا...' : 'Enter item description...'}
-                                />
-                              </div>
-
-                            </div>
+                          {/* 1. Index Column */}
+                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', fontWeight: 'bold', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>{idx + 1}</td>
+                          
+                          {/* 2. Code Type Column */}
+                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                            <select
+                              className="input"
+                              style={{
+                                background: '#0b0d19',
+                                border: '1px solid var(--border)',
+                                color: '#00f5d4',
+                                padding: '0.3rem 0.4rem',
+                                borderRadius: '6px',
+                                fontWeight: 'bold',
+                                outline: 'none',
+                                cursor: 'pointer',
+                                width: '100%',
+                                fontSize: '0.8rem',
+                                textAlign: 'center'
+                              }}
+                              value={line.codeType || 'EGS'}
+                              onChange={(e) => updateInvoiceLine(idx, 'codeType', e.target.value)}
+                            >
+                              <option value="EGS">EGS</option>
+                              <option value="GS1">GS1</option>
+                            </select>
                           </td>
-                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
-                            {/* Editable Quantity */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                              <input 
-                                type="number" 
-                                className="input" 
-                                style={{ 
-                                  width: '100%', 
-                                  background: 'rgba(255, 255, 255, 0.02)', 
-                                  border: '1px solid var(--border)', 
-                                  color: '#fff', 
-                                  padding: '0.4rem', 
-                                  borderRadius: '4px', 
-                                  textAlign: 'center', 
-                                  fontWeight: 'bold',
-                                  outline: 'none'
-                                }} 
-                                value={line.quantity || 0} 
-                                onChange={(e) => updateInvoiceLine(idx, 'quantity', e.target.value)} 
-                              />
 
-                              {/* Editable Unit Type Selector */}
+                          {/* 3. Item Code Column */}
+                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                            <input 
+                              type="text" 
+                              className="input" 
+                              style={{ 
+                                background: 'rgba(9, 11, 20, 0.6)', 
+                                border: '1px solid var(--border)', 
+                                borderRadius: '6px', 
+                                color: '#00e0a1', 
+                                fontSize: '0.8rem', 
+                                padding: '0.3rem 0.4rem', 
+                                width: '100%', 
+                                fontFamily: 'monospace',
+                                fontWeight: 'bold',
+                                outline: 'none',
+                                textAlign: 'center'
+                              }} 
+                              value={line.itemCode || ''} 
+                              onChange={(e) => updateInvoiceLine(idx, 'itemCode', e.target.value)} 
+                            />
+                          </td>
+
+                          {/* 4. Internal Code Column */}
+                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                            <input 
+                              type="text" 
+                              className="input" 
+                              style={{ 
+                                background: 'rgba(9, 11, 20, 0.6)', 
+                                border: '1px solid var(--border)', 
+                                borderRadius: '6px', 
+                                color: '#fff', 
+                                fontSize: '0.8rem', 
+                                padding: '0.3rem 0.4rem', 
+                                width: '100%', 
+                                fontFamily: 'monospace',
+                                outline: 'none',
+                                textAlign: 'center'
+                              }} 
+                              value={line.internalCode || ''} 
+                              onChange={(e) => updateInvoiceLine(idx, 'internalCode', e.target.value)} 
+                            />
+                          </td>
+
+                          {/* 5. Item Description Column */}
+                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                            <textarea 
+                              className="input" 
+                              style={{ 
+                                width: '100%', 
+                                background: 'rgba(255, 255, 255, 0.015)', 
+                                border: '1px solid rgba(0, 245, 212, 0.25)', 
+                                color: '#fff', 
+                                fontSize: '0.8rem', 
+                                padding: '0.4rem 0.5rem', 
+                                borderRadius: '6px',
+                                outline: 'none',
+                                resize: 'vertical',
+                                minHeight: '50px',
+                                lineHeight: '1.4',
+                                fontFamily: 'inherit'
+                              }} 
+                              value={line.description || ''} 
+                              onChange={(e) => updateInvoiceLine(idx, 'description', e.target.value)} 
+                              placeholder={lang === 'ar' ? 'الوصف...' : 'Description...'}
+                            />
+                          </td>
+
+                          {/* 6. Quantity Column */}
+                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                            <input 
+                              type="number" 
+                              className="input" 
+                              style={{ 
+                                width: '100%', 
+                                background: 'rgba(255, 255, 255, 0.02)', 
+                                border: '1px solid var(--border)', 
+                                color: '#fff', 
+                                padding: '0.35rem', 
+                                borderRadius: '6px', 
+                                textAlign: 'center', 
+                                fontWeight: 'bold',
+                                outline: 'none',
+                                fontSize: '0.85rem'
+                              }} 
+                              value={line.quantity || 0} 
+                              onChange={(e) => updateInvoiceLine(idx, 'quantity', e.target.value)} 
+                            />
+                          </td>
+
+                          {/* 7. Quantity Measurement Column */}
+                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                               <select
                                 className="input"
                                 style={{ 
                                   background: '#0b0d19', 
                                   border: '1px solid var(--border)', 
                                   color: 'var(--accent)', 
-                                  fontSize: '0.75rem',
-                                  padding: '0.2rem', 
-                                  borderRadius: '4px', 
+                                  fontSize: '0.8rem',
+                                  padding: '0.35rem 0.4rem', 
+                                  borderRadius: '6px', 
                                   fontWeight: 'bold',
                                   outline: 'none',
-                                  cursor: 'pointer'
+                                  cursor: 'pointer',
+                                  width: '100%',
+                                  textAlign: 'center'
                                 }}
                                 value={['m', 'KG', 'EA', 'BAR', 'TNE'].includes(line.unitType) ? line.unitType : 'custom'}
                                 onChange={(e) => {
@@ -1679,12 +1718,12 @@ export default function Home() {
                                   }
                                 }}
                               >
-                                <option value="m">{lang === 'ar' ? 'متر (m)' : 'Meter (m)'}</option>
-                                <option value="KG">{lang === 'ar' ? 'كجم (KG)' : 'Kilogram (KG)'}</option>
-                                <option value="EA">{lang === 'ar' ? 'عدد (EA)' : 'Each (EA)'}</option>
-                                <option value="BAR">{lang === 'ar' ? 'بار (BAR)' : 'Bar (BAR)'}</option>
-                                <option value="TNE">{lang === 'ar' ? 'طن (TNE)' : 'Tonne (TNE)'}</option>
-                                <option value="custom">{lang === 'ar' ? '✍️ وحدة مخصصة' : '✍️ Custom Unit'}</option>
+                                <option value="m">m</option>
+                                <option value="KG">KG</option>
+                                <option value="EA">EA</option>
+                                <option value="BAR">BAR</option>
+                                <option value="TNE">TNE</option>
+                                <option value="custom">{lang === 'ar' ? '✍️ مخصص' : '✍️ Custom'}</option>
                               </select>
 
                               {(!['m', 'KG', 'EA', 'BAR', 'TNE'].includes(line.unitType) || line.unitType === 'custom_unit') && (
@@ -1696,10 +1735,11 @@ export default function Home() {
                                     border: '1px solid var(--border)', 
                                     color: 'var(--accent)', 
                                     fontSize: '0.75rem',
-                                    padding: '0.25rem', 
+                                    padding: '0.2rem', 
                                     borderRadius: '4px',
                                     textAlign: 'center',
-                                    outline: 'none'
+                                    outline: 'none',
+                                    width: '100%'
                                   }}
                                   placeholder={lang === 'ar' ? 'اسم الوحدة' : 'Unit code'}
                                   value={line.unitType === 'custom_unit' ? '' : line.unitType}
@@ -1708,60 +1748,85 @@ export default function Home() {
                               )}
                             </div>
                           </td>
-                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
-                            {/* Editable Unit Price */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                              <input 
-                                type="number" 
-                                className="input" 
-                                style={{ 
-                                  width: '100%', 
-                                  background: 'rgba(255, 255, 255, 0.02)', 
-                                  border: '1px solid var(--border)', 
-                                  color: '#fff', 
-                                  padding: '0.4rem', 
-                                  borderRadius: '4px', 
-                                  textAlign: 'center', 
-                                  fontWeight: 'bold',
-                                  outline: 'none'
-                                }} 
-                                value={line.unitValue?.amountEGP || 0} 
-                                onChange={(e) => updateInvoiceLine(idx, 'unitValue', e.target.value)} 
-                              />
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>EGP</span>
-                            </div>
+
+                          {/* 8. Currency Column */}
+                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 'bold' }}>EGP</span>
                           </td>
-                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', fontWeight: 'bold', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>{Number(line.netTotal || line.salesTotal || 0).toLocaleString()} EGP</td>
-                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
-                            {/* Editable Tax % Selector */}
-                            <select 
+
+                          {/* 9. Unit Price Column */}
+                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                            <input 
+                              type="number" 
                               className="input" 
                               style={{ 
-                                background: '#0b0d19', 
+                                width: '100%', 
+                                background: 'rgba(255, 255, 255, 0.02)', 
                                 border: '1px solid var(--border)', 
-                                color: '#f1c40f', 
-                                padding: '0.4rem', 
-                                borderRadius: '4px', 
+                                color: '#fff', 
+                                padding: '0.35rem', 
+                                borderRadius: '6px', 
+                                textAlign: 'center', 
                                 fontWeight: 'bold',
                                 outline: 'none',
-                                cursor: 'pointer'
+                                fontSize: '0.85rem'
                               }} 
-                              value={line.taxableItems?.[0]?.rate || 14} 
-                              onChange={(e) => updateInvoiceLine(idx, 'taxPercent', e.target.value)}
-                            >
-                              <option value="14">14%</option>
-                              <option value="5">5%</option>
-                              <option value="0">0%</option>
-                            </select>
+                              value={line.unitValue?.amountEGP || 0} 
+                              onChange={(e) => updateInvoiceLine(idx, 'unitValue', e.target.value)} 
+                            />
                           </td>
-                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>{Number(line.taxableItems?.[0]?.amount || 0).toLocaleString()} EGP</td>
-                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', color: 'var(--accent)', fontWeight: 800, borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>{Number(line.total || 0).toLocaleString()} EGP</td>
-                          <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
-                            {/* Delete Line Action */}
+
+                          {/* 10. Tax Column */}
+                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
+                              <select 
+                                className="input" 
+                                style={{ 
+                                  background: '#0b0d19', 
+                                  border: '1px solid var(--border)', 
+                                  color: '#f1c40f', 
+                                  padding: '0.35rem 0.4rem', 
+                                  borderRadius: '6px', 
+                                  fontWeight: 'bold',
+                                  outline: 'none',
+                                  cursor: 'pointer',
+                                  width: '100%',
+                                  textAlign: 'center',
+                                  fontSize: '0.8rem'
+                                }} 
+                                value={line.taxableItems?.[0]?.rate || 14} 
+                                onChange={(e) => updateInvoiceLine(idx, 'taxPercent', e.target.value)}
+                              >
+                                <option value="14">14%</option>
+                                <option value="5">5%</option>
+                                <option value="0">0%</option>
+                              </select>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
+                                {Number(line.taxableItems?.[0]?.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* 11. Total Column (Before tax and total for each line) */}
+                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', textAlign: lang === 'ar' ? 'left' : 'right', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontSize: '0.8rem' }}>
+                              <div>
+                                <span style={{ color: 'var(--text-dim)', fontSize: '0.7rem' }}>{lang === 'ar' ? 'قبل:' : 'Net:'} </span>
+                                <span style={{ fontWeight: 'bold', color: '#fff' }}>{Number(line.netTotal || line.salesTotal || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} EGP</span>
+                              </div>
+                              <div style={{ color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.85rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.2rem' }}>
+                                <span style={{ color: 'var(--text-dim)', fontSize: '0.7rem' }}>{lang === 'ar' ? 'الكلي:' : 'Total:'} </span>
+                                <span>{Number(line.total || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} EGP</span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* 12. Actions Column */}
+                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
                             <button 
                               type="button" 
                               className="btn btn-ghost btn-sm" 
-                              style={{ color: 'var(--danger)', fontSize: '1.1rem', padding: '0.3rem' }} 
+                              style={{ color: 'var(--danger)', fontSize: '1.1rem', padding: '0.2rem' }} 
                               onClick={() => deleteInvoiceLine(idx)}
                               title={lang === 'ar' ? 'حذف هذا الصنف' : 'Delete this item'}
                             >
