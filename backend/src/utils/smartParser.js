@@ -665,22 +665,42 @@ function parseSchucoInvoice(text) {
   let curBlock = null;
 
   for (const line of rawLines) {
-    // End Of Invoice Detection: Stop parsing item blocks when we hit the final Bank Details
-    // We CANNOT use "Total Amount" because each Schüco item block contains a "Total amount" line.
-    if (/Bank Details/i.test(line) || /IBAN\s*:/i.test(line) || /Account\s*:/i.test(line)) {
+    const lowerLine = line.toLowerCase();
+    
+    // End Of Invoice Detection: Stop parsing item blocks when we hit the final Bank Details or Footer keywords
+    if (
+      /Bank Details/i.test(line) || 
+      /IBAN\s*:/i.test(line) || 
+      /Account\s*:/i.test(line) ||
+      /net weight/i.test(line) ||
+      /amount in words/i.test(line) ||
+      /we here(?:\s+)?with/i.test(line) ||
+      /packing/i.test(line) ||
+      /freight/i.test(line) ||
+      /certify/i.test(line) ||
+      /conformity/i.test(line)
+    ) {
       break; 
     }
 
     const match = line.match(blockStartRegex);
     if (match) {
-      if (curBlock) blocks.push(curBlock);
       const itemCode = match[2] || match[3] || match[5];
       const pos = match[1] || match[4] || '';
-      curBlock = {
-        itemCode,
-        pos,
-        rawLines: [line]
-      };
+      
+      // Ignore HS codes (7604xxxx) and lines referencing HS code or page footers
+      if (itemCode.startsWith('7604') || lowerLine.includes('hs code') || lowerLine.includes('hscode') || lowerLine.includes('page') || lowerLine.includes('smart village')) {
+        if (curBlock) {
+          curBlock.rawLines.push(line);
+        }
+      } else {
+        if (curBlock) blocks.push(curBlock);
+        curBlock = {
+          itemCode,
+          pos,
+          rawLines: [line]
+        };
+      }
     } else if (curBlock) {
       curBlock.rawLines.push(line);
     }
@@ -738,7 +758,7 @@ function parseSchucoInvoice(text) {
       const mmMatch = line.match(/([\d,]+)\s*(?:\\t)?\s*mm/i);
       if (mmMatch) {
         const val = Number(mmMatch[1].replace(/,/g, ''));
-        if (val > 1000) length = val;
+        if (val > 1000 && val < 20000) length = val;
       }
 
       const kgMatch = line.match(/([\d,.]+)\s*(?:\\t)?\s*KG/i);
