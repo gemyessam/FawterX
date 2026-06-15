@@ -4,8 +4,8 @@ import { AppContext } from '../App'
 import { getDraftById, submitDraft, getETAStatus, submitToETA, deleteDraft } from '../services/api'
 import toast from 'react-hot-toast'
 
-function fmt(n) {
-  return Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+function fmt(n, digits = 4) {
+  return Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })
 }
 
 export default function DraftDetails() {
@@ -359,7 +359,7 @@ export default function DraftDetails() {
                 <td style={{ whiteSpace: 'pre-wrap' }}>{line.description}</td>
                 <td>{line.quantity}</td>
                 <td>{line.unitType}</td>
-                <td>{fmt(line.unitValue?.amountEGP || line.valueDifference)} EGP</td>
+                <td>{fmt(line.unitValue?.amountEGP || line.valueDifference, 4)} EGP</td>
                 <td style={{ color: 'var(--accent)', fontWeight: 700 }}>{fmt(line.totalAmount || line.total)} EGP</td>
               </tr>
             ))}

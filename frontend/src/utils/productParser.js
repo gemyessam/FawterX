@@ -76,5 +76,21 @@ export function parseProductDescription(rawText) {
  * بناء الوصف النصي الموحد لإرساله لمنظومة الضرائب ETA
  */
 export function buildEtaDescription(rawText) {
-  return rawText;
+  if (!rawText) return "";
+
+  const noisePatterns = [
+    /(?:\b(?:street|st\.?|road|rd\.?|building|bldg|floor|block|district|city|governate|country|postal code|po box|p\.?o\.?|phone|tel|fax|mobile|email|website|www\.|info@|@)\b)/i,
+    /(?:\b(?:cr#|vat|tax|reg\.?|cr\.?|cr no\.?|commercial register)\b)/i,
+    /(?:\b(?:smart village|giza|cairo|egypt|egyptian tax authority|eta)\b)/i,
+    /--\s*\d+\s+of\s+\d+\s*--/i
+  ];
+
+  return String(rawText)
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .filter(line => !noisePatterns.some(pattern => pattern.test(line)))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
 }

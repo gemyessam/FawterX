@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AppContext } from '../App'
 import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations } from '../services/api'
 import toast from 'react-hot-toast'
-import { parseProductDescription, buildEtaDescription } from '../utils/productParser'
 
 export default function Home() {
   const { lang, t, user, resetTrigger, showTutorialModal, setShowTutorialModal } = useContext(AppContext)
@@ -247,6 +246,19 @@ export default function Home() {
     }
   }, [uploadResult])
 
+  useEffect(() => {
+    const resizeDescriptions = () => {
+      document.querySelectorAll('textarea[data-description-autosize="true"]').forEach((el) => {
+        el.style.height = 'auto'
+        el.style.height = `${Math.max(el.scrollHeight, 50)}px`
+      })
+    }
+
+    resizeDescriptions()
+    const raf = requestAnimationFrame(resizeDescriptions)
+    return () => cancelAnimationFrame(raf)
+  }, [etaDocs])
+
   // Drag & drop excel files
   function handleFileSelect(f) {
     if (!f) return
@@ -343,14 +355,14 @@ export default function Home() {
     } else if (field === 'itemCode') {
       line.itemCode = val
     } else if (field === 'quantity') {
-      line.quantity = parseFloat(parseFloat(val).toFixed(2)) || 0
+      line.quantity = parseFloat(parseFloat(val).toFixed(4)) || 0
     } else if (field === 'unitType') {
       line.unitType = val
     } else if (field === 'unitValue') {
       if (!line.unitValue) line.unitValue = { currencySold: "EGP" }
-      line.unitValue.amountEGP = parseFloat(parseFloat(val).toFixed(2)) || 0
+      line.unitValue.amountEGP = parseFloat(parseFloat(val).toFixed(4)) || 0
     } else if (field === 'taxPercent') {
-      const rate = parseFloat(parseFloat(val).toFixed(2)) || 0
+      const rate = parseFloat(parseFloat(val).toFixed(4)) || 0
       if (line.taxableItems && line.taxableItems[0]) {
         line.taxableItems[0].rate = rate
       }
@@ -1658,13 +1670,19 @@ export default function Home() {
                                 padding: '0.4rem 0.5rem', 
                                 borderRadius: '6px',
                                 outline: 'none',
-                                resize: 'vertical',
+                                resize: 'none',
+                                overflowY: 'hidden',
                                 minHeight: '50px',
                                 lineHeight: '1.4',
                                 fontFamily: 'inherit'
                               }} 
+                              data-description-autosize="true"
                               value={line.description || ''} 
-                              onChange={(e) => updateInvoiceLine(idx, 'description', e.target.value)} 
+                              onChange={(e) => updateInvoiceLine(idx, 'description', e.target.value)}
+                              onInput={(e) => {
+                                e.currentTarget.style.height = 'auto'
+                                e.currentTarget.style.height = `${Math.max(e.currentTarget.scrollHeight, 50)}px`
+                              }} 
                               placeholder={lang === 'ar' ? 'الوصف...' : 'Description...'}
                             />
                             {packaging && (
@@ -1809,7 +1827,7 @@ export default function Home() {
                                 <option value="0">0%</option>
                               </select>
                               <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
-                                {Number(line.taxableItems?.[0]?.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
+                                {Number(line.taxableItems?.[0]?.amount || 0).toLocaleString(undefined, {minimumFractionDigits:4, maximumFractionDigits:4})}
                               </span>
                             </div>
                           </td>
@@ -1819,11 +1837,11 @@ export default function Home() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontSize: '0.8rem' }}>
                               <div>
                                 <span style={{ color: 'var(--text-dim)', fontSize: '0.7rem' }}>{lang === 'ar' ? 'قبل:' : 'Net:'} </span>
-                                <span style={{ fontWeight: 'bold', color: '#fff' }}>{Number(line.netTotal || line.salesTotal || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} EGP</span>
+                            <span style={{ fontWeight: 'bold', color: '#fff' }}>{Number(line.netTotal || line.salesTotal || 0).toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 4})} EGP</span>
                               </div>
                               <div style={{ color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.85rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.2rem' }}>
                                 <span style={{ color: 'var(--text-dim)', fontSize: '0.7rem' }}>{lang === 'ar' ? 'الكلي:' : 'Total:'} </span>
-                                <span>{Number(line.total || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} EGP</span>
+                            <span>{Number(line.total || 0).toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 4})} EGP</span>
                               </div>
                             </div>
                           </td>

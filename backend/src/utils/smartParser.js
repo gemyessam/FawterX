@@ -266,11 +266,6 @@ function buildDescription(rawDescription, attrs, productType) {
   if (attrs.finish) lines.push(`Finish: ${attrs.finish}`);
   if (attrs.packaging) lines.push(`Packaging: ${attrs.packaging}`);
 
-  const cleanRaw = normalizeSpaces(rawDescription);
-  if (cleanRaw && cleanRaw.length > title.length && !lines.some(l => l.includes(cleanRaw))) {
-    lines.push(`Source: ${cleanRaw.slice(0, 180)}`);
-  }
-
   return lines.join("\n");
 }
 
@@ -320,7 +315,7 @@ function normalizeLine(raw, idx, metadataCurrency) {
     productType,
     quantity,
     unitType,
-    unitValue,
+    unitValue: Number(unitValue.toFixed(4)),
     taxPercent,
     currency: raw.currency || metadataCurrency || "EGP",
     total,
@@ -341,7 +336,7 @@ function normalizeLine(raw, idx, metadataCurrency) {
   };
 
   if (total > 0 && unitValue > 0 && Math.abs(total - quantity * unitValue) > Math.max(2, total * 0.03)) {
-    line.warnings.push(`Line math mismatch: quantity x unit price = ${(quantity * unitValue).toFixed(2)}, invoice line total = ${total.toFixed(2)}.`);
+      line.warnings.push(`Line math mismatch: quantity x unit price = ${(quantity * unitValue).toFixed(4)}, invoice line total = ${total.toFixed(4)}.`);
     line.confidence = Math.max(35, line.confidence - 15);
   }
 
@@ -524,7 +519,7 @@ async function parseSmartDocument(filePath, isPdf = false) {
   let totalsMatched = true;
   if (rows.length && totals.netAmount && Math.abs(sumLines - totals.netAmount) > Math.max(5, totals.netAmount * 0.03)) {
     totalsMatched = false;
-    warnings.push(`Invoice totals need review: extracted line sum ${sumLines.toFixed(2)} does not match net total ${totals.netAmount.toFixed(2)}.`);
+    warnings.push(`Invoice totals need review: extracted line sum ${sumLines.toFixed(4)} does not match net total ${totals.netAmount.toFixed(4)}.`);
   }
 
   const confidenceScore = rows.length
@@ -1062,7 +1057,7 @@ function parseSchucoInvoice(text) {
     }
 
     const expectedNetFromLm = lmQty && unitPricePerMeter
-      ? Number((lmQty * unitPricePerMeter).toFixed(2))
+      ? Number((lmQty * unitPricePerMeter).toFixed(4))
       : 0;
     if (netAmountCandidates.length > 0) {
       const rankedCandidates = netAmountCandidates
@@ -1086,7 +1081,7 @@ function parseSchucoInvoice(text) {
     }
 
     const unitPriceFromLmTotal = lmQty && lineNetAmount
-      ? Number((lineNetAmount / lmQty).toFixed(5))
+      ? Number((lineNetAmount / lmQty).toFixed(4))
       : 0;
     if (unitPriceFromLmTotal) {
       unitPricePerMeter = unitPriceFromLmTotal;
@@ -1103,14 +1098,14 @@ function parseSchucoInvoice(text) {
     // 9. Build rich description matching template format
     const descParts = ['Aluminium', block.itemCode, productName];
     if (packagingLabel) descParts.push(packagingLabel);
-    if (weight) descParts.push(`${weight.toFixed(2)} KG`);
+    if (weight) descParts.push(`${weight.toFixed(4)} KG`);
     if (length) descParts.push(`${Number(length).toLocaleString('en-US')} mm`);
     if (finish) descParts.push(finish);
     const description = descParts.join(' | ');
 
     // 10. Calculate final values
-    const net = lineNetAmount || Number((quantity * parsedUnitPrice).toFixed(2));
-    const unitValue = quantity > 0 ? Number((net / quantity).toFixed(5)) : parsedUnitPrice;
+    const net = lineNetAmount || Number((quantity * parsedUnitPrice).toFixed(4));
+    const unitValue = quantity > 0 ? Number((net / quantity).toFixed(4)) : parsedUnitPrice;
 
     const taxPercent = 14;
     const taxAmt = Number((net * 0.14).toFixed(5));
@@ -1121,7 +1116,7 @@ function parseSchucoInvoice(text) {
     if (unitValue === 0) missingFields.push('Missing unit price');
 
     console.log(`  📦 PARSED BLOCK [Pos=${block.pos}, Code=${block.itemCode}]:`, {
-      productName, quantity, unitValue: Number(unitValue.toFixed(2)), net: Number(net.toFixed(2)),
+      productName, quantity, unitValue: Number(unitValue.toFixed(4)), net: Number(net.toFixed(4)),
       weight, length, finish, barQty, lmQty, unitPricePerMeter, unitPricePerBar, lineNetAmount, description
     });
 
@@ -1159,9 +1154,9 @@ function parseSchucoInvoice(text) {
     const calcTax = invoiceLines.reduce((sum, line) => sum + (line.quantity * line.unitValue * 0.14), 0);
     const calcTotal = calcNet + calcTax;
     if (!metadata.netAmount) {
-      metadata.netAmount = Number(calcNet.toFixed(2));
-      metadata.taxAmount = Number(calcTax.toFixed(2));
-      metadata.totalAmount = Number(calcTotal.toFixed(2));
+    metadata.netAmount = Number(calcNet.toFixed(4));
+    metadata.taxAmount = Number(calcTax.toFixed(4));
+    metadata.totalAmount = Number(calcTotal.toFixed(4));
     }
   }
 

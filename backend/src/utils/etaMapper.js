@@ -63,18 +63,18 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
   for (const [invoiceNumber, groupRows] of Object.entries(invoiceGroups)) {
     const invoiceLines = groupRows.map(({ row, idx }) => {
       const parsedVal = parseFloat(row[mapping.unitValue]);
-      const unitValue = parseFloat((isNaN(parsedVal) ? 0 : parsedVal).toFixed(2));
+      const unitValue = parseFloat((isNaN(parsedVal) ? 0 : parsedVal).toFixed(4));
 
       const parsedQty = parseFloat(row[mapping.quantity]);
-      const quantity  = parseFloat((isNaN(parsedQty) ? 1 : parsedQty).toFixed(2));
+      const quantity  = parseFloat((isNaN(parsedQty) ? 1 : parsedQty).toFixed(4));
 
       const parsedTax = parseFloat(row[mapping.taxPercent]);
-      const taxPercent = parseFloat((isNaN(parsedTax) ? 14 : parsedTax).toFixed(2));
+      const taxPercent = parseFloat((isNaN(parsedTax) ? 14 : parsedTax).toFixed(4));
 
-      const salesTotal = parseFloat((unitValue * quantity).toFixed(2));
-      const taxAmount  = parseFloat(((salesTotal * taxPercent) / 100).toFixed(2));
-      const netTotal   = parseFloat(salesTotal.toFixed(2));
-      const total      = parseFloat((netTotal + taxAmount).toFixed(2));
+      const salesTotal = parseFloat((unitValue * quantity).toFixed(4));
+      const taxAmount  = parseFloat(((salesTotal * taxPercent) / 100).toFixed(4));
+      const netTotal   = parseFloat(salesTotal.toFixed(4));
+      const total      = parseFloat((netTotal + taxAmount).toFixed(4));
 
       const desc = String(row[mapping.description] || `Item ${idx + 1}`);
 
@@ -151,7 +151,7 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
     const taxTotals = [
       {
         taxType: "T1",
-        amount: parseFloat(invoiceLines.reduce((s, l) => s + (l.taxableItems[0]?.amount || 0), 0).toFixed(2)),
+        amount: parseFloat(invoiceLines.reduce((s, l) => s + (l.taxableItems[0]?.amount || 0), 0).toFixed(4)),
       },
     ];
 

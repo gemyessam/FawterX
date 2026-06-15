@@ -13,8 +13,8 @@ const DEFAULT_ISSUER = {
   buildingNumber:     import.meta.env.VITE_ISSUER_BUILDING   || '1',
 }
 
-function fmt(n) {
-  return Number(n).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+function fmt(n, digits = 4) {
+  return Number(n).toLocaleString('ar-EG', { minimumFractionDigits: digits, maximumFractionDigits: digits })
 }
 
 function JsonHighlight({ json }) {
@@ -559,7 +559,7 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
                         </td>
                         {/* 8. Unit Price EGP */}
                         <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
-                          <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{fmt(unitPrice)}</div>
+                          <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{fmt(unitPrice, 4)}</div>
                         </td>
                         {/* 9. Tax */}
                         <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
