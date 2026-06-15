@@ -450,7 +450,7 @@ export default function Home() {
       description: "Aluminium | 111111 | قطاع ألومنيوم جديد | 0.00 KG | 0 mm",
       itemCode: "EG-111111-1111",
       quantity: 1,
-      unitType: "m",
+      unitType: "M",
       unitValue: {
         currencySold: "EGP",
         amountEGP: 100
@@ -1708,7 +1708,7 @@ export default function Home() {
                                   width: '100%',
                                   textAlign: 'center'
                                 }}
-                                value={['m', 'KG', 'EA', 'BAR', 'TNE'].includes(line.unitType) ? line.unitType : 'custom'}
+                                value={['M', 'KGM', 'EA', 'BAR', 'TNE'].includes(line.unitType) ? line.unitType : 'custom'}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   if (val !== 'custom') {
@@ -1718,15 +1718,15 @@ export default function Home() {
                                   }
                                 }}
                               >
-                                <option value="m">m</option>
-                                <option value="KG">KG</option>
-                                <option value="EA">EA</option>
-                                <option value="BAR">BAR</option>
-                                <option value="TNE">TNE</option>
+                                <option value="M">{lang === 'ar' ? 'متر (M)' : 'M (Meter)'}</option>
+                                <option value="KGM">{lang === 'ar' ? 'كيلوجرام (KGM)' : 'KGM (Kilogram)'}</option>
+                                <option value="EA">{lang === 'ar' ? 'وحدة (EA)' : 'EA (Each)'}</option>
+                                <option value="BAR">{lang === 'ar' ? 'قضيب (BAR)' : 'BAR (Bar)'}</option>
+                                <option value="TNE">{lang === 'ar' ? 'طن (TNE)' : 'TNE (Ton)'}</option>
                                 <option value="custom">{lang === 'ar' ? '✍️ مخصص' : '✍️ Custom'}</option>
                               </select>
 
-                              {(!['m', 'KG', 'EA', 'BAR', 'TNE'].includes(line.unitType) || line.unitType === 'custom_unit') && (
+                              {(!['M', 'KGM', 'EA', 'BAR', 'TNE'].includes(line.unitType) || line.unitType === 'custom_unit') && (
                                 <input 
                                   type="text"
                                   className="input"

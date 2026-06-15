@@ -2,41 +2,41 @@ const fs = require("fs");
 const XLSX = require("xlsx");
 
 const ETA_UNIT_MAP = {
-  kg: "kg",
-  kgs: "kg",
-  kilogram: "kg",
-  kilograms: "kg",
-  kgm: "kg",
-  m: "m",
-  mt: "m",
-  mtr: "m",
-  meter: "m",
-  meters: "m",
-  metre: "m",
-  metres: "m",
-  lm: "m",
-  "l.m": "m",
-  mm: "mm",
-  cm: "cm",
-  ton: "ton",
-  tonne: "ton",
-  tne: "ton",
-  ea: "ea",
-  each: "ea",
-  pce: "ea",
-  pc: "ea",
-  pcs: "ea",
-  piece: "ea",
-  pieces: "ea",
-  pac: "pac",
-  pack: "pac",
-  package: "pac",
-  bar: "bar",
-  roll: "roll",
-  set: "set",
-  l: "l",
-  liter: "l",
-  litre: "l"
+  kg: "KGM",
+  kgs: "KGM",
+  kilogram: "KGM",
+  kilograms: "KGM",
+  kgm: "KGM",
+  m: "M",
+  mt: "M",
+  mtr: "M",
+  meter: "M",
+  meters: "M",
+  metre: "M",
+  metres: "M",
+  lm: "M",
+  "l.m": "M",
+  mm: "M",
+  cm: "M",
+  ton: "TNE",
+  tonne: "TNE",
+  tne: "TNE",
+  ea: "EA",
+  each: "EA",
+  pce: "EA",
+  pc: "EA",
+  pcs: "EA",
+  piece: "EA",
+  pieces: "EA",
+  pac: "PAC",
+  pack: "PAC",
+  package: "PAC",
+  bar: "BAR",
+  roll: "ROLL",
+  set: "SET",
+  l: "LTR",
+  liter: "LTR",
+  litre: "LTR"
 };
 
 const FIELD_HEADERS = {
@@ -911,7 +911,7 @@ function parseSchucoInvoice(text) {
 
     // LM is the primary billing unit for ETA
     const quantity = lmQty || barQty || 0;
-    const unitType = lmQty ? 'm' : 'EA';
+    const unitType = lmQty ? 'M' : 'EA';
     const parsedUnitPrice = unitPricePerMeter || unitPricePerBar || 0;
 
     // 9. Build rich description matching template format

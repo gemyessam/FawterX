@@ -63,7 +63,7 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     expect(l1.itemCode).toBe('EG-708820883-1');
     expect(l1.codeName).toBe('Aluminium');
     expect(l1.quantity).toBe(19.75);
-    expect(l1.unitType).toBe('m');
+    expect(l1.unitType).toBe('M');
     expect(Number(l1.unitValue.toFixed(2))).toBe(623.53);
     expect(l1.net).toBe(12314.80);
     // Rich description matching template
@@ -108,7 +108,7 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     expect(l1.internalCode).toBe('9655090');
     // LM derived: 5 BAR * 3.95m = 19.75 LM
     expect(l1.quantity).toBe(19.75);
-    expect(l1.unitType).toBe('m');
+    expect(l1.unitType).toBe('M');
   });
 
   test('should correctly segment blocks and extract exact literal text when Pos number is missing', () => {
