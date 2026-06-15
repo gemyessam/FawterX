@@ -97,6 +97,14 @@ function cleanVat(value) {
   return String(value || "").replace(/[^0-9]/g, "");
 }
 
+function normalizeSchucoInvoiceNumber(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("202303") && digits.length >= 9) return digits;
+  const last3 = digits.slice(-3).padStart(3, "0");
+  return `202303${last3}`;
+}
+
 function parseNumber(value) {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   if (value === null || value === undefined) return 0;
@@ -729,6 +737,9 @@ function parseSchucoInvoice(text) {
   
   if (metadata.issuerVat === SCHUCO_VAT) {
     metadata.issuer = "Schüco EGYPT LLC";
+    if (metadata.internalID) {
+      metadata.internalID = normalizeSchucoInvoiceNumber(metadata.internalID);
+    }
   }
 
   if (!metadata.internalID) metadata.internalID = `INV-${Date.now().toString().slice(-8)}`;
