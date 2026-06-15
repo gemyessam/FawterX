@@ -627,11 +627,11 @@ function parseSchucoInvoice(text) {
 
     // Receiver name
     if (line.includes('OMSI') && !metadata.receiver) {
-      metadata.receiver = line.replace(/^(Account Name|Beneficiary Name|Customer Name|Name|Customer|Client)\s*[:\-]?\s*/i, '').trim();
+      metadata.receiver = line.replace(/^\s*(Account Name|Beneficiary Name|Customer Name|Name|Customer|Client)\s*[:\-]?\s*/i, '').trim();
     }
     // Issuer name
     if (line.includes('Schüco') && line.toLowerCase().includes('egypt') && !metadata.issuer) {
-      metadata.issuer = line.replace(/^(Account Name|Beneficiary Name|Name|Supplier|Seller|Vendor)\s*[:\-]?\s*/i, '').trim();
+      metadata.issuer = line.replace(/^\s*(Account Name|Beneficiary Name|Name|Supplier|Seller|Vendor)\s*[:\-]?\s*/i, '').trim();
     }
 
     // Totals from invoice footer
@@ -648,14 +648,61 @@ function parseSchucoInvoice(text) {
     }
   }
 
-  // Swap VATs as before
-  if (metadata.issuerVat && metadata.receiverVat) {
-    const tmp = metadata.issuerVat;
-    metadata.issuerVat = metadata.receiverVat;
-    metadata.receiverVat = tmp;
-  } else if (metadata.issuerVat && !metadata.receiverVat) {
-    metadata.receiverVat = metadata.issuerVat;
-    metadata.issuerVat = '';
+  // Dynamic receiver name heuristic
+  let receiverName = '';
+  for (let i = 0; i < Math.min(15, rawLines.length); i++) {
+    const line = rawLines[i].trim();
+    const lower = line.toLowerCase();
+    if (
+      lower.includes('vat:') || 
+      lower.includes('invoice') || 
+      lower.includes('terms of') || 
+      lower.includes('customer number') || 
+      lower.includes('address:') || 
+      lower.includes('tel :') || 
+      lower.includes('tel:') || 
+      lower.includes('mobile') || 
+      lower.includes('postal code') || 
+      lower.includes('delivered') || 
+      lower.includes('cr #') || 
+      lower.includes('ship to') || 
+      lower.includes('pos.') || 
+      /^\d+$/.test(line) || 
+      /^[a-z]-\d+$/i.test(line) || 
+      line.includes('/')
+    ) {
+      continue;
+    }
+    if (line.length > 3) {
+      receiverName = line;
+      break;
+    }
+  }
+  if (receiverName) {
+    metadata.receiver = receiverName;
+  }
+
+  // Explicitly identify issuer and receiver VATs based on the known Schüco VAT
+  const SCHUCO_VAT = "708820883";
+  let v1 = metadata.issuerVat;
+  let v2 = metadata.receiverVat;
+  
+  if (v1 === SCHUCO_VAT || v2 === SCHUCO_VAT) {
+    metadata.issuerVat = SCHUCO_VAT;
+    metadata.receiverVat = (v1 === SCHUCO_VAT ? v2 : v1) || "";
+  } else {
+    // Fallback: if we didn't find Schüco's VAT but found others
+    if (v1 && v2) {
+      metadata.issuerVat = v2;
+      metadata.receiverVat = v1;
+    } else if (v1) {
+      metadata.receiverVat = v1;
+      metadata.issuerVat = SCHUCO_VAT; // default to Schüco as issuer
+    }
+  }
+  
+  if (metadata.issuerVat === SCHUCO_VAT) {
+    metadata.issuer = "Schüco EGYPT LLC";
   }
 
   if (!metadata.internalID) metadata.internalID = `INV-${Date.now().toString().slice(-8)}`;
@@ -676,19 +723,8 @@ function parseSchucoInvoice(text) {
       /Bank Details/i.test(line) || 
       /IBAN\s*:/i.test(line) || 
       /Account\s*:/i.test(line) ||
-      /net weight/i.test(line) ||
       /amount in words/i.test(line) ||
-      /we here(?:\s+)?with/i.test(line) ||
-      /packing/i.test(line) ||
-      /freight/i.test(line) ||
-      /certify/i.test(line) ||
-      /conformity/i.test(line) ||
-      /sales invoice/i.test(line) ||
-      /smart village/i.test(line) ||
-      /phone\s*:/i.test(line) ||
-      /tel\s*:/i.test(line) ||
-      /infoeg@/i.test(line) ||
-      /page\s+\d+/i.test(line)
+      /we here(?:\s+)?with/i.test(line)
     ) {
       break; 
     }
@@ -712,7 +748,19 @@ function parseSchucoInvoice(text) {
         };
       }
     } else if (curBlock) {
-      curBlock.rawLines.push(line);
+      if (
+        lowerLine.includes('net amount') || 
+        lowerLine.includes('packing') || 
+        lowerLine.includes('freight') || 
+        lowerLine.includes('total amount') || 
+        lowerLine.includes('net weight') || 
+        lowerLine.includes('amount in words')
+      ) {
+        blocks.push(curBlock);
+        curBlock = null;
+      } else {
+        curBlock.rawLines.push(line);
+      }
     }
   }
   if (curBlock) blocks.push(curBlock);
@@ -764,15 +812,17 @@ function parseSchucoInvoice(text) {
         }
       }
 
-      // Standalone Fallbacks for mm and KG
+      // Standalone Fallbacks for mm and KG (checking that they are not unit price references like /1KG)
       const mmMatch = line.match(/([\d,]+)\s*(?:\\t)?\s*mm/i);
-      if (mmMatch) {
+      if (mmMatch && !lower.includes('/1mm') && !lower.includes('/1 mm')) {
         const val = Number(mmMatch[1].replace(/,/g, ''));
         if (val > 1000 && val < 20000) length = val;
       }
 
       const kgMatch = line.match(/([\d,.]+)\s*(?:\\t)?\s*KG/i);
-      if (kgMatch && !lower.includes('length')) weight = Number(kgMatch[1].replace(/,/g, ''));
+      if (kgMatch && !lower.includes('length') && !lower.includes('/1kg') && !lower.includes('/1 kg')) {
+        weight = Number(kgMatch[1].replace(/,/g, ''));
+      }
 
       // 2. Finish from: "Finish \t RAL9007SD"
       if (lower.includes('finish')) {
@@ -799,7 +849,7 @@ function parseSchucoInvoice(text) {
       } else {
         if (lower.includes('lm')) {
           const match = line.match(/([\d,.]+)\s*(?:\\t)?\s*LM/i);
-          if (match) lmQty = Number(match[1].replace(/,/g, ''));
+          if (match && !lower.includes('/1lm') && !lower.includes('/1 lm')) lmQty = Number(match[1].replace(/,/g, ''));
         }
         if (lower.includes('/1m') || lower.includes('/1 m')) {
           const match = line.match(/([\d,.]+)\s*(?:\\t)?\s*\/1\s*M/i);
@@ -815,7 +865,7 @@ function parseSchucoInvoice(text) {
       } else {
         if (lower.includes('bar')) {
           const match = line.match(/([\d,.]+)\s*(?:\\t)?\s*BAR/i);
-          if (match) barQty = Number(match[1].replace(/,/g, ''));
+          if (match && !lower.includes('/1bar') && !lower.includes('/1 bar')) barQty = Number(match[1].replace(/,/g, ''));
         }
         if (lower.includes('/1bar') || lower.includes('/1 bar')) {
           const match = line.match(/([\d,.]+)\s*(?:\\t)?\s*\/1\s*BAR/i);
@@ -841,6 +891,32 @@ function parseSchucoInvoice(text) {
       }
     });
 
+    // Heuristic for split Length/KG values and labels (when they are on separate lines)
+    let lengthLabelIdx = -1;
+    let kgLabelIdx = -1;
+    block.rawLines.forEach((line, idx) => {
+      const lower = line.toLowerCase().trim();
+      if (lower === 'length') lengthLabelIdx = idx;
+      if (lower === 'kg') kgLabelIdx = idx;
+    });
+
+    if (lengthLabelIdx !== -1 && kgLabelIdx !== -1) {
+      const numbersBefore = [];
+      const searchLimit = Math.min(lengthLabelIdx, kgLabelIdx);
+      for (let i = searchLimit - 1; i >= 0; i--) {
+        const raw = (block.rawLines[i] || '').replace(/,/g, '').trim();
+        const val = parseFloat(raw);
+        if (!isNaN(val) && val > 0) {
+          numbersBefore.unshift(val);
+        }
+        if (numbersBefore.length >= 2) break;
+      }
+      if (numbersBefore.length >= 2) {
+        length = numbersBefore[0];
+        weight = numbersBefore[1];
+      }
+    }
+
     // Heuristic Fallback for unassigned standalone numbers
     if (unclassifiedNumbers.length > 0) {
       const sorted = [...unclassifiedNumbers].sort((a, b) => b - a);
@@ -862,9 +938,39 @@ function parseSchucoInvoice(text) {
     // 7. Product Name Extraction
     const nameParts = [];
     block.rawLines.forEach((line, idx) => {
-      const lower = line.toLowerCase();
-      // Skip lines that are purely specs or totals
-      if (lower.includes('total amount') || lower.includes('net amount') || lower.includes('vat') || lower.includes('egypt') || lower.includes('origin')) {
+      const lower = line.toLowerCase().trim();
+      
+      // Skip lines that are purely specs, headers, units, or totals
+      if (
+        lower.includes('total amount') || 
+        lower.includes('net amount') || 
+        lower.includes('vat') || 
+        lower.includes('egypt') || 
+        lower.includes('origin') ||
+        lower.includes('hs code') ||
+        lower.includes('hscode') ||
+        lower.includes('packing') ||
+        lower.includes('freight') ||
+        lower.includes('net weight') ||
+        lower.includes('delivery') ||
+        lower.includes('bank details') ||
+        lower.includes('iban') ||
+        lower.includes('swift') ||
+        lower.includes('account') ||
+        lower.includes('address') ||
+        lower.includes('pos.') ||
+        lower.includes('quantity') ||
+        lower.includes('price/ unit') ||
+        lower.includes('total net') ||
+        lower.includes('profiles') ||
+        lower.includes('currency') ||
+        lower.includes('conformity') ||
+        lower.includes('certify') ||
+        lower.includes('invoice') ||
+        lower.includes('customer') ||
+        lower.includes('page') ||
+        /^(?:bar|kg|lm|mm|ea|mtr|length|finish)$/i.test(lower)
+      ) {
         return;
       }
       

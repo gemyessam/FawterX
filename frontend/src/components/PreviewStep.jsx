@@ -489,25 +489,33 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
               <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                 <thead>
                   <tr style={{ background: 'linear-gradient(135deg, #1a3a5c 0%, #234e78 100%)', color: '#fff' }}>
-                    <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Code Name / Description</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Coding Scheme</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Item Code / Internal Code</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Quantity / Unit Type</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Unit Price (EGP)</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Total Sales Amount (EGP)</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Code Type</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Item Code</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Internal Code</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5', minWidth: '250px' }}>Item Description</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Quantity</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Quantity Measurement</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Currency</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Unit Price EGP</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Tax</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5', minWidth: '150px' }}>Total (EGP)</th>
                   </tr>
                 </thead>
                 <tbody>
                   {etaDocs[selectedDocIndex].invoiceLines.map((line, i) => {
-                    const codeName = line.codeName || line.name || line.description?.split(" ")[0] || 'Aluminium';
                     const desc = line.description || '';
                     const itemCode = line.itemCode || '';
                     const internalCode = line.internalCode || '';
-                    const codeType = line.codeType || 'EGS';
+                    const codeType = line.codeType || line.itemType || 'EGS';
                     const qty = line.quantity || 0;
                     const unit = line.unitType || 'M';
+                    const currency = line.unitValue?.currencySold || 'EGP';
                     const unitPrice = typeof line.unitValue === 'object' ? (line.unitValue.amountEGP || 0) : (line.unitValue || 0);
-                    const salesAmt = line.salesTotal || line.net || (qty * unitPrice) || 0;
+                    
+                    const taxRate = line.taxableItems?.[0]?.rate || 14;
+                    const taxAmount = line.taxableItems?.[0]?.amount || 0;
+                    const netAmt = line.salesTotal || line.netTotal || (qty * unitPrice) || 0;
+                    const totalAmt = line.total || (netAmt + taxAmount) || 0;
                     
                     return (
                       <tr key={i} style={{ 
@@ -515,26 +523,54 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
                         borderBottom: '1px solid rgba(255,255,255,0.06)',
                         transition: 'background 0.15s'
                       }}>
-                        <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
-                          <div style={{ fontWeight: 700, color: '#4da3ff', fontSize: '0.95rem', marginBottom: '4px' }}>{codeName}</div>
-                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.4, maxWidth: '400px', wordBreak: 'break-word' }}>{desc}</div>
-                        </td>
-                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'top' }}>
+                        {/* 1. Code Type */}
+                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
                           <span style={{ background: 'rgba(0, 245, 212, 0.08)', color: '#00f5d4', padding: '3px 10px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>{codeType}</span>
                         </td>
-                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'top' }}>
-                          <div style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text)' }}>{itemCode}</div>
-                          <div style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>{internalCode}</div>
+                        {/* 2. Item Code */}
+                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '0.85rem' }}>{itemCode}</span>
                         </td>
-                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'top' }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>{Number(qty).toFixed(5)}</div>
-                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>{unit}</div>
+                        {/* 3. Internal Code */}
+                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                          <span style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{internalCode}</span>
                         </td>
-                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'top' }}>
-                          <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text)' }}>{fmt(unitPrice)}</div>
+                        {/* 4. Item Description */}
+                        <td style={{ padding: '14px 16px', textAlign: 'left', verticalAlign: 'middle' }}>
+                          <div style={{ fontSize: '0.8rem', color: '#fff', lineHeight: 1.4, maxWidth: '400px', wordBreak: 'break-word' }}>{desc}</div>
                         </td>
-                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'top' }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#00f5d4' }}>{fmt(salesAmt)}</div>
+                        {/* 5. Quantity */}
+                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{qty}</div>
+                        </td>
+                        {/* 6. Quantity Measurement */}
+                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{unit}</div>
+                        </td>
+                        {/* 7. Currency */}
+                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>{currency}</div>
+                        </td>
+                        {/* 8. Unit Price EGP */}
+                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                          <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{fmt(unitPrice)}</div>
+                        </td>
+                        {/* 9. Tax */}
+                        <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                          <div style={{ fontSize: '0.85rem', color: '#f1c40f', fontWeight: 'bold' }}>{taxRate}%</div>
+                        </td>
+                        {/* 10. Total */}
+                        <td style={{ padding: '14px 16px', textAlign: 'right', verticalAlign: 'middle' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontSize: '0.8rem' }}>
+                            <div>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Net: </span>
+                              <span style={{ fontWeight: 'bold', color: '#fff' }}>{fmt(netAmt)}</span>
+                            </div>
+                            <div style={{ color: '#00f5d4', fontWeight: 'bold', fontSize: '0.85rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.2rem' }}>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Total: </span>
+                              <span>{fmt(totalAmt)}</span>
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     );
