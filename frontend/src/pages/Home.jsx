@@ -1668,7 +1668,7 @@ export default function Home() {
                               placeholder={lang === 'ar' ? 'الوصف...' : 'Description...'}
                             />
                             {packaging && (
-                              <div style={{ marginTop: '0.35rem', fontSize: '0.72rem', color: 'var(--accent)', fontWeight: 700 }}>
+                              <div dir="ltr" style={{ marginTop: '0.35rem', fontSize: '0.72rem', color: 'var(--accent)', fontWeight: 700, unicodeBidi: 'plaintext' }}>
                                 {packaging}
                               </div>
                             )}
@@ -1714,7 +1714,7 @@ export default function Home() {
                                   width: '100%',
                                   textAlign: 'center'
                                 }}
-                                value={['M', 'KGM', 'EA', 'BAR', 'TNE'].includes(line.unitType) ? line.unitType : 'custom'}
+                                value={['LM', 'M', 'KGM', 'EA', 'BAR', 'TNE'].includes(line.unitType) ? line.unitType : 'custom'}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   if (val !== 'custom') {
@@ -1724,6 +1724,7 @@ export default function Home() {
                                   }
                                 }}
                               >
+                                <option value="LM">{lang === 'ar' ? 'LM (متر طولي)' : 'LM (Linear Meter)'}</option>
                                 <option value="M">{lang === 'ar' ? 'متر (M)' : 'M (Meter)'}</option>
                                 <option value="KGM">{lang === 'ar' ? 'كيلوجرام (KGM)' : 'KGM (Kilogram)'}</option>
                                 <option value="EA">{lang === 'ar' ? 'وحدة (EA)' : 'EA (Each)'}</option>
@@ -1732,7 +1733,7 @@ export default function Home() {
                                 <option value="custom">{lang === 'ar' ? '✍️ مخصص' : '✍️ Custom'}</option>
                               </select>
 
-                              {(!['M', 'KGM', 'EA', 'BAR', 'TNE'].includes(line.unitType) || line.unitType === 'custom_unit') && (
+                              {(!['LM', 'M', 'KGM', 'EA', 'BAR', 'TNE'].includes(line.unitType) || line.unitType === 'custom_unit') && (
                                 <input 
                                   type="text"
                                   className="input"

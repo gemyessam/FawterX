@@ -509,7 +509,7 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
                     const internalCode = line.internalCode || '';
                     const codeType = line.codeType || line.itemType || 'EGS';
                     const qty = line.quantity || 0;
-                    const unit = line.unitType || 'M';
+                    const unit = line.unitType || 'LM';
                     const currency = line.unitValue?.currencySold || 'EGP';
                     const unitPrice = typeof line.unitValue === 'object' ? (line.unitValue.amountEGP || 0) : (line.unitValue || 0);
                     
@@ -540,7 +540,7 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
                         <td style={{ padding: '14px 16px', textAlign: 'left', verticalAlign: 'middle' }}>
                           <div style={{ fontSize: '0.8rem', color: '#fff', lineHeight: 1.4, maxWidth: '400px', wordBreak: 'break-word' }}>{desc}</div>
                           {packaging && (
-                            <div style={{ fontSize: '0.72rem', color: 'var(--accent)', marginTop: '0.3rem', fontWeight: 600 }}>
+                            <div dir="ltr" style={{ fontSize: '0.72rem', color: 'var(--accent)', marginTop: '0.3rem', fontWeight: 600, unicodeBidi: 'plaintext' }}>
                               {packaging}
                             </div>
                           )}
