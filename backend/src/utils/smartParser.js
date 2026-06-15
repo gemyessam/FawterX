@@ -1060,10 +1060,17 @@ function parseSchucoInvoice(text) {
       lmQty = derivedLmQty;
     }
 
+    const unitPriceFromLmTotal = lmQty && lineNetAmount
+      ? Number((lineNetAmount / lmQty).toFixed(5))
+      : 0;
+    if (unitPriceFromLmTotal) {
+      unitPricePerMeter = unitPriceFromLmTotal;
+    }
+
     // LM is the primary billing unit for ETA, but keep the bar count as a human hint.
     const quantity = lmQty || barQty || 0;
     const unitType = lmQty ? 'LM' : (barQty ? 'BAR' : 'EA');
-    const parsedUnitPrice = unitPricePerMeter || unitPricePerBar || 0;
+    const parsedUnitPrice = unitPriceFromLmTotal || unitPricePerMeter || unitPricePerBar || 0;
     const packagingLabel = barQty && lmQty
       ? `${Number(barQty).toLocaleString('en-US')} Bar / ${Number(lmQty).toLocaleString('en-US')} LM`
       : (barQty ? `${Number(barQty).toLocaleString('en-US')} Bar` : (lmQty ? `${Number(lmQty).toLocaleString('en-US')} LM` : ''));
