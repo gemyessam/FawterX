@@ -626,9 +626,13 @@ function parseSchucoInvoice(text) {
     }
 
     // Receiver name
-    if (line.includes('OMSI') && !metadata.receiver) metadata.receiver = line.trim();
+    if (line.includes('OMSI') && !metadata.receiver) {
+      metadata.receiver = line.replace(/^(Account Name|Beneficiary Name|Customer Name|Name|Customer|Client)\s*[:\-]?\s*/i, '').trim();
+    }
     // Issuer name
-    if (line.includes('Schüco') && line.toLowerCase().includes('egypt') && !metadata.issuer) metadata.issuer = line.trim();
+    if (line.includes('Schüco') && line.toLowerCase().includes('egypt') && !metadata.issuer) {
+      metadata.issuer = line.replace(/^(Account Name|Beneficiary Name|Name|Supplier|Seller|Vendor)\s*[:\-]?\s*/i, '').trim();
+    }
 
     // Totals from invoice footer
     const netMatch = line.match(/Net Amount\s*([\d,]+\.\d+)/i) || line.match(/^([\d,]+\.\d+)\s*Net Amount/i);
