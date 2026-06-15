@@ -789,6 +789,7 @@ function parseSchucoInvoice(text) {
     let unitPricePerBar = 0;
     let lineNetAmount = 0;
     let countryOfOrigin = 'Egypt';
+    const netAmountCandidates = [];
     const unclassifiedNumbers = [];
 
     // Parse attributes from the block lines
@@ -845,7 +846,7 @@ function parseSchucoInvoice(text) {
       if (explicitNetAmountMatch) {
         const val = Number(explicitNetAmountMatch[1].replace(/,/g, ''));
         if (!Number.isNaN(val) && val > 0) {
-          lineNetAmount = val;
+          netAmountCandidates.push({ value: val, idx, source: 'explicit' });
         }
       }
 
@@ -857,7 +858,7 @@ function parseSchucoInvoice(text) {
         // Last number on a LM line is the item Net Amount
         const tkns = line.split(/(?:[\s]+|\\t)+/).map(t => t.trim()).filter(Boolean);
         const nms = tkns.map(t => t.replace(/,/g, '')).filter(t => !isNaN(t) && t.length > 0).map(Number);
-        if (nms.length >= 3) lineNetAmount = nms[nms.length - 1];
+        if (nms.length >= 3) netAmountCandidates.push({ value: nms[nms.length - 1], idx, source: 'lm-line' });
       } else {
         if (lower.includes('lm')) {
           const match = line.match(/([\d,.]+)\s*(?:\\t)?\s*LM/i);
@@ -914,7 +915,7 @@ function parseSchucoInvoice(text) {
           .map(t => t.replace(/,/g, ''))
           .filter(t => !isNaN(t) && t.length > 0)
           .map(Number);
-        if (numbers.length >= 3) lineNetAmount = numbers[numbers.length - 1];
+        if (numbers.length >= 3) netAmountCandidates.push({ value: numbers[numbers.length - 1], idx, source: 'bar-line' });
       }
 
       // Collect standalone numbers that have no labels
@@ -922,8 +923,8 @@ function parseSchucoInvoice(text) {
       const pureNumMatch = cleanLine.match(/^([\d,]+(?:\.\d+)?)$/);
       if (pureNumMatch && !lower.includes('length') && !lower.includes('finish') && !lower.includes('origin')) {
         const numVal = Number(pureNumMatch[1].replace(/,/g, ''));
-        if (!lineNetAmount && (nextLineLower.includes('bar') || nextLineLower.includes('lm') || nextLineLower.includes('net amount') || nextLineLower.includes('total net'))) {
-          lineNetAmount = numVal;
+        if (nextLineLower.includes('bar') || nextLineLower.includes('lm') || nextLineLower.includes('net amount') || nextLineLower.includes('total net')) {
+          netAmountCandidates.push({ value: numVal, idx, source: 'adjacent-number' });
         }
         unclassifiedNumbers.push(numVal);
       }
@@ -1058,6 +1059,30 @@ function parseSchucoInvoice(text) {
       lmQty = derivedLmQty;
     } else if (derivedLmQty && Math.abs(lmQty - derivedLmQty) > Math.max(1, derivedLmQty * 0.05)) {
       lmQty = derivedLmQty;
+    }
+
+    const expectedNetFromLm = lmQty && unitPricePerMeter
+      ? Number((lmQty * unitPricePerMeter).toFixed(2))
+      : 0;
+    if (netAmountCandidates.length > 0) {
+      const rankedCandidates = netAmountCandidates
+        .filter(c => c.value > 0)
+        .map(c => ({
+          ...c,
+          diffToExpected: expectedNetFromLm ? Math.abs(c.value - expectedNetFromLm) : Number.MAX_SAFE_INTEGER
+        }))
+        .sort((a, b) => {
+          if (expectedNetFromLm) return a.diffToExpected - b.diffToExpected;
+          return b.value - a.value;
+        });
+
+      const bestCandidate = rankedCandidates[0];
+      const withinTolerance = expectedNetFromLm
+        ? bestCandidate && bestCandidate.diffToExpected <= Math.max(5, expectedNetFromLm * 0.08)
+        : false;
+      if (bestCandidate && (withinTolerance || !lineNetAmount)) {
+        lineNetAmount = bestCandidate.value;
+      }
     }
 
     const unitPriceFromLmTotal = lmQty && lineNetAmount
