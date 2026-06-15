@@ -1561,6 +1561,7 @@ export default function Home() {
                       const rowConfidence = rawRow.confidence || 90;
                       const rowWarnings = rawRow.warnings || [];
                       const rowMissing = rawRow.missingFields || [];
+                      const packaging = rawRow.smartAttributes?.packagingLabel || '';
 
                       const isRowWarning = rowConfidence < 75 || rowWarnings.length > 0 || rowMissing.length > 0;
 
@@ -1666,6 +1667,11 @@ export default function Home() {
                               onChange={(e) => updateInvoiceLine(idx, 'description', e.target.value)} 
                               placeholder={lang === 'ar' ? 'الوصف...' : 'Description...'}
                             />
+                            {packaging && (
+                              <div style={{ marginTop: '0.35rem', fontSize: '0.72rem', color: 'var(--accent)', fontWeight: 700 }}>
+                                {packaging}
+                              </div>
+                            )}
                           </td>
 
                           {/* 6. Quantity Column */}

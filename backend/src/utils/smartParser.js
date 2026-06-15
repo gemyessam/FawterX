@@ -857,19 +857,33 @@ function parseSchucoInvoice(text) {
         }
       }
 
-      // 5. BAR Quantity & Unit Price Per Bar from: "5 \t BAR \t 2,462.96 \t /1BAR \t 12,314.80"
+      // 5. BAR Quantity & Unit Price Per Bar from explicit BAR pricing lines.
       const barLineMatch = line.match(/([\d,.]+)(?:\s|\\t)*BAR(?:\s|\\t)*([\d,.]+)(?:\s|\\t)*\/1BAR/i);
       if (barLineMatch) {
         barQty = Number(barLineMatch[1].replace(/,/g, ''));
         unitPricePerBar = Number(barLineMatch[2].replace(/,/g, ''));
-      } else {
-        if (lower.includes('bar')) {
-          const match = line.match(/([\d,.]+)\s*(?:\\t)?\s*BAR/i);
-          if (match && !lower.includes('/1bar') && !lower.includes('/1 bar')) barQty = Number(match[1].replace(/,/g, ''));
-        }
+      } else if (lower.includes('bar') && !lower.includes('lm')) {
+        const match = line.match(/([\d,.]+)\s*(?:\\t)?\s*BAR/i);
+        if (match && !lower.includes('/1bar') && !lower.includes('/1 bar')) barQty = Number(match[1].replace(/,/g, ''));
         if (lower.includes('/1bar') || lower.includes('/1 bar')) {
-          const match = line.match(/([\d,.]+)\s*(?:\\t)?\s*\/1\s*BAR/i);
-          if (match) unitPricePerBar = Number(match[1].replace(/,/g, ''));
+          const matchPrice = line.match(/([\d,.]+)\s*(?:\\t)?\s*\/1\s*BAR/i);
+          if (matchPrice) unitPricePerBar = Number(matchPrice[1].replace(/,/g, ''));
+        }
+      }
+
+      // Mixed BAR/LM rows often keep the bar count in the previous pipe-delimited column.
+      if (lower.includes('bar') && lower.includes('lm')) {
+        const segments = line.split('|').map(part => part.trim()).filter(Boolean);
+        const barLmSegmentIndex = segments.findIndex(segment => /\bbar\b/i.test(segment) && /\blm\b/i.test(segment));
+        if (barLmSegmentIndex > 0) {
+          const prevSegment = segments[barLmSegmentIndex - 1];
+          const prevNumbers = prevSegment.match(/[\d,.]+/g);
+          if (!barQty && prevNumbers && prevNumbers.length > 0) {
+            const candidate = Number(prevNumbers[prevNumbers.length - 1].replace(/,/g, ''));
+            if (!Number.isNaN(candidate) && candidate > 0) {
+              barQty = candidate;
+            }
+          }
         }
       }
 
@@ -885,7 +899,7 @@ function parseSchucoInvoice(text) {
 
       // Collect standalone numbers that have no labels
       const cleanLine = line.trim();
-      const pureNumMatch = cleanLine.match(/^([\d,]+(?:\.\d+)?)(?:\s*(?:mm|kg|lm|bar|ea|mtr))?$/i);
+      const pureNumMatch = cleanLine.match(/^([\d,]+(?:\.\d+)?)$/);
       if (pureNumMatch && !lower.includes('length') && !lower.includes('finish') && !lower.includes('origin')) {
         unclassifiedNumbers.push(Number(pureNumMatch[1].replace(/,/g, '')));
       }
