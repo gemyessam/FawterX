@@ -1569,99 +1569,21 @@ export default function Home() {
                         }}>
                           <td style={{ padding: '1.5rem 1rem', textAlign: 'center', fontWeight: 'bold', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>{idx + 1}</td>
                           <td style={{ padding: '1.5rem 1rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', minWidth: '350px' }}>
                               
-                              {/* Code Name Display */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>
-                                  {lang === 'ar' ? '🏷️ الاسم الحركي (Code Name):' : '🏷️ Code Name:'}
-                                </span>
-                                <span style={{ 
-                                  fontSize: '0.7rem', 
-                                  background: 'rgba(0, 245, 212, 0.08)', 
-                                  color: '#00f5d4', 
-                                  padding: '0.15rem 0.5rem', 
-                                  borderRadius: '4px',
-                                  fontWeight: 'bold',
-                                  border: '1px solid rgba(0, 245, 212, 0.2)'
-                                }}>
-                                  {line.name || line.description?.split(" | ")[0] || "Generic"}
-                                </span>
-                              </div>
-
-                              {/* 1. Free-form Editable Description (Intelligent ETA-ready text) */}
-                              <input 
-                                type="text" 
-                                className="input" 
-                                style={{ 
-                                  width: '100%', 
-                                  background: 'rgba(255, 255, 255, 0.02)', 
-                                  border: '1px solid var(--border)', 
-                                  color: '#fff', 
-                                  fontSize: '0.85rem', 
-                                  padding: '0.5rem', 
-                                  borderRadius: '6px',
-                                  outline: 'none'
-                                }} 
-                                value={line.description || ''} 
-                                onChange={(e) => updateInvoiceLine(idx, 'description', e.target.value)} 
-                                placeholder={lang === 'ar' ? 'ادخل وصف الصنف هنا...' : 'Enter item description...'}
-                              />
-
-                              {/* 2. Intelligent Product Specifications & Family Inference Badge Strip */}
-                              {(() => {
-                                const inferred = parseProductDescription(line.description);
-
-                                return (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                    
-                                    {/* Inferred Industry Family Tag */}
-                                    <span style={{ 
-                                      fontSize: '0.7rem', 
-                                      padding: '0.15rem 0.5rem', 
-                                      borderRadius: '4px', 
-                                      background: 'rgba(124, 77, 255, 0.1)', 
-                                      color: '#7c4dff', 
-                                      border: '1px solid rgba(124, 77, 255, 0.2)',
-                                      fontWeight: 'bold'
-                                    }}>
-                                      📂 {inferred.family}
-                                    </span>
-
-                                    {/* Confidence score */}
-                                    <span style={{ 
-                                      fontSize: '0.7rem', 
-                                      padding: '0.15rem 0.5rem', 
-                                      borderRadius: '4px',
-                                      background: 'rgba(0, 224, 161, 0.1)',
-                                      color: '#00e0a1',
-                                      border: '1px solid rgba(0, 224, 161, 0.2)'
-                                    }}>
-                                      🎯 {rowConfidence}% {lang === 'ar' ? 'ثقة' : 'Confidence'}
-                                    </span>
-
-                                    {/* Inferred Specs Tags (Only if they exist) */}
-                                    {inferred.specs.map((s, sIdx) => (
-                                      <span key={sIdx} style={{ 
-                                        fontSize: '0.7rem', 
-                                        padding: '0.15rem 0.5rem', 
-                                        borderRadius: '4px', 
-                                        background: 'rgba(255, 255, 255, 0.04)', 
-                                        color: 'var(--text-dim)', 
-                                        border: '1px solid rgba(255, 255, 255, 0.08)' 
-                                      }}>
-                                        {s.label === 'Length' ? '📏' : s.label === 'Weight' ? '⚖️' : '🎨'} {s.value}
-                                      </span>
-                                    ))}
-
-                                  </div>
-                                );
-                              })()}
-
-                              {/* 3. EGS/GS1 Code and Raw Extracted Text Expander */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', borderTop: '1px solid rgba(255, 255, 255, 0.02)', paddingTop: '0.4rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>🔑 EGS/GS1:</span>
+                              {/* 1. Code Name & EGS Code Row */}
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>
+                                    {lang === 'ar' ? '🏷️ الاسم الحركي:' : '🏷️ Code Name:'}
+                                  </span>
+                                  <strong style={{ color: '#00f5d4', fontSize: '0.85rem' }}>
+                                    {line.name || line.description?.split(" | ")[0] || "Aluminium"}
+                                  </strong>
+                                </div>
+                                
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>🔑 كود الصنف (EGS):</span>
                                   <input 
                                     type="text" 
                                     className="input" 
@@ -1670,9 +1592,9 @@ export default function Home() {
                                       border: '1px solid var(--border)', 
                                       borderRadius: '6px', 
                                       color: '#00e0a1', 
-                                      fontSize: '0.75rem', 
+                                      fontSize: '0.8rem', 
                                       padding: '0.2rem 0.4rem', 
-                                      width: '160px', 
+                                      width: '170px', 
                                       fontFamily: 'monospace',
                                       fontWeight: 'bold',
                                       outline: 'none'
@@ -1681,24 +1603,33 @@ export default function Home() {
                                     onChange={(e) => updateInvoiceLine(idx, 'itemCode', e.target.value)} 
                                   />
                                 </div>
+                              </div>
 
-                                <details style={{ cursor: 'pointer' }}>
-                                  <summary style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 'bold' }}>
-                                    {lang === 'ar' ? '🔍 عرض النص الأصلي المستخلص' : '🔍 View Raw Extracted Text'}
-                                  </summary>
-                                  <p style={{
-                                    margin: '0.25rem 0 0',
-                                    fontSize: '0.7rem',
-                                    color: 'var(--text-dim)',
-                                    background: 'rgba(0, 0, 0, 0.2)',
-                                    padding: '0.4rem',
-                                    borderRadius: '4px',
-                                    whiteSpace: 'pre-wrap',
-                                    maxWidth: '450px'
-                                  }}>
-                                    {rawRow.rawText || line.description}
-                                  </p>
-                                </details>
+                              {/* 2. Free-form Editable Description (Teal-bordered area matching requested layout) */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>
+                                  {lang === 'ar' ? '📝 وصف ومواصفات البند (Description):' : '📝 Description:'}
+                                </span>
+                                <textarea 
+                                  className="input" 
+                                  style={{ 
+                                    width: '100%', 
+                                    background: 'rgba(255, 255, 255, 0.015)', 
+                                    border: '1px solid rgba(0, 245, 212, 0.3)', 
+                                    color: '#fff', 
+                                    fontSize: '0.85rem', 
+                                    padding: '0.5rem', 
+                                    borderRadius: '6px',
+                                    outline: 'none',
+                                    resize: 'vertical',
+                                    minHeight: '60px',
+                                    lineHeight: '1.45',
+                                    fontFamily: 'inherit'
+                                  }} 
+                                  value={line.description || ''} 
+                                  onChange={(e) => updateInvoiceLine(idx, 'description', e.target.value)} 
+                                  placeholder={lang === 'ar' ? 'ادخل وصف الصنف هنا...' : 'Enter item description...'}
+                                />
                               </div>
 
                             </div>

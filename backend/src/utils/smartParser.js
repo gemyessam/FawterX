@@ -678,7 +678,13 @@ function parseSchucoInvoice(text) {
       /packing/i.test(line) ||
       /freight/i.test(line) ||
       /certify/i.test(line) ||
-      /conformity/i.test(line)
+      /conformity/i.test(line) ||
+      /sales invoice/i.test(line) ||
+      /smart village/i.test(line) ||
+      /phone\s*:/i.test(line) ||
+      /tel\s*:/i.test(line) ||
+      /infoeg@/i.test(line) ||
+      /page\s+\d+/i.test(line)
     ) {
       break; 
     }
