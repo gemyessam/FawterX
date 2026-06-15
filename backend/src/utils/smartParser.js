@@ -64,6 +64,35 @@ function normalizeSpaces(value) {
   return String(value || "").replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").trim();
 }
 
+function stripTrailingNoise(value) {
+  let text = normalizeSpaces(value);
+  if (!text) return "";
+
+  const noiseStarts = [
+    /\b(street|road|building|floor|block|district|city|governate|country|postal code|zip|po box|smart village|giza|cairo|egypt|address)\b/i,
+    /\b(cr#|cr\s*#|commercial register|vat[:\s#-]*\d|tax id|mobile|tel[:\s]|phone[:\s]|info@|contact)\b/i,
+    /\b(page|powered by|terms|conditions|signature|stamp|thank you)\b/i
+  ];
+
+  let cutIndex = -1;
+  for (const pattern of noiseStarts) {
+    const match = text.match(pattern);
+    if (match && typeof match.index === "number" && match.index >= 0) {
+      cutIndex = cutIndex === -1 ? match.index : Math.min(cutIndex, match.index);
+    }
+  }
+
+  if (cutIndex > 0) {
+    text = text.slice(0, cutIndex).trim();
+  }
+
+  return text
+    .replace(/\s+[-–—]\s*$/, "")
+    .replace(/\s+\|?\s*$/, "")
+    .replace(/[\s,;:.-]+$/, "")
+    .trim();
+}
+
 function cleanVat(value) {
   return String(value || "").replace(/[^0-9]/g, "");
 }
@@ -134,6 +163,8 @@ function isNoiseLine(line) {
   const text = normalizeSpaces(line);
   if (!text) return true;
   if (NOISE_PATTERNS.some(pattern => pattern.test(text))) return true;
+  if (/\b(street|road|building|floor|block|district|city|governate|country|postal code|zip|po box|smart village|giza|cairo|egypt|address)\b/i.test(text)) return true;
+  if (/\b(cr#|cr\s*#|commercial register|vat[:\s#-]*\d|tax id|mobile|tel[:\s]|phone[:\s]|info@|contact)\b/i.test(text)) return true;
   if (/^\s*(page\s*)?\d+\s*(of|\/)\s*\d+\s*$/i.test(text)) return true;
   return false;
 }
@@ -969,8 +1000,15 @@ function parseSchucoInvoice(text) {
 
     // 7. Product Name Extraction
     const nameParts = [];
+    let footerReached = false;
     block.rawLines.forEach((line, idx) => {
+      if (footerReached) return;
       const lower = line.toLowerCase().trim();
+
+      if (/^(sales invoice|schüco|schuco|info@|phone:|tel:|vat:|--\s*\d+\s+of\s+\d+\s*--)/i.test(lower)) {
+        footerReached = true;
+        return;
+      }
       
       // Skip lines that are purely specs, headers, units, or totals
       if (
@@ -1018,6 +1056,8 @@ function parseSchucoInvoice(text) {
         cleanLine = cleanLine.replace(/\s+[\d,.]+\s*$/, '');
       }
 
+      cleanLine = stripTrailingNoise(cleanLine);
+
       // Strip out measurement values so they don't pollute the name, but keep the rest of the text (e.g. 170MM)
       cleanLine = cleanLine
         .replace(/[\d,.]+(?:\s|\\t)*LM/gi, '')
@@ -1040,6 +1080,7 @@ function parseSchucoInvoice(text) {
       }
 
       if (cleanLine) {
+        if (isNoiseLine(cleanLine)) return;
         nameParts.push(cleanLine);
       }
     });
