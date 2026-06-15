@@ -905,16 +905,15 @@ function parseSchucoInvoice(text) {
 
     // LM is the primary billing unit for ETA
     const quantity = lmQty || barQty || 0;
-    const unitType = lmQty ? 'M' : 'EA';
+    const unitType = lmQty ? 'm' : 'EA';
     const parsedUnitPrice = unitPricePerMeter || unitPricePerBar || 0;
 
-    // 9. Build rich description matching ETA portal format
+    // 9. Build rich description matching template format
     const descParts = ['Aluminium', block.itemCode, productName];
-    if (barQty) descParts.push(`${barQty} Bar`);
     if (weight) descParts.push(`${weight.toFixed(2)} KG`);
     if (length) descParts.push(`${Number(length).toLocaleString('en-US')} mm`);
     if (finish) descParts.push(finish);
-    const description = descParts.join(' ');
+    const description = descParts.join(' | ');
 
     // 10. Calculate final values
     const net = lineNetAmount || Number((quantity * parsedUnitPrice).toFixed(2));

@@ -63,17 +63,11 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     expect(l1.itemCode).toBe('EG-708820883-1');
     expect(l1.codeName).toBe('Aluminium');
     expect(l1.quantity).toBe(19.75);
-    expect(l1.unitType).toBe('M');
+    expect(l1.unitType).toBe('m');
     expect(Number(l1.unitValue.toFixed(2))).toBe(623.53);
     expect(l1.net).toBe(12314.80);
-    // Rich description: "Aluminium 9655090 UNIT FACADE FEMALE MULLION 170MM 5 Bar 50.47 KG 3,950 mm RAL9007SD"
-    expect(l1.description).toContain('Aluminium');
-    expect(l1.description).toContain('9655090');
-    expect(l1.description).toContain('UNIT FACADE FEMALE MULLION 170MM');
-    expect(l1.description).toContain('Bar');
-    expect(l1.description).toContain('KG');
-    expect(l1.description).toContain('mm');
-    expect(l1.description).toContain('RAL9007SD');
+    // Rich description matching template
+    expect(l1.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM | 50.47 KG | 3,950 mm | RAL9007SD');
 
     // Line 2: LM qty=14.70, net=9,165.89
     const l2 = invoiceLines[1];
@@ -114,7 +108,7 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     expect(l1.internalCode).toBe('9655090');
     // LM derived: 5 BAR * 3.95m = 19.75 LM
     expect(l1.quantity).toBe(19.75);
-    expect(l1.unitType).toBe('M');
+    expect(l1.unitType).toBe('m');
   });
 
   test('should correctly segment blocks and extract exact literal text when Pos number is missing', () => {
