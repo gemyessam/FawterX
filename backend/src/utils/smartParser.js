@@ -756,8 +756,7 @@ function parseSchucoInvoice(text) {
         lowerLine.includes('net weight') || 
         lowerLine.includes('amount in words')
       ) {
-        blocks.push(curBlock);
-        curBlock = null;
+        curBlock.rawLines.push(line);
       } else {
         curBlock.rawLines.push(line);
       }
@@ -793,8 +792,9 @@ function parseSchucoInvoice(text) {
     const unclassifiedNumbers = [];
 
     // Parse attributes from the block lines
-    block.rawLines.forEach(line => {
+    block.rawLines.forEach((line, idx) => {
       const lower = line.toLowerCase();
+      const nextLineLower = (block.rawLines[idx + 1] || '').toLowerCase();
 
       // 1. Length & Weight from: "3,950 \t 50.47 \t Length \t KG"
       if (lower.includes('length') && lower.includes('kg')) {
@@ -837,6 +837,18 @@ function parseSchucoInvoice(text) {
         countryOfOrigin = 'Egypt';
       }
 
+      const explicitNetAmountMatch =
+        line.match(/([\d,.]+)\s*(?:\\t)?\s*net amount/i) ||
+        line.match(/net amount\s*([\d,.]+)/i) ||
+        line.match(/([\d,.]+)\s*(?:\\t)?\s*total net/i) ||
+        line.match(/total net\s*([\d,.]+)/i);
+      if (explicitNetAmountMatch) {
+        const val = Number(explicitNetAmountMatch[1].replace(/,/g, ''));
+        if (!Number.isNaN(val) && val > 0) {
+          lineNetAmount = val;
+        }
+      }
+
       // 4. LM Quantity & Unit Price Per Meter from: "90.00 \t LM \t 476.53 \t /1M \t 42,887.88"
       const lmLineMatch = line.match(/([\d,.]+)(?:\s|\\t)*LM(?:\s|\\t)*([\d,.]+)(?:\s|\\t)*\/1M/i);
       if (lmLineMatch) {
@@ -871,6 +883,14 @@ function parseSchucoInvoice(text) {
         }
       }
 
+      // The first line often ends with the bar quantity before the BAR row appears.
+      if (!barQty && idx === 0) {
+        const firstLineBarMatch = line.match(/(?:^|\s)([\d,.]+)\s*$/);
+        if (firstLineBarMatch && /[A-Za-z]/.test(line)) {
+          barQty = Number(firstLineBarMatch[1].replace(/,/g, ''));
+        }
+      }
+
       // Mixed BAR/LM rows often keep the bar count in the previous pipe-delimited column.
       if (lower.includes('bar') && lower.includes('lm')) {
         const segments = line.split('|').map(part => part.trim()).filter(Boolean);
@@ -901,7 +921,11 @@ function parseSchucoInvoice(text) {
       const cleanLine = line.trim();
       const pureNumMatch = cleanLine.match(/^([\d,]+(?:\.\d+)?)$/);
       if (pureNumMatch && !lower.includes('length') && !lower.includes('finish') && !lower.includes('origin')) {
-        unclassifiedNumbers.push(Number(pureNumMatch[1].replace(/,/g, '')));
+        const numVal = Number(pureNumMatch[1].replace(/,/g, ''));
+        if (!lineNetAmount && (nextLineLower.includes('bar') || nextLineLower.includes('lm') || nextLineLower.includes('net amount') || nextLineLower.includes('total net'))) {
+          lineNetAmount = numVal;
+        }
+        unclassifiedNumbers.push(numVal);
       }
     });
 
@@ -937,8 +961,6 @@ function parseSchucoInvoice(text) {
       sorted.forEach(num => {
         if (num > 1000 && !length && num % 1 === 0) {
           length = num;
-        } else if (num >= 500 && !lineNetAmount) {
-          lineNetAmount = num;
         } else if (num >= 10 && num < 500 && !weight && !Number.isInteger(num)) {
           weight = num;
         } else if (num < 100 && !barQty) {
@@ -996,6 +1018,8 @@ function parseSchucoInvoice(text) {
         if (block.itemCode) {
           cleanLine = cleanLine.replace(new RegExp(`\\b${block.itemCode}\\b`, 'g'), '');
         }
+        // The first line often ends with the extracted bar count; keep the product name clean.
+        cleanLine = cleanLine.replace(/\s+[\d,.]+\s*$/, '');
       }
 
       // Strip out measurement values so they don't pollute the name, but keep the rest of the text (e.g. 170MM)
@@ -1038,7 +1062,7 @@ function parseSchucoInvoice(text) {
 
     // LM is the primary billing unit for ETA, but keep the bar count as a human hint.
     const quantity = lmQty || barQty || 0;
-    const unitType = lmQty ? 'M' : (barQty ? 'BAR' : 'EA');
+    const unitType = lmQty ? 'LM' : (barQty ? 'BAR' : 'EA');
     const parsedUnitPrice = unitPricePerMeter || unitPricePerBar || 0;
     const packagingLabel = barQty && lmQty
       ? `${Number(barQty).toLocaleString('en-US')} Bar / ${Number(lmQty).toLocaleString('en-US')} LM`
@@ -1046,7 +1070,6 @@ function parseSchucoInvoice(text) {
 
     // 9. Build rich description matching template format
     const descParts = ['Aluminium', block.itemCode, productName];
-    if (packagingLabel) descParts.push(packagingLabel);
     if (weight) descParts.push(`${weight.toFixed(2)} KG`);
     if (length) descParts.push(`${Number(length).toLocaleString('en-US')} mm`);
     if (finish) descParts.push(finish);
