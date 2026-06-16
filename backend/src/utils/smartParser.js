@@ -1150,7 +1150,7 @@ function parseSchucoInvoice(text) {
     // 9. Build rich description matching template format
     const descParts = ['Aluminium', block.itemCode, productName];
     if (packagingLabel) descParts.push(packagingLabel);
-    if (weight) descParts.push(`${weight.toFixed(4)} KG`);
+    if (weight) descParts.push(`${weight.toFixed(2)} KG`);
     if (length) descParts.push(`${Number(length).toLocaleString('en-US')} mm`);
     if (finish) descParts.push(finish);
     const description = descParts.join(' | ');
