@@ -188,8 +188,12 @@ namespace FawterXSigner
             }
         }
 
+        private static X509Certificate2 _cachedCert = null;
+
         private static X509Certificate2 SelectCertificate()
         {
+            if (_cachedCert != null) return _cachedCert;
+
             X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
             store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
             
@@ -222,7 +226,8 @@ namespace FawterXSigner
 
             if (selectedCollection.Count > 0)
             {
-                return selectedCollection[0];
+                _cachedCert = selectedCollection[0];
+                return _cachedCert;
             }
             
             return null;
