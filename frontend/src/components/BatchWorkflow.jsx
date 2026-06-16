@@ -25,35 +25,59 @@ function cleanObject(obj) {
   return obj
 }
 
-// Simple serializer matching the local signer tool's expectation
-function serializeToken(obj) {
-  let str = "";
-  if (Array.isArray(obj)) {
-    obj.forEach(item => {
-      if (item !== null && item !== undefined && item !== "") {
-        str += '"' + item + '"';
-      }
-    });
-  } else if (typeof obj === "object" && obj !== null) {
-    Object.keys(obj)
-      .map(key => key.toUpperCase())
-      .sort()
-      .forEach(key => {
-        const originalKey = Object.keys(obj).find(k => k.toUpperCase() === key);
-        const val = obj[originalKey];
-        if (val !== null && val !== undefined && val !== "") {
-          str += '"' + key + '"';
-          if (typeof val === "object") {
-            str += serializeToken(val);
-          } else {
-            str += '"' + String(val) + '"';
-          }
+function escapeJsonString(str) {
+  if (typeof str !== 'string') str = String(str);
+  let result = '';
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    const code = str.charCodeAt(i);
+    switch (char) {
+      case '"': result += '\\"'; break;
+      case '\\': result += '\\\\'; break;
+      case '\n': result += '\\n'; break;
+      case '\r': result += '\\r'; break;
+      case '\t': result += '\\t'; break;
+      case '\f': result += '\\f'; break;
+      case '\b': result += '\\b'; break;
+      default:
+        if (code < 32) {
+          result += '\\u' + code.toString(16).padStart(4, '0');
+        } else {
+          result += char;
         }
-      });
-  } else if (obj !== null && obj !== undefined && obj !== "") {
-    str += '"' + String(obj) + '"';
+        break;
+    }
   }
-  return str;
+  return `"${result}"`;
+}
+
+function serializeToken(object) {
+  let serialized = "";
+  // ETA canonicalization follows the JSON property insertion order. Sorting keys changes
+  // the byte stream that ETA recalculates and causes 4043 message-digest mismatches.
+  const keys = Object.keys(object);
+  for (const key of keys) {
+    const val = object[key];
+    if (key === "signatures" || val === null || val === undefined) {
+      continue;
+    }
+    serialized += `"${key.toUpperCase()}"`;
+    if (Array.isArray(val)) {
+      for (const item of val) {
+        serialized += `"${key.toUpperCase()}"`;
+        if (item !== null && typeof item === "object") {
+          serialized += serializeToken(item);
+        } else {
+          serialized += typeof item === "string" ? escapeJsonString(item) : `"${item.toString()}"`;
+        }
+      }
+    } else if (typeof val === "object") {
+      serialized += serializeToken(val);
+    } else {
+      serialized += typeof val === "string" ? escapeJsonString(val) : `"${val.toString()}"`;
+    }
+  }
+  return serialized;
 }
 
 export default function BatchWorkflow({ lang, t, fetchUsage }) {
