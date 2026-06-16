@@ -92,8 +92,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
     toast.loading(lang === 'ar' ? 'جاري توليد الفواتير ومطابقتها...' : 'Generating and mapping invoices...', { id: 'batch-gen' })
     
     try {
-      const saved = localStorage.getItem('companySettings')
-      const config = saved ? JSON.parse(saved) : {}
+      const config = settings || {}
       
       const issuer = {
         name: config.companyName || 'الشركة العربية المتميزة للصناعة',

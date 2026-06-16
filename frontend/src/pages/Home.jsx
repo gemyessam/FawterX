@@ -280,8 +280,7 @@ export default function Home() {
     if (!file) return
 
     // Enforce configured ETA credentials check and successful connection verification before any file upload processing
-    const saved = localStorage.getItem('companySettings')
-    const config = saved ? JSON.parse(saved) : {}
+    const config = settings || {}
     if (!config.clientId || !config.clientSecret1 || !config.clientSecret2 || !config.isVerified) {
       toast.error(lang === 'ar' 
         ? '⚠️ خطأ: يجب إدخال واختبار بيانات ربط مصلحة الضرائب (ETA) بنجاح أولاً من قائمة "إعدادات الشركة" قبل معالجة أي فواتير!' 
@@ -554,8 +553,7 @@ export default function Home() {
 
     setUploadLoading(true)
     try {
-      const saved = localStorage.getItem('companySettings')
-      const config = saved ? JSON.parse(saved) : {}
+      const config = settings || {}
       const issuer = {
         name: config.companyName || 'الشركة العربية المتميزة للصناعة',
         registrationNumber: config.taxId || '477-840-515',
@@ -1055,9 +1053,9 @@ export default function Home() {
               </div>
 
               {(() => {
-                const settings = JSON.parse(localStorage.getItem('companySettings') || '{}')
-                const hasKeys = settings.clientId && settings.clientSecret1 && settings.clientSecret2
-                return !hasKeys || !settings.isVerified
+                const config = settings || {}
+                const hasKeys = config.clientId && config.clientSecret1 && config.clientSecret2
+                return !hasKeys || !config.isVerified
               })() && (
                 <div style={{ background: 'rgba(231, 76, 60, 0.1)', border: '1px solid var(--danger)', padding: '1rem', borderRadius: 'var(--radius)', color: '#fff', fontSize: '0.9rem', marginBottom: '1.5rem', textAlign: 'right', display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'right' }}>
                   <div>

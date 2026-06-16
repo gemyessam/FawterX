@@ -460,7 +460,7 @@ export default function App() {
   }
 
   return (
-    <AppContext.Provider value={{ lang, setLang, t, user, handleLogout, resetTrigger, triggerReset, showTutorialModal, setShowTutorialModal }}>
+    <AppContext.Provider value={{ lang, setLang, t, user, handleLogout, resetTrigger, triggerReset, showTutorialModal, setShowTutorialModal, settings }}>
       <BrowserRouter>
         <Toaster position="bottom-center" toastOptions={{ style: { background: '#101223', color: '#e8eaf6', border: '1px solid #202442', borderRadius: '12px' } }} />
         
