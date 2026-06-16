@@ -639,7 +639,9 @@ export default function Home() {
       // 2. Local signer is active! Let's sign each document
       toast.loading(lang === 'ar' ? 'يرجى اختيار الشهادة وإدخال رقم الـ PIN في نافذة التوقيع...' : 'Please choose certificate & enter PIN in signer popup...', { id: 'submit-loader' });
       
-      const currentIsoTime = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+      const safeDate = new Date();
+      safeDate.setMinutes(safeDate.getMinutes() - 5);
+      const currentIsoTime = safeDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
       for (let i = 0; i < etaDocs.length; i++) {
         const doc = etaDocs[i];
         doc.dateTimeIssued = currentIsoTime;

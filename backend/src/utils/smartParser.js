@@ -648,7 +648,10 @@ function parseSchucoInvoice(text) {
     const dateMatch = line.match(/(\d{2}[.\/\-]\d{2}[.\/\-]\d{4})/);
     if (dateMatch) {
       const parsed = parseDate(dateMatch[1]);
-      if (parsed) metadata.dateTimeIssued = parsed;
+      // ALWAYS override with current date (minus 5 mins to prevent future date rejection CF313)
+      const safeDate = new Date();
+      safeDate.setMinutes(safeDate.getMinutes() - 5);
+      metadata.dateTimeIssued = safeDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
     }
     
     // VAT matching
