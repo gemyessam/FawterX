@@ -9,6 +9,7 @@ import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } fr
 
 // bilingual context
 export const AppContext = createContext(null)
+export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
@@ -460,7 +461,7 @@ export default function App() {
   }
 
   return (
-    <AppContext.Provider value={{ lang, setLang, t, user, handleLogout, resetTrigger, triggerReset, showTutorialModal, setShowTutorialModal, settings }}>
+    <AppContext.Provider value={{ lang, setLang, t, user, handleLogout, resetTrigger, triggerReset, showTutorialModal, setShowTutorialModal }}>
       <BrowserRouter>
         <Toaster position="bottom-center" toastOptions={{ style: { background: '#101223', color: '#e8eaf6', border: '1px solid #202442', borderRadius: '12px' } }} />
         

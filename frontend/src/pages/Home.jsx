@@ -1,12 +1,13 @@
 import { useState, useEffect, useContext } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { AppContext } from '../App'
+import { AppContext, SettingsContext } from '../App'
 import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations } from '../services/api'
 import BatchWorkflow from '../components/BatchWorkflow'
 import toast from 'react-hot-toast'
 
 export default function Home() {
   const { lang, t, user, resetTrigger, showTutorialModal, setShowTutorialModal } = useContext(AppContext)
+  const settings = useContext(SettingsContext)
 
   const TUTORIAL_STEPS = [
     {

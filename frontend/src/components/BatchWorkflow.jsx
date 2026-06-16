@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useContext } from 'react'
+import { SettingsContext } from '../App'
 import UploadStep from './UploadStep'
 import { generateInvoice, submitToETA, getETAStatus } from '../services/api'
 import toast from 'react-hot-toast'
@@ -81,6 +82,7 @@ function serializeToken(object) {
 }
 
 export default function BatchWorkflow({ lang, t, fetchUsage }) {
+  const settings = useContext(SettingsContext);
   const [step, setStep] = useState(1) // 1: Upload, 2: Processing, 3: Review
   const [invoices, setInvoices] = useState([]) // Array of generated ETA docs
   const [selectedIdx, setSelectedIdx] = useState(0)
