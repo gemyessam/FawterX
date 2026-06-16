@@ -2,6 +2,7 @@ import { useState, useEffect, useContext } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppContext } from '../App'
 import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations } from '../services/api'
+import BatchWorkflow from '../components/BatchWorkflow'
 import toast from 'react-hot-toast'
 
 export default function Home() {
@@ -911,8 +912,13 @@ export default function Home() {
             </div>
           </div>
  
+          {/* BATCH WORKFLOW */}
+          {parseMode === 'batch' && (
+            <BatchWorkflow lang={lang} t={t} fetchUsage={fetchUsage} />
+          )}
+
           {/* STEP 1: UPLOAD FILE */}
-          {step === 1 && (
+          {step === 1 && parseMode !== 'batch' && (
             <div className="card fade-in">
               <h2 className="card-title">📂 {lang === 'ar' ? 'أتمتة الفواتير والمعاملات الذكية' : 'Intelligent Document Automation'}</h2>
               <p className="card-sub">{lang === 'ar' ? 'ارفع فواتيرك ومعاملاتك مباشرة ليتم تحليلها والتحقق من امتثالها فورياً مصلحة الضرائب' : 'Upload transaction spreadsheets or raw PDF invoices to parse and validate them instantly'}</p>
@@ -1019,6 +1025,27 @@ export default function Home() {
                   }}>
                     {lang === 'ar' ? 'تحت التجربة والارتقاء 🧪' : 'Beta / Under Dev 🧪'}
                   </span>
+                </button>
+                <button 
+                  type="button"
+                  style={{ 
+                    flex: 1, 
+                    padding: '0.75rem', 
+                    borderRadius: '8px', 
+                    border: 'none', 
+                    background: parseMode === 'batch' ? 'var(--accent)' : 'transparent', 
+                    color: parseMode === 'batch' ? '#0b0d19' : '#fff', 
+                    cursor: 'pointer', 
+                    fontWeight: 700, 
+                    transition: 'all 0.25s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem'
+                  }}
+                  onClick={() => { setParseMode('batch'); setFile(null); }}
+                >
+                  📑 {lang === 'ar' ? 'الرفع المتعدد (Batch Upload)' : 'Batch Upload'}
                 </button>
               </div>
 

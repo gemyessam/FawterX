@@ -66,6 +66,15 @@ export async function uploadExcel(file, mode = 'template') {
   return data
 }
 
+/** رفع مجموعة ملفات Excel/PDF وجلب النتائج المجمعة */
+export async function uploadExcelBatch(files, mode = 'template') {
+  const form = new FormData()
+  Array.from(files).forEach(f => form.append('files', f))
+  form.append('mode', mode)
+  const { data } = await api.post('/excel/upload-batch', form)
+  return data
+}
+
 /** توليد ETA JSON من الـ mapping والـ rows */
 export async function generateInvoice(mapping, rows, issuer, metadata = {}) {
   const { data } = await api.post('/invoice/generate', { mapping, rows, issuer, metadata })
