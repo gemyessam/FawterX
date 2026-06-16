@@ -20,10 +20,10 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.7.9 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.8.0 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.7.9 (Egypt ETA)  ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.8.0 (Egypt ETA)  ");
             Console.WriteLine("    [STATUS] CAdES-BES Exact Chain (No Roots/Duplicates): Active ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
@@ -97,7 +97,7 @@ namespace FawterXSigner
                 if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/")
                 {
                     response.ContentType = "application/json; charset=utf-8";
-                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.7.7\",\"message\":\"FawterX local signer v1.7.9 is running with Exact Certificate Chain embedding (No Roots/Duplicates) and UTF-8 Unicode support!\"}";
+                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.7.7\",\"message\":\"FawterX local signer v1.8.0 is running with Exact Certificate Chain embedding (No Roots/Duplicates) and UTF-8 Unicode support!\"}";
                     byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                     response.ContentLength64 = buffer.Length;
                     response.OutputStream.Write(buffer, 0, buffer.Length);
@@ -128,19 +128,13 @@ namespace FawterXSigner
                         string signatureBase64 = "";
                         string errorMsg = "";
                         
+                        X509Certificate2 cert = null;
+                        
                         Thread staThread = new Thread(() =>
                         {
                             try
                             {
-                                X509Certificate2 cert = SelectCertificate();
-                                if (cert == null)
-                                {
-                                    errorMsg = "User cancelled certificate selection or no valid token was found.";
-                                    return;
-                                }
-
-                                Console.WriteLine("[SIGNING] Using Certificate: " + cert.Subject);
-                                signatureBase64 = SignDocument(canonicalString, cert);
+                                cert = SelectCertificate();
                             }
                             catch (Exception ex)
                             {
@@ -151,6 +145,25 @@ namespace FawterXSigner
                         staThread.SetApartmentState(ApartmentState.STA);
                         staThread.Start();
                         staThread.Join();
+
+                        if (cert == null && string.IsNullOrEmpty(errorMsg))
+                        {
+                            errorMsg = "User cancelled certificate selection or no valid token was found.";
+                        }
+
+                        if (cert != null)
+                        {
+                            try
+                            {
+                                Console.WriteLine("[SIGNING] Using Certificate: " + cert.Subject);
+                                // Execute signing on the MTA ThreadPool thread to prevent CSP deadlocks
+                                signatureBase64 = SignDocument(canonicalString, cert);
+                            }
+                            catch (Exception ex)
+                            {
+                                errorMsg = ex.Message;
+                            }
+                        }
 
                         if (!string.IsNullOrEmpty(errorMsg))
                         {
