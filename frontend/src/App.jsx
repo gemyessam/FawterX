@@ -41,7 +41,7 @@ const TRANSLATIONS = {
     statsTitle: 'إحصائيات الأداء'
   },
   en: {
-    logo: 'FawterX',
+    logo: 'FawterX v2.4.0',
     logoSub: 'ERP Alternative for ETA Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
