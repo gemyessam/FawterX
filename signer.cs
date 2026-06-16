@@ -20,10 +20,10 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.8.0 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.8.1 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.8.0 (Egypt ETA)  ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.8.1 (Egypt ETA)  ");
             Console.WriteLine("    [STATUS] CAdES-BES Exact Chain (No Roots/Duplicates): Active ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
@@ -97,7 +97,7 @@ namespace FawterXSigner
                 if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/")
                 {
                     response.ContentType = "application/json; charset=utf-8";
-                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.7.7\",\"message\":\"FawterX local signer v1.8.0 is running with Exact Certificate Chain embedding (No Roots/Duplicates) and UTF-8 Unicode support!\"}";
+                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.7.7\",\"message\":\"FawterX local signer v1.8.1 is running with Exact Certificate Chain embedding (No Roots/Duplicates) and UTF-8 Unicode support!\"}";
                     byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                     response.ContentLength64 = buffer.Length;
                     response.OutputStream.Write(buffer, 0, buffer.Length);
@@ -268,7 +268,9 @@ namespace FawterXSigner
 
             CmsSigner cmsSigner = new CmsSigner(cert);
             cmsSigner.SignerIdentifierType = SubjectIdentifierType.IssuerAndSerialNumber;
-            cmsSigner.IncludeOption = X509IncludeOption.ExcludeRoot;
+            // Set IncludeOption to EndCertOnly to avoid blocking online CRL checks.
+            // Intermediate certificates are manually embedded anyway.
+            cmsSigner.IncludeOption = X509IncludeOption.EndCertOnly;
 
             // Dynamically build the exact certificate chain for the signer
             try
