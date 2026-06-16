@@ -639,8 +639,10 @@ export default function Home() {
       // 2. Local signer is active! Let's sign each document
       toast.loading(lang === 'ar' ? 'يرجى اختيار الشهادة وإدخال رقم الـ PIN في نافذة التوقيع...' : 'Please choose certificate & enter PIN in signer popup...', { id: 'submit-loader' });
       
+      const currentIsoTime = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
       for (let i = 0; i < etaDocs.length; i++) {
         const doc = etaDocs[i];
+        doc.dateTimeIssued = currentIsoTime;
         
         // Clean the document recursively to strip empty optional fields before canonicalization & submission
         const cleanedDoc = cleanObject(doc);
