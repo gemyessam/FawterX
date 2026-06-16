@@ -865,7 +865,8 @@ export default function Home() {
               {/* FawterX Signer Download Card */}
               <div className="card" style={{ padding: '1.5rem', border: '1px solid rgba(0, 224, 161, 0.2)', background: 'rgba(0, 224, 161, 0.02)' }}>
                 <h4 style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
-                  🔑 {lang === 'ar' ? 'برنامج التوقيع المحلي' : 'Local E-Signer Bridge'}
+                  🔑 {lang === 'ar' ? 'أداة التوقيع FawterX Signer' : 'Local E-Signer Bridge'}
+                  <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'var(--accent)', color: '#000', marginLeft: '0.5rem' }}>v1.7.8</span>
                 </h4>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0.5rem 0 1.25rem' }}>
                   {lang === 'ar' 
@@ -873,7 +874,7 @@ export default function Home() {
                     : 'Download and run FawterX Signer to sign invoices using your E-Invoicing USB Token.'}
                 </p>
                 <a href={`/FawterX-Signer.zip?t=${Date.now()}`} download className="btn btn-accent btn-block btn-sm" style={{ textDecoration: 'none', textAlign: 'center', display: 'block' }}>
-                  📥 {lang === 'ar' ? 'تحميل برنامج التوقيع (ZIP)' : 'Download Signer (ZIP)'}
+                  📥 {lang === 'ar' ? 'تحميل أحدث إصدار v1.7.8 (ZIP)' : 'Download Latest v1.7.8 (ZIP)'}
                 </a>
               </div>
 
