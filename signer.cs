@@ -13,6 +13,12 @@ namespace FawterXSigner
 {
     class Program
     {
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        static extern IntPtr GetConsoleWindow();
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        static extern bool SetForegroundWindow(IntPtr hWnd);
         private static HttpListener listener;
         private static readonly string PREFIX = "http://localhost:8585/";
 
@@ -20,10 +26,10 @@ namespace FawterXSigner
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.8.2 🔑";
+            Console.Title = "FawterX Digital Signer Bridge v1.8.3 🔑";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.8.2 (Egypt ETA)  ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.8.3 (Egypt ETA)  ");
             Console.WriteLine("    [STATUS] CAdES-BES Exact Chain (No Roots/Duplicates): Active ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
@@ -97,7 +103,7 @@ namespace FawterXSigner
                 if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/")
                 {
                     response.ContentType = "application/json; charset=utf-8";
-                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.7.7\",\"message\":\"FawterX local signer v1.8.2 is running with Exact Certificate Chain embedding (No Roots/Duplicates) and UTF-8 Unicode support!\"}";
+                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.7.7\",\"message\":\"FawterX local signer v1.8.3 is running with Exact Certificate Chain embedding (No Roots/Duplicates) and UTF-8 Unicode support!\"}";
                     byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                     response.ContentLength64 = buffer.Length;
                     response.OutputStream.Write(buffer, 0, buffer.Length);
@@ -188,12 +194,27 @@ namespace FawterXSigner
             }
         }
 
+
+        private static void ForceForeground()
+        {
+            try
+            {
+                IntPtr hWnd = GetConsoleWindow();
+                if (hWnd != IntPtr.Zero)
+                {
+                    SetForegroundWindow(hWnd);
+                }
+            }
+            catch { }
+        }
+
         private static X509Certificate2 _cachedCert = null;
 
         private static X509Certificate2 SelectCertificate()
         {
             if (_cachedCert != null) return _cachedCert;
 
+            ForceForeground();
             X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
             store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
             
@@ -255,9 +276,7 @@ namespace FawterXSigner
 
             CmsSigner cmsSigner = new CmsSigner(cert);
             cmsSigner.SignerIdentifierType = SubjectIdentifierType.IssuerAndSerialNumber;
-            // Set IncludeOption to EndCertOnly to avoid blocking online CRL checks.
-            // Intermediate certificates are manually embedded anyway.
-            cmsSigner.IncludeOption = X509IncludeOption.EndCertOnly;
+            cmsSigner.IncludeOption = X509IncludeOption.ExcludeRoot;
 
             // Dynamically build the exact certificate chain for the signer
             try
@@ -307,6 +326,7 @@ namespace FawterXSigner
             // Compute signature (Windows automatically prompts the user for PIN if required by USB CSP)
             try
             {
+                ForceForeground();
                 signedCms.ComputeSignature(cmsSigner, false);
             }
             catch (Exception ex)
