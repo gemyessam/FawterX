@@ -659,10 +659,15 @@ function parseSchucoInvoice(text) {
   const currMatch = text.match(/\b(EUR|USD|GBP|SAR|AED)\b/i);
   if (currMatch) metadata.currency = currMatch[1].toUpperCase();
 
-  const packMatch = text.match(/Packing[\s\S]{0,200}?([\d,]+\.\d+)/i);
+  const noSpaceText = text.replace(/\s+/g, '').toUpperCase();
+  
+  const packMatch = noSpaceText.match(/PACK(?:ING|AGING)?[\s\S]{0,100}?([0-9]+[0-9,]*\.[0-9]+)/);
   if (packMatch) packingAmt = parseFloat(packMatch[1].replace(/,/g, ''));
 
-  const freightMatch = text.match(/Freight[\s\S]{0,200}?([\d,]+\.\d+)/i);
+  let fText = noSpaceText;
+  if (packMatch) fText = fText.replace(packMatch[1], ''); // Prevent matching the same number if extracted vertically
+  
+  const freightMatch = fText.match(/FR(?:E)?IGHT[\s\S]{0,100}?([0-9]+[0-9,]*\.[0-9]+)/);
   if (freightMatch) freightAmt = parseFloat(freightMatch[1].replace(/,/g, ''));
 
   for (const line of rawLines) {
