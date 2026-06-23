@@ -64,7 +64,7 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
     const firstRow = groupRows[0].row;
     
     // استخدام ميتاداتا المستلم إذا وجدت، وإلا الرجوع للمربوط في الصفوف
-    const receiverId = (metadata.receiverVat || String(firstRow[mapping.receiverId] || "")).replace(/[^0-9A-Za-z]/g, "");
+    const receiverId = (metadata.receiverVat || metadata.receiverRegistrationNo || String(firstRow[mapping.receiverId] || "")).replace(/[^0-9A-Za-z]/g, "");
     const receiverName = metadata.receiver || String(firstRow[mapping.receiverName] || "");
     
     let receiverType = metadata.receiverType;
@@ -73,7 +73,7 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       if (receiverId.length === 14 && /^\d+$/.test(receiverId)) receiverType = "P";
     }
 
-    const receiverCountry = metadata.receiverCountry || "EG";
+    const receiverCountry = metadata.receiverCountry || (receiverType === "F" ? "" : "EG");
 
     const invoiceLines = groupRows.map(({ row, idx }) => {
       const parsedVal = parseFloat(row[mapping.unitValue]);

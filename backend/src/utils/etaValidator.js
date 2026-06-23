@@ -92,9 +92,18 @@ function validateStructure(doc) {
   // Receiver checks
   if (doc.receiver) {
     if (!doc.receiver.name) { errors.push('اسم العميل (receiver.name) مطلوب للإرسال الناجح'); missingFields.push("receiver.name"); }
-    if (doc.receiver.type === "B" && !doc.receiver.id) {
-      errors.push('الرقم الضريبي مطلوب للعملاء الشركات (Receiver Type: B)');
+    if ((doc.receiver.type === "B" || doc.receiver.type === "F") && !doc.receiver.id) {
+      errors.push('رقم المستلم مطلوب للعملاء الشركات أو الأجانب (Receiver Type: B/F)');
       missingFields.push("receiver.id");
+    }
+    if (doc.receiver.type === "F") {
+      if (!doc.receiver.address?.country) {
+        errors.push('Country مطلوب للمستلم الأجنبي');
+        missingFields.push("receiver.address.country");
+      } else if (String(doc.receiver.address.country).toUpperCase() === "EG") {
+        errors.push('المستلم الأجنبي لا يجوز أن يكون Country = EG');
+        missingFields.push("receiver.address.country");
+      }
     }
     if (doc.receiver.type === "P" && (!doc.receiver.id || doc.receiver.id.length !== 14)) {
       if (doc.totalAmount >= 50000) {

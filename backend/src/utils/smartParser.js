@@ -1,4 +1,4 @@
-const fs = require("fs");
+﻿const fs = require("fs");
 const XLSX = require("xlsx");
 
 const ETA_UNIT_MAP = {
@@ -212,6 +212,7 @@ function extractMetadata(text, rawRows = []) {
     issuerVat: cleanVat(extractFirst(/(?:supplier|seller|vendor|issuer)?\s*(?:vat|tax id|registration no|رقم ضريبي|التسجيل الضريبي)\s*[:#-]?\s*([0-9\-\s]{9,20})/i, allText)) || cleanVat(vatMatches[0] || ""),
     receiver: extractFirst(/(?:bill\s*to|buyer|customer|client|receiver|العميل|المشتري)\s*[:#-]?\s*([^\n]{3,90})/i, text),
     receiverVat: cleanVat(vatMatches[1] || ""),
+    receiverRegistrationNo: "",
     documentType: "I",
     documentTypeVersion: "1.0",
     dateTimeIssued: parseDate(invoiceDate) || new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
@@ -225,11 +226,12 @@ function extractMetadata(text, rawRows = []) {
   if (addressMatch) {
     const addrLower = addressMatch.toLowerCase();
     const isDomestic = /(egypt|cairo|giza|alex|مصر|القاهرة|الجيزة|الاسكندرية)/.test(addrLower);
-    const isForeign = /(saudi|ksa|uae|dubai|usa|uk|germany|france|italy|spain|السعودية|الامارات|دبي|امريكا)/.test(addrLower);
+    const isForeign = /(saudi|ksa|uae|dubai|usa|uk|germany|france|italy|spain|kenya|nairobi|mombasa|china|turkey|qatar|oman|bahrain|morocco|tunisia|algeria|south africa|niger|ethiopia|uganda|rwanda|tanzania|السعودية|الامارات|دبي|امريكا|كينيا|نيروبي|مومباسا)/.test(addrLower);
     
     if (isForeign && !isDomestic) {
       metadata.receiverType = "F";
-      if (addrLower.includes("saudi") || addrLower.includes("ksa") || addrLower.includes("السعودية")) metadata.receiverCountry = "SA";
+      if (addrLower.includes("kenya") || addrLower.includes("nairobi") || addrLower.includes("mombasa") || addrLower.includes("كينيا") || addrLower.includes("نيروبي") || addrLower.includes("مومباسا")) metadata.receiverCountry = "KE";
+      else if (addrLower.includes("saudi") || addrLower.includes("ksa") || addrLower.includes("السعودية")) metadata.receiverCountry = "SA";
       else if (addrLower.includes("uae") || addrLower.includes("dubai") || addrLower.includes("الامارات") || addrLower.includes("دبي")) metadata.receiverCountry = "AE";
       else if (addrLower.includes("usa") || addrLower.includes("امريكا")) metadata.receiverCountry = "US";
       else if (addrLower.includes("uk")) metadata.receiverCountry = "GB";
@@ -238,6 +240,26 @@ function extractMetadata(text, rawRows = []) {
     }
   }
 
+  if (!metadata.receiverType && /(kenya|nairobi|mombasa|كينيا|نيروبي|مومباسا)/i.test(allText)) {
+    metadata.receiverType = "F";
+    metadata.receiverCountry = "KE";
+  }
+
+  if (!metadata.receiverVat) {
+    const regCandidates = [];
+    rawRows.slice(0, 24).forEach(line => {
+      const textLine = normalizeSpaces(line);
+      const crMatch = textLine.match(/\b(?:cr\s*#|commercial register|commercial reg|registration no|reg\s*no)\s*[:#-]?\s*([A-Z0-9\-\/\s]{3,30})/i);
+      if (crMatch && crMatch[1]) {
+        const clean = cleanVat(crMatch[1]);
+        if (clean.length >= 4) regCandidates.push(clean);
+      }
+    });
+    if (regCandidates.length) {
+      metadata.receiverVat = regCandidates[0];
+      metadata.receiverRegistrationNo = regCandidates[0];
+    }
+  }
   rawRows.slice(0, 12).forEach(row => {
     const joined = row.map(normalizeSpaces).filter(Boolean).join(" ");
     if (!metadata.issuer && /(supplier|seller|vendor|المورد|البائع)/i.test(joined)) {
@@ -633,6 +655,7 @@ async function parseSmartDocument(filePath, isPdf = false) {
 function parseSchucoInvoice(text) {
   const warnings = [];
   const rawLines = text.split('\n').map(l => l.trim().replace(/\\t/g, '\t')).filter(Boolean);
+  const allText = rawLines.join('\n');
 
   // ── RAW TEXT DEBUG LOG ──────────────────────────────────
   console.log('═══════════════ SCHÜCO RAW OCR TEXT ═══════════════');
@@ -655,10 +678,23 @@ function parseSchucoInvoice(text) {
 
   let packingAmt = 0;
   let freightAmt = 0;
+  const receiverRegCandidates = [];
 
   // Global robust matching for Currency, Packing and Freight
   const currMatch = text.match(/\b(EUR|USD|GBP|SAR|AED)\b/i);
   if (currMatch) metadata.currency = currMatch[1].toUpperCase();
+
+  // Foreign destination hints should be captured before any later fallback logic runs.
+  if (/(kenya|nairobi|mombasa|كينيا|نيروبي|مومباسا)/i.test(allText)) {
+    metadata.receiverType = 'F';
+    metadata.receiverCountry = 'KE';
+  } else if (/(saudi|ksa|riyadh|jeddah|السعودية|الرياض|جدة)/i.test(allText)) {
+    metadata.receiverType = 'F';
+    metadata.receiverCountry = 'SA';
+  } else if (/(uae|dubai|abudhabi|الامارات|دبي|ابوظبي)/i.test(allText)) {
+    metadata.receiverType = 'F';
+    metadata.receiverCountry = 'AE';
+  }
 
   // ══════════════════════════════════════════════════════════════
   // FOOTER EXTRACTION — Multi-strategy for Packing/Freight/Totals
@@ -837,6 +873,12 @@ function parseSchucoInvoice(text) {
   console.log('=== FINAL FOOTER RESULT ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, taxAmount: metadata.taxAmount, totalAmount: metadata.totalAmount });
 
   for (const line of rawLines) {
+    const crMatch = line.match(/\b(?:cr\s*#|cr#|commercial register|commercial reg|registration no|reg\.?\s*no|company reg(?:istration)?(?: no)?)\s*[:#-]?\s*([A-Z0-9\-\/]{3,30})/i);
+    if (crMatch && crMatch[1]) {
+      const cleanCr = crMatch[1].replace(/[^0-9A-Za-z]/g, '');
+      if (cleanCr) receiverRegCandidates.push({ value: cleanCr, idx: rawLines.indexOf(line) });
+    }
+
     // Invoice number: e.g. "000000612" or "202303610"
     const invMatch = line.match(/^0*(\d{3,10})$/) ;
     if (invMatch && !metadata.internalID && parseInt(invMatch[1]) > 100) {
@@ -950,6 +992,22 @@ function parseSchucoInvoice(text) {
     if (metadata.internalID) {
       metadata.internalID = normalizeSchucoInvoiceNumber(metadata.internalID);
     }
+  }
+
+  const salesInvoiceIdx = rawLines.findIndex(line => /sales invoice/i.test(line));
+  const candidatePool = receiverRegCandidates
+    .filter(c => c && c.value && c.value !== metadata.issuerVat && c.value !== SCHUCO_VAT)
+    .sort((a, b) => a.idx - b.idx);
+  const preferredPool = candidatePool.filter(c => salesInvoiceIdx === -1 ? true : c.idx < salesInvoiceIdx);
+  const chosenCandidate = (preferredPool[0] || candidatePool[0] || null);
+  if (!metadata.receiverVat && chosenCandidate) {
+    metadata.receiverVat = chosenCandidate.value;
+    metadata.receiverRegistrationNo = chosenCandidate.value;
+  }
+
+  if (!metadata.receiverCountry && /(kenya|nairobi|mombasa|كينيا|نيروبي|مومباسا)/i.test(allText)) {
+    metadata.receiverCountry = 'KE';
+    metadata.receiverType = 'F';
   }
 
   if (!metadata.internalID) metadata.internalID = `INV-${Date.now().toString().slice(-8)}`;
@@ -1543,3 +1601,6 @@ module.exports = {
   parseSmartDocument: parseSmartDocumentWithSchuco,
   parseSchucoInvoice
 };
+
+
+
