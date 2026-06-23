@@ -607,7 +607,7 @@ async function parseSmartDocument(filePath, isPdf = false) {
     warnings: [...warnings, ...lineWarnings],
     confidenceScore: Math.max(0, Math.min(99, confidenceScore)),
     parserDebugInfo: {
-      mode: "Smart Invoice Intelligence Engine v5.0",
+      mode: "Smart Invoice Intelligence Engine v6.0",
       confidenceScore: Math.max(0, Math.min(99, confidenceScore)),
       totalsMatched,
       lineCount: rows.length,
@@ -697,10 +697,10 @@ function parseSchucoInvoice(text) {
     if (currMatch) metadata.currency = currMatch[1].toUpperCase();
 
     // Extra services
-    const packMatch = line.match(/Packing\s+(?:[A-Z]{3}\s+)?([\d,.]+(?:\.\d+)?)/i);
+    const packMatch = line.match(/Packing\s*[:\-]?\s*(?:[A-Z]{3}\s*)?([\d,.]+(?:\.\d+)?)/i);
     if (packMatch) packingAmt = parseFloat(packMatch[1].replace(/,/g, ''));
 
-    const freightMatch = line.match(/Freight\s+(?:[A-Z]{3}\s+)?([\d,.]+(?:\.\d+)?)/i);
+    const freightMatch = line.match(/Freight\s*[:\-]?\s*(?:[A-Z]{3}\s*)?([\d,.]+(?:\.\d+)?)/i);
     if (freightMatch) freightAmt = parseFloat(freightMatch[1].replace(/,/g, ''));
 
     // Totals from invoice footer
@@ -1348,7 +1348,7 @@ async function parseSmartDocumentWithSchuco(filePath, isPdf = false) {
         warnings: [...warnings, ...lineWarnings],
         confidenceScore: 92,
         parserDebugInfo: {
-          mode: 'Schüco/System Invoice Block Parser v1.0',
+          mode: 'Schüco/System Invoice Block Parser v6.0',
           confidenceScore: 92,
           totalsMatched: true,
           lineCount: rows.length,
