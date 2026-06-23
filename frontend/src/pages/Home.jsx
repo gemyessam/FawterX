@@ -1669,21 +1669,7 @@ export default function Home() {
                     />
                   </div>
 
-                  {/* Exchange Rate */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
-                      💱 {lang === 'ar' ? 'سعر الصرف' : 'Exchange Rate'}
-                    </label>
-                    <input 
-                      type="number" 
-                      className="input" 
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
-                      value={etaDocs[0]?.invoiceLines?.[0]?.unitValue?.currencyExchangeRate || 1} 
-                      onChange={(e) => updateInvoiceMetadata('exchangeRate', e.target.value)} 
-                      min="1"
-                      step="0.01"
-                    />
-                  </div>
+
 
                 </div>
               </div>
