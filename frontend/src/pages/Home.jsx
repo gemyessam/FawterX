@@ -453,21 +453,29 @@ export default function Home() {
       doc.receiver.address.country = val
     } else if (field === 'taxpayerActivityCode') {
       doc.taxpayerActivityCode = val
-    } else if (field === 'currency') {
-      // currency sold updates on unitValue inside lines
-      doc.invoiceLines.forEach(l => {
-        if (l.unitValue) l.unitValue.currencySold = val
-      })
-    } else if (field === 'exchangeRate') {
-      const exRate = parseFloat(val) || 1
+    } else if (field === 'currency' || field === 'exchangeRate') {
+      const exRate = field === 'exchangeRate' ? (parseFloat(val) || 1) : (doc.invoiceLines[0]?.unitValue?.currencyExchangeRate || 1)
+      const curr = field === 'currency' ? val : (doc.invoiceLines[0]?.unitValue?.currencySold || 'EGP')
+      
       let totalSales = 0
       let totalTax = 0
       
       doc.invoiceLines.forEach(l => {
-        if (l.unitValue && l.unitValue.currencySold && l.unitValue.currencySold !== 'EGP') {
-          l.unitValue.currencyExchangeRate = exRate
-          const amountSold = l.unitValue.amountSold || 0
-          l.unitValue.amountEGP = parseFloat((amountSold * exRate).toFixed(5))
+        if (l.unitValue) {
+          l.unitValue.currencySold = curr
+          if (curr !== 'EGP') {
+            if (!l.unitValue.amountSold) {
+              l.unitValue.amountSold = l.unitValue.amountEGP
+            }
+            l.unitValue.currencyExchangeRate = exRate
+            l.unitValue.amountEGP = parseFloat((l.unitValue.amountSold * exRate).toFixed(5))
+          } else {
+            if (l.unitValue.amountSold > 0) {
+              l.unitValue.amountEGP = l.unitValue.amountSold
+            }
+            l.unitValue.amountSold = 0
+            l.unitValue.currencyExchangeRate = 0
+          }
           
           const qty = l.quantity || 0
           const net = qty * l.unitValue.amountEGP
