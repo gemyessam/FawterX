@@ -735,6 +735,73 @@ function parseSchucoInvoice(text) {
     console.log('=== FOOTER STRATEGY 2 (line scan) ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, totalAmount: metadata.totalAmount });
   }
 
+  const firstNumberInLine = (line) => {
+    const matches = String(line || "").match(/\d[\d.,]*/g);
+    if (!matches || !matches.length) return null;
+    return parseGlobalNumberStr(matches[0]);
+  };
+
+  // Strategy 2B: ordered footer walk. This is the most reliable for invoices
+  // where Packing/Freight amounts are printed on separate lines after the labels.
+  if (!packingAmt || !freightAmt || !metadata.netAmount || !metadata.totalAmount) {
+    const footerScanStart = Math.max(0, rawLines.length - 80);
+    let footerStart = -1;
+    const footerMarkers = [/net\s*amount/i, /packing/i, /fre?ight/i, /\bvat\b/i, /total\s*amount/i];
+    outer: for (const marker of footerMarkers) {
+      for (let i = rawLines.length - 1; i >= footerScanStart; i--) {
+        if (marker.test(String(rawLines[i] || "").trim())) {
+          footerStart = i;
+          break outer;
+        }
+      }
+    }
+    if (footerStart !== -1) {
+      const footerLines = rawLines.slice(Math.max(0, footerStart - 2), Math.min(rawLines.length, footerStart + 25));
+      const pending = [];
+
+      for (const rawLine of footerLines) {
+        const trimmed = String(rawLine || "").trim();
+        if (!trimmed) continue;
+
+        if (/^packing\b/i.test(trimmed) && !packingAmt) {
+          pending.push('packing');
+          continue;
+        }
+        if (/^fre?ight\b/i.test(trimmed) && !freightAmt) {
+          pending.push('freight');
+          continue;
+        }
+        if (/net\s*amount\b/i.test(trimmed) && !metadata.netAmount) {
+          const v = firstNumberInLine(trimmed);
+          if (v !== null && !isNaN(v)) metadata.netAmount = v;
+          continue;
+        }
+        if (/^vat\b/i.test(trimmed) && !metadata.taxAmount && !/^vat[:\s]*\d{3}[-\s]?\d{3}[-\s]?\d{3}/i.test(trimmed)) {
+          const v = firstNumberInLine(trimmed);
+          if (v !== null && !isNaN(v)) metadata.taxAmount = v;
+          continue;
+        }
+        if (/^total\s*amount\b/i.test(trimmed) && !metadata.totalAmount) {
+          const v = firstNumberInLine(trimmed);
+          if (v !== null && !isNaN(v)) metadata.totalAmount = v;
+          continue;
+        }
+
+        if (pending.length && /^[\d.,]+(?:\s*[A-Za-z]{1,4})?$/.test(trimmed)) {
+          const value = parseGlobalNumberStr(trimmed);
+          const label = pending.shift();
+          if (label === 'packing' && !packingAmt) packingAmt = value;
+          if (label === 'freight' && !freightAmt) freightAmt = value;
+        }
+      }
+      console.log('=== FOOTER STRATEGY 2B (ordered footer walk) ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, taxAmount: metadata.taxAmount, totalAmount: metadata.totalAmount });
+    }
+  }
+
+  if (metadata.currency !== 'EGP') {
+    metadata.taxAmount = 0;
+  }
+
   // ── Strategy 3: noSpaceText fallback (Handles split numbers and detached columns) ──
   if (!packingAmt || !freightAmt || !metadata.netAmount || !metadata.totalAmount) {
     const noSp = text.replace(/\s+/g, '').toUpperCase();
@@ -744,13 +811,6 @@ function parseSchucoInvoice(text) {
       return m.map(match => parseGlobalNumberStr(match[1])).filter(v => !isNaN(v));
     };
     
-    // Bounds increased to {0,500} for Packing/Freight to handle multi-column extraction where labels and values are extremely far apart
-    const packingMatches = getAllValid(new RegExp(`PACK(?:ING|AGING)?.{0,500}?${numReStr}`, 'ig'));
-    if (packingMatches.length > 0 && !packingAmt) packingAmt = packingMatches[packingMatches.length - 1];
-
-    const freightMatches = getAllValid(new RegExp(`FRE?IGHT.{0,500}?${numReStr}`, 'ig'));
-    if (freightMatches.length > 0 && !freightAmt) freightAmt = freightMatches[freightMatches.length - 1];
-
     const netMatches = getAllValid(new RegExp(`NETAMOUNT.{0,150}?${numReStr}`, 'g'));
     if (netMatches.length > 0 && !metadata.netAmount) metadata.netAmount = netMatches[netMatches.length - 1];
 

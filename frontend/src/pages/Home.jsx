@@ -373,9 +373,11 @@ export default function Home() {
         line.unitValue.amountSold = 0;
       }
     } else if (field === 'taxPercent') {
-      const rate = parseFloat(parseFloat(val).toFixed(4)) || 0
+      const currency = line.unitValue?.currencySold || 'EGP'
+      const rate = currency !== 'EGP' ? 0 : (parseFloat(parseFloat(val).toFixed(4)) || 0)
       if (line.taxableItems && line.taxableItems[0]) {
         line.taxableItems[0].rate = rate
+        line.taxableItems[0].amount = currency !== 'EGP' ? 0 : (line.netTotal || 0) * (rate / 100)
       } else {
         line.taxableItems = [{ taxType: "T1", subType: "V009", rate: rate, amount: 0 }]
       }
@@ -389,8 +391,11 @@ export default function Home() {
     line.salesTotal = net
     
     // Fix falsy 0 evaluation and respect backend taxPercent:
-    const taxRate = line.taxableItems?.[0]?.rate !== undefined ? line.taxableItems[0].rate : (line.taxPercent !== undefined ? line.taxPercent : 14);
-    const taxAmt = net * (taxRate / 100);
+    const currency = line.unitValue?.currencySold || 'EGP';
+    const taxRate = currency !== 'EGP'
+      ? 0
+      : (line.taxableItems?.[0]?.rate !== undefined ? line.taxableItems[0].rate : (line.taxPercent !== undefined ? line.taxPercent : 14));
+    const taxAmt = currency !== 'EGP' ? 0 : (net * (taxRate / 100));
     
     if (line.taxableItems && line.taxableItems[0]) {
       line.taxableItems[0].amount = taxAmt;
@@ -501,10 +506,13 @@ export default function Home() {
           l.netTotal = net
           l.salesTotal = net
           
-          const taxRate = l.taxableItems?.[0]?.rate !== undefined ? l.taxableItems[0].rate : (l.taxPercent !== undefined ? l.taxPercent : 14)
-          const taxAmt = net * (taxRate / 100)
+          const taxRate = (curr !== 'EGP')
+            ? 0
+            : (l.taxableItems?.[0]?.rate !== undefined ? l.taxableItems[0].rate : (l.taxPercent !== undefined ? l.taxPercent : 14))
+          const taxAmt = curr !== 'EGP' ? 0 : (net * (taxRate / 100))
           if (l.taxableItems && l.taxableItems[0]) {
             l.taxableItems[0].amount = taxAmt
+            l.taxableItems[0].rate = taxRate
           }
           l.total = net + taxAmt
         }
@@ -1960,6 +1968,10 @@ export default function Home() {
                           {/* 10. Tax Column */}
                           <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
+                              {(() => {
+                                const curr = line.unitValue?.currencySold || 'EGP'
+                                const taxValue = curr !== 'EGP' ? 0 : (line.taxableItems?.[0]?.rate ?? (line.taxPercent ?? 14))
+                                return (
                               <select 
                                 className="input" 
                                 style={{ 
@@ -1975,13 +1987,16 @@ export default function Home() {
                                   textAlign: 'center',
                                   fontSize: '0.8rem'
                                 }} 
-                                value={line.taxableItems?.[0]?.rate ?? (line.taxPercent ?? 14)} 
+                                value={taxValue} 
+                                disabled={curr !== 'EGP'}
                                 onChange={(e) => updateInvoiceLine(idx, 'taxPercent', e.target.value)}
                               >
                                 <option value="14">14%</option>
                                 <option value="5">5%</option>
                                 <option value="0">0%</option>
                               </select>
+                                )
+                              })()}
                               <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
                                 {Number(line.taxableItems?.[0]?.amount || 0).toLocaleString(undefined, {minimumFractionDigits:4, maximumFractionDigits:4})}
                               </span>

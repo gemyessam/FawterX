@@ -92,7 +92,7 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       const parsedTax = parseFloat(row[mapping.taxPercent]);
       let taxPercent = parseFloat((isNaN(parsedTax) ? 14 : parsedTax).toFixed(4));
 
-      if (receiverType === "F" || (receiverCountry && receiverCountry !== "EG")) {
+      if (currency !== "EGP" || receiverType === "F" || (receiverCountry && receiverCountry !== "EG")) {
         taxPercent = 0;
       }
 
