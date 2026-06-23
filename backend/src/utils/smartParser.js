@@ -659,27 +659,67 @@ function parseSchucoInvoice(text) {
   const currMatch = text.match(/\b(EUR|USD|GBP|SAR|AED)\b/i);
   if (currMatch) metadata.currency = currMatch[1].toUpperCase();
 
-  const noSpaceText = text.replace(/\s+/g, '').toUpperCase();
+  // ── Footer-level extraction: parse lines from bottom up for summary amounts ──
+  // We reverse-scan the raw lines to find footer entries like:
+  //   "Net Amount    EUR    27,440.35"
+  //   "Packing       EUR    2,692.60"
+  // This avoids matching item-level text like "Packing unit: 0.002 TO"
+  const reversedLines = [...rawLines].reverse();
   
-  const getLastMatch = (regex) => {
-    const matches = [...noSpaceText.matchAll(regex)];
-    return matches.length > 0 ? parseFloat(matches[matches.length - 1][1].replace(/,/g, '')) : null;
-  };
-
-  const pAmt = getLastMatch(/PACK(?:ING|AGING)?.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g);
-  if (pAmt !== null) packingAmt = pAmt;
-
-  const fAmt = getLastMatch(/FR(?:E)?IGHT.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g);
-  if (fAmt !== null) freightAmt = fAmt;
-
-  const nAmt = getLastMatch(/NETAMOUNT.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g);
-  if (nAmt !== null) metadata.netAmount = nAmt;
-
-  const vAmt = getLastMatch(/VAT.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g);
-  if (vAmt !== null) metadata.taxAmount = vAmt;
-
-  const tAmt = getLastMatch(/TOTALAMOUNT.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g);
-  if (tAmt !== null) metadata.totalAmount = tAmt;
+  console.log('=== FOOTER EXTRACTION DEBUG ===');
+  console.log('Total lines to scan:', rawLines.length);
+  console.log('Currency detected:', metadata.currency);
+  
+  // Scan only the last ~80 lines (footer region)
+  const footerLines = reversedLines.slice(0, 80);
+  
+  for (const fLine of footerLines) {
+    const trimmed = fLine.trim();
+    if (!trimmed) continue;
+    
+    // Match patterns like: "Packing    EUR    2,692.60" or "Packing  2,692.60"
+    if (/^Packing/i.test(trimmed) && !packingAmt) {
+      const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
+      if (m) {
+        packingAmt = parseFloat(m[1].replace(/,/g, ''));
+        console.log('  ✅ PACKING from footer line:', packingAmt, '| line:', trimmed);
+      }
+    }
+    
+    if (/^Freight/i.test(trimmed) && !freightAmt) {
+      const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
+      if (m) {
+        freightAmt = parseFloat(m[1].replace(/,/g, ''));
+        console.log('  ✅ FREIGHT from footer line:', freightAmt, '| line:', trimmed);
+      }
+    }
+    
+    if (/^Net\s*Amount/i.test(trimmed) && !metadata.netAmount) {
+      const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
+      if (m) {
+        metadata.netAmount = parseFloat(m[1].replace(/,/g, ''));
+        console.log('  ✅ NET AMOUNT from footer line:', metadata.netAmount, '| line:', trimmed);
+      }
+    }
+    
+    if (/^VAT\b/i.test(trimmed) && !metadata.taxAmount) {
+      const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
+      if (m) {
+        metadata.taxAmount = parseFloat(m[1].replace(/,/g, ''));
+        console.log('  ✅ TAX (VAT) from footer line:', metadata.taxAmount, '| line:', trimmed);
+      }
+    }
+    
+    if (/^Total\s*Amount/i.test(trimmed) && !metadata.totalAmount) {
+      const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
+      if (m) {
+        metadata.totalAmount = parseFloat(m[1].replace(/,/g, ''));
+        console.log('  ✅ TOTAL AMOUNT from footer line:', metadata.totalAmount, '| line:', trimmed);
+      }
+    }
+  }
+  
+  console.log('=== FOOTER RESULT ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, taxAmount: metadata.taxAmount, totalAmount: metadata.totalAmount });
 
   for (const line of rawLines) {
     // Invoice number: e.g. "000000612" or "202303610"
