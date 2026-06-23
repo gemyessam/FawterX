@@ -1219,7 +1219,7 @@ function parseSchucoInvoice(text) {
       warnings: [],
       missingFields
     };
-  }).filter(l => l.description && l.internalCode);
+  }).filter(l => l.description && l.internalCode && (l.quantity > 0 || l.unitValue > 0 || l.rawDescription.length > 2));
 
   // If we have actual lines, let's also compute dynamic totals if they weren't matched perfectly
   if (invoiceLines.length > 0) {

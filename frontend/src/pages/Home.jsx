@@ -1965,7 +1965,7 @@ export default function Home() {
                                   textAlign: 'center',
                                   fontSize: '0.8rem'
                                 }} 
-                                value={line.taxableItems?.[0]?.rate || 14} 
+                                value={line.taxableItems?.[0]?.rate ?? 14} 
                                 onChange={(e) => updateInvoiceLine(idx, 'taxPercent', e.target.value)}
                               >
                                 <option value="14">14%</option>
