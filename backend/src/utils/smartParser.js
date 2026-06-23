@@ -671,13 +671,29 @@ function parseSchucoInvoice(text) {
   const currCode = metadata.currency || 'EUR|USD|GBP|EGP';
   const ccPat = currCode.includes('|') ? currCode : `(?:${currCode})`;
 
-  // Strategy 1: Full-text currency-qualified regex (using literals)
-  const allMatchesLit = (re, src) => { const m = [...src.matchAll(re)]; return m.length ? parseFloat(m[m.length - 1][1].replace(/,/g, "")) : null; };
-  let packS1 = allMatchesLit(/Packing\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
-  let freightS1 = allMatchesLit(/Fre?ight\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
-  let netS1 = allMatchesLit(/Net\s*Amount\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
-  let vatS1 = allMatchesLit(/VAT\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
-  let totS1 = allMatchesLit(/Total\s*Amount\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
+  const parseGlobalNumberStr = (str) => {
+    let clean = str.replace(/[^\d.,]/g, '');
+    const lastDot = clean.lastIndexOf('.');
+    const lastComma = clean.lastIndexOf(',');
+    if (lastComma > lastDot) clean = clean.replace(/\./g, '').replace(',', '.');
+    else clean = clean.replace(/,/g, '');
+    return parseFloat(clean);
+  };
+
+  // Robust number regex string (handles 1,234.56 and 1.234,56 and 123.45)
+  const numReStr = '((?:[0-9]{1,3}(?:[.,][0-9]{3})+|[0-9]+)[.,][0-9]{2})(?![0-9])';
+
+  // Strategy 1: Full-text currency-qualified regex
+  const allMatchesLit = (re, src) => { 
+    const m = [...src.matchAll(re)]; 
+    return m.length ? parseGlobalNumberStr(m[m.length - 1][1]) : null; 
+  };
+  
+  let packS1 = allMatchesLit(new RegExp(`Packing\\s+(?:EUR|USD|GBP|EGP|SAR|AED)\\s+${numReStr}`, 'gi'), text);
+  let freightS1 = allMatchesLit(new RegExp(`Fre?ight\\s+(?:EUR|USD|GBP|EGP|SAR|AED)\\s+${numReStr}`, 'gi'), text);
+  let netS1 = allMatchesLit(new RegExp(`Net\\s*Amount\\s+(?:EUR|USD|GBP|EGP|SAR|AED)\\s+${numReStr}`, 'gi'), text);
+  let vatS1 = allMatchesLit(new RegExp(`VAT\\s+(?:EUR|USD|GBP|EGP|SAR|AED)\\s+${numReStr}`, 'gi'), text);
+  let totS1 = allMatchesLit(new RegExp(`Total\\s*Amount\\s+(?:EUR|USD|GBP|EGP|SAR|AED)\\s+${numReStr}`, 'gi'), text);
 
   console.log('=== FOOTER STRATEGY 1 (currency-qualified) ===', { packing: packS1, freight: freightS1, net: netS1, vat: vatS1, total: totS1 });
 
@@ -690,29 +706,30 @@ function parseSchucoInvoice(text) {
   // ── Strategy 2: Line-by-line reverse scan (for cases without currency on same line) ──
   if (!packingAmt || !freightAmt || !metadata.netAmount || !metadata.totalAmount) {
     const reversedLines = [...rawLines].reverse().slice(0, 80);
+    const endNumRe = new RegExp(`${numReStr}\\s*$`);
     for (const fLine of reversedLines) {
       const trimmed = fLine.trim();
       if (!trimmed) continue;
       
       if (/^Packing/i.test(trimmed) && !packingAmt) {
-        const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
-        if (m) packingAmt = parseFloat(m[1].replace(/,/g, ''));
+        const m = trimmed.match(endNumRe);
+        if (m) packingAmt = parseGlobalNumberStr(m[1]);
       }
       if (/^Fre?ight/i.test(trimmed) && !freightAmt) {
-        const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
-        if (m) freightAmt = parseFloat(m[1].replace(/,/g, ''));
+        const m = trimmed.match(endNumRe);
+        if (m) freightAmt = parseGlobalNumberStr(m[1]);
       }
       if (/^Net\s*Amount/i.test(trimmed) && !metadata.netAmount) {
-        const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
-        if (m) metadata.netAmount = parseFloat(m[1].replace(/,/g, ''));
+        const m = trimmed.match(endNumRe);
+        if (m) metadata.netAmount = parseGlobalNumberStr(m[1]);
       }
       if (/^VAT\b/i.test(trimmed) && !metadata.taxAmount) {
-        const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
-        if (m) metadata.taxAmount = parseFloat(m[1].replace(/,/g, ''));
+        const m = trimmed.match(endNumRe);
+        if (m) metadata.taxAmount = parseGlobalNumberStr(m[1]);
       }
       if (/^Total\s*Amount/i.test(trimmed) && !metadata.totalAmount) {
-        const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
-        if (m) metadata.totalAmount = parseFloat(m[1].replace(/,/g, ''));
+        const m = trimmed.match(endNumRe);
+        if (m) metadata.totalAmount = parseGlobalNumberStr(m[1]);
       }
     }
     console.log('=== FOOTER STRATEGY 2 (line scan) ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, totalAmount: metadata.totalAmount });
@@ -722,33 +739,33 @@ function parseSchucoInvoice(text) {
   if (!packingAmt || !freightAmt || !metadata.netAmount || !metadata.totalAmount) {
     const noSp = text.replace(/\s+/g, '').toUpperCase();
     
-    // Helper to extract ALL valid currency-like values matching the regex
     const getAllValid = (re) => {
       const m = [...noSp.matchAll(re)];
-      return m.map(match => parseFloat(match[1].replace(/,/g, ''))).filter(v => !isNaN(v));
+      return m.map(match => parseGlobalNumberStr(match[1])).filter(v => !isNaN(v));
     };
     
-    const packingMatches = getAllValid(/PACK(?:ING|AGING)?.{0,150}?([0-9]+[0-9,]*\.[0-9]{2})(?![0-9])/g);
+    // Bounds tightened to {0,100} to prevent it from greedily jumping to EGP totals if the target is completely missing
+    const packingMatches = getAllValid(new RegExp(`PACK(?:ING|AGING)?.{0,100}?${numReStr}`, 'g'));
     if (packingMatches.length > 0 && !packingAmt) packingAmt = packingMatches[packingMatches.length - 1];
 
-    const freightMatches = getAllValid(/FRE?IGHT.{0,150}?([0-9]+[0-9,]*\.[0-9]{2})(?![0-9])/g);
+    const freightMatches = getAllValid(new RegExp(`FRE?IGHT.{0,100}?${numReStr}`, 'g'));
     if (freightMatches.length > 0 && !freightAmt) freightAmt = freightMatches[freightMatches.length - 1];
 
-    const netMatches = getAllValid(/NETAMOUNT.{0,150}?([0-9]+[0-9,]*\.[0-9]{2})(?![0-9])/g);
+    const netMatches = getAllValid(new RegExp(`NETAMOUNT.{0,100}?${numReStr}`, 'g'));
     if (netMatches.length > 0 && !metadata.netAmount) metadata.netAmount = netMatches[netMatches.length - 1];
 
-    const taxMatches = getAllValid(/VAT.{0,150}?([0-9]+[0-9,]*\.[0-9]{2})(?![0-9])/g);
+    const taxMatches = getAllValid(new RegExp(`VAT.{0,100}?${numReStr}`, 'g'));
     if (taxMatches.length > 0 && !metadata.taxAmount) metadata.taxAmount = taxMatches[taxMatches.length - 1];
 
-    // Total Amount: User explicitly wants the EGP total if available (for foreign currency invoices)
-    const totEgpMatches = getAllValid(/TOTALAMOUNTEGP.{0,150}?([0-9]+[0-9,]*\.[0-9]{2})(?![0-9])/g);
-    const totAnyMatches = getAllValid(/TOTALAMOUNT.{0,150}?([0-9]+[0-9,]*\.[0-9]{2})(?![0-9])/g);
+    const totEgpMatches = getAllValid(new RegExp(`TOTALAMOUNTEGP.{0,100}?${numReStr}`, 'g'));
+    const totAnyMatches = getAllValid(new RegExp(`TOTALAMOUNT.{0,100}?${numReStr}`, 'g'));
     
     if (totEgpMatches.length > 0) {
       metadata.totalAmount = totEgpMatches[totEgpMatches.length - 1]; // Prioritize EGP total
     } else if (totAnyMatches.length > 0 && !metadata.totalAmount) {
       metadata.totalAmount = totAnyMatches[totAnyMatches.length - 1];
     }
+
     
     console.log('=== FOOTER STRATEGY 3 (noSpace fallback) ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, totalAmount: metadata.totalAmount });
   }
