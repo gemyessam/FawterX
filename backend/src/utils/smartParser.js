@@ -1382,7 +1382,10 @@ function parseSchucoInvoice(text) {
     });
   }
 
-  return { metadata, invoiceLines };
+  // Inject a debug warning with the last 1500 chars of the text so we can see what PDF.js is outputting
+  warnings.push("DEBUG_TEXT_START:\n" + text.slice(-1500) + "\n:DEBUG_TEXT_END");
+
+  return { metadata, invoiceLines, warnings };
 }
 
 // ── Extend parseSmartDocument to try Schüco parser first for PDFs ──
