@@ -388,13 +388,13 @@ export default function Home() {
     line.netTotal = net
     line.salesTotal = net
     
-    // Fix falsy 0 evaluation:
-    const taxRate = line.taxableItems?.[0]?.rate !== undefined ? line.taxableItems[0].rate : 14;
+    // Fix falsy 0 evaluation and respect backend taxPercent:
+    const taxRate = line.taxableItems?.[0]?.rate !== undefined ? line.taxableItems[0].rate : (line.taxPercent !== undefined ? line.taxPercent : 14);
     const taxAmt = net * (taxRate / 100);
     
     if (line.taxableItems && line.taxableItems[0]) {
       line.taxableItems[0].amount = taxAmt;
-    } else if (taxAmt > 0) {
+    } else if (taxAmt > 0 || taxRate >= 0) {
       line.taxableItems = [{ taxType: "T1", subType: "V009", rate: taxRate, amount: taxAmt }];
     }
     

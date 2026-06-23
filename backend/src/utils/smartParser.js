@@ -744,17 +744,17 @@ function parseSchucoInvoice(text) {
       return m.map(match => parseGlobalNumberStr(match[1])).filter(v => !isNaN(v));
     };
     
-    // Bounds tightened to {0,100} to prevent it from greedily jumping to EGP totals if the target is completely missing
-    const packingMatches = getAllValid(new RegExp(`PACK(?:ING|AGING)?.{0,100}?${numReStr}`, 'g'));
+    // Bounds increased to {0,300} for Packing/Freight to handle multi-column extraction where labels and values are far apart
+    const packingMatches = getAllValid(new RegExp(`PACK(?:ING|AGING)?.{0,300}?${numReStr}`, 'g'));
     if (packingMatches.length > 0 && !packingAmt) packingAmt = packingMatches[packingMatches.length - 1];
 
-    const freightMatches = getAllValid(new RegExp(`FRE?IGHT.{0,100}?${numReStr}`, 'g'));
+    const freightMatches = getAllValid(new RegExp(`FRE?IGHT.{0,300}?${numReStr}`, 'g'));
     if (freightMatches.length > 0 && !freightAmt) freightAmt = freightMatches[freightMatches.length - 1];
 
-    const netMatches = getAllValid(new RegExp(`NETAMOUNT.{0,100}?${numReStr}`, 'g'));
+    const netMatches = getAllValid(new RegExp(`NETAMOUNT.{0,150}?${numReStr}`, 'g'));
     if (netMatches.length > 0 && !metadata.netAmount) metadata.netAmount = netMatches[netMatches.length - 1];
 
-    const taxMatches = getAllValid(new RegExp(`VAT.{0,100}?${numReStr}`, 'g'));
+    const taxMatches = getAllValid(new RegExp(`VAT.{0,150}?${numReStr}`, 'g'));
     if (taxMatches.length > 0 && !metadata.taxAmount) metadata.taxAmount = taxMatches[taxMatches.length - 1];
 
     const totEgpMatches = getAllValid(new RegExp(`TOTALAMOUNTEGP.{0,100}?${numReStr}`, 'g'));
