@@ -280,12 +280,12 @@ export default function Home() {
   async function handleUploadExcel() {
     if (!file) return
 
-    // Enforce configured ETA credentials check and successful connection verification before any file upload processing
+    // Enforce configured ETA credentials check before any file upload processing
     const config = settings || {}
-    if (!config.clientId || !config.clientSecret1 || !config.clientSecret2 || !config.isVerified) {
+    if (!config.clientId || !config.clientSecret1 || !config.clientSecret2) {
       toast.error(lang === 'ar' 
-        ? '⚠️ خطأ: يجب إدخال واختبار بيانات ربط مصلحة الضرائب (ETA) بنجاح أولاً من قائمة "إعدادات الشركة" قبل معالجة أي فواتير!' 
-        : '⚠️ Error: You must enter and successfully test valid ETA connection credentials from "Company Setup" before processing invoices!')
+        ? '⚠️ خطأ: يجب إدخال بيانات ربط مصلحة الضرائب (ETA) أولاً من قائمة "إعدادات الشركة" قبل معالجة أي فواتير!' 
+        : '⚠️ Error: You must enter ETA connection credentials from "Company Setup" before processing invoices!')
       return
     }
 
@@ -434,6 +434,13 @@ export default function Home() {
     } else if (field === 'receiverVat') {
       if (!doc.receiver) doc.receiver = {}
       doc.receiver.id = val
+    } else if (field === 'receiverType') {
+      if (!doc.receiver) doc.receiver = {}
+      doc.receiver.type = val
+    } else if (field === 'receiverCountry') {
+      if (!doc.receiver) doc.receiver = {}
+      if (!doc.receiver.address) doc.receiver.address = {}
+      doc.receiver.address.country = val
     } else if (field === 'taxpayerActivityCode') {
       doc.taxpayerActivityCode = val
     } else if (field === 'currency') {
@@ -1056,13 +1063,13 @@ export default function Home() {
               {(() => {
                 const config = settings || {}
                 const hasKeys = config.clientId && config.clientSecret1 && config.clientSecret2
-                return !hasKeys || !config.isVerified
+                return !hasKeys
               })() && (
                 <div style={{ background: 'rgba(231, 76, 60, 0.1)', border: '1px solid var(--danger)', padding: '1rem', borderRadius: 'var(--radius)', color: '#fff', fontSize: '0.9rem', marginBottom: '1.5rem', textAlign: 'right', display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'right' }}>
                   <div>
-                    <strong>{lang === 'ar' ? '⚠️ يلزم تهيئة واختبار إعدادات الاتصال:' : '⚠️ Connection credentials validation required:'}</strong>
+                    <strong>{lang === 'ar' ? '⚠️ يلزم تهيئة إعدادات الاتصال:' : '⚠️ Connection credentials required:'}</strong>
                     <span style={{ display: 'block', fontSize: '0.8rem', opacity: 0.85, marginTop: '0.2rem' }}>
-                      {lang === 'ar' ? 'الرجاء الضغط على "إعدادات الشركة" في الشريط العلوي، وإدخال مفاتيح ربط مصلحة الضرائب (ETA)، ثم الضغط على "اختبار الاتصال المباشر" وحفظ الإعدادات بنجاح أولاً.' : 'Please open "Company Setup" at the top, enter your ETA keys, and click "Test Direct Connection" to successfully verify connection first.'}
+                      {lang === 'ar' ? 'الرجاء الضغط على "إعدادات الشركة" في الشريط العلوي، وإدخال مفاتيح ربط مصلحة الضرائب (ETA) وحفظ الإعدادات بنجاح أولاً.' : 'Please open "Company Setup" at the top, enter your ETA keys, and save the settings first.'}
                     </span>
                   </div>
                 </div>
@@ -1550,6 +1557,37 @@ export default function Home() {
                       style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
                       value={etaDocs[0]?.receiver?.id || ''} 
                       onChange={(e) => updateInvoiceMetadata('receiverVat', e.target.value)} 
+                    />
+                  </div>
+
+                  {/* Receiver Type */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      📋 {lang === 'ar' ? 'نوع المستلم' : 'Receiver Type'}
+                    </label>
+                    <select
+                      className="input"
+                      style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      value={etaDocs[0]?.receiver?.type || 'B'}
+                      onChange={(e) => updateInvoiceMetadata('receiverType', e.target.value)}
+                    >
+                      <option value="B">{lang === 'ar' ? 'شركة / أعمال (B)' : 'Business (B)'}</option>
+                      <option value="P">{lang === 'ar' ? 'شخص (P)' : 'Person (P)'}</option>
+                      <option value="F">{lang === 'ar' ? 'أجنبي (F)' : 'Foreigner (F)'}</option>
+                    </select>
+                  </div>
+
+                  {/* Receiver Country */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      🌍 {lang === 'ar' ? 'دولة المستلم (ISO Code)' : 'Receiver Country Code'}
+                    </label>
+                    <input 
+                      type="text" 
+                      className="input" 
+                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
+                      value={etaDocs[0]?.receiver?.address?.country || 'EG'} 
+                      onChange={(e) => updateInvoiceMetadata('receiverCountry', e.target.value)} 
                     />
                   </div>
 

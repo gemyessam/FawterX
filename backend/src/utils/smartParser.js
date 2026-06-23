@@ -220,6 +220,24 @@ function extractMetadata(text, rawRows = []) {
     currency: inferCurrency(allText)
   };
 
+  // Simple heuristic for foreign detection
+  const addressMatch = extractFirst(/(?:address|العنوان)\s*[:#-]?\s*([^\n]{3,150})/i, allText);
+  if (addressMatch) {
+    const addrLower = addressMatch.toLowerCase();
+    const isDomestic = /(egypt|cairo|giza|alex|مصر|القاهرة|الجيزة|الاسكندرية)/.test(addrLower);
+    const isForeign = /(saudi|ksa|uae|dubai|usa|uk|germany|france|italy|spain|السعودية|الامارات|دبي|امريكا)/.test(addrLower);
+    
+    if (isForeign && !isDomestic) {
+      metadata.receiverType = "F";
+      if (addrLower.includes("saudi") || addrLower.includes("ksa") || addrLower.includes("السعودية")) metadata.receiverCountry = "SA";
+      else if (addrLower.includes("uae") || addrLower.includes("dubai") || addrLower.includes("الامارات") || addrLower.includes("دبي")) metadata.receiverCountry = "AE";
+      else if (addrLower.includes("usa") || addrLower.includes("امريكا")) metadata.receiverCountry = "US";
+      else if (addrLower.includes("uk")) metadata.receiverCountry = "GB";
+      else if (addrLower.includes("germany")) metadata.receiverCountry = "DE";
+      else metadata.receiverCountry = "XX"; // Unknown foreign country fallback
+    }
+  }
+
   rawRows.slice(0, 12).forEach(row => {
     const joined = row.map(normalizeSpaces).filter(Boolean).join(" ");
     if (!metadata.issuer && /(supplier|seller|vendor|المورد|البائع)/i.test(joined)) {

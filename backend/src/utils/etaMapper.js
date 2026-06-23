@@ -158,12 +158,17 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
     const firstRow = groupRows[0].row;
     
     // استخدام ميتاداتا المستلم إذا وجدت، وإلا الرجوع للمربوط في الصفوف
-    const receiverId = (metadata.receiverVat || String(firstRow[mapping.receiverId] || "")).replace(/[^0-9]/g, "");
+    const receiverId = (metadata.receiverVat || String(firstRow[mapping.receiverId] || "")).replace(/[^0-9A-Za-z]/g, "");
     const receiverName = metadata.receiver || String(firstRow[mapping.receiverName] || "");
     
-    let receiverType = "B";
-    if (receiverId.length === 14) receiverType = "P";
-    else if (receiverId === "") receiverType = "P";
+    let receiverType = metadata.receiverType;
+    if (!receiverType) {
+      receiverType = "B";
+      if (receiverId.length === 14 && /^\d+$/.test(receiverId)) receiverType = "P";
+      else if (receiverId === "") receiverType = "P";
+    }
+
+    const receiverCountry = metadata.receiverCountry || "EG";
 
     documents.push({
       issuer: {
@@ -181,7 +186,7 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       },
       receiver: {
         address: {
-          country:        "EG",
+          country:        receiverCountry,
           governate:      metadata.receiverGovernate || "Cairo",
           regionCity:     metadata.receiverRegionCity || "Cairo",
           street:         metadata.receiverStreet || "Main Street",

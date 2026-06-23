@@ -134,15 +134,8 @@ function Layout({ children }) {
                 return next
               })
             })
-            .catch(() => {
-              setSettings(prev => {
-                const next = { ...finalSettings, isVerified: false }
-                localStorage.setItem('companySettings', JSON.stringify(next))
-                return next
-              })
-              toast.error(lang === 'ar'
-                ? '⚠️ تنبيه: انتهت صلاحية مفاتيح ربط الضرائب أو تم إلغاؤها! يرجى مراجعة إعدادات الشركة وإعادة المصادقة.'
-                : '⚠️ Warning: ETA credentials have expired or been revoked! Please review company setup and re-verify.')
+            .catch((err) => {
+              console.warn('Background ETA verification failed or timed out. Keeping existing verified status.', err)
             })
         }
       })
@@ -308,7 +301,9 @@ function Layout({ children }) {
 
       {/* ─── Main Content Wrapper ─── */}
       <main className="main-content-flow">
-        {children}
+        <SettingsContext.Provider value={settings}>
+          {children}
+        </SettingsContext.Provider>
       </main>
 
       {/* ─── Breathtaking Footer ─── */}
