@@ -1535,6 +1535,23 @@ export default function Home() {
                     </select>
                   </div>
 
+                  {/* Exchange Rate */}
+                  {etaDocs[0]?.invoiceLines?.[0]?.unitValue?.currencySold && etaDocs[0]?.invoiceLines?.[0]?.unitValue?.currencySold !== 'EGP' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                        💱 {lang === 'ar' ? 'سعر الصرف' : 'Exchange Rate'}
+                      </label>
+                      <input 
+                        type="number" 
+                        step="0.00001"
+                        className="input" 
+                        style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#f1c40f', fontWeight: 'bold', borderRadius: '6px', padding: '0.5rem' }} 
+                        value={etaDocs[0]?.invoiceLines?.[0]?.unitValue?.currencyExchangeRate || 1} 
+                        onChange={(e) => updateInvoiceMetadata('exchangeRate', e.target.value)} 
+                      />
+                    </div>
+                  )}
+
                   {/* Code Type */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                     <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
@@ -2012,45 +2029,84 @@ export default function Home() {
               </div>
 
               {/* Gorgeous Portal-Style Totals Panel */}
-              <div style={{ 
-                marginTop: '2.5rem', 
-                marginBottom: '2.5rem', 
-                padding: '2rem', 
-                background: 'rgba(255, 255, 255, 0.015)', 
-                border: '1px solid var(--border)', 
-                borderRadius: 'var(--radius)',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '2.5rem',
-                textAlign: lang === 'ar' ? 'right' : 'left'
-              }}>
-                <div style={{ borderLeft: lang === 'ar' ? '1px solid var(--border)' : 'none', borderRight: lang !== 'ar' ? '1px solid var(--border)' : 'none', paddingLeft: lang === 'ar' ? '2rem' : '0', paddingRight: lang !== 'ar' ? '2rem' : '0' }}>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.5rem' }}>
-                    {lang === 'ar' ? '💵 إجمالي المبيعات (قبل الضريبة)' : '💵 Total Sales (Before Tax)'}
-                  </span>
-                  <strong style={{ fontSize: '1.45rem', color: '#fff' }}>
-                    {Number(etaDocs[0]?.netAmount || etaDocs[0]?.totalSalesAmount || 0).toLocaleString()} <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>EGP</span>
-                  </strong>
-                </div>
+              {(() => {
+                const doc = etaDocs[0];
+                const isForeign = doc?.invoiceLines?.[0]?.unitValue?.currencySold && doc?.invoiceLines?.[0]?.unitValue?.currencySold !== 'EGP';
+                const curr = doc?.invoiceLines?.[0]?.unitValue?.currencySold || 'EGP';
                 
-                <div style={{ borderLeft: lang === 'ar' ? '1px solid var(--border)' : 'none', borderRight: lang !== 'ar' ? '1px solid var(--border)' : 'none', paddingLeft: lang === 'ar' ? '2rem' : '0', paddingRight: lang !== 'ar' ? '2rem' : '0' }}>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.5rem' }}>
-                    {lang === 'ar' ? '⚡ إجمالي ضريبة القيمة المضافة (T1)' : '⚡ Total Value Added Tax (VAT T1)'}
-                  </span>
-                  <strong style={{ fontSize: '1.45rem', color: '#f1c40f' }}>
-                    {Number(etaDocs[0]?.taxTotals?.[0]?.amount || 0).toLocaleString()} <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>EGP</span>
-                  </strong>
-                </div>
+                let forNet = 0;
+                let forTax = 0;
+                
+                if (isForeign) {
+                  doc?.invoiceLines?.forEach(l => {
+                    const qty = l.quantity || 0;
+                    const unitSold = l.unitValue?.amountSold || 0;
+                    const lineForNet = qty * unitSold;
+                    forNet += lineForNet;
+                    
+                    const taxRate = l.taxableItems?.[0]?.rate || 0;
+                    forTax += lineForNet * (taxRate / 100);
+                  });
+                }
+                const forTotal = forNet + forTax;
 
-                <div>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.5rem' }}>
-                    {lang === 'ar' ? '🏆 الإجمالي الكلي للفاتورة (بالضريبة)' : '🏆 Grand Invoice Total (With VAT)'}
-                  </span>
-                  <strong style={{ fontSize: '1.8rem', color: 'var(--accent)', fontWeight: 800 }}>
-                    {Number(etaDocs[0]?.totalAmount || 0).toLocaleString()} <span style={{ fontSize: '1.1rem', color: 'var(--text-dim)' }}>EGP</span>
-                  </strong>
-                </div>
-              </div>
+                return (
+                  <div style={{ 
+                    marginTop: '2.5rem', 
+                    marginBottom: '2.5rem', 
+                    padding: '2rem', 
+                    background: 'rgba(255, 255, 255, 0.015)', 
+                    border: '1px solid var(--border)', 
+                    borderRadius: 'var(--radius)',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '2.5rem',
+                    textAlign: lang === 'ar' ? 'right' : 'left'
+                  }}>
+                    <div style={{ borderLeft: lang === 'ar' ? '1px solid var(--border)' : 'none', borderRight: lang !== 'ar' ? '1px solid var(--border)' : 'none', paddingLeft: lang === 'ar' ? '2rem' : '0', paddingRight: lang !== 'ar' ? '2rem' : '0' }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.5rem' }}>
+                        {lang === 'ar' ? '💵 إجمالي المبيعات (قبل الضريبة)' : '💵 Total Sales (Before Tax)'}
+                      </span>
+                      <strong style={{ fontSize: '1.45rem', color: '#fff' }}>
+                        {Number(doc?.netAmount || doc?.totalSalesAmount || 0).toLocaleString()} <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>EGP</span>
+                      </strong>
+                      {isForeign && (
+                        <div style={{ marginTop: '0.25rem', color: '#f1c40f', fontSize: '0.95rem', fontWeight: 'bold' }}>
+                          ≈ {Number(forNet).toLocaleString(undefined, { minimumFractionDigits: 2 })} {curr}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div style={{ borderLeft: lang === 'ar' ? '1px solid var(--border)' : 'none', borderRight: lang !== 'ar' ? '1px solid var(--border)' : 'none', paddingLeft: lang === 'ar' ? '2rem' : '0', paddingRight: lang !== 'ar' ? '2rem' : '0' }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.5rem' }}>
+                        {lang === 'ar' ? '⚡ إجمالي ضريبة القيمة المضافة (T1)' : '⚡ Total Value Added Tax (VAT T1)'}
+                      </span>
+                      <strong style={{ fontSize: '1.45rem', color: '#f1c40f' }}>
+                        {Number(doc?.taxTotals?.[0]?.amount || 0).toLocaleString()} <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>EGP</span>
+                      </strong>
+                      {isForeign && forTax > 0 && (
+                        <div style={{ marginTop: '0.25rem', color: '#f1c40f', fontSize: '0.95rem', fontWeight: 'bold' }}>
+                          ≈ {Number(forTax).toLocaleString(undefined, { minimumFractionDigits: 2 })} {curr}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.5rem' }}>
+                        {lang === 'ar' ? '🏆 الإجمالي الكلي للفاتورة (بالضريبة)' : '🏆 Grand Invoice Total (With VAT)'}
+                      </span>
+                      <strong style={{ fontSize: '1.8rem', color: 'var(--accent)', fontWeight: 800 }}>
+                        {Number(doc?.totalAmount || 0).toLocaleString()} <span style={{ fontSize: '1.1rem', color: 'var(--text-dim)' }}>EGP</span>
+                      </strong>
+                      {isForeign && (
+                        <div style={{ marginTop: '0.25rem', color: 'var(--accent)', fontSize: '1.1rem', fontWeight: 'bold' }}>
+                          ≈ {Number(forTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })} {curr}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="expandable-advanced" style={{ marginTop: '2.5rem', marginBottom: '1.5rem' }}>
                 <div className="advanced-toggle-header" onClick={() => setShowAdvanced(!showAdvanced)}>

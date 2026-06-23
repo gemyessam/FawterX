@@ -659,16 +659,27 @@ function parseSchucoInvoice(text) {
   const currMatch = text.match(/\b(EUR|USD|GBP|SAR|AED)\b/i);
   if (currMatch) metadata.currency = currMatch[1].toUpperCase();
 
-  const noSpaceText = text.replace(/\s+/g, '').toUpperCase();
+  const lastChunk = text.slice(-2500).replace(/\s+/g, '').toUpperCase();
   
-  const packMatch = noSpaceText.match(/PACK(?:ING|AGING)?[\s\S]{0,100}?([0-9]+[0-9,]*\.[0-9]+)/);
+  const packMatch = lastChunk.match(/PACK(?:ING|AGING)?[\s\S]{0,100}?([0-9]+[0-9,]*\.[0-9]+)/);
   if (packMatch) packingAmt = parseFloat(packMatch[1].replace(/,/g, ''));
 
-  let fText = noSpaceText;
-  if (packMatch) fText = fText.replace(packMatch[1], ''); // Prevent matching the same number if extracted vertically
+  let fText = lastChunk;
+  if (packMatch) fText = fText.replace(packMatch[1], ''); // Prevent matching the same number
   
   const freightMatch = fText.match(/FR(?:E)?IGHT[\s\S]{0,100}?([0-9]+[0-9,]*\.[0-9]+)/);
   if (freightMatch) freightAmt = parseFloat(freightMatch[1].replace(/,/g, ''));
+
+  const netMatch = lastChunk.match(/NETAMOUNT[\s\S]{0,100}?([0-9]+[0-9,]*\.[0-9]+)/);
+  if (netMatch) metadata.netAmount = parseFloat(netMatch[1].replace(/,/g, ''));
+
+  const vatMatch = lastChunk.match(/VAT[\s\S]{0,100}?([0-9]+[0-9,]*\.[0-9]+)/);
+  if (vatMatch) metadata.taxAmount = parseFloat(vatMatch[1].replace(/,/g, ''));
+
+  let tText = lastChunk;
+  if (netMatch) tText = tText.replace(netMatch[1], '');
+  const totalMatch = tText.match(/TOTALAMOUNT[\s\S]{0,100}?([0-9]+[0-9,]*\.[0-9]+)/);
+  if (totalMatch) metadata.totalAmount = parseFloat(totalMatch[1].replace(/,/g, ''));
 
   for (const line of rawLines) {
     // Invoice number: e.g. "000000612" or "202303610"
