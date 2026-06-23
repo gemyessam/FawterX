@@ -1414,6 +1414,8 @@ async function parseSmartDocumentWithSchuco(filePath, isPdf = false) {
         ...row.warnings.map(w => `Line ${idx + 1}: ${w}`),
         ...(row.missingFields || []).map(m => `Line ${idx + 1}: ${m}`)
       ]);
+      
+      warnings.push("DEBUG_TEXT_START:\n" + text.slice(-1500) + "\n:DEBUG_TEXT_END");
 
       const headers = [
         'invoiceNumber', 'itemCode', 'codeType', 'internalCode',
