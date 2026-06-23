@@ -659,67 +659,82 @@ function parseSchucoInvoice(text) {
   const currMatch = text.match(/\b(EUR|USD|GBP|SAR|AED)\b/i);
   if (currMatch) metadata.currency = currMatch[1].toUpperCase();
 
-  // ── Footer-level extraction: parse lines from bottom up for summary amounts ──
-  // We reverse-scan the raw lines to find footer entries like:
-  //   "Net Amount    EUR    27,440.35"
-  //   "Packing       EUR    2,692.60"
-  // This avoids matching item-level text like "Packing unit: 0.002 TO"
-  const reversedLines = [...rawLines].reverse();
-  
-  console.log('=== FOOTER EXTRACTION DEBUG ===');
-  console.log('Total lines to scan:', rawLines.length);
-  console.log('Currency detected:', metadata.currency);
-  
-  // Scan only the last ~80 lines (footer region)
-  const footerLines = reversedLines.slice(0, 80);
-  
-  for (const fLine of footerLines) {
-    const trimmed = fLine.trim();
-    if (!trimmed) continue;
-    
-    // Match patterns like: "Packing    EUR    2,692.60" or "Packing  2,692.60"
-    if (/^Packing/i.test(trimmed) && !packingAmt) {
-      const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
-      if (m) {
-        packingAmt = parseFloat(m[1].replace(/,/g, ''));
-        console.log('  ✅ PACKING from footer line:', packingAmt, '| line:', trimmed);
+  // ══════════════════════════════════════════════════════════════
+  // FOOTER EXTRACTION — Multi-strategy for Packing/Freight/Totals
+  // ══════════════════════════════════════════════════════════════
+  //   "Packing unit: 0.002"
+  // Strategy 2: Line-by-line reverse scan
+  // Strategy 3: noSpaceText global scan fallback
+  // ══════════════════════════════════════════════════════════════
+
+  const currCode = metadata.currency || 'EUR|USD|GBP|EGP';
+  const ccPat = currCode.includes('|') ? currCode : `(?:${currCode})`;
+
+  // Strategy 1: Full-text currency-qualified regex (using literals)
+  const allMatchesLit = (re, src) => { const m = [...src.matchAll(re)]; return m.length ? parseFloat(m[m.length - 1][1].replace(/,/g, "")) : null; };
+  let p1 = allMatchesLit(/Packing\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
+  let f1 = allMatchesLit(/Fre?ight\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
+  let n1 = allMatchesLit(/Net\s*Amount\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
+  let v1 = allMatchesLit(/VAT\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
+  let t1 = allMatchesLit(/Total\s*Amount\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
+
+  console.log('=== FOOTER STRATEGY 1 (currency-qualified) ===', { packing: p1, freight: f1, net: n1, vat: v1, total: t1 });
+
+  if (p1 !== null) packingAmt = p1;
+  if (f1 !== null) freightAmt = f1;
+  if (n1 !== null) metadata.netAmount = n1;
+  if (v1 !== null) metadata.taxAmount = v1;
+  if (t1 !== null) metadata.totalAmount = t1;
+
+  // ── Strategy 2: Line-by-line reverse scan (for cases without currency on same line) ──
+  if (!packingAmt || !freightAmt || !metadata.netAmount || !metadata.totalAmount) {
+    const reversedLines = [...rawLines].reverse().slice(0, 80);
+    for (const fLine of reversedLines) {
+      const trimmed = fLine.trim();
+      if (!trimmed) continue;
+      
+      if (/^Packing/i.test(trimmed) && !packingAmt) {
+        const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
+        if (m) packingAmt = parseFloat(m[1].replace(/,/g, ''));
+      }
+      if (/^Fre?ight/i.test(trimmed) && !freightAmt) {
+        const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
+        if (m) freightAmt = parseFloat(m[1].replace(/,/g, ''));
+      }
+      if (/^Net\s*Amount/i.test(trimmed) && !metadata.netAmount) {
+        const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
+        if (m) metadata.netAmount = parseFloat(m[1].replace(/,/g, ''));
+      }
+      if (/^VAT\b/i.test(trimmed) && !metadata.taxAmount) {
+        const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
+        if (m) metadata.taxAmount = parseFloat(m[1].replace(/,/g, ''));
+      }
+      if (/^Total\s*Amount/i.test(trimmed) && !metadata.totalAmount) {
+        const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
+        if (m) metadata.totalAmount = parseFloat(m[1].replace(/,/g, ''));
       }
     }
-    
-    if (/^Freight/i.test(trimmed) && !freightAmt) {
-      const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
-      if (m) {
-        freightAmt = parseFloat(m[1].replace(/,/g, ''));
-        console.log('  ✅ FREIGHT from footer line:', freightAmt, '| line:', trimmed);
-      }
-    }
-    
-    if (/^Net\s*Amount/i.test(trimmed) && !metadata.netAmount) {
-      const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
-      if (m) {
-        metadata.netAmount = parseFloat(m[1].replace(/,/g, ''));
-        console.log('  ✅ NET AMOUNT from footer line:', metadata.netAmount, '| line:', trimmed);
-      }
-    }
-    
-    if (/^VAT\b/i.test(trimmed) && !metadata.taxAmount) {
-      const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
-      if (m) {
-        metadata.taxAmount = parseFloat(m[1].replace(/,/g, ''));
-        console.log('  ✅ TAX (VAT) from footer line:', metadata.taxAmount, '| line:', trimmed);
-      }
-    }
-    
-    if (/^Total\s*Amount/i.test(trimmed) && !metadata.totalAmount) {
-      const m = trimmed.match(/([\d,]+\.\d+)\s*$/);
-      if (m) {
-        metadata.totalAmount = parseFloat(m[1].replace(/,/g, ''));
-        console.log('  ✅ TOTAL AMOUNT from footer line:', metadata.totalAmount, '| line:', trimmed);
-      }
-    }
+    console.log('=== FOOTER STRATEGY 2 (line scan) ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, totalAmount: metadata.totalAmount });
   }
-  
-  console.log('=== FOOTER RESULT ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, taxAmount: metadata.taxAmount, totalAmount: metadata.totalAmount });
+
+  // ── Strategy 3: noSpaceText fallback ──
+  if (!packingAmt || !freightAmt || !metadata.netAmount || !metadata.totalAmount) {
+    const noSp = text.replace(/\s+/g, '').toUpperCase();
+    const getLast = (re) => { const m = [...noSp.matchAll(re)]; return m.length ? parseFloat(m[m.length - 1][1].replace(/,/g, '')) : null; };
+    
+    // Use currency-aware patterns even in noSpaceText: PACKINGEUR2,692.60
+    if (!packingAmt) { const v = getLast(/PACKING(?:EUR|USD|GBP|EGP)([0-9,]+\.[0-9]+)/g); if (v) packingAmt = v; }
+    if (!freightAmt) { const v = getLast(/FRE?IGHT(?:EUR|USD|GBP|EGP)([0-9,]+\.[0-9]+)/g); if (v) freightAmt = v; }
+    if (!metadata.netAmount) { const v = getLast(/NETAMOUNT(?:EUR|USD|GBP|EGP)?([0-9,]+\.[0-9]+)/g); if (v) metadata.netAmount = v; }
+    if (!metadata.taxAmount) { const v = getLast(/VAT(?:EUR|USD|GBP|EGP)([0-9,]+\.[0-9]+)/g); if (v) metadata.taxAmount = v; }
+    if (!metadata.totalAmount) { const v = getLast(/TOTALAMOUNT(?:EUR|USD|GBP|EGP)?([0-9,]+\.[0-9]+)/g); if (v) metadata.totalAmount = v; }
+    console.log('=== FOOTER STRATEGY 3 (noSpaceText) ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, totalAmount: metadata.totalAmount });
+  }
+
+  // Debug: show last 5 non-empty raw lines to understand PDF text structure
+  const lastLines = rawLines.filter(l => l.trim()).slice(-10);
+  console.log('=== LAST 10 NON-EMPTY LINES OF PDF ===', lastLines);
+  console.log('=== FINAL FOOTER RESULT ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, taxAmount: metadata.taxAmount, totalAmount: metadata.totalAmount });
 
   for (const line of rawLines) {
     // Invoice number: e.g. "000000612" or "202303610"
