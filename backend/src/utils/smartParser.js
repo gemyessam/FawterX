@@ -631,6 +631,7 @@ async function parseSmartDocument(filePath, isPdf = false) {
 // ══════════════════════════════════════════════════════════
 
 function parseSchucoInvoice(text) {
+  const warnings = [];
   const rawLines = text.split('\n').map(l => l.trim().replace(/\\t/g, '\t')).filter(Boolean);
 
   // ── RAW TEXT DEBUG LOG ──────────────────────────────────
@@ -717,26 +718,38 @@ function parseSchucoInvoice(text) {
     console.log('=== FOOTER STRATEGY 2 (line scan) ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, totalAmount: metadata.totalAmount });
   }
 
-  // ── Strategy 3: noSpaceText fallback ──
+  // ── Strategy 3: noSpaceText fallback (Handles split numbers and detached columns) ──
   if (!packingAmt || !freightAmt || !metadata.netAmount || !metadata.totalAmount) {
     const noSp = text.replace(/\s+/g, '').toUpperCase();
     
-    // Helper to extract the last valid currency-like value (ignores weights like 0.002)
-    const getValidLast = (re) => {
+    // Helper to extract ALL valid currency-like values matching the regex
+    const getAllValid = (re) => {
       const m = [...noSp.matchAll(re)];
-      for (let i = m.length - 1; i >= 0; i--) {
-        const valStr = m[i][1];
-        if (valStr.includes('.') && valStr.split('.')[1].length > 2) continue; // Skip e.g., 0.002
-        return parseFloat(valStr.replace(/,/g, ''));
-      }
-      return null;
+      return m.map(match => parseFloat(match[1].replace(/,/g, ''))).filter(v => !isNaN(v));
     };
     
-    if (!packingAmt) { const v = getValidLast(/PACK(?:ING|AGING)?.{0,150}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) packingAmt = v; }
-    if (!freightAmt) { const v = getValidLast(/FRE?IGHT.{0,150}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) freightAmt = v; }
-    if (!metadata.netAmount) { const v = getValidLast(/NETAMOUNT.{0,150}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) metadata.netAmount = v; }
-    if (!metadata.taxAmount) { const v = getValidLast(/VAT.{0,150}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) metadata.taxAmount = v; }
-    if (!metadata.totalAmount) { const v = getValidLast(/TOTALAMOUNT.{0,150}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) metadata.totalAmount = v; }
+    const packingMatches = getAllValid(/PACK(?:ING|AGING)?.{0,150}?([0-9]+[0-9,]*\.[0-9]{2})(?![0-9])/g);
+    if (packingMatches.length > 0 && !packingAmt) packingAmt = packingMatches[packingMatches.length - 1];
+
+    const freightMatches = getAllValid(/FRE?IGHT.{0,150}?([0-9]+[0-9,]*\.[0-9]{2})(?![0-9])/g);
+    if (freightMatches.length > 0 && !freightAmt) freightAmt = freightMatches[freightMatches.length - 1];
+
+    const netMatches = getAllValid(/NETAMOUNT.{0,150}?([0-9]+[0-9,]*\.[0-9]{2})(?![0-9])/g);
+    if (netMatches.length > 0 && !metadata.netAmount) metadata.netAmount = netMatches[netMatches.length - 1];
+
+    const taxMatches = getAllValid(/VAT.{0,150}?([0-9]+[0-9,]*\.[0-9]{2})(?![0-9])/g);
+    if (taxMatches.length > 0 && !metadata.taxAmount) metadata.taxAmount = taxMatches[taxMatches.length - 1];
+
+    // Total Amount: User explicitly wants the EGP total if available (for foreign currency invoices)
+    const totEgpMatches = getAllValid(/TOTALAMOUNTEGP.{0,150}?([0-9]+[0-9,]*\.[0-9]{2})(?![0-9])/g);
+    const totAnyMatches = getAllValid(/TOTALAMOUNT.{0,150}?([0-9]+[0-9,]*\.[0-9]{2})(?![0-9])/g);
+    
+    if (totEgpMatches.length > 0) {
+      metadata.totalAmount = totEgpMatches[totEgpMatches.length - 1]; // Prioritize EGP total
+    } else if (totAnyMatches.length > 0 && !metadata.totalAmount) {
+      metadata.totalAmount = totAnyMatches[totAnyMatches.length - 1];
+    }
+    
     console.log('=== FOOTER STRATEGY 3 (noSpace fallback) ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, totalAmount: metadata.totalAmount });
   }
 
