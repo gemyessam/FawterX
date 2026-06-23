@@ -74,6 +74,14 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
     }
 
     const receiverCountry = metadata.receiverCountry || (receiverType === "F" ? "" : "EG");
+    const receiverForeign = receiverType === "F" || (receiverCountry && receiverCountry !== "EG");
+    const receiverAddress = {
+      country: receiverCountry,
+      governate: metadata.receiverGovernate || metadata.receiverRegionCity || (receiverForeign ? "" : "Cairo"),
+      regionCity: metadata.receiverRegionCity || metadata.receiverGovernate || (receiverForeign ? "" : "Cairo"),
+      street: metadata.receiverStreet || metadata.receiverAddressText || (receiverForeign ? "" : "Main Street"),
+      buildingNumber: metadata.receiverBuildingNumber || (receiverForeign ? "" : "1")
+    };
 
     const invoiceLines = groupRows.map(({ row, idx }) => {
       const parsedVal = parseFloat(row[mapping.unitValue]);
@@ -197,13 +205,7 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
         name: issuerName,
       },
       receiver: {
-        address: {
-          country:        receiverCountry,
-          governate:      metadata.receiverGovernate || "Cairo",
-          regionCity:     metadata.receiverRegionCity || "Cairo",
-          street:         metadata.receiverStreet || "Main Street",
-          buildingNumber: metadata.receiverBuildingNumber || "1"
-        },
+        address: receiverAddress,
         type: receiverType,
         id:   receiverId,
         name: receiverName,

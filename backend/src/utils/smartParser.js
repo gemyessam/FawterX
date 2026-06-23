@@ -201,6 +201,86 @@ function parseDate(value) {
   return isNaN(d.getTime()) ? "" : d.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
+function extractReceiverAddressDetails(lines = [], receiverName = "") {
+  const normalizedLines = (Array.isArray(lines) ? lines : [])
+    .map(normalizeSpaces)
+    .filter(Boolean);
+
+  const lowerName = normalizeSpaces(receiverName).toLowerCase();
+  const receiverIdx = lowerName
+    ? normalizedLines.findIndex(line => line.toLowerCase() === lowerName || line.toLowerCase().includes(lowerName))
+    : -1;
+  const shipToIdx = normalizedLines.findIndex(line => /^ship to$/i.test(line));
+  const startIdx = receiverIdx >= 0 ? receiverIdx + 1 : 0;
+  const endIdx = shipToIdx >= 0 ? shipToIdx : normalizedLines.length;
+
+  const countryHints = [
+    { test: /(kenya|كينيا)/i, code: "KE" },
+    { test: /(egypt|مصر)/i, code: "EG" },
+    { test: /(saudi|ksa|السعودية)/i, code: "SA" },
+    { test: /(uae|dubai|الامارات|دبي)/i, code: "AE" },
+    { test: /(usa|امريكا)/i, code: "US" },
+    { test: /(uk)/i, code: "GB" },
+    { test: /(germany)/i, code: "DE" }
+  ];
+
+  const addressLines = [];
+  let countryCode = "";
+  let countryHit = false;
+
+  for (const rawLine of normalizedLines.slice(startIdx, endIdx)) {
+    let line = rawLine
+      .replace(/^\d{1,4}[.\/-]\d{1,2}[.\/-]\d{1,4}\s*\/\s*/i, "")
+      .replace(/^\s*(customer number|terms of delivery|invoice number|date)\s*[:#-]?\s*/i, "")
+      .trim();
+
+    if (
+      !line ||
+      /^0*\d{3,10}$/.test(line) ||
+      /^c-\d+$/i.test(line) ||
+      /^(customer number|invoice number|terms of delivery|vat|cr\s*#|cr#|sales invoice|phone:|tel:|info@|page\s*\d+|--\s*\d+\s+of\s+\d+\s*--)$/i.test(line)
+    ) {
+      continue;
+    }
+
+    const detectedCountry = countryHints.find(entry => entry.test.test(line));
+    if (detectedCountry) {
+      if (!countryCode) countryCode = detectedCountry.code;
+      addressLines.push(line);
+      countryHit = true;
+      break;
+    }
+
+    addressLines.push(line);
+  }
+
+  const addressText = addressLines.join(", ");
+  const cityLine = addressLines.find(line => /[A-Za-z\u0600-\u06FF]{3,}/.test(line) && /[,]/.test(line)) || "";
+  const cityMatch = cityLine.match(/^([^,]+)\s*,\s*(kenya|egypt|saudi arabia|uae|dubai|usa|uk|germany|كينيا|مصر|السعودية|الامارات|دبي|امريكا)/i);
+  const receiverRegionCity = cityMatch ? normalizeSpaces(cityMatch[1]) : "";
+
+  const streetLines = addressLines.filter(line => {
+    if (!line) return false;
+    if (countryHints.some(entry => entry.test.test(line))) return false;
+    if (/^ship to$/i.test(line)) return false;
+    return true;
+  });
+
+  const receiverStreet = streetLines.join(", ");
+  const pBoxMatch = receiverStreet.match(/\b(?:p\.?\s*o\.?\s*box\s*[\d\-\/]+|\d{3,6})\b/i);
+  const receiverBuildingNumber = pBoxMatch ? normalizeSpaces(pBoxMatch[0]) : "";
+
+  return {
+    receiverAddressText: addressText,
+    receiverStreet: receiverStreet || addressText,
+    receiverRegionCity: receiverRegionCity || "",
+    receiverGovernate: receiverRegionCity || "",
+    receiverBuildingNumber,
+    receiverCountry: countryCode,
+    receiverAddressLines: addressLines
+  };
+}
+
 function extractMetadata(text, rawRows = []) {
   const allText = normalizeSpaces(text.replace(/\n/g, " \n "));
   const vatMatches = allText.match(/\b\d{3}[-\s]?\d{3}[-\s]?\d{3}\b/g) || [];
@@ -243,6 +323,27 @@ function extractMetadata(text, rawRows = []) {
   if (!metadata.receiverType && /(kenya|nairobi|mombasa|كينيا|نيروبي|مومباسا)/i.test(allText)) {
     metadata.receiverType = "F";
     metadata.receiverCountry = "KE";
+  }
+
+  if (rawRows && rawRows.length) {
+    const rowsAsLines = rawRows.map(row => Array.isArray(row) ? row.map(normalizeSpaces).filter(Boolean).join(" ") : normalizeSpaces(row));
+    const addressDetails = extractReceiverAddressDetails(rowsAsLines, metadata.receiver);
+    if (addressDetails.receiverAddressText) {
+      metadata.receiverAddressText = addressDetails.receiverAddressText;
+    }
+    if (addressDetails.receiverStreet) {
+      metadata.receiverStreet = addressDetails.receiverStreet;
+    }
+    if (addressDetails.receiverRegionCity) {
+      metadata.receiverRegionCity = addressDetails.receiverRegionCity;
+      if (!metadata.receiverGovernate) metadata.receiverGovernate = addressDetails.receiverGovernate;
+    }
+    if (addressDetails.receiverBuildingNumber) {
+      metadata.receiverBuildingNumber = addressDetails.receiverBuildingNumber;
+    }
+    if (addressDetails.receiverCountry && !metadata.receiverCountry) {
+      metadata.receiverCountry = addressDetails.receiverCountry;
+    }
   }
 
   if (!metadata.receiverVat) {
@@ -966,6 +1067,24 @@ function parseSchucoInvoice(text) {
   }
   if (receiverName) {
     metadata.receiver = receiverName;
+  }
+
+  const receiverAddressDetails = extractReceiverAddressDetails(rawLines, metadata.receiver);
+  if (receiverAddressDetails.receiverAddressText) {
+    metadata.receiverAddressText = receiverAddressDetails.receiverAddressText;
+  }
+  if (receiverAddressDetails.receiverStreet) {
+    metadata.receiverStreet = receiverAddressDetails.receiverStreet;
+  }
+  if (receiverAddressDetails.receiverRegionCity) {
+    metadata.receiverRegionCity = receiverAddressDetails.receiverRegionCity;
+    if (!metadata.receiverGovernate) metadata.receiverGovernate = receiverAddressDetails.receiverGovernate;
+  }
+  if (receiverAddressDetails.receiverBuildingNumber) {
+    metadata.receiverBuildingNumber = receiverAddressDetails.receiverBuildingNumber;
+  }
+  if (receiverAddressDetails.receiverCountry && !metadata.receiverCountry) {
+    metadata.receiverCountry = receiverAddressDetails.receiverCountry;
   }
 
   // Explicitly identify issuer and receiver VATs based on the known Schüco VAT
