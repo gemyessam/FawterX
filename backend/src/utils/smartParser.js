@@ -172,7 +172,7 @@ function isNoiseLine(line) {
   if (!text) return true;
   if (NOISE_PATTERNS.some(pattern => pattern.test(text))) return true;
   if (/\b(street|road|building|floor|block|district|city|governate|country|postal code|zip|po box|smart village|giza|cairo|egypt|address|ship to|port|kenya|nairobi|mombasa|saudi|ksa|uae|dubai)\b/i.test(text)) return true;
-  if (/\b(cr#|cr\s*#|commercial register|vat[:\s#-]*\d|tax id|mobile|tel[:\s]|phone[:\s]|info@|contact)\b/i.test(text)) return true;
+  if (/(cr\s*#|commercial register|vat[:\s#-]*\d|tax id|mobile|tel[:\s]|phone[:\s]|info@|contact\b)/i.test(text)) return true;
   if (/^\s*(page\s*)?\d+\s*(of|\/)\s*\d+\s*$/i.test(text)) return true;
   return false;
 }

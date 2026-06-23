@@ -71,7 +71,6 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
     if (!receiverType) {
       receiverType = "B";
       if (receiverId.length === 14 && /^\d+$/.test(receiverId)) receiverType = "P";
-      else if (receiverId === "") receiverType = "P";
     }
 
     const receiverCountry = metadata.receiverCountry || "EG";

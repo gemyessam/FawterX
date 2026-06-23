@@ -447,6 +447,18 @@ export default function Home() {
     } else if (field === 'receiverType') {
       if (!doc.receiver) doc.receiver = {}
       doc.receiver.type = val
+      
+      if (val === 'F') {
+        doc.invoiceLines.forEach(l => {
+          if (l.taxableItems && l.taxableItems.length > 0) {
+            l.taxableItems[0].rate = 0
+            l.taxableItems[0].amount = 0
+          }
+          l.total = l.netTotal
+        })
+        doc.taxTotals = [{ taxType: "T1", amount: 0 }]
+        doc.totalAmount = doc.netAmount
+      }
     } else if (field === 'receiverCountry') {
       if (!doc.receiver) doc.receiver = {}
       if (!doc.receiver.address) doc.receiver.address = {}
