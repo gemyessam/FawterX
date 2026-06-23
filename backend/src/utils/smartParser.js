@@ -1362,7 +1362,7 @@ function parseSchucoInvoice(text) {
     }
   }
 
-  if (packingAmt > 0) {
+  if (packingAmt > 0 && metadata.currency !== 'EGP') {
     invoiceLines.push({
       invoiceNumber: metadata.internalID,
       itemCode: "EG-708820883-4",
@@ -1387,7 +1387,7 @@ function parseSchucoInvoice(text) {
     });
   }
 
-  if (freightAmt > 0) {
+  if (freightAmt > 0 && metadata.currency !== 'EGP') {
     invoiceLines.push({
       invoiceNumber: metadata.internalID,
       itemCode: "EG-708820883-4",
