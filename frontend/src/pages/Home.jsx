@@ -501,7 +501,7 @@ export default function Home() {
           l.netTotal = net
           l.salesTotal = net
           
-          const taxRate = l.taxableItems?.[0]?.rate || 0
+          const taxRate = l.taxableItems?.[0]?.rate !== undefined ? l.taxableItems[0].rate : (l.taxPercent !== undefined ? l.taxPercent : 14)
           const taxAmt = net * (taxRate / 100)
           if (l.taxableItems && l.taxableItems[0]) {
             l.taxableItems[0].amount = taxAmt
@@ -1975,7 +1975,7 @@ export default function Home() {
                                   textAlign: 'center',
                                   fontSize: '0.8rem'
                                 }} 
-                                value={line.taxableItems?.[0]?.rate ?? 14} 
+                                value={line.taxableItems?.[0]?.rate ?? (line.taxPercent ?? 14)} 
                                 onChange={(e) => updateInvoiceLine(idx, 'taxPercent', e.target.value)}
                               >
                                 <option value="14">14%</option>

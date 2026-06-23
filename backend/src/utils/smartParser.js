@@ -744,11 +744,11 @@ function parseSchucoInvoice(text) {
       return m.map(match => parseGlobalNumberStr(match[1])).filter(v => !isNaN(v));
     };
     
-    // Bounds increased to {0,300} for Packing/Freight to handle multi-column extraction where labels and values are far apart
-    const packingMatches = getAllValid(new RegExp(`PACK(?:ING|AGING)?.{0,300}?${numReStr}`, 'g'));
+    // Bounds increased to {0,500} for Packing/Freight to handle multi-column extraction where labels and values are extremely far apart
+    const packingMatches = getAllValid(new RegExp(`PACK(?:ING|AGING)?.{0,500}?${numReStr}`, 'ig'));
     if (packingMatches.length > 0 && !packingAmt) packingAmt = packingMatches[packingMatches.length - 1];
 
-    const freightMatches = getAllValid(new RegExp(`FRE?IGHT.{0,300}?${numReStr}`, 'g'));
+    const freightMatches = getAllValid(new RegExp(`FRE?IGHT.{0,500}?${numReStr}`, 'ig'));
     if (freightMatches.length > 0 && !freightAmt) freightAmt = freightMatches[freightMatches.length - 1];
 
     const netMatches = getAllValid(new RegExp(`NETAMOUNT.{0,150}?${numReStr}`, 'g'));
