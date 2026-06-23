@@ -659,27 +659,27 @@ function parseSchucoInvoice(text) {
   const currMatch = text.match(/\b(EUR|USD|GBP|SAR|AED)\b/i);
   if (currMatch) metadata.currency = currMatch[1].toUpperCase();
 
-  const lastChunk = text.slice(-2500).replace(/\s+/g, '').toUpperCase();
+  const noSpaceText = text.replace(/\s+/g, '').toUpperCase();
   
-  const packMatch = lastChunk.match(/PACK(?:ING|AGING)?[\s\S]{0,100}?([0-9]+[0-9,]*\.[0-9]+)/);
-  if (packMatch) packingAmt = parseFloat(packMatch[1].replace(/,/g, ''));
+  const getLastMatch = (regex) => {
+    const matches = [...noSpaceText.matchAll(regex)];
+    return matches.length > 0 ? parseFloat(matches[matches.length - 1][1].replace(/,/g, '')) : null;
+  };
 
-  let fText = lastChunk;
-  if (packMatch) fText = fText.replace(packMatch[1], ''); // Prevent matching the same number
-  
-  const freightMatch = fText.match(/FR(?:E)?IGHT[\s\S]{0,100}?([0-9]+[0-9,]*\.[0-9]+)/);
-  if (freightMatch) freightAmt = parseFloat(freightMatch[1].replace(/,/g, ''));
+  const pAmt = getLastMatch(/PACK(?:ING|AGING)?.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g);
+  if (pAmt !== null) packingAmt = pAmt;
 
-  const netMatch = lastChunk.match(/NETAMOUNT[\s\S]{0,100}?([0-9]+[0-9,]*\.[0-9]+)/);
-  if (netMatch) metadata.netAmount = parseFloat(netMatch[1].replace(/,/g, ''));
+  const fAmt = getLastMatch(/FR(?:E)?IGHT.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g);
+  if (fAmt !== null) freightAmt = fAmt;
 
-  const vatMatch = lastChunk.match(/VAT[\s\S]{0,100}?([0-9]+[0-9,]*\.[0-9]+)/);
-  if (vatMatch) metadata.taxAmount = parseFloat(vatMatch[1].replace(/,/g, ''));
+  const nAmt = getLastMatch(/NETAMOUNT.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g);
+  if (nAmt !== null) metadata.netAmount = nAmt;
 
-  let tText = lastChunk;
-  if (netMatch) tText = tText.replace(netMatch[1], '');
-  const totalMatch = tText.match(/TOTALAMOUNT[\s\S]{0,100}?([0-9]+[0-9,]*\.[0-9]+)/);
-  if (totalMatch) metadata.totalAmount = parseFloat(totalMatch[1].replace(/,/g, ''));
+  const vAmt = getLastMatch(/VAT.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g);
+  if (vAmt !== null) metadata.taxAmount = vAmt;
+
+  const tAmt = getLastMatch(/TOTALAMOUNT.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g);
+  if (tAmt !== null) metadata.totalAmount = tAmt;
 
   for (const line of rawLines) {
     // Invoice number: e.g. "000000612" or "202303610"
