@@ -659,10 +659,10 @@ function parseSchucoInvoice(text) {
   const currMatch = text.match(/\b(EUR|USD|GBP|SAR|AED)\b/i);
   if (currMatch) metadata.currency = currMatch[1].toUpperCase();
 
-  const packMatch = text.match(/Packing[\s\S]{0,40}?([\d,]+\.\d{2})/i);
+  const packMatch = text.match(/Packing[\s\S]{0,200}?([\d,]+\.\d+)/i);
   if (packMatch) packingAmt = parseFloat(packMatch[1].replace(/,/g, ''));
 
-  const freightMatch = text.match(/Freight[\s\S]{0,40}?([\d,]+\.\d{2})/i);
+  const freightMatch = text.match(/Freight[\s\S]{0,200}?([\d,]+\.\d+)/i);
   if (freightMatch) freightAmt = parseFloat(freightMatch[1].replace(/,/g, ''));
 
   for (const line of rawLines) {
@@ -1198,8 +1198,8 @@ function parseSchucoInvoice(text) {
     const net = lineNetAmount || Number((quantity * parsedUnitPrice).toFixed(4));
     const unitValue = quantity > 0 ? Number((net / quantity).toFixed(4)) : parsedUnitPrice;
 
-    const taxPercent = 14;
-    const taxAmt = Number((net * 0.14).toFixed(5));
+    const taxPercent = metadata.receiverType === 'F' ? 0 : 14;
+    const taxAmt = Number((net * (taxPercent / 100)).toFixed(5));
     const total = Number((net + taxAmt).toFixed(5));
 
     const missingFields = [];
@@ -1224,7 +1224,7 @@ function parseSchucoInvoice(text) {
       unitType,
       unitValue,
       taxPercent,
-      currency: 'EGP',
+      currency: metadata.currency || 'EGP',
       net,
       total,
       smartAttributes: { weight, length, finish, barQty, lmQty, packagingLabel, unitPricePerBar, unitPricePerMeter },
