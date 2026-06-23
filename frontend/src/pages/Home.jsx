@@ -376,6 +376,8 @@ export default function Home() {
       const rate = parseFloat(parseFloat(val).toFixed(4)) || 0
       if (line.taxableItems && line.taxableItems[0]) {
         line.taxableItems[0].rate = rate
+      } else {
+        line.taxableItems = [{ taxType: "T1", subType: "V009", rate: rate, amount: 0 }]
       }
     }
 
@@ -386,11 +388,16 @@ export default function Home() {
     line.netTotal = net
     line.salesTotal = net
     
-    const taxRate = line.taxableItems?.[0]?.rate || 14
-    const taxAmt = net * (taxRate / 100)
+    // Fix falsy 0 evaluation:
+    const taxRate = line.taxableItems?.[0]?.rate !== undefined ? line.taxableItems[0].rate : 14;
+    const taxAmt = net * (taxRate / 100);
+    
     if (line.taxableItems && line.taxableItems[0]) {
-      line.taxableItems[0].amount = taxAmt
+      line.taxableItems[0].amount = taxAmt;
+    } else if (taxAmt > 0) {
+      line.taxableItems = [{ taxType: "T1", subType: "V009", rate: taxRate, amount: taxAmt }];
     }
+    
     line.total = net + taxAmt
 
     // إعادة احتساب إجماليات الفاتورة بالكامل (Grand Totals Recalculation)
