@@ -61,6 +61,21 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
   const taxpayerActivityCode = metadata.taxpayerActivityCode || issuer.activityCode || "1234";
 
   for (const [invoiceNumber, groupRows] of Object.entries(invoiceGroups)) {
+    const firstRow = groupRows[0].row;
+    
+    // استخدام ميتاداتا المستلم إذا وجدت، وإلا الرجوع للمربوط في الصفوف
+    const receiverId = (metadata.receiverVat || String(firstRow[mapping.receiverId] || "")).replace(/[^0-9A-Za-z]/g, "");
+    const receiverName = metadata.receiver || String(firstRow[mapping.receiverName] || "");
+    
+    let receiverType = metadata.receiverType;
+    if (!receiverType) {
+      receiverType = "B";
+      if (receiverId.length === 14 && /^\d+$/.test(receiverId)) receiverType = "P";
+      else if (receiverId === "") receiverType = "P";
+    }
+
+    const receiverCountry = metadata.receiverCountry || "EG";
+
     const invoiceLines = groupRows.map(({ row, idx }) => {
       const parsedVal = parseFloat(row[mapping.unitValue]);
       const unitValue = parseFloat((isNaN(parsedVal) ? 0 : parsedVal).toFixed(4));
@@ -166,20 +181,7 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       },
     ];
 
-    const firstRow = groupRows[0].row;
-    
-    // استخدام ميتاداتا المستلم إذا وجدت، وإلا الرجوع للمربوط في الصفوف
-    const receiverId = (metadata.receiverVat || String(firstRow[mapping.receiverId] || "")).replace(/[^0-9A-Za-z]/g, "");
-    const receiverName = metadata.receiver || String(firstRow[mapping.receiverName] || "");
-    
-    let receiverType = metadata.receiverType;
-    if (!receiverType) {
-      receiverType = "B";
-      if (receiverId.length === 14 && /^\d+$/.test(receiverId)) receiverType = "P";
-      else if (receiverId === "") receiverType = "P";
-    }
-
-    const receiverCountry = metadata.receiverCountry || "EG";
+    // Receiver info was moved to the top of the loop
 
     documents.push({
       issuer: {
