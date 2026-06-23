@@ -672,19 +672,19 @@ function parseSchucoInvoice(text) {
 
   // Strategy 1: Full-text currency-qualified regex (using literals)
   const allMatchesLit = (re, src) => { const m = [...src.matchAll(re)]; return m.length ? parseFloat(m[m.length - 1][1].replace(/,/g, "")) : null; };
-  let p1 = allMatchesLit(/Packing\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
-  let f1 = allMatchesLit(/Fre?ight\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
-  let n1 = allMatchesLit(/Net\s*Amount\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
-  let v1 = allMatchesLit(/VAT\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
-  let t1 = allMatchesLit(/Total\s*Amount\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
+  let packS1 = allMatchesLit(/Packing\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
+  let freightS1 = allMatchesLit(/Fre?ight\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
+  let netS1 = allMatchesLit(/Net\s*Amount\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
+  let vatS1 = allMatchesLit(/VAT\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
+  let totS1 = allMatchesLit(/Total\s*Amount\s+(?:EUR|USD|GBP|EGP|SAR|AED)\s+([\d,]+\.\d+)/gi, text);
 
-  console.log('=== FOOTER STRATEGY 1 (currency-qualified) ===', { packing: p1, freight: f1, net: n1, vat: v1, total: t1 });
+  console.log('=== FOOTER STRATEGY 1 (currency-qualified) ===', { packing: packS1, freight: freightS1, net: netS1, vat: vatS1, total: totS1 });
 
-  if (p1 !== null) packingAmt = p1;
-  if (f1 !== null) freightAmt = f1;
-  if (n1 !== null) metadata.netAmount = n1;
-  if (v1 !== null) metadata.taxAmount = v1;
-  if (t1 !== null) metadata.totalAmount = t1;
+  if (packS1 !== null) packingAmt = packS1;
+  if (freightS1 !== null) freightAmt = freightS1;
+  if (netS1 !== null) metadata.netAmount = netS1;
+  if (vatS1 !== null) metadata.taxAmount = vatS1;
+  if (totS1 !== null) metadata.totalAmount = totS1;
 
   // ── Strategy 2: Line-by-line reverse scan (for cases without currency on same line) ──
   if (!packingAmt || !freightAmt || !metadata.netAmount || !metadata.totalAmount) {
@@ -739,8 +739,7 @@ function parseSchucoInvoice(text) {
     if (!metadata.totalAmount) { const v = getValidLast(/TOTALAMOUNT.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) metadata.totalAmount = v; }
     console.log('=== FOOTER STRATEGY 3 (noSpace fallback) ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, totalAmount: metadata.totalAmount });
   }
-    console.log('=== FOOTER STRATEGY 3 (noSpaceText) ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, totalAmount: metadata.totalAmount });
-  }
+
 
   // Debug: show last 5 non-empty raw lines to understand PDF text structure
   const lastLines = rawLines.filter(l => l.trim()).slice(-10);
