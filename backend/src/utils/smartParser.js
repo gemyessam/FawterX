@@ -720,7 +720,7 @@ function parseSchucoInvoice(text) {
 
     // Totals from invoice footer
     const netMatch = line.match(/Net Amount[\s\S]{0,20}?([\d,]+\.\d{2})/i) || line.match(/^([\d,]+\.\d{2})[\s\S]{0,20}?Net Amount/i);
-    if (netMatch) metadata.netAmount = parseNumber(netMatch[1]);
+    if (netMatch && !metadata.netAmount) metadata.netAmount = parseNumber(netMatch[1]);
 
     const vatAmtMatch = line.match(/VAT[\s\S]{0,20}?([\d,]+\.\d{2})/i) || line.match(/^([\d,]+\.\d{2})[\s\S]{0,20}?VAT/i);
     if (vatAmtMatch && !metadata.taxAmount) metadata.taxAmount = parseNumber(vatAmtMatch[1]);
