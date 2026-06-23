@@ -93,29 +93,9 @@ function Layout({ children }) {
   const [connStatus, setConnStatus] = useState(null) // 'connected' or 'failed'
   const [saving, setSaving] = useState(false)
 
-  // Load settings from Firestore (primary source of truth) when user logs in
+  // Load settings immediately from local storage for fast UI, then sync with Firestore
   useEffect(() => {
-    if (user) {
-      getCompanySettings()
-        .then((res) => {
-          if (res && res.success && res.settings) {
-            setSettings(res.settings)
-            localStorage.setItem('companySettings', JSON.stringify(res.settings))
-          } else {
-            // Fallback to local storage if no firestore setting exists yet
-            const saved = localStorage.getItem('companySettings')
-            if (saved) {
-              try { setSettings(JSON.parse(saved)) } catch (e) {}
-            }
-          }
-        })
-        .catch(() => {
-          const saved = localStorage.getItem('companySettings')
-          if (saved) {
-            try { setSettings(JSON.parse(saved)) } catch (e) {}
-          }
-        })
-    } else {
+    if (!user) {
       // Clear settings state when logged out
       setSettings({
         clientId: '',
@@ -123,41 +103,50 @@ function Layout({ children }) {
         clientSecret2: '',
         taxpayerActivityCode: '6209'
       })
+      return
     }
-  }, [user, showSettingsModal])
 
-  // Silent background verification check on mount to ensure credentials remain active and verified
-  useEffect(() => {
-    if (user) {
-      getCompanySettings()
-        .then((res) => {
-          const activeSettings = (res && res.success && res.settings) ? res.settings : null
-          const saved = localStorage.getItem('companySettings')
-          const finalSettings = activeSettings || (saved ? JSON.parse(saved) : null)
-          
-          if (finalSettings && finalSettings.clientId && finalSettings.clientSecret1 && finalSettings.clientSecret2) {
-            testETAAuth(finalSettings)
-              .then(() => {
-                setSettings(prev => {
-                  const next = { ...finalSettings, isVerified: true }
-                  localStorage.setItem('companySettings', JSON.stringify(next))
-                  return next
-                })
-              })
-              .catch(() => {
-                setSettings(prev => {
-                  const next = { ...finalSettings, isVerified: false }
-                  localStorage.setItem('companySettings', JSON.stringify(next))
-                  return next
-                })
-                toast.error(lang === 'ar'
-                  ? '⚠️ تنبيه: انتهت صلاحية مفاتيح ربط الضرائب أو تم إلغاؤها! يرجى مراجعة إعدادات الشركة وإعادة المصادقة.'
-                  : '⚠️ Warning: ETA credentials have expired or been revoked! Please review company setup and re-verify.')
-              })
-          }
-        })
-        .catch(() => {})
+    // 1. Instantly load from local storage to prevent error banner flash
+    const saved = localStorage.getItem('companySettings')
+    if (saved) {
+      try { setSettings(JSON.parse(saved)) } catch (e) {}
     }
+
+    // 2. Fetch from Firestore (primary source of truth) in the background
+    getCompanySettings()
+      .then((res) => {
+        let finalSettings = null;
+        if (res && res.success && res.settings) {
+          finalSettings = res.settings;
+          setSettings(res.settings)
+          localStorage.setItem('companySettings', JSON.stringify(res.settings))
+        } else if (saved) {
+          try { finalSettings = JSON.parse(saved); } catch (e) {}
+        }
+
+        // 3. Silent background verification check
+        if (finalSettings && finalSettings.clientId && finalSettings.clientSecret1 && finalSettings.clientSecret2) {
+          testETAAuth(finalSettings)
+            .then(() => {
+              setSettings(prev => {
+                const next = { ...finalSettings, isVerified: true }
+                localStorage.setItem('companySettings', JSON.stringify(next))
+                return next
+              })
+            })
+            .catch(() => {
+              setSettings(prev => {
+                const next = { ...finalSettings, isVerified: false }
+                localStorage.setItem('companySettings', JSON.stringify(next))
+                return next
+              })
+              toast.error(lang === 'ar'
+                ? '⚠️ تنبيه: انتهت صلاحية مفاتيح ربط الضرائب أو تم إلغاؤها! يرجى مراجعة إعدادات الشركة وإعادة المصادقة.'
+                : '⚠️ Warning: ETA credentials have expired or been revoked! Please review company setup and re-verify.')
+            })
+        }
+      })
+      .catch(() => {})
   }, [user])
 
   // Click outside to close the user profile dropdown cleanly
