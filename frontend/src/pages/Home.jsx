@@ -1436,7 +1436,7 @@ export default function Home() {
                     <h4 style={{ margin: 0, fontWeight: 900, color: '#fff', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       {lang === 'ar' ? 'وضع المراجعة الذكية للـ PDF نشط' : 'AI PDF Accountant Review Mode Active'}
                       <span className="badge badge-accent" style={{ background: '#7c4dff', color: '#fff', border: 'none', fontSize: '0.75rem', padding: '0.2rem 0.6rem' }}>
-                        {lang === 'ar' ? 'مسودة موثوقة' : 'AI Draft'}
+                        {lang === 'ar' ? 'مسودة موثوقة' : 'AI Draft'} - {etaDocs[0]?.parserDebugInfo?.mode || 'v6.0'}
                       </span>
                     </h4>
                     <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: 'var(--text-dim)' }}>
