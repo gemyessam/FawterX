@@ -652,6 +652,9 @@ function parseSchucoInvoice(text) {
     netAmount: 0, taxAmount: 0, totalAmount: 0
   };
 
+  let packingAmt = 0;
+  let freightAmt = 0;
+
   for (const line of rawLines) {
     // Invoice number: e.g. "000000612" or "202303610"
     const invMatch = line.match(/^0*(\d{3,10})$/) ;
@@ -689,18 +692,34 @@ function parseSchucoInvoice(text) {
       metadata.issuer = line.replace(/^\s*(Account Name|Beneficiary Name|Name|Supplier|Seller|Vendor)\s*[:\-]?\s*/i, '').trim();
     }
 
+    // Currency Detection
+    const currMatch = line.match(/(?:Net Amount|Total Amount|Packing|Freight|VAT)\s+([A-Z]{3})\s+[\d,.]+/i);
+    if (currMatch) metadata.currency = currMatch[1].toUpperCase();
+
+    // Extra services
+    const packMatch = line.match(/Packing\s+(?:[A-Z]{3}\s+)?([\d,.]+(?:\.\d+)?)/i);
+    if (packMatch) packingAmt = parseFloat(packMatch[1].replace(/,/g, ''));
+
+    const freightMatch = line.match(/Freight\s+(?:[A-Z]{3}\s+)?([\d,.]+(?:\.\d+)?)/i);
+    if (freightMatch) freightAmt = parseFloat(freightMatch[1].replace(/,/g, ''));
+
     // Totals from invoice footer
-    const netMatch = line.match(/Net Amount\s*([\d,]+\.\d+)/i) || line.match(/^([\d,]+\.\d+)\s*Net Amount/i);
+    const netMatch = line.match(/Net Amount\s*(?:[A-Z]{3}\s*)?([\d,]+\.\d+)/i) || line.match(/^([\d,]+\.\d+)\s*(?:[A-Z]{3}\s*)?Net Amount/i);
     if (netMatch) metadata.netAmount = parseNumber(netMatch[1]);
 
-    const vatAmtMatch = line.match(/VAT\s+([\d,]+\.\d+)/i) || line.match(/^([\d,]+\.\d+)\s+VAT/i);
+    const vatAmtMatch = line.match(/VAT\s*(?:[A-Z]{3}\s*)?([\d,]+\.\d+)/i) || line.match(/^([\d,]+\.\d+)\s*(?:[A-Z]{3}\s*)?VAT/i);
     if (vatAmtMatch && !metadata.taxAmount) metadata.taxAmount = parseNumber(vatAmtMatch[1]);
 
-    const totalMatch = line.match(/Total Amount\s*([\d,]+\.\d+)/i) || line.match(/^([\d,]+\.\d+)\s*Total Amount/i) || line.match(/([\d,]+\.\d+)\s*EGP\s*$/i);
+    const totalMatch = line.match(/Total Amount\s*(?:[A-Z]{3}\s*)?([\d,]+\.\d+)/i) || line.match(/^([\d,]+\.\d+)\s*(?:[A-Z]{3}\s*)?Total Amount/i) || line.match(/([\d,]+\.\d+)\s*EGP\s*$/i);
     if (totalMatch && !metadata.totalAmount) {
       const v = parseNumber(totalMatch[1]);
       if (v > 100) metadata.totalAmount = v;
     }
+  }
+
+  // Handle foreign receiver type
+  if (metadata.currency !== 'EGP') {
+    metadata.receiverType = 'F';
   }
 
   // Dynamic receiver name heuristic
@@ -1231,6 +1250,56 @@ function parseSchucoInvoice(text) {
     metadata.taxAmount = Number(calcTax.toFixed(4));
     metadata.totalAmount = Number(calcTotal.toFixed(4));
     }
+  }
+
+  if (packingAmt > 0) {
+    invoiceLines.push({
+      invoiceNumber: metadata.internalID,
+      itemCode: "EG-708820883-4",
+      codeType: 'EGS',
+      codeName: 'Packing Services',
+      internalCode: 'PACKING',
+      description: 'Packing Services',
+      rawDescription: 'Packing Services',
+      productType: 'Service',
+      quantity: 1,
+      unitType: 'EA',
+      unitValue: packingAmt,
+      taxPercent: metadata.receiverType === 'F' ? 0 : 14,
+      currency: metadata.currency || 'EGP',
+      net: packingAmt,
+      total: packingAmt + (metadata.receiverType === 'F' ? 0 : (packingAmt * 0.14)),
+      smartAttributes: {},
+      confidence: 95,
+      extractionConfidence: { productName: 95, quantity: 95, unitPrice: 95 },
+      warnings: [],
+      missingFields: []
+    });
+  }
+
+  if (freightAmt > 0) {
+    invoiceLines.push({
+      invoiceNumber: metadata.internalID,
+      itemCode: "EG-708820883-4",
+      codeType: 'EGS',
+      codeName: 'Freight Services',
+      internalCode: 'FREIGHT',
+      description: 'Freight Services',
+      rawDescription: 'Freight Services',
+      productType: 'Service',
+      quantity: 1,
+      unitType: 'EA',
+      unitValue: freightAmt,
+      taxPercent: metadata.receiverType === 'F' ? 0 : 14,
+      currency: metadata.currency || 'EGP',
+      net: freightAmt,
+      total: freightAmt + (metadata.receiverType === 'F' ? 0 : (freightAmt * 0.14)),
+      smartAttributes: {},
+      confidence: 95,
+      extractionConfidence: { productName: 95, quantity: 95, unitPrice: 95 },
+      warnings: [],
+      missingFields: []
+    });
   }
 
   return { metadata, invoiceLines };
