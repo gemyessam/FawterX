@@ -68,13 +68,24 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       const parsedQty = parseFloat(row[mapping.quantity]);
       const quantity  = parseFloat((isNaN(parsedQty) ? 1 : parsedQty).toFixed(4));
 
-      const parsedTax = parseFloat(row[mapping.taxPercent]);
-      const taxPercent = parseFloat((isNaN(parsedTax) ? 14 : parsedTax).toFixed(4));
+      const currency = String(row[mapping.currency] || metadata.currency || "EGP").toUpperCase();
+      const exchangeRate = parseFloat(metadata.currencyExchangeRate) || 1;
+      
+      const amountSold = currency === "EGP" ? 0 : unitValue;
+      const amountEGP = currency === "EGP" ? unitValue : parseFloat((unitValue * exchangeRate).toFixed(5));
+      const currencyExchangeRate = currency === "EGP" ? 0 : exchangeRate;
 
-      const salesTotal = parseFloat((unitValue * quantity).toFixed(4));
-      const taxAmount  = parseFloat(((salesTotal * taxPercent) / 100).toFixed(4));
-      const netTotal   = parseFloat(salesTotal.toFixed(4));
-      const total      = parseFloat((netTotal + taxAmount).toFixed(4));
+      const parsedTax = parseFloat(row[mapping.taxPercent]);
+      let taxPercent = parseFloat((isNaN(parsedTax) ? 14 : parsedTax).toFixed(4));
+
+      if (receiverType === "F" || (receiverCountry && receiverCountry !== "EG")) {
+        taxPercent = 0;
+      }
+
+      const salesTotal = parseFloat((amountEGP * quantity).toFixed(5));
+      const taxAmount  = parseFloat(((salesTotal * taxPercent) / 100).toFixed(5));
+      const netTotal   = parseFloat(salesTotal.toFixed(5));
+      const total      = parseFloat((netTotal + taxAmount).toFixed(5));
 
       const desc = String(row[mapping.description] || `Item ${idx + 1}`);
 
@@ -129,10 +140,10 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
         itemsDiscount:     0,
         discount: { rate: 0, amount: 0 },
         unitValue: {
-          currencySold:        String(row[mapping.currency] || "EGP").toUpperCase(),
-          amountEGP:           unitValue,
-          amountSold:          String(row[mapping.currency] || "EGP").toUpperCase() === "EGP" ? 0 : unitValue,
-          currencyExchangeRate: String(row[mapping.currency] || "EGP").toUpperCase() === "EGP" ? 0 : 1,
+          currencySold:        currency,
+          amountEGP:           amountEGP,
+          amountSold:          amountSold,
+          currencyExchangeRate: currencyExchangeRate,
         },
         taxableItems: [
           {

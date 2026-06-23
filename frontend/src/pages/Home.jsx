@@ -361,7 +361,17 @@ export default function Home() {
       line.unitType = val
     } else if (field === 'unitValue') {
       if (!line.unitValue) line.unitValue = { currencySold: "EGP" }
-      line.unitValue.amountEGP = parseFloat(parseFloat(val).toFixed(4)) || 0
+      const newAmount = parseFloat(parseFloat(val).toFixed(4)) || 0;
+      const currency = line.unitValue.currencySold || "EGP";
+      const exRate = line.unitValue.currencyExchangeRate || 1;
+      
+      if (currency !== "EGP") {
+        line.unitValue.amountSold = newAmount;
+        line.unitValue.amountEGP = parseFloat((newAmount * exRate).toFixed(5));
+      } else {
+        line.unitValue.amountEGP = newAmount;
+        line.unitValue.amountSold = 0;
+      }
     } else if (field === 'taxPercent') {
       const rate = parseFloat(parseFloat(val).toFixed(4)) || 0
       if (line.taxableItems && line.taxableItems[0]) {
@@ -448,6 +458,37 @@ export default function Home() {
       doc.invoiceLines.forEach(l => {
         if (l.unitValue) l.unitValue.currencySold = val
       })
+    } else if (field === 'exchangeRate') {
+      const exRate = parseFloat(val) || 1
+      let totalSales = 0
+      let totalTax = 0
+      
+      doc.invoiceLines.forEach(l => {
+        if (l.unitValue && l.unitValue.currencySold && l.unitValue.currencySold !== 'EGP') {
+          l.unitValue.currencyExchangeRate = exRate
+          const amountSold = l.unitValue.amountSold || 0
+          l.unitValue.amountEGP = parseFloat((amountSold * exRate).toFixed(5))
+          
+          const qty = l.quantity || 0
+          const net = qty * l.unitValue.amountEGP
+          l.netTotal = net
+          l.salesTotal = net
+          
+          const taxRate = l.taxableItems?.[0]?.rate || 0
+          const taxAmt = net * (taxRate / 100)
+          if (l.taxableItems && l.taxableItems[0]) {
+            l.taxableItems[0].amount = taxAmt
+          }
+          l.total = net + taxAmt
+        }
+        totalSales += l.netTotal || 0
+        totalTax += (l.taxableItems?.[0]?.amount || 0)
+      })
+      
+      doc.totalSalesAmount = totalSales
+      doc.netAmount = totalSales
+      doc.taxTotals = [{ taxType: "T1", amount: totalTax }]
+      doc.totalAmount = totalSales + totalTax
     } else if (field === 'codeType') {
       doc.codeType = val // EGS / GS1
     }
@@ -1591,6 +1632,22 @@ export default function Home() {
                     />
                   </div>
 
+                  {/* Exchange Rate */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      💱 {lang === 'ar' ? 'سعر الصرف' : 'Exchange Rate'}
+                    </label>
+                    <input 
+                      type="number" 
+                      className="input" 
+                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
+                      value={etaDocs[0]?.invoiceLines?.[0]?.unitValue?.currencyExchangeRate || 1} 
+                      onChange={(e) => updateInvoiceMetadata('exchangeRate', e.target.value)} 
+                      min="1"
+                      step="0.01"
+                    />
+                  </div>
+
                 </div>
               </div>
 
@@ -1845,7 +1902,7 @@ export default function Home() {
 
                           {/* 8. Currency Column */}
                           <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 'bold' }}>EGP</span>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 'bold' }}>{line.unitValue?.currencySold || 'EGP'}</span>
                           </td>
 
                           {/* 9. Unit Price Column */}
@@ -1865,7 +1922,7 @@ export default function Home() {
                                 outline: 'none',
                                 fontSize: '0.85rem'
                               }} 
-                              value={line.unitValue?.amountEGP || 0} 
+                              value={line.unitValue?.currencySold && line.unitValue.currencySold !== 'EGP' ? (line.unitValue?.amountSold || 0) : (line.unitValue?.amountEGP || 0)} 
                               onChange={(e) => updateInvoiceLine(idx, 'unitValue', e.target.value)} 
                             />
                           </td>
