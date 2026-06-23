@@ -732,11 +732,11 @@ function parseSchucoInvoice(text) {
       return null;
     };
     
-    if (!packingAmt) { const v = getValidLast(/PACK(?:ING|AGING)?.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) packingAmt = v; }
-    if (!freightAmt) { const v = getValidLast(/FRE?IGHT.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) freightAmt = v; }
-    if (!metadata.netAmount) { const v = getValidLast(/NETAMOUNT.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) metadata.netAmount = v; }
-    if (!metadata.taxAmount) { const v = getValidLast(/VAT.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) metadata.taxAmount = v; }
-    if (!metadata.totalAmount) { const v = getValidLast(/TOTALAMOUNT.{0,30}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) metadata.totalAmount = v; }
+    if (!packingAmt) { const v = getValidLast(/PACK(?:ING|AGING)?.{0,150}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) packingAmt = v; }
+    if (!freightAmt) { const v = getValidLast(/FRE?IGHT.{0,150}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) freightAmt = v; }
+    if (!metadata.netAmount) { const v = getValidLast(/NETAMOUNT.{0,150}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) metadata.netAmount = v; }
+    if (!metadata.taxAmount) { const v = getValidLast(/VAT.{0,150}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) metadata.taxAmount = v; }
+    if (!metadata.totalAmount) { const v = getValidLast(/TOTALAMOUNT.{0,150}?([0-9]+[0-9,]*\.[0-9]+)/g); if (v) metadata.totalAmount = v; }
     console.log('=== FOOTER STRATEGY 3 (noSpace fallback) ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, totalAmount: metadata.totalAmount });
   }
 
