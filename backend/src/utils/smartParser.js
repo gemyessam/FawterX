@@ -1015,7 +1015,11 @@ function parseSchucoInvoice(text) {
   // ── Hierarchical Item Block Segmenter ───────────────────────
   // A block starts at "Pos. + Item No." like: "1 \t 9655090" or "9655090 \t 1" or "1 9655090"
   // Item No is usually a 5-8 digit code.
-  const blockStartRegex = /^(?:(\d+)(?:\s|\\t)+(\d{5,8})|(\d{5,8})(?:\s|\\t)+(\d+)|(\d{5,8}))(?:\s|\\t|$)/i;
+  const itemCodePattern = "\\d{5,8}(?:-\\d+(?:\\.\\d+)?)?";
+  const blockStartRegex = new RegExp(
+    `^(?:(\\d+)(?:\\s|\\\\t)+(${itemCodePattern})|(${itemCodePattern})(?:\\s|\\\\t)+(\\d+)|(${itemCodePattern}))(?:\\s|\\\\t|$)`,
+    "i"
+  );
   
   const blocks = [];
   let curBlock = null;
