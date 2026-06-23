@@ -655,6 +655,16 @@ function parseSchucoInvoice(text) {
   let packingAmt = 0;
   let freightAmt = 0;
 
+  // Global robust matching for Currency, Packing and Freight
+  const currMatch = text.match(/\b(EUR|USD|GBP|SAR|AED)\b/i);
+  if (currMatch) metadata.currency = currMatch[1].toUpperCase();
+
+  const packMatch = text.match(/Packing[\s\S]{0,40}?([\d,]+\.\d{2})/i);
+  if (packMatch) packingAmt = parseFloat(packMatch[1].replace(/,/g, ''));
+
+  const freightMatch = text.match(/Freight[\s\S]{0,40}?([\d,]+\.\d{2})/i);
+  if (freightMatch) freightAmt = parseFloat(freightMatch[1].replace(/,/g, ''));
+
   for (const line of rawLines) {
     // Invoice number: e.g. "000000612" or "202303610"
     const invMatch = line.match(/^0*(\d{3,10})$/) ;
@@ -692,25 +702,14 @@ function parseSchucoInvoice(text) {
       metadata.issuer = line.replace(/^\s*(Account Name|Beneficiary Name|Name|Supplier|Seller|Vendor)\s*[:\-]?\s*/i, '').trim();
     }
 
-    // Currency Detection
-    const currMatch = line.match(/(?:Net Amount|Total Amount|Packing|Freight|VAT)\s+([A-Z]{3})\s+[\d,.]+/i);
-    if (currMatch) metadata.currency = currMatch[1].toUpperCase();
-
-    // Extra services
-    const packMatch = line.match(/Packing\s*[:\-]?\s*(?:[A-Z]{3}\s*)?([\d,.]+(?:\.\d+)?)/i);
-    if (packMatch) packingAmt = parseFloat(packMatch[1].replace(/,/g, ''));
-
-    const freightMatch = line.match(/Freight\s*[:\-]?\s*(?:[A-Z]{3}\s*)?([\d,.]+(?:\.\d+)?)/i);
-    if (freightMatch) freightAmt = parseFloat(freightMatch[1].replace(/,/g, ''));
-
     // Totals from invoice footer
-    const netMatch = line.match(/Net Amount\s*(?:[A-Z]{3}\s*)?([\d,]+\.\d+)/i) || line.match(/^([\d,]+\.\d+)\s*(?:[A-Z]{3}\s*)?Net Amount/i);
+    const netMatch = line.match(/Net Amount[\s\S]{0,20}?([\d,]+\.\d{2})/i) || line.match(/^([\d,]+\.\d{2})[\s\S]{0,20}?Net Amount/i);
     if (netMatch) metadata.netAmount = parseNumber(netMatch[1]);
 
-    const vatAmtMatch = line.match(/VAT\s*(?:[A-Z]{3}\s*)?([\d,]+\.\d+)/i) || line.match(/^([\d,]+\.\d+)\s*(?:[A-Z]{3}\s*)?VAT/i);
+    const vatAmtMatch = line.match(/VAT[\s\S]{0,20}?([\d,]+\.\d{2})/i) || line.match(/^([\d,]+\.\d{2})[\s\S]{0,20}?VAT/i);
     if (vatAmtMatch && !metadata.taxAmount) metadata.taxAmount = parseNumber(vatAmtMatch[1]);
 
-    const totalMatch = line.match(/Total Amount\s*(?:[A-Z]{3}\s*)?([\d,]+\.\d+)/i) || line.match(/^([\d,]+\.\d+)\s*(?:[A-Z]{3}\s*)?Total Amount/i) || line.match(/([\d,]+\.\d+)\s*EGP\s*$/i);
+    const totalMatch = line.match(/Total Amount[\s\S]{0,20}?([\d,]+\.\d{2})/i) || line.match(/^([\d,]+\.\d{2})[\s\S]{0,20}?Total Amount/i) || line.match(/([\d,]+\.\d+)\s*EGP\s*$/i);
     if (totalMatch && !metadata.totalAmount) {
       const v = parseNumber(totalMatch[1]);
       if (v > 100) metadata.totalAmount = v;
