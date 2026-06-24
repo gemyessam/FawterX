@@ -216,7 +216,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
           await getETAStatus(uuid)
           toast.success(lang === 'ar' ? 'تم تأكيد وصول الدفعة بالبوابة!' : 'Batch appearance verified in Portal!', { id: 'verify-batch' })
         } catch (vErr) {
-          toast.error(lang === 'ar' ? 'بوابة الضرائب تقوم بمعالجة الدفعة حالياً' : 'ETA Portal is processing batch currently', { id: 'verify-batch' })
+          toast.loading(lang === 'ar' ? 'بوابة الضرائب تراجع الدفعة حالياً...' : 'ETA Portal is still processing the batch...', { id: 'verify-batch' })
         } finally {
           if (fetchUsage) fetchUsage()
         }

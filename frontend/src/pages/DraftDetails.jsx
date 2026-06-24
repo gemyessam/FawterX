@@ -155,7 +155,7 @@ export default function DraftDetails() {
           setVerificationResult(verifyRes.data)
           toast.success(lang === 'ar' ? 'تم تأكيد ظهور الفاتورة بالبوابة!' : 'Invoice appearance confirmed in Portal!', { id: 'draft-verify' })
         } catch (vErr) {
-          toast.error(lang === 'ar' ? 'بوابة الضرائب تقوم بمعالجة المستند حالياً' : 'Document currently processing by ETA index', { id: 'draft-verify' })
+          toast.loading(lang === 'ar' ? 'بوابة الضرائب تراجع المستند حالياً...' : 'Document is still being processed by ETA...', { id: 'draft-verify' })
         } finally {
           setVerifyingStatus(false)
         }

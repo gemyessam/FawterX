@@ -794,7 +794,7 @@ export default function Home() {
           setVerificationResult(verifyRes.data)
           toast.success(lang === 'ar' ? 'تم تأكيد ظهور الفاتورة بالبوابة!' : 'Invoice appearance verified in Portal!', { id: 'verify-loader' })
         } catch (vErr) {
-          toast.error(lang === 'ar' ? 'بوابة الضرائب تقوم بمعالجة المستند حالياً' : 'ETA Portal is processing document currently', { id: 'verify-loader' })
+          toast.loading(lang === 'ar' ? 'بوابة الضرائب تراجع المستند حالياً...' : 'ETA Portal is still processing the document...', { id: 'verify-loader' })
         } finally {
           setVerifying(false)
           fetchUsage()
