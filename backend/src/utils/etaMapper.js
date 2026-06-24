@@ -80,7 +80,7 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       governate: metadata.receiverGovernate || metadata.receiverRegionCity || (receiverForeign ? "" : "Cairo"),
       regionCity: metadata.receiverRegionCity || metadata.receiverGovernate || (receiverForeign ? "" : "Cairo"),
       street: metadata.receiverStreet || metadata.receiverAddressText || (receiverForeign ? "" : "Main Street"),
-      buildingNumber: metadata.receiverBuildingNumber || (receiverForeign ? "" : "1")
+      buildingNumber: metadata.receiverBuildingNumber || "1"
     };
 
     const invoiceLines = groupRows.map(({ row, idx }) => {

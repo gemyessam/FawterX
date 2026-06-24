@@ -267,8 +267,13 @@ function extractReceiverAddressDetails(lines = [], receiverName = "") {
   });
 
   const receiverStreet = streetLines.join(", ");
-  const pBoxMatch = receiverStreet.match(/\b(?:p\.?\s*o\.?\s*box\s*[\d\-\/]+|\d{3,6})\b/i);
-  const receiverBuildingNumber = pBoxMatch ? normalizeSpaces(pBoxMatch[0]) : "";
+  const buildingCandidates = [
+    receiverStreet.match(/\b(?:p\.?\s*o\.?\s*box\s*[\d\-\/]+|\d{1,6}(?:\s*&\s*\d{1,6})?)\b/i)?.[0],
+    streetLines.find(line => /\b(?:unit|building|block|plot|villa|house|suite|floor|room|no\.?|#)\s*[\w\-\/&]+/i.test(line))?.match(/\b(?:unit|building|block|plot|villa|house|suite|floor|room|no\.?|#)\s*([\w\-\/&]+(?:\s*&\s*[\w\-\/&]+)*)/i)?.[1],
+    streetLines.find(line => /^\d{1,6}\b/.test(line))?.match(/^(\d{1,6}\b(?:\s*&\s*\d{1,6})?)/)?.[1],
+    streetLines.find(line => /\b\d{1,6}\b/.test(line))?.match(/\b(\d{1,6}\b(?:\s*&\s*\d{1,6})?)\b/)?.[1]
+  ].map(normalizeSpaces).filter(Boolean);
+  const receiverBuildingNumber = buildingCandidates[0] || "1";
 
   return {
     receiverAddressText: addressText,
