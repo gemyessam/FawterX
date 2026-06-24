@@ -227,6 +227,16 @@ function extractReceiverAddressDetails(lines = [], receiverName = "") {
   const addressLines = [];
   let countryCode = "";
   let countryHit = false;
+  let regionCity = "";
+
+  const extractCityFromCountryLine = (line) => {
+    if (!line) return "";
+    const m = normalizeSpaces(line).match(/^(.+?)\s*,\s*(kenya|egypt|saudi arabia|saudi|ksa|uae|dubai|usa|uk|germany|كينيا|مصر|السعودية|الامارات|دبي|امريكا)\.?$/i);
+    if (m) return normalizeSpaces(m[1]);
+    const m2 = normalizeSpaces(line).match(/^(.+?)\s+(kenya|egypt|saudi arabia|saudi|ksa|uae|dubai|usa|uk|germany|كينيا|مصر|السعودية|الامارات|دبي|امريكا)\.?$/i);
+    if (m2) return normalizeSpaces(m2[1]);
+    return "";
+  };
 
   for (const rawLine of normalizedLines.slice(startIdx, endIdx)) {
     let line = rawLine
@@ -247,6 +257,9 @@ function extractReceiverAddressDetails(lines = [], receiverName = "") {
     if (detectedCountry) {
       if (!countryCode) countryCode = detectedCountry.code;
       addressLines.push(line);
+      if (!regionCity) {
+        regionCity = extractCityFromCountryLine(line);
+      }
       countryHit = true;
       break;
     }
@@ -255,9 +268,21 @@ function extractReceiverAddressDetails(lines = [], receiverName = "") {
   }
 
   const addressText = addressLines.join(", ");
-  const cityLine = addressLines.find(line => /[A-Za-z\u0600-\u06FF]{3,}/.test(line) && /[,]/.test(line)) || "";
-  const cityMatch = cityLine.match(/^([^,]+)\s*,\s*(kenya|egypt|saudi arabia|uae|dubai|usa|uk|germany|كينيا|مصر|السعودية|الامارات|دبي|امريكا)/i);
-  const receiverRegionCity = cityMatch ? normalizeSpaces(cityMatch[1]) : "";
+  if (!regionCity) {
+    const cityLine = addressLines.find(line => /[A-Za-z\u0600-\u06FF]{3,}/.test(line) && /[,]/.test(line)) || "";
+    const cityMatch = cityLine.match(/^([^,]+)\s*,\s*(kenya|egypt|saudi arabia|uae|dubai|usa|uk|germany|كينيا|مصر|السعودية|الامارات|دبي|امريكا)/i);
+    regionCity = cityMatch ? normalizeSpaces(cityMatch[1]) : "";
+  }
+
+  if (!regionCity && addressLines.length >= 2) {
+    const lastMeaningful = [...addressLines]
+      .slice(0, -1)
+      .reverse()
+      .find(line => /[A-Za-z\u0600-\u06FF]{3,}/.test(line) && !/(street|road|avenue|lane|p\.?\s*o\.?\s*box|building|unit|area|center|centre|district|zone)/i.test(line));
+    if (lastMeaningful) {
+      regionCity = normalizeSpaces(lastMeaningful.replace(/[.,]+$/g, ""));
+    }
+  }
 
   const streetLines = addressLines.filter(line => {
     if (!line) return false;
@@ -278,8 +303,8 @@ function extractReceiverAddressDetails(lines = [], receiverName = "") {
   return {
     receiverAddressText: addressText,
     receiverStreet: receiverStreet || addressText,
-    receiverRegionCity: receiverRegionCity || "",
-    receiverGovernate: receiverRegionCity || "",
+    receiverRegionCity: regionCity || "",
+    receiverGovernate: regionCity || "",
     receiverBuildingNumber,
     receiverCountry: countryCode,
     receiverAddressLines: addressLines

@@ -104,6 +104,22 @@ function validateStructure(doc) {
         errors.push('المستلم الأجنبي لا يجوز أن يكون Country = EG');
         missingFields.push("receiver.address.country");
       }
+      if (!doc.receiver.address?.street) {
+        errors.push('عنوان المستلم (receiver.address.street) مطلوب');
+        missingFields.push("receiver.address.street");
+      }
+      if (!doc.receiver.address?.buildingNumber) {
+        errors.push('رقم المبنى (receiver.address.buildingNumber) مطلوب');
+        missingFields.push("receiver.address.buildingNumber");
+      }
+      if (!doc.receiver.address?.regionCity) {
+        errors.push('المدينة / المنطقة (receiver.address.regionCity) مطلوبة');
+        missingFields.push("receiver.address.regionCity");
+      }
+      if (!doc.receiver.address?.governate) {
+        errors.push('المحافظة / الولاية (receiver.address.governate) مطلوبة');
+        missingFields.push("receiver.address.governate");
+      }
     }
     if (doc.receiver.type === "P" && (!doc.receiver.id || doc.receiver.id.length !== 14)) {
       if (doc.totalAmount >= 50000) {
