@@ -475,6 +475,22 @@ export default function Home() {
       if (!doc.receiver) doc.receiver = {}
       if (!doc.receiver.address) doc.receiver.address = {}
       doc.receiver.address.country = val
+    } else if (field === 'receiverStreet') {
+      if (!doc.receiver) doc.receiver = {}
+      if (!doc.receiver.address) doc.receiver.address = {}
+      doc.receiver.address.street = val
+    } else if (field === 'receiverBuildingNumber') {
+      if (!doc.receiver) doc.receiver = {}
+      if (!doc.receiver.address) doc.receiver.address = {}
+      doc.receiver.address.buildingNumber = val
+    } else if (field === 'receiverRegionCity') {
+      if (!doc.receiver) doc.receiver = {}
+      if (!doc.receiver.address) doc.receiver.address = {}
+      doc.receiver.address.regionCity = val
+    } else if (field === 'receiverGovernate') {
+      if (!doc.receiver) doc.receiver = {}
+      if (!doc.receiver.address) doc.receiver.address = {}
+      doc.receiver.address.governate = val
     } else if (field === 'taxpayerActivityCode') {
       doc.taxpayerActivityCode = val
     } else if (field === 'currency' || field === 'exchangeRate') {
@@ -1286,6 +1302,19 @@ export default function Home() {
                       <strong style={{ fontSize: '0.95rem', color: 'var(--accent)' }}>{uploadResult.metadata?.receiver || uploadResult.metadata?.receiverName || 'N/A'}</strong>
                     </div>
                     <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>{lang === 'ar' ? 'عنوان المشتري' : 'Buyer Address'}</span>
+                      <strong style={{ fontSize: '0.9rem', color: 'var(--text)', lineHeight: 1.6, whiteSpace: 'pre-wrap', display: 'block' }}>
+                        {[
+                          uploadResult.metadata?.receiverStreet,
+                          uploadResult.metadata?.receiverAddressText,
+                          uploadResult.metadata?.receiverRegionCity,
+                          uploadResult.metadata?.receiverGovernate,
+                          uploadResult.metadata?.receiverBuildingNumber ? `Bldg: ${uploadResult.metadata.receiverBuildingNumber}` : '',
+                          uploadResult.metadata?.receiverCountry ? `Country: ${uploadResult.metadata.receiverCountry}` : ''
+                        ].filter(Boolean).join('\n') || 'N/A'}
+                      </strong>
+                    </div>
+                    <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>{lang === 'ar' ? 'الرقم الضريبي للمشتري' : 'Buyer VAT/ID'}</span>
                       <strong style={{ fontSize: '0.95rem', color: 'var(--text)', fontFamily: 'monospace' }}>{uploadResult.metadata?.receiverVat || uploadResult.metadata?.receiverId || 'N/A'}</strong>
                     </div>
@@ -1681,6 +1710,59 @@ export default function Home() {
                       style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
                       value={etaDocs[0]?.receiver?.address?.country || 'EG'} 
                       onChange={(e) => updateInvoiceMetadata('receiverCountry', e.target.value)} 
+                    />
+                  </div>
+
+                  {/* Receiver Street */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      🏠 {lang === 'ar' ? 'عنوان المستلم / الشارع' : 'Receiver Street / Address'}
+                    </label>
+                    <textarea
+                      className="input"
+                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.6rem', minHeight: '76px', resize: 'vertical', lineHeight: 1.5 }}
+                      value={etaDocs[0]?.receiver?.address?.street || etaDocs[0]?.receiver?.address?.addressLine || ''} 
+                      onChange={(e) => updateInvoiceMetadata('receiverStreet', e.target.value)} 
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                        🔢 {lang === 'ar' ? 'رقم المبنى' : 'Building Number'}
+                      </label>
+                      <input
+                        type="text"
+                        className="input"
+                        style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
+                        value={etaDocs[0]?.receiver?.address?.buildingNumber || ''} 
+                        onChange={(e) => updateInvoiceMetadata('receiverBuildingNumber', e.target.value)} 
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                        🏙️ {lang === 'ar' ? 'المدينة / المنطقة' : 'Region / City'}
+                      </label>
+                      <input
+                        type="text"
+                        className="input"
+                        style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }}
+                        value={etaDocs[0]?.receiver?.address?.regionCity || ''} 
+                        onChange={(e) => updateInvoiceMetadata('receiverRegionCity', e.target.value)} 
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                      🗺️ {lang === 'ar' ? 'المحافظة / الولاية' : 'Governate / Province'}
+                    </label>
+                    <input
+                      type="text"
+                      className="input"
+                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }}
+                      value={etaDocs[0]?.receiver?.address?.governate || ''} 
+                      onChange={(e) => updateInvoiceMetadata('receiverGovernate', e.target.value)} 
                     />
                   </div>
 
