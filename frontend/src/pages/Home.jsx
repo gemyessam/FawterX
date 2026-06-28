@@ -780,21 +780,36 @@ export default function Home() {
 
       const res = await submitToETA(updatedDocs, false)
       setSubmissionResult(res)
-      toast.success(lang === 'ar' ? 'تم إرسال الفاتورة بنجاح لـ ETA!' : 'Invoices sent successfully to ETA!', { id: 'submit-loader' })
+      toast.success(
+        lang === 'ar'
+          ? 'تم إرسال الفاتورة بنجاح، وجاري تأكيدها من بوابة الضرائب.'
+          : 'Invoice sent successfully, now being confirmed by ETA Portal.',
+        { id: 'submit-loader' }
+      )
 
       // Auto verify appearance in tax portal
       const uuid = res.requestId || res.result?.submissionUUID || res.result?.submissionId || res.result?.requestId;
       if (uuid && uuid !== "N/A") {
         setVerifying(true)
-        toast.loading(lang === 'ar' ? 'جاري التحقق الفوري من بوابة الضرائب...' : 'Verifying directly from ETA Portal...', { id: 'verify-loader' })
+        toast(
+          lang === 'ar'
+            ? 'الفاتورة وصلت، وبوابة الضرائب تتحقق منها الآن.'
+            : 'The invoice has been sent and ETA Portal is verifying it now.',
+          { id: 'verify-loader', icon: '⏳' }
+        )
         
         await new Promise(r => setTimeout(r, 3000));
         try {
           const verifyRes = await getETAStatus(uuid)
           setVerificationResult(verifyRes.data)
-          toast.success(lang === 'ar' ? 'تم تأكيد ظهور الفاتورة بالبوابة!' : 'Invoice appearance verified in Portal!', { id: 'verify-loader' })
+          toast.success(lang === 'ar' ? 'تم تأكيد ظهور الفاتورة على بوابة الضرائب.' : 'Invoice appearance confirmed on ETA Portal.', { id: 'verify-loader' })
         } catch (vErr) {
-          toast.loading(lang === 'ar' ? 'بوابة الضرائب تراجع المستند حالياً...' : 'ETA Portal is still processing the document...', { id: 'verify-loader' })
+          toast(
+            lang === 'ar'
+              ? 'بوابة الضرائب ما زالت تعالج الفاتورة، وسيظهر التأكيد بعد قليل.'
+              : 'ETA Portal is still processing the invoice and confirmation will appear shortly.',
+            { id: 'verify-loader', icon: '⏳' }
+          )
         } finally {
           setVerifying(false)
           fetchUsage()
