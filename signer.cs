@@ -479,7 +479,14 @@ namespace FawterXSigner
             if (endIndex == -1) return null;
 
             string value = json.Substring(startIndex + 1, endIndex - startIndex - 1);
-            return value.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\t", "\t").Replace("\\f", "\f").Replace("\\b", "\b");
+            try
+            {
+                return System.Text.RegularExpressions.Regex.Unescape(value);
+            }
+            catch
+            {
+                return value.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\t", "\t").Replace("\\f", "\f").Replace("\\b", "\b");
+            }
         }
 
         private static string EscapeString(string str)
