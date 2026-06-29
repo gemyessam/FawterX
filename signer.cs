@@ -18,15 +18,16 @@ namespace FawterXSigner
     {
         private static HttpListener listener;
         private static readonly string PREFIX = "http://localhost:8585/";
+        private static readonly string SIGNER_VERSION = "1.8.8";
 
         [STAThread]
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.8.7 ≡ƒöæ";
+            Console.Title = "FawterX Digital Signer Bridge v1.8.8 ≡ƒöæ";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.8.7 (Egypt ETA)  ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.8.8 (Egypt ETA)  ");
             Console.WriteLine("    [STATUS] CAdES-BES Exact Chain (No Roots/Duplicates): Active ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
@@ -41,7 +42,27 @@ namespace FawterXSigner
 
                 if (result == DialogResult.Yes)
                 {
-                    InstallSelf();
+                    string installedExe = InstallSelf();
+                    if (!string.IsNullOrEmpty(installedExe))
+                    {
+                        try
+                        {
+                            Process.Start(new ProcessStartInfo
+                            {
+                                FileName = installedExe,
+                                UseShellExecute = false,
+                                CreateNoWindow = true,
+                                WindowStyle = ProcessWindowStyle.Hidden
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("[WARN] Failed to relaunch installed signer: " + ex.Message);
+                        }
+
+                        Environment.Exit(0);
+                        return;
+                    }
                 }
             }
             
@@ -52,7 +73,7 @@ namespace FawterXSigner
                 listener.Start();
                 
                 Console.WriteLine("[INFO] Local signer is active and listening on " + PREFIX);
-                Console.WriteLine("[INFO] Version 1.8.7 (CAdES-BES Minimal Profile + Exact Chain No-Root Support Active)");
+                Console.WriteLine("[INFO] Version " + SIGNER_VERSION + " (CAdES-BES Minimal Profile + Exact Chain No-Root Support Active)");
                 Console.WriteLine("[INFO] Keep this window open while signing invoices online!");
                 Console.WriteLine("===================================================");
                 Console.WriteLine();
@@ -114,7 +135,7 @@ namespace FawterXSigner
                 if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/")
                 {
                     response.ContentType = "application/json; charset=utf-8";
-                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"1.8.7\",\"message\":\"FawterX local signer v1.8.7 is running with automatic self-install support, Exact Certificate Chain embedding (No Roots/Duplicates) and UTF-8 Unicode support!\"}";
+                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"" + SIGNER_VERSION + "\",\"message\":\"FawterX local signer v" + SIGNER_VERSION + " is running with automatic self-install support, Exact Certificate Chain embedding (No Roots/Duplicates) and UTF-8 Unicode support!\"}";
                     byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                     response.ContentLength64 = buffer.Length;
                     response.OutputStream.Write(buffer, 0, buffer.Length);
@@ -529,16 +550,17 @@ namespace FawterXSigner
             }
 
             string currentExe = Assembly.GetExecutingAssembly().Location;
-            string installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "FawterX", "Signer");
-            return !currentExe.StartsWith(installDir, StringComparison.OrdinalIgnoreCase);
+            string installDir = GetInstallDirectory();
+            string installedExe = Path.Combine(installDir, Path.GetFileName(currentExe));
+            return !string.Equals(Path.GetFullPath(currentExe), Path.GetFullPath(installedExe), StringComparison.OrdinalIgnoreCase);
         }
 
-        private static bool InstallSelf()
+        private static string InstallSelf()
         {
             try
             {
                 string currentExe = Assembly.GetExecutingAssembly().Location;
-                string installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "FawterX", "Signer");
+                string installDir = GetInstallDirectory();
                 string installedExe = Path.Combine(installDir, Path.GetFileName(currentExe));
                 string taskName = "FawterX Signer Bridge";
 
@@ -574,13 +596,18 @@ namespace FawterXSigner
 
                 Console.WriteLine("[INFO] Installed at: " + installedExe);
                 Console.WriteLine("[INFO] The signer will start automatically at logon.");
-                return true;
+                return installedExe;
             }
             catch (Exception ex)
             {
                 Console.WriteLine("[ERROR] Self-install failed: " + ex.Message);
-                return false;
+                return null;
             }
+        }
+
+        private static string GetInstallDirectory()
+        {
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FawterX", "Signer");
         }
 
         private static string EscapeString(string str)
