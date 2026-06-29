@@ -386,9 +386,20 @@ export default function Home() {
     // إعادة احتساب أرقام السطر المالي
     const qty = line.quantity || 0
     const unitPrice = line.unitValue?.amountEGP || 0
-    const net = qty * unitPrice
+    
+    // ETA Math requires rawSalesTotal = qty * unitPrice
+    const rawSalesTotal = qty * unitPrice
+    
+    // Reset valueDifference ONLY if the user explicitly modifies quantity or unit price
+    if (field === 'quantity' || field === 'unitValue') {
+      line.valueDifference = 0
+    }
+    
+    const valDiff = line.valueDifference || 0
+    const net = rawSalesTotal + valDiff
+    
+    line.salesTotal = rawSalesTotal
     line.netTotal = net
-    line.salesTotal = net
     
     // Fix falsy 0 evaluation and respect backend taxPercent:
     const currency = line.unitValue?.currencySold || 'EGP';
@@ -408,9 +419,11 @@ export default function Home() {
     // إعادة احتساب إجماليات الفاتورة بالكامل (Grand Totals Recalculation)
     let totalSales = 0
     let totalTax = 0
+    let grandTotal = 0
     nextDocs[0].invoiceLines.forEach(l => {
       totalSales += l.netTotal || 0
       totalTax += (l.taxableItems?.[0]?.amount || 0)
+      grandTotal += (l.total || 0)
     })
 
     nextDocs[0].totalSalesAmount = totalSales
@@ -419,7 +432,7 @@ export default function Home() {
       taxType: "T1",
       amount: totalTax
     }]
-    nextDocs[0].totalAmount = totalSales + totalTax
+    nextDocs[0].totalAmount = grandTotal
 
     setEtaDocs(nextDocs)
 
@@ -588,15 +601,17 @@ export default function Home() {
     // إعادة احتساب إجماليات الفاتورة بالكامل
     let totalSales = 0
     let totalTax = 0
+    let grandTotal = 0
     nextDocs[0].invoiceLines.forEach(l => {
       totalSales += l.netTotal || 0
       totalTax += (l.taxableItems?.[0]?.amount || 0)
+      grandTotal += (l.total || 0)
     })
 
     nextDocs[0].totalSalesAmount = totalSales
     nextDocs[0].netAmount = totalSales
     nextDocs[0].taxTotals = [{ taxType: "T1", amount: totalTax }]
-    nextDocs[0].totalAmount = totalSales + totalTax
+    nextDocs[0].totalAmount = grandTotal
 
     setEtaDocs(nextDocs)
     toast.success(lang === 'ar' ? 'تم إضافة بند جديد للفاتورة!' : 'New item line added to invoice!')
@@ -622,15 +637,17 @@ export default function Home() {
     // إعادة احتساب إجماليات الفاتورة بالكامل
     let totalSales = 0
     let totalTax = 0
+    let grandTotal = 0
     nextDocs[0].invoiceLines.forEach(l => {
       totalSales += l.netTotal || 0
       totalTax += (l.taxableItems?.[0]?.amount || 0)
+      grandTotal += (l.total || 0)
     })
 
     nextDocs[0].totalSalesAmount = totalSales
     nextDocs[0].netAmount = totalSales
     nextDocs[0].taxTotals = [{ taxType: "T1", amount: totalTax }]
-    nextDocs[0].totalAmount = totalSales + totalTax
+    nextDocs[0].totalAmount = grandTotal
 
     setEtaDocs(nextDocs)
     toast.success(lang === 'ar' ? 'تم حذف الصنف من الفاتورة!' : 'Item line deleted from invoice!')

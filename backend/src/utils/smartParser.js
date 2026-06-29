@@ -1398,6 +1398,30 @@ function parseSchucoInvoice(text) {
         if (numbers.length >= 3) netAmountCandidates.push({ value: numbers[numbers.length - 1], idx, source: 'bar-line' });
       }
 
+      // 6b. Net Amount from KG line
+      if (!lineNetAmount && lower.includes('kg') && (lower.includes('/1kg') || lower.includes('/1 kg'))) {
+        const tokens = line.split(/(?:[\s]+|\\t)+/).map(t => t.trim()).filter(Boolean);
+        const numbers = tokens
+          .map(t => t.replace(/,/g, ''))
+          .filter(t => !isNaN(t) && t.length > 0)
+          .map(Number);
+        if (numbers.length >= 3) {
+          netAmountCandidates.push({ value: numbers[numbers.length - 1], idx, source: 'kg-line' });
+        }
+      }
+
+      // 6c. Net Amount from 'Total amount' line explicitly
+      if (!lineNetAmount && (lower.includes('total amount') || lower.includes('total net') || lower.includes('net price'))) {
+        const tokens = line.split(/(?:[\s]+|\\t)+/).map(t => t.trim()).filter(Boolean);
+        const numbers = tokens
+          .map(t => t.replace(/,/g, ''))
+          .filter(t => !isNaN(t) && t.length > 0)
+          .map(Number);
+        if (numbers.length > 0) {
+          netAmountCandidates.push({ value: numbers[numbers.length - 1], idx, source: 'total-amount-line' });
+        }
+      }
+
       // Collect standalone numbers that have no labels
       const cleanLine = line.trim();
       const pureNumMatch = cleanLine.match(/^([\d,]+(?:\.\d+)?)$/);
