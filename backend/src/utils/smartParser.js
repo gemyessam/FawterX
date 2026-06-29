@@ -1,4 +1,4 @@
-﻿const fs = require("fs");
+const fs = require("fs");
 const XLSX = require("xlsx");
 
 const ETA_UNIT_MAP = {
@@ -291,7 +291,7 @@ function extractReceiverAddressDetails(lines = [], receiverName = "") {
     return true;
   });
 
-  const receiverStreet = streetLines.join(", ");
+  let receiverStreet = streetLines.join(", ");
   const buildingCandidates = [
     receiverStreet.match(/\b(?:p\.?\s*o\.?\s*box\s*[\d\-\/]+|\d{1,6}(?:\s*&\s*\d{1,6})?)\b/i)?.[0],
     streetLines.find(line => /\b(?:unit|building|block|plot|villa|house|suite|floor|room|no\.?|#)\s*[\w\-\/&]+/i.test(line))?.match(/\b(?:unit|building|block|plot|villa|house|suite|floor|room|no\.?|#)\s*([\w\-\/&]+(?:\s*&\s*[\w\-\/&]+)*)/i)?.[1],
@@ -300,13 +300,35 @@ function extractReceiverAddressDetails(lines = [], receiverName = "") {
   ].map(normalizeSpaces).filter(Boolean);
   const receiverBuildingNumber = buildingCandidates[0] || "1";
 
+  // Smart splitting for comma-separated full addresses
+  let finalRegionCity = regionCity || "";
+  let finalGovernate = regionCity || "";
+  
+  if (addressText.includes(",")) {
+    const parts = addressText.split(",").map(s => s.trim()).filter(Boolean);
+    if (parts.length >= 3) {
+      const lastPart = parts[parts.length - 1];
+      const isCountry = countryHints.some(entry => entry.test.test(lastPart)) || /(egypt|مصر|kenya|ksa|uae|uk|usa|germany)/i.test(lastPart);
+      if (isCountry) {
+        finalGovernate = parts[parts.length - 2] || finalGovernate;
+        finalRegionCity = parts[parts.length - 3] || finalRegionCity;
+      } else {
+        finalGovernate = parts[parts.length - 1] || finalGovernate;
+        finalRegionCity = parts[parts.length - 2] || finalRegionCity;
+      }
+    }
+  }
+
+  // Always use the full address for the street address text to preserve exact values
+  receiverStreet = addressText;
+
   return {
     receiverAddressText: addressText,
     receiverStreet: receiverStreet || addressText,
-    receiverRegionCity: regionCity || "",
-    receiverGovernate: regionCity || "",
+    receiverRegionCity: finalRegionCity,
+    receiverGovernate: finalGovernate,
     receiverBuildingNumber,
-    receiverCountry: countryCode,
+    receiverCountry: countryCode || "EG",
     receiverAddressLines: addressLines
   };
 }

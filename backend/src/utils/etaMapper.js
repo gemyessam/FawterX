@@ -104,10 +104,20 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
         taxPercent = 0;
       }
 
-      const salesTotal = parseFloat((amountEGP * quantity).toFixed(5));
-      const taxAmount  = parseFloat(((salesTotal * taxPercent) / 100).toFixed(5));
-      const netTotal   = parseFloat(salesTotal.toFixed(5));
-      const total      = parseFloat((netTotal + taxAmount).toFixed(5));
+      const rawSalesTotal = row.netTotal !== undefined ? row.netTotal : row.salesTotal;
+      const salesTotal = rawSalesTotal !== undefined ? parseFloat(rawSalesTotal.toFixed(5)) : parseFloat((amountEGP * quantity).toFixed(5));
+      const netTotal = parseFloat(salesTotal.toFixed(5));
+
+      const rawTaxAmount = row.taxAmount;
+      let taxAmount = rawTaxAmount !== undefined ? parseFloat(rawTaxAmount.toFixed(5)) : parseFloat(((salesTotal * taxPercent) / 100).toFixed(5));
+      
+      const rawTotal = row.total;
+      const total = rawTotal !== undefined ? parseFloat(rawTotal.toFixed(5)) : parseFloat((netTotal + taxAmount).toFixed(5));
+
+      // Re-enforce zero tax if foreign receiver or non-EGP, overriding parsed if necessary
+      if (currency !== "EGP" || receiverType === "F" || (receiverCountry && receiverCountry !== "EG")) {
+        taxAmount = 0;
+      }
 
       const desc = String(row[mapping.description] || `Item ${idx + 1}`);
 
