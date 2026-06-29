@@ -4,6 +4,7 @@ import { Toaster, toast } from 'react-hot-toast'
 import Home from './pages/Home'
 import Drafts from './pages/Drafts'
 import DraftDetails from './pages/DraftDetails'
+import AdminPanel from './pages/AdminPanel'
 import { testETAAuth, getCompanySettings, saveCompanySettings } from './services/api'
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase'
 
@@ -49,6 +50,7 @@ const TRANSLATIONS = {
     navCreate: 'Excel Auto',
     navDrafts: 'Saved Recovery',
     navSettings: 'Company Setup',
+    navAdmin: 'Admin Panel',
     logout: 'Log Out',
     footer: 'FawterX ETA Invoicing Automation Platform · Egyptian Tax Authority Servers',
     loginTitle: 'Sign In to FawterX',
@@ -73,7 +75,7 @@ const TRANSLATIONS = {
 }
 
 function Layout({ children }) {
-  const { lang, setLang, t, user, handleLogout, triggerReset, showTutorialModal, setShowTutorialModal } = useContext(AppContext)
+  const { lang, setLang, t, user, isAdmin, handleLogout, triggerReset, showTutorialModal, setShowTutorialModal } = useContext(AppContext)
   const location = useLocation()
   const handleLogoClick = (e) => {
     e.preventDefault();
@@ -219,6 +221,9 @@ function Layout({ children }) {
         <nav className="header-nav">
           <Link to="/" onClick={handleLogoClick} className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>{t.navHome}</Link>
           <Link to="/drafts" className={`nav-link ${location.pathname.includes('/drafts') ? 'active' : ''}`}>{t.navDrafts}</Link>
+          {isAdmin && (
+            <Link to="/admin" className={`nav-link ${location.pathname.includes('/admin') ? 'active' : ''}`}>{t.navAdmin || (lang === 'ar' ? 'لوحة الأدمن' : 'Admin Panel')}</Link>
+          )}
           <button type="button" className="nav-link" onClick={() => setShowTutorialModal(true)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.5rem 0.75rem', fontWeight: 600 }}>
             💡 {lang === 'ar' ? 'دليل الخطوات' : 'Step Guide'}
           </button>
@@ -403,6 +408,7 @@ export default function App() {
   })
 
   const t = TRANSLATIONS[lang]
+  const isAdmin = (user?.email || '').toLowerCase() === 'gemy.essam.ge@gmail.com'
 
   useEffect(() => {    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
@@ -445,7 +451,7 @@ export default function App() {
   }
 
   return (
-    <AppContext.Provider value={{ lang, setLang, t, user, handleLogout, resetTrigger, triggerReset, showTutorialModal, setShowTutorialModal }}>
+    <AppContext.Provider value={{ lang, setLang, t, user, isAdmin, handleLogout, resetTrigger, triggerReset, showTutorialModal, setShowTutorialModal }}>
       <BrowserRouter>
         <Toaster position="bottom-center" toastOptions={{ style: { background: '#101223', color: '#e8eaf6', border: '1px solid #202442', borderRadius: '12px' } }} />
         
@@ -513,6 +519,16 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/drafts" element={<Drafts />} />
               <Route path="/drafts/:id" element={<DraftDetails />} />
+              <Route path="/admin" element={isAdmin ? <AdminPanel /> : (
+                <div className="card fade-in" style={{ padding: '2rem' }}>
+                  <h2 className="card-title">Access Denied</h2>
+                  <p className="card-sub" style={{ marginBottom: 0 }}>
+                    {lang === 'ar'
+                      ? 'هذه الصفحة محجوبة لحساب الإدارة المعتمد فقط.'
+                      : 'This page is restricted to the approved administrator account only.'}
+                  </p>
+                </div>
+              )} />
             </Routes>
           </Layout>
         )}

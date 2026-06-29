@@ -188,3 +188,21 @@ export async function saveCompanySettings(settings) {
   const { data } = await api.post('/eta/settings', settings)
   return data
 }
+
+/** جلب ملخص الإدارة */
+export async function getAdminStats() {
+  const { data } = await api.get('/admin/stats')
+  return data
+}
+
+/** جلب قائمة المستخدمين للإدارة */
+export async function getAdminUsers() {
+  const { data } = await api.get('/admin/users')
+  return data
+}
+
+/** تحديث صلاحيات مستخدم */
+export async function updateAdminUser(uid, payload) {
+  const { data } = await api.patch(`/admin/users/${uid}`, payload)
+  return data
+}

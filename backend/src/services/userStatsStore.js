@@ -1,4 +1,5 @@
 const admin = require("./firebaseAdmin");
+const { isAdminEmail } = require("./adminAccess");
 
 // ═══════════════════════════════════════════════════════════════════
 // Firestore-First User Stats Store
@@ -14,6 +15,22 @@ function getDb() {
   return null;
 }
 
+function normalizeAccess(source = {}) {
+  const access = source.access && typeof source.access === "object" ? source.access : source;
+  const dailyLimit = Number(access.quotaDaily ?? access.dailyLimit ?? 10);
+  const monthlyLimit = access.quotaMonthly == null || access.quotaMonthly === "" ? null : Number(access.quotaMonthly);
+  const status = String(access.status || "active").toLowerCase();
+  return {
+    role: String(access.role || "user").toLowerCase(),
+    status,
+    isSubscribed: Boolean(access.isSubscribed),
+    dailyLimit: Number.isFinite(dailyLimit) && dailyLimit >= 0 ? dailyLimit : 10,
+    monthlyLimit: Number.isFinite(monthlyLimit) && monthlyLimit >= 0 ? monthlyLimit : null,
+    expiresAt: access.expiresAt || null,
+    note: access.note || "",
+  };
+}
+
 /**
  * جلب حالة اشتراك واستخدام المستخدم الحالي
  */
@@ -22,9 +39,13 @@ async function getUserUsage(userId, userEmail) {
   let data = { 
     submissionsCount: 0, 
     isSubscribed: false,
+    role: "user",
+    status: "active",
+    dailyLimit: 10,
+    monthlyLimit: null,
     dailyCount: 0,
     lastReset: new Date().toISOString().split('T')[0],
-    isGm: userEmail === 'gemy.essam.ge@gmail.com'
+    isGm: isAdminEmail(userEmail)
   };
 
   if (db) {
@@ -33,8 +54,13 @@ async function getUserUsage(userId, userEmail) {
       const docSnap = await docRef.get();
       if (docSnap.exists) {
         const d = docSnap.data();
+        const access = normalizeAccess(d);
         data.submissionsCount = d.submissionsCount || 0;
-        data.isSubscribed = d.isSubscribed || false;
+        data.isSubscribed = access.isSubscribed || d.isSubscribed || false;
+        data.role = access.role;
+        data.status = access.status;
+        data.dailyLimit = access.dailyLimit;
+        data.monthlyLimit = access.monthlyLimit;
         const today = new Date().toISOString().split('T')[0];
         if (d.lastReset === today) {
           data.dailyCount = d.dailyCount || 0;
@@ -47,8 +73,12 @@ async function getUserUsage(userId, userEmail) {
     }
   }
 
-  if (userEmail === 'gemy.essam.ge@gmail.com') {
+  if (isAdminEmail(userEmail)) {
     data.isSubscribed = true;
+    data.role = "admin";
+    data.status = "active";
+    data.dailyLimit = 9999;
+    data.monthlyLimit = null;
   }
   return data;
 }
@@ -57,10 +87,11 @@ async function getUserUsage(userId, userEmail) {
  * يتحقق مما إذا كان للمستخدم الحق في الإرسال
  */
 async function canUserSubmit(userId, userEmail) {
-  if (userEmail === 'gemy.essam.ge@gmail.com') return true;
+  if (isAdminEmail(userEmail)) return true;
   const userStat = await getUserUsage(userId, userEmail);
+  if (userStat.status === "suspended" || userStat.status === "blocked") return false;
   if (userStat.isSubscribed) return true;
-  return userStat.dailyCount < 10;
+  return userStat.dailyCount < userStat.dailyLimit;
 }
 
 /**

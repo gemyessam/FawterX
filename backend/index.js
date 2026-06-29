@@ -6,6 +6,7 @@ const morgan = require("morgan");
 const excelRoutes = require("./src/routes/excel");
 const invoiceRoutes = require("./src/routes/invoice");
 const etaRoutes = require("./src/routes/eta");
+const adminRoutes = require("./src/routes/admin");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -24,6 +25,7 @@ app.get("/", (req, res) => {
 app.use("/api/excel", excelRoutes);
 app.use("/api/invoice", invoiceRoutes);
 app.use("/api/eta", etaRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Error Handling Middleware
 app.use((err, req, res, next) => {
