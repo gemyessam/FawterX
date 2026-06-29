@@ -728,7 +728,7 @@ export default function Home() {
         toast.error(
           lang === 'ar' 
             ? '⚠️ لم يتم الكشف عن أداة التوقيع! يرجى تحميل وتشغيل برنامج FawterX Signer أولاً والتأكد من توصيل الدونجل.' 
-            : '⚠️ Local signer app not detected! Please download & run FawterX Signer and ensure your USB Token is plugged in.',
+            : '⚠️ Local signer window not detected! Please open FawterX Signer and keep its window visible while your USB Token is plugged in.',
           { duration: 7000 }
         );
         return;
@@ -987,8 +987,8 @@ export default function Home() {
                 </h4>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0.5rem 0 1.25rem' }}>
                   {lang === 'ar' 
-                    ? 'يلزم تشغيل برنامج FawterX Signer للربط وتوقيع الفواتير بالدونجل (USB Token) الحقيقي الخاص بك.' 
-                    : 'Download and run FawterX Signer to sign invoices using your E-Invoicing USB Token.'}
+                    ? 'يلزم فتح نافذة FawterX Signer وتركها ظاهرة أثناء التوقيع للتأكد من أن الأداة تعمل بشكل سليم.' 
+                    : 'Open the FawterX Signer window and keep it visible while signing so we can verify the tool is running correctly.'}
                 </p>
                 <a href={`/FawterX-Signer.zip?t=${Date.now()}`} download className="btn btn-accent btn-block btn-sm" style={{ textDecoration: 'none', textAlign: 'center', display: 'block' }}>
                   📥 {lang === 'ar' ? 'تحميل أحدث إصدار v1.8.9 (ZIP)' : 'Download Latest v1.8.9 (ZIP)'}

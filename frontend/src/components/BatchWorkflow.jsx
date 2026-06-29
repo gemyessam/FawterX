@@ -167,8 +167,8 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
         setSubmitting(false);
         toast.error(
           lang === 'ar' 
-            ? '⚠️ لم يتم الكشف عن أداة التوقيع! يرجى تحميل وتشغيل برنامج FawterX Signer أولاً والتأكد من توصيل الدونجل.' 
-            : '⚠️ Local signer app not detected! Please download & run FawterX Signer and ensure your USB Token is plugged in.',
+            ? '⚠️ لم يتم العثور على نافذة أداة التوقيع! يرجى فتح FawterX Signer وترك النافذة ظاهرة مع توصيل الدونجل.' 
+            : '⚠️ Local signer window not detected! Please open FawterX Signer and keep its window visible with your USB Token plugged in.',
           { duration: 7000 }
         );
         return;
