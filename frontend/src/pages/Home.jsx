@@ -877,9 +877,9 @@ export default function Home() {
                 <strong style={{ fontSize: '0.9rem' }}>
                   {usage.isSubscribed 
                     ? (lang === 'ar' ? 'باقة FawterX نشطة: إرسال غير محدود للضرائب ✓' : 'FawterX Premium Active: Unlimited transmissions ✓')
-                    : (usage.submissionsCount >= 25
-                        ? (lang === 'ar' ? '⚠️ استهلكت التجربة المجانية (0 تجارب متبقية)' : '⚠️ Trial used (0 free submissions left)')
-                        : (lang === 'ar' ? `🎁 باقة تجريبية: يتبقى لك ${25 - usage.submissionsCount} تجربة إرسال مجانية للضرائب` : `🎁 Free Trial: ${25 - usage.submissionsCount} free submissions left to ETA`)
+                    : (usage.dailyCount >= (usage.dailyLimit || 10)
+                        ? (lang === 'ar' ? `⚠️ استنفدت الحد اليومي (${usage.dailyLimit || 10} فواتير)` : `⚠️ Daily limit reached (${usage.dailyLimit || 10} invoices)`)
+                        : (lang === 'ar' ? `🎁 متبقي لك ${(usage.dailyLimit || 10) - usage.dailyCount} فواتير للرفع اليوم` : `🎁 ${(usage.dailyLimit || 10) - usage.dailyCount} invoices left to upload today`)
                       )
                   }
                 </strong>
@@ -894,7 +894,7 @@ export default function Home() {
               <button 
                 className="btn btn-accent btn-lg" 
                 onClick={() => {
-                  if (!usage.isSubscribed && usage.submissionsCount >= 25) {
+                  if (!usage.isSubscribed && usage.dailyCount >= (usage.dailyLimit || 10)) {
                     setShowPricingModal(true)
                   } else {
                     setInWorkflow(true)
