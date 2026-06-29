@@ -37,10 +37,34 @@ async function listUsers() {
   const db = getDb();
   if (!db) return [];
   const snapshot = await db.collection("users").get();
-  return snapshot.docs
+  let usersList = snapshot.docs
     .map(sanitizeUserSnapshot)
     .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")))
     .slice(0, 200);
+
+  try {
+    const authUsersMap = {};
+    for (let i = 0; i < usersList.length; i += 100) {
+      const batch = usersList.slice(i, i + 100).map(u => ({ uid: u.uid }));
+      const authUsersResult = await admin.auth().getUsers(batch);
+      authUsersResult.users.forEach(u => {
+        authUsersMap[u.uid] = { email: u.email, displayName: u.displayName };
+      });
+    }
+
+    usersList = usersList.map(u => {
+      const authUser = authUsersMap[u.uid];
+      return {
+        ...u,
+        email: u.email || (authUser && authUser.email) || "",
+        displayName: u.displayName || (authUser && authUser.displayName) || "",
+      };
+    });
+  } catch (err) {
+    console.warn("Could not fetch auth users in bulk:", err.message);
+  }
+
+  return usersList;
 }
 
 async function getUserById(uid) {
@@ -48,7 +72,17 @@ async function getUserById(uid) {
   if (!db) return null;
   const doc = await db.collection("users").doc(uid).get();
   if (!doc.exists) return null;
-  return sanitizeUserSnapshot(doc);
+  const user = sanitizeUserSnapshot(doc);
+
+  try {
+    const authUser = await admin.auth().getUser(uid);
+    user.email = user.email || authUser.email || "";
+    user.displayName = user.displayName || authUser.displayName || "";
+  } catch (err) {
+    console.warn(`Could not fetch auth user ${uid}:`, err.message);
+  }
+
+  return user;
 }
 
 function clampPositiveInteger(value, fallback) {

@@ -161,39 +161,45 @@ export default function AdminPanel() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '1rem', alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr', gap: '1rem', alignItems: 'start' }}>
           <div className="table-wrapper" style={{ maxHeight: '70vh', overflow: 'auto' }}>
             <table>
               <thead>
                 <tr>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Daily</th>
-                  <th>Subs</th>
-                  <th>Submissions</th>
-                  <th>Action</th>
+                  <th>{lang === 'ar' ? 'الحساب' : 'Email'}</th>
+                  <th>{lang === 'ar' ? 'الدور' : 'Role'}</th>
+                  <th>{lang === 'ar' ? 'الحالة' : 'Status'}</th>
+                  <th>{lang === 'ar' ? 'الحد اليومي' : 'Daily'}</th>
+                  <th>{lang === 'ar' ? 'الاستخدام' : 'Used'}</th>
+                  <th>{lang === 'ar' ? 'المتبقي' : 'Remaining'}</th>
+                  <th>{lang === 'ar' ? 'اشتراك' : 'Subs'}</th>
+                  <th>{lang === 'ar' ? 'إجراء' : 'Action'}</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.map((u) => (
+                {filteredUsers.map((u) => {
+                  const quota = u.quotaDaily ?? 10;
+                  const used = u.submissionsCount || 0;
+                  const remaining = Math.max(0, quota - used);
+                  return (
                   <tr key={u.uid} style={{ background: selected?.uid === u.uid ? 'rgba(0, 224, 161, 0.08)' : 'transparent' }}>
                     <td>
                       <div style={{ fontWeight: 700 }}>{u.displayName || '—'}</div>
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{u.email || u.uid}</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', wordBreak: 'break-all' }}>{u.email || u.uid}</div>
                     </td>
                     <td>{u.role || 'user'}</td>
                     <td>{u.status || 'active'}</td>
-                    <td>{u.quotaDaily ?? 10}</td>
-                    <td>{u.isSubscribed ? 'Yes' : 'No'}</td>
-                    <td>{u.submissionsCount || 0}</td>
+                    <td>{quota}</td>
+                    <td>{used}</td>
+                    <td style={{ fontWeight: 'bold', color: remaining > 0 ? 'var(--accent)' : '#ff4d4f' }}>{remaining}</td>
+                    <td>{u.isSubscribed ? (lang === 'ar' ? 'نعم' : 'Yes') : (lang === 'ar' ? 'لا' : 'No')}</td>
                     <td>
                       <button className="btn btn-ghost btn-sm" onClick={() => selectUser(u)}>
                         {lang === 'ar' ? 'تعديل' : 'Edit'}
                       </button>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>
