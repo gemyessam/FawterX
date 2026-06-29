@@ -85,10 +85,10 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
 
     const invoiceLines = groupRows.map(({ row, idx }) => {
       const parsedVal = parseFloat(row[mapping.unitValue]);
-      const unitValue = parseFloat((isNaN(parsedVal) ? 0 : parsedVal).toFixed(4));
+      const unitValue = parseFloat((isNaN(parsedVal) ? 0 : parsedVal).toFixed(5));
 
       const parsedQty = parseFloat(row[mapping.quantity]);
-      const quantity  = parseFloat((isNaN(parsedQty) ? 1 : parsedQty).toFixed(4));
+      const quantity  = parseFloat((isNaN(parsedQty) ? 1 : parsedQty).toFixed(5));
 
       const currency = String(row[mapping.currency] || metadata.currency || "EGP").toUpperCase();
       const exchangeRate = parseFloat(metadata.currencyExchangeRate) || 1;
@@ -98,7 +98,7 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       const currencyExchangeRate = currency === "EGP" ? 0 : exchangeRate;
 
       const parsedTax = parseFloat(row[mapping.taxPercent]);
-      let taxPercent = parseFloat((isNaN(parsedTax) ? 14 : parsedTax).toFixed(4));
+      let taxPercent = parseFloat((isNaN(parsedTax) ? 14 : parsedTax).toFixed(5));
 
       if (currency !== "EGP" || receiverType === "F" || (receiverCountry && receiverCountry !== "EG")) {
         taxPercent = 0;
