@@ -215,7 +215,7 @@ function extractReceiverAddressDetails(lines = [], receiverName = "") {
   const endIdx = shipToIdx >= 0 ? shipToIdx : normalizedLines.length;
 
   const countryHints = [
-    { test: /(c[ôo]te\s*d'\s*ivoire|ivory\s*coast|كوت ديفوار)/i, code: "CI" },
+    { test: /(c[ôo]te.*d'.*ivoire|ivory\s*coast|كوت ديفوار)/i, code: "CI" },
     { test: /(kenya|كينيا)/i, code: "KE" },
     { test: /(egypt|مصر)/i, code: "EG" },
     { test: /(saudi|ksa|السعودية)/i, code: "SA" },
@@ -232,9 +232,9 @@ function extractReceiverAddressDetails(lines = [], receiverName = "") {
 
   const extractCityFromCountryLine = (line) => {
     if (!line) return "";
-    const m = normalizeSpaces(line).match(/^(.+?)\s*,\s*(c[ôo]te\s*d'\s*ivoire|ivory\s*coast|kenya|egypt|saudi arabia|saudi|ksa|uae|dubai|usa|uk|germany|كينيا|مصر|السعودية|الامارات|دبي|امريكا)\.?$/i);
+    const m = normalizeSpaces(line).match(/^(.+?)\s*,\s*(c[ôo]te.*d'.*ivoire|ivory\s*coast|kenya|egypt|saudi arabia|saudi|ksa|uae|dubai|usa|uk|germany|كينيا|مصر|السعودية|الامارات|دبي|امريكا)\.?$/i);
     if (m) return normalizeSpaces(m[1]);
-    const m2 = normalizeSpaces(line).match(/^(.+?)\s+(c[ôo]te\s*d'\s*ivoire|ivory\s*coast|kenya|egypt|saudi arabia|saudi|ksa|uae|dubai|usa|uk|germany|كينيا|مصر|السعودية|الامارات|دبي|امريكا)\.?$/i);
+    const m2 = normalizeSpaces(line).match(/^(.+?)\s+(c[ôo]te.*d'.*ivoire|ivory\s*coast|kenya|egypt|saudi arabia|saudi|ksa|uae|dubai|usa|uk|germany|كينيا|مصر|السعودية|الامارات|دبي|امريكا)\.?$/i);
     if (m2) return normalizeSpaces(m2[1]);
     return "";
   };
@@ -311,7 +311,7 @@ function extractReceiverAddressDetails(lines = [], receiverName = "") {
     const parts = addressText.split(",").map(s => s.trim()).filter(Boolean);
     if (parts.length >= 3) {
       const lastPart = parts[parts.length - 1];
-      const isCountry = countryHints.some(entry => entry.test.test(lastPart)) || /(egypt|مصر|kenya|ksa|uae|uk|usa|germany|c[ôo]te\s*d'\s*ivoire|ivory\s*coast)/i.test(lastPart);
+      const isCountry = countryHints.some(entry => entry.test.test(lastPart)) || /(egypt|مصر|kenya|ksa|uae|uk|usa|germany|c[ôo]te.*d'.*ivoire|ivory\s*coast)/i.test(lastPart);
       if (isCountry) {
         finalGovernate = parts[parts.length - 2] || finalGovernate;
         finalRegionCity = parts[parts.length - 3] || finalRegionCity;
