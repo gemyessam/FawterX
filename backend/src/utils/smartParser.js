@@ -256,12 +256,13 @@ function extractReceiverAddressDetails(lines = [], receiverName = "") {
       .replace(/^\d{1,4}[.\/-]\d{1,2}[.\/-]\d{1,4}\s*\/\s*/i, "")
       .trim();
 
-    const detectedCountry = countryHints.find(entry => entry.test.test(line));
+    const currentText = (addressLines.join(" ") + " " + line).trim();
+    const detectedCountry = countryHints.find(entry => entry.test.test(currentText));
     if (detectedCountry) {
       if (!countryCode) countryCode = detectedCountry.code;
       addressLines.push(line);
       if (!regionCity) {
-        regionCity = extractCityFromCountryLine(line);
+        regionCity = extractCityFromCountryLine(currentText);
       }
       countryHit = true;
       break;
@@ -311,14 +312,31 @@ function extractReceiverAddressDetails(lines = [], receiverName = "") {
     const parts = addressText.split(",").map(s => s.trim()).filter(Boolean);
     if (parts.length >= 3) {
       const lastPart = parts[parts.length - 1];
-      const isCountry = countryHints.some(entry => entry.test.test(lastPart)) || /(egypt|مصر|kenya|ksa|uae|uk|usa|germany|c[ôo]te.*d.*ivoire|ivory\s*coast)/i.test(lastPart);
+      const secondLastPart = parts[parts.length - 2];
+      const combined = secondLastPart + " " + lastPart;
+      
+      const isCountry = countryHints.some(entry => entry.test.test(lastPart) || entry.test.test(combined)) || /(egypt|مصر|kenya|ksa|uae|uk|usa|germany|c[ôo]te.*d.*ivoire|ivory\s*coast)/i.test(lastPart) || /(egypt|مصر|kenya|ksa|uae|uk|usa|germany|c[ôo]te.*d.*ivoire|ivory\s*coast)/i.test(combined);
+      
       if (isCountry) {
-        finalGovernate = parts[parts.length - 2] || finalGovernate;
-        finalRegionCity = parts[parts.length - 3] || finalRegionCity;
+        if (/(c[ôo]te.*d.*ivoire|ivory\s*coast)/i.test(combined) && !/(c[ôo]te.*d.*ivoire|ivory\s*coast)/i.test(lastPart)) {
+          finalGovernate = parts[parts.length - 3] || finalGovernate;
+          finalRegionCity = parts[parts.length - 4] || finalRegionCity;
+        } else {
+          finalGovernate = parts[parts.length - 2] || finalGovernate;
+          finalRegionCity = parts[parts.length - 3] || finalRegionCity;
+        }
       } else {
         finalGovernate = parts[parts.length - 1] || finalGovernate;
         finalRegionCity = parts[parts.length - 2] || finalRegionCity;
       }
+    }
+  }
+
+  if (!countryCode) {
+    const fullText = addressText.replace(/,/g, " ").replace(/\s+/g, " ");
+    const detected = countryHints.find(entry => entry.test.test(fullText));
+    if (detected) {
+      countryCode = detected.code;
     }
   }
 
