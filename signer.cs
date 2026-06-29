@@ -9,8 +9,6 @@ using System.Security.Cryptography.X509Certificates;
 using System.Windows.Forms;
 using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
-using System.Diagnostics;
-using System.Reflection;
 
 namespace FawterXSigner
 {
@@ -18,53 +16,19 @@ namespace FawterXSigner
     {
         private static HttpListener listener;
         private static readonly string PREFIX = "http://localhost:8585/";
-        private static readonly string SIGNER_VERSION = "1.8.8";
+        private static readonly string SIGNER_VERSION = "1.8.9";
 
         [STAThread]
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "FawterX Digital Signer Bridge v1.8.8 ≡ƒöæ";
+            Console.Title = "FawterX Digital Signer Bridge v1.8.9 ≡ƒöæ";
             
             Console.WriteLine("===================================================");
-            Console.WriteLine("    FawterX Digital Signer Bridge v1.8.8 (Egypt ETA)  ");
+            Console.WriteLine("    FawterX Digital Signer Bridge v1.8.9 (Egypt ETA)  ");
             Console.WriteLine("    [STATUS] CAdES-BES Exact Chain (No Roots/Duplicates): Active ");
             Console.WriteLine("===================================================");
             Console.WriteLine();
-
-            if (ShouldOfferInstall(args))
-            {
-                var result = MessageBox.Show(
-                    "Install FawterX Signer once so it starts automatically every time you log in?",
-                    "FawterX Signer Setup",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question);
-
-                if (result == DialogResult.Yes)
-                {
-                    string installedExe = InstallSelf();
-                    if (!string.IsNullOrEmpty(installedExe))
-                    {
-                        try
-                        {
-                            Process.Start(new ProcessStartInfo
-                            {
-                                FileName = installedExe,
-                                UseShellExecute = false,
-                                CreateNoWindow = true,
-                                WindowStyle = ProcessWindowStyle.Hidden
-                            });
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine("[WARN] Failed to relaunch installed signer: " + ex.Message);
-                        }
-
-                        Environment.Exit(0);
-                        return;
-                    }
-                }
-            }
             
             try
             {
@@ -135,7 +99,7 @@ namespace FawterXSigner
                 if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/")
                 {
                     response.ContentType = "application/json; charset=utf-8";
-                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"" + SIGNER_VERSION + "\",\"message\":\"FawterX local signer v" + SIGNER_VERSION + " is running with automatic self-install support, Exact Certificate Chain embedding (No Roots/Duplicates) and UTF-8 Unicode support!\"}";
+                    responseString = "{\"success\":true,\"status\":\"ready\",\"version\":\"" + SIGNER_VERSION + "\",\"message\":\"FawterX local signer v" + SIGNER_VERSION + " is running with Exact Certificate Chain embedding (No Roots/Duplicates) and UTF-8 Unicode support!\"}";
                     byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                     response.ContentLength64 = buffer.Length;
                     response.OutputStream.Write(buffer, 0, buffer.Length);
@@ -540,74 +504,6 @@ namespace FawterXSigner
                     return value.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\t", "\t").Replace("\\f", "\f").Replace("\\b", "\b");
                 }
             }
-        }
-
-        private static bool ShouldOfferInstall(string[] args)
-        {
-            if (args != null && Array.Exists(args, a => string.Equals(a, "--install", StringComparison.OrdinalIgnoreCase)))
-            {
-                return true;
-            }
-
-            string currentExe = Assembly.GetExecutingAssembly().Location;
-            string installDir = GetInstallDirectory();
-            string installedExe = Path.Combine(installDir, Path.GetFileName(currentExe));
-            return !string.Equals(Path.GetFullPath(currentExe), Path.GetFullPath(installedExe), StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string InstallSelf()
-        {
-            try
-            {
-                string currentExe = Assembly.GetExecutingAssembly().Location;
-                string installDir = GetInstallDirectory();
-                string installedExe = Path.Combine(installDir, Path.GetFileName(currentExe));
-                string taskName = "FawterX Signer Bridge";
-
-                Directory.CreateDirectory(installDir);
-                File.Copy(currentExe, installedExe, true);
-
-                string psCommand =
-                    "$taskName = '" + taskName + "'; " +
-                    "$installedExe = '" + installedExe.Replace("'", "''") + "'; " +
-                    "Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null; " +
-                    "$action = New-ScheduledTaskAction -Execute $installedExe; " +
-                    "$trigger = New-ScheduledTaskTrigger -AtLogOn; " +
-                    "$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew; " +
-                    "Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description 'FawterX local signing bridge for USB token signing' | Out-Null";
-
-                var psi = new ProcessStartInfo
-                {
-                    FileName = "powershell.exe",
-                    Arguments = "-NoProfile -ExecutionPolicy Bypass -Command \"" + psCommand.Replace("\"", "\\\"") + "\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden
-                };
-
-                using (var proc = Process.Start(psi))
-                {
-                    proc.WaitForExit();
-                    if (proc.ExitCode != 0)
-                    {
-                        Console.WriteLine("[WARN] PowerShell installer exited with code: " + proc.ExitCode);
-                    }
-                }
-
-                Console.WriteLine("[INFO] Installed at: " + installedExe);
-                Console.WriteLine("[INFO] The signer will start automatically at logon.");
-                return installedExe;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("[ERROR] Self-install failed: " + ex.Message);
-                return null;
-            }
-        }
-
-        private static string GetInstallDirectory()
-        {
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FawterX", "Signer");
         }
 
         private static string EscapeString(string str)
