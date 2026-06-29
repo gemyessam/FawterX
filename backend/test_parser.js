@@ -1,41 +1,25 @@
-const fs = require('fs');
-const { PDFParse } = require('pdf-parse');
-const { parseSmartDocument } = require('./src/utils/smartParser');
-const path = require('path');
-const os = require('os');
+const { parseSchucoInvoice } = require('./src/utils/smartParser');
 
-// First extract raw text to see what the parser sees
-async function testParser() {
-  const pdfPath = 'C:/Users/GeMy/Documents/System and Electronic Invoice/System invoice 610.PDF';
-  
-  console.log('=== Testing Schüco Parser ===\n');
-  
-  try {
-    const result = await parseSmartDocument(pdfPath, true);
-    
-    console.log('Parser Mode:', result.parserDebugInfo?.mode);
-    console.log('Lines found:', result.invoiceLines?.length);
-    console.log('Confidence:', result.confidenceScore);
-    console.log('\n=== METADATA ===');
-    console.log(JSON.stringify(result.metadata, null, 2));
-    console.log('\n=== INVOICE LINES ===');
-    result.invoiceLines?.forEach((line, i) => {
-      console.log(`\n[Line ${i+1}] ${line.itemCode} - ${line.rawDescription}`);
-      console.log(`  Description: ${line.description}`);
-      console.log(`  Qty: ${line.quantity} ${line.unitType}`);
-      console.log(`  Unit Price: ${line.unitValue} EGP`);
-      console.log(`  Total: ${line.total} EGP`);
-      if (line.warnings?.length) console.log(`  ⚠️ Warnings:`, line.warnings);
-      if (line.missingFields?.length) console.log(`  ❌ Missing:`, line.missingFields);
-    });
-    
-    if (result.warnings?.length) {
-      console.log('\n=== PARSER WARNINGS ===');
-      result.warnings.slice(0, 10).forEach(w => console.log(' -', w));
-    }
-  } catch (err) {
-    console.error('Error:', err.message);
-  }
-}
+const text = `
+Pos. Item No. Error Quantity Unit Price/ Unit Net Price Total Net
+1 539070 2T Outer Frame Bottom 149.00 BAR 2,232.03 /1BAR
+1,032.83 KG 322.00 /1KG 332,571.98
+819.50 LM 405.82 /1M
+Total amount 332,571.98
+Length 5,500 mm
+Country of origin Egypt
+2 539070 2T Outer Frame Bottom 165.00 BAR 2,637.85 /1BAR
+1,351.69 KG 322.00 /1KG 435,245.21
+1,072.50 LM 405.82 /1M
+Total amount 435,245.21
+Length 6,500 mm
+Country of origin Egypt
+Net Amount EGP 1,779,341.72
+VAT EGP 249,107.84
+Total Amount EGP 2,028,449.56
+`;
 
-testParser();
+(async () => {
+  const result = await parseSchucoInvoice(text);
+  console.log(JSON.stringify(result, null, 2));
+})();

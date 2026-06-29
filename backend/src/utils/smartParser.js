@@ -1578,8 +1578,16 @@ function parseSchucoInvoice(text) {
     const expectedNetFromLm = lmQty && unitPricePerMeter
       ? Number((lmQty * unitPricePerMeter).toFixed(4))
       : 0;
-    if (netAmountCandidates.length > 0) {
-      const rankedCandidates = netAmountCandidates
+    if (netAmountCandidates.length > 0 || unclassifiedNumbers.length > 0) {
+      // Include unclassified numbers as potential candidates if they are large enough (to catch isolated Total lines)
+      const allCandidates = [...netAmountCandidates];
+      unclassifiedNumbers.forEach(val => {
+        if (val > 1000) {
+          allCandidates.push({ value: val, idx: -1, source: 'unclassified' });
+        }
+      });
+
+      const rankedCandidates = allCandidates
         .filter(c => c.value > 0)
         .map(c => ({
           ...c,
