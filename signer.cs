@@ -8,6 +8,7 @@ using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Windows.Forms;
 using System.Text.RegularExpressions;
+using System.Web.Script.Serialization;
 
 namespace FawterXSigner
 {
@@ -113,8 +114,8 @@ namespace FawterXSigner
                         requestBody = reader.ReadToEnd();
                     }
 
-                    // Simple JSON extraction to avoid external JSON parser dependency
-                    string canonicalString = ExtractJsonValue(requestBody, "canonicalString");
+                    // Parse JSON safely to preserve the exact canonical payload bytes received from the browser
+                    string canonicalString = ExtractCanonicalString(requestBody);
 
                     if (string.IsNullOrEmpty(canonicalString))
                     {
@@ -457,35 +458,50 @@ namespace FawterXSigner
             return der;
         }
 
-        // Lightweight helper to extract JSON values without external libraries
-        private static string ExtractJsonValue(string json, string key)
+        // Safe JSON parsing for the canonical string to avoid escaping drift / digest mismatches
+        private static string ExtractCanonicalString(string json)
         {
-            string searchKey = "\"" + key + "\"";
-            int keyIndex = json.IndexOf(searchKey);
-            if (keyIndex == -1) return null;
+            if (string.IsNullOrWhiteSpace(json)) return null;
 
-            int colonIndex = json.IndexOf(":", keyIndex + searchKey.Length);
-            if (colonIndex == -1) return null;
-
-            int startIndex = json.IndexOf("\"", colonIndex + 1);
-            if (startIndex == -1) return null;
-
-            int endIndex = json.IndexOf("\"", startIndex + 1);
-            while (endIndex != -1 && json[endIndex - 1] == '\\') // handle escaped quotes
-            {
-                endIndex = json.IndexOf("\"", endIndex + 1);
-            }
-
-            if (endIndex == -1) return null;
-
-            string value = json.Substring(startIndex + 1, endIndex - startIndex - 1);
             try
             {
-                return System.Text.RegularExpressions.Regex.Unescape(value);
+                var serializer = new JavaScriptSerializer();
+                var dict = serializer.DeserializeObject(json) as System.Collections.Generic.Dictionary<string, object>;
+                if (dict == null || !dict.ContainsKey("canonicalString") || dict["canonicalString"] == null)
+                {
+                    return null;
+                }
+                return dict["canonicalString"].ToString();
             }
             catch
             {
-                return value.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\t", "\t").Replace("\\f", "\f").Replace("\\b", "\b");
+                string searchKey = "\"canonicalString\"";
+                int keyIndex = json.IndexOf(searchKey);
+                if (keyIndex == -1) return null;
+
+                int colonIndex = json.IndexOf(":", keyIndex + searchKey.Length);
+                if (colonIndex == -1) return null;
+
+                int startIndex = json.IndexOf("\"", colonIndex + 1);
+                if (startIndex == -1) return null;
+
+                int endIndex = json.IndexOf("\"", startIndex + 1);
+                while (endIndex != -1 && json[endIndex - 1] == '\\')
+                {
+                    endIndex = json.IndexOf("\"", endIndex + 1);
+                }
+
+                if (endIndex == -1) return null;
+
+                string value = json.Substring(startIndex + 1, endIndex - startIndex - 1);
+                try
+                {
+                    return System.Text.RegularExpressions.Regex.Unescape(value);
+                }
+                catch
+                {
+                    return value.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\t", "\t").Replace("\\f", "\f").Replace("\\b", "\b");
+                }
             }
         }
 
