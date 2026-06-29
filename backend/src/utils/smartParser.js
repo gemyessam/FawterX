@@ -1608,7 +1608,7 @@ function parseSchucoInvoice(text) {
     }
 
     const unitPriceFromLmTotal = lmQty && lineNetAmount
-      ? Number((lineNetAmount / lmQty).toFixed(4))
+      ? Number((lineNetAmount / lmQty).toFixed(5))
       : 0;
     if (unitPriceFromLmTotal) {
       unitPricePerMeter = unitPriceFromLmTotal;
@@ -1631,8 +1631,8 @@ function parseSchucoInvoice(text) {
     const description = descParts.join(' | ');
 
     // 10. Calculate final values
-    const net = lineNetAmount || Number((quantity * parsedUnitPrice).toFixed(4));
-    const unitValue = quantity > 0 ? Number((net / quantity).toFixed(4)) : parsedUnitPrice;
+    const net = lineNetAmount || Number((quantity * parsedUnitPrice).toFixed(5));
+    const unitValue = quantity > 0 ? Number((net / quantity).toFixed(5)) : parsedUnitPrice;
 
     const taxPercent = metadata.receiverType === 'F' ? 0 : 14;
     const taxAmt = Number((net * (taxPercent / 100)).toFixed(5));
