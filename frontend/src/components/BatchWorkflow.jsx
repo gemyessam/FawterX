@@ -175,23 +175,13 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
       }
 
       // 2. Sign each document locally
+      const safeDate = new Date();
+      safeDate.setMinutes(safeDate.getMinutes() - 5);
+      const currentIsoTime = safeDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
       for (const doc of invoices) {
         // Remove internal _fileName before signing and submitting
-        const { _fileName, ...pureDoc } = doc;
-        
-        // Use the existing date if present (from parser or manual input), else generate a safe fallback
-        if (pureDoc.dateTimeIssued) {
-          try {
-            const parsed = new Date(pureDoc.dateTimeIssued);
-            if (!isNaN(parsed.getTime())) {
-              pureDoc.dateTimeIssued = parsed.toISOString().replace(/\.\d{3}Z$/, 'Z');
-            }
-          } catch (e) {}
-        } else {
-          const safeDate = new Date();
-          safeDate.setMinutes(safeDate.getMinutes() - 5);
-          pureDoc.dateTimeIssued = safeDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
-        }
+        const { _fileName, ...pureDoc } = doc
+        pureDoc.dateTimeIssued = currentIsoTime;
         const cleanedDoc = cleanObject(pureDoc)
         const canonicalString = serializeToken(cleanedDoc)
         
