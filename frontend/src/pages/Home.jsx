@@ -756,10 +756,19 @@ export default function Home() {
       
       const safeDate = new Date();
       safeDate.setMinutes(safeDate.getMinutes() - 5);
-      const currentIsoTime = safeDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
+      const fallbackIsoTime = safeDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
       for (let i = 0; i < etaDocs.length; i++) {
         const doc = etaDocs[i];
-        doc.dateTimeIssued = currentIsoTime;
+        if (doc.dateTimeIssued) {
+          const parsed = new Date(doc.dateTimeIssued);
+          if (!isNaN(parsed.getTime())) {
+            doc.dateTimeIssued = parsed.toISOString().replace(/\.\d{3}Z$/, 'Z');
+          } else {
+            doc.dateTimeIssued = fallbackIsoTime;
+          }
+        } else {
+          doc.dateTimeIssued = fallbackIsoTime;
+        }
         
         // Clean the document recursively to strip empty optional fields before canonicalization & submission
         const cleanedDoc = cleanObject(doc);

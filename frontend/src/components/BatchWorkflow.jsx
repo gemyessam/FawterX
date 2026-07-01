@@ -177,11 +177,20 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
       // 2. Sign each document locally
       const safeDate = new Date();
       safeDate.setMinutes(safeDate.getMinutes() - 5);
-      const currentIsoTime = safeDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
+      const fallbackIsoTime = safeDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
       for (const doc of invoices) {
         // Remove internal _fileName before signing and submitting
         const { _fileName, ...pureDoc } = doc
-        pureDoc.dateTimeIssued = currentIsoTime;
+        if (pureDoc.dateTimeIssued) {
+          const parsed = new Date(pureDoc.dateTimeIssued);
+          if (!isNaN(parsed.getTime())) {
+            pureDoc.dateTimeIssued = parsed.toISOString().replace(/\.\d{3}Z$/, 'Z');
+          } else {
+            pureDoc.dateTimeIssued = fallbackIsoTime;
+          }
+        } else {
+          pureDoc.dateTimeIssued = fallbackIsoTime;
+        }
         const cleanedDoc = cleanObject(pureDoc)
         const canonicalString = serializeToken(cleanedDoc)
         
