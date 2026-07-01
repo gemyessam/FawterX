@@ -754,12 +754,23 @@ export default function Home() {
       // 2. Local signer is active! Let's sign each document
       toast.loading(lang === 'ar' ? 'يرجى اختيار الشهادة وإدخال رقم الـ PIN في نافذة التوقيع...' : 'Please choose certificate & enter PIN in signer popup...', { id: 'submit-loader' });
       
-      const safeDate = new Date();
-      safeDate.setMinutes(safeDate.getMinutes() - 5);
-      const currentIsoTime = safeDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
       for (let i = 0; i < etaDocs.length; i++) {
         const doc = etaDocs[i];
-        doc.dateTimeIssued = currentIsoTime;
+        
+        // Use the existing date if present (from parser or manual input), else generate a safe fallback
+        if (doc.dateTimeIssued) {
+          try {
+            const parsed = new Date(doc.dateTimeIssued);
+            if (!isNaN(parsed.getTime())) {
+              // Ensure it ends with Z and has no milliseconds
+              doc.dateTimeIssued = parsed.toISOString().replace(/\.\d{3}Z$/, 'Z');
+            }
+          } catch (e) {}
+        } else {
+          const safeDate = new Date();
+          safeDate.setMinutes(safeDate.getMinutes() - 5);
+          doc.dateTimeIssued = safeDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
+        }
         
         // Clean the document recursively to strip empty optional fields before canonicalization & submission
         const cleanedDoc = cleanObject(doc);
