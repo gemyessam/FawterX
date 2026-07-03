@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
 app.use(morgan("dev")); // Logging requests
 
 // Health Check
@@ -30,7 +30,7 @@ app.use("/api/admin", adminRoutes);
 // Error Handling Middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ success: false, message: "حدث خطأ داخلي في الخادم" });
+  res.status(500).json({ success: false, message: "حدث خطأ داخلي في الخادم", details: err.message });
 });
 
 // Start Server

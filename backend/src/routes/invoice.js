@@ -3,7 +3,7 @@ const { mapToETADocument } = require("../utils/etaMapper");
 const authMiddleware = require("../middleware/auth");
 
 const router = express.Router();
-router.use(express.json());
+router.use(express.json({ limit: "50mb" }));
 
 // تطبيق الـ authMiddleware لعزل الجلسات وربط المستندات بالمستخدم الحالي
 router.use(authMiddleware);

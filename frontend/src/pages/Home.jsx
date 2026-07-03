@@ -698,7 +698,8 @@ export default function Home() {
       setStep(3) // Move to Preview / Summary
     } catch (e) {
       console.error(e)
-      const errorMsg = e.response?.data?.message || e.message || 'Unknown error'
+      const data = e.response?.data || {}
+      const errorMsg = data.details ? `${data.message} - ${data.details}` : (data.message || e.message || 'Unknown error')
       toast.error(lang === 'ar' 
         ? `خطأ: ${errorMsg}` 
         : `Error: ${errorMsg}`)
