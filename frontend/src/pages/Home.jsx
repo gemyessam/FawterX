@@ -337,8 +337,9 @@ export default function Home() {
         setStep(2) // Standard template mode: Move to manual Mapping
       }
     } catch (e) {
-      setError(e.response?.data?.message || e.message || 'Error processing document')
-      toast.error(lang === 'ar' ? 'فشل تحليل ومعالجة المستند بالذكاء الاصطناعي' : 'Failed to parse document with AI')
+      const errorMsg = e.response?.data?.message || e.message || 'Error processing document'
+      setError(errorMsg)
+      toast.error(lang === 'ar' ? `فشل تحليل ومعالجة المستند: ${errorMsg}` : `Failed to parse document: ${errorMsg}`)
     } finally {
       setUploadLoading(false)
     }
@@ -697,9 +698,10 @@ export default function Home() {
       setStep(3) // Move to Preview / Summary
     } catch (e) {
       console.error(e)
+      const errorMsg = e.response?.data?.message || e.message || 'Unknown error'
       toast.error(lang === 'ar' 
-        ? 'فشل الاتصال بسيرفر فاوتر إكس. هل قمت بتشغيل الـ Backend؟' 
-        : 'Connection failed to FawterX backend. Is the server running?')
+        ? `خطأ: ${errorMsg}` 
+        : `Error: ${errorMsg}`)
     } finally {
       setUploadLoading(false)
     }

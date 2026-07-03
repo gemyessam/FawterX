@@ -4,8 +4,10 @@ import UploadStep from './UploadStep'
 import { generateInvoice, submitToETA, getETAStatus } from '../services/api'
 import toast from 'react-hot-toast'
 
-// Helper function equivalent to cleanObject in Home.jsx
 function cleanObject(obj) {
+  if (typeof obj === 'number') {
+    return parseFloat(obj.toFixed(5));
+  }
   if (Array.isArray(obj)) {
     const arr = obj.map(item => cleanObject(item)).filter(item => {
       if (item === null || item === undefined || item === '') return false
