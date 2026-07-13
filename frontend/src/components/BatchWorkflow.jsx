@@ -272,6 +272,18 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
 
   // REVIEW AND SUBMIT STEP
   const selectedDoc = invoices[selectedIdx]
+  const selectedIssuer = selectedDoc?.issuer || {}
+  const selectedReceiver = selectedDoc?.receiver || {}
+  const selectedSummary = [
+    { label: lang === 'ar' ? 'رقم الفاتورة' : 'Invoice No.', value: selectedDoc?.internalID || `Invoice #${selectedIdx + 1}` },
+    { label: lang === 'ar' ? 'تاريخ الإصدار' : 'Issued At', value: selectedDoc?.dateTimeIssued || '—' },
+    { label: lang === 'ar' ? 'المرسل' : 'Issuer', value: selectedIssuer?.name || '—' },
+    { label: lang === 'ar' ? 'المستلم' : 'Receiver', value: selectedReceiver?.name || '—' },
+    { label: lang === 'ar' ? 'رقم التسجيل' : 'Receiver ID', value: selectedReceiver?.id || '—' },
+    { label: lang === 'ar' ? 'الإجمالي قبل الضريبة' : 'Subtotal', value: `${(selectedDoc?.totalSalesAmount || 0).toLocaleString()} EGP` },
+    { label: lang === 'ar' ? 'قيمة الضريبة' : 'VAT', value: `${(selectedDoc?.taxTotals?.[0]?.amount || 0).toLocaleString()} EGP` },
+    { label: lang === 'ar' ? 'الإجمالي النهائي' : 'Grand Total', value: `${(selectedDoc?.totalAmount || 0).toLocaleString()} EGP` },
+  ]
 
   return (
     <div className="card fade-in" style={{ padding: '0', overflow: 'hidden' }}>
@@ -334,16 +346,36 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                   <h3 style={{ margin: 0, color: 'var(--accent)' }}>{selectedDoc.internalID}</h3>
                   <p style={{ margin: '0.5rem 0 0', color: 'var(--text-dim)' }}>{selectedDoc.dateTimeIssued}</p>
                 </div>
-                <div style={{ textAlign: lang === 'ar' ? 'left' : 'right' }}>
-                  <h4 style={{ margin: 0 }}>{selectedDoc.receiver?.name}</h4>
-                  <p style={{ margin: '0.25rem 0 0', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-                    {selectedDoc.receiver?.id}
-                  </p>
-                </div>
-              </div>
+        <div style={{ textAlign: lang === 'ar' ? 'left' : 'right' }}>
+          <h4 style={{ margin: 0 }}>{selectedDoc.receiver?.name}</h4>
+          <p style={{ margin: '0.25rem 0 0', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+            {selectedDoc.receiver?.id}
+          </p>
+        </div>
+      </div>
 
-              <div className="table-wrapper">
-                <table>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.85rem', marginBottom: '1.5rem' }}>
+        {selectedSummary.map((item) => (
+          <div
+            key={item.label}
+            style={{
+              padding: '0.9rem 1rem',
+              borderRadius: '12px',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid var(--border)',
+              minHeight: '88px',
+            }}
+          >
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.35rem' }}>{item.label}</div>
+            <div style={{ fontWeight: 800, fontSize: '0.95rem', lineHeight: 1.35, wordBreak: 'break-word', color: item.label.includes('Total') || item.label.includes('الإجمالي') ? 'var(--accent)' : '#fff' }}>
+              {item.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="table-wrapper">
+        <table>
                   <thead>
                     <tr>
                       <th style={{ width: '5%' }}>#</th>
