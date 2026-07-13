@@ -91,6 +91,12 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
   const [submitting, setSubmitting] = useState(false)
   const [submissionResults, setSubmissionResults] = useState([])
 
+  useEffect(() => {
+    if (invoices.length > 0 && selectedIdx >= invoices.length) {
+      setSelectedIdx(0)
+    }
+  }, [invoices.length, selectedIdx])
+
   async function handleBatchUploadSuccess(resultsArray) {
     setStep(2)
     toast.loading(lang === 'ar' ? 'جاري توليد الفواتير ومطابقتها...' : 'Generating and mapping invoices...', { id: 'batch-gen' })
@@ -283,6 +289,12 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
     { label: lang === 'ar' ? 'الإجمالي قبل الضريبة' : 'Subtotal', value: `${(selectedDoc?.totalSalesAmount || 0).toLocaleString()} EGP` },
     { label: lang === 'ar' ? 'قيمة الضريبة' : 'VAT', value: `${(selectedDoc?.taxTotals?.[0]?.amount || 0).toLocaleString()} EGP` },
     { label: lang === 'ar' ? 'الإجمالي النهائي' : 'Grand Total', value: `${(selectedDoc?.totalAmount || 0).toLocaleString()} EGP` },
+  ]
+
+  const selectedTotals = [
+    { label: lang === 'ar' ? 'الإجمالي قبل الضريبة' : 'Subtotal', value: `${(selectedDoc?.totalSalesAmount || 0).toLocaleString()} EGP` },
+    { label: lang === 'ar' ? 'إجمالي الضريبة' : 'Total VAT', value: `${(selectedDoc?.taxTotals?.[0]?.amount || 0).toLocaleString()} EGP` },
+    { label: lang === 'ar' ? 'الإجمالي النهائي' : 'Grand Total', value: `${(selectedDoc?.totalAmount || 0).toLocaleString()} EGP`, accent: true },
   ]
 
   return (
