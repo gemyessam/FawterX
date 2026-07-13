@@ -44,13 +44,14 @@ async function listUsers() {
 
   try {
     const authUsersMap = {};
-    for (let i = 0; i < usersList.length; i += 100) {
-      const batch = usersList.slice(i, i + 100).map(u => ({ uid: u.uid }));
-      const authUsersResult = await admin.auth().getUsers(batch);
-      authUsersResult.users.forEach(u => {
+    let pageToken = undefined;
+    do {
+      const page = await admin.auth().listUsers(1000, pageToken);
+      page.users.forEach(u => {
         authUsersMap[u.uid] = { email: u.email, displayName: u.displayName };
       });
-    }
+      pageToken = page.pageToken;
+    } while (pageToken);
 
     usersList = usersList.map(u => {
       const authUser = authUsersMap[u.uid];

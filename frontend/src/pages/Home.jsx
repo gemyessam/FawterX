@@ -89,6 +89,10 @@ export default function Home() {
 
   // Usage state from Backend
   const [usage, setUsage] = useState({ submissionsCount: 0, isSubscribed: false })
+  const usageLimit = usage.isSubscribed ? null : (usage.dailyLimit || 10)
+  const usageUsed = usage.dailyCount || 0
+  const usageRemaining = usage.isSubscribed ? null : Math.max(0, usageLimit - usageUsed)
+  const usageProgress = usage.isSubscribed ? 100 : Math.min(100, Math.round((usageUsed / Math.max(usageLimit || 1, 1)) * 100))
 
   // File Upload states
   const [file, setFile] = useState(null)
@@ -901,21 +905,50 @@ export default function Home() {
               <p>{t.welcomeSub}</p>
               
               {/* Usage Warning Banner */}
-              <div style={{ margin: '1.5rem 0', padding: '1rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span>🎯</span>
-                <strong style={{ fontSize: '0.9rem' }}>
-                  {usage.isSubscribed 
-                    ? (lang === 'ar' ? 'باقة FawterX نشطة: إرسال غير محدود للضرائب ✓' : 'FawterX Premium Active: Unlimited transmissions ✓')
-                    : (usage.dailyCount >= (usage.dailyLimit || 10)
-                        ? (lang === 'ar' ? `⚠️ استنفدت الحد اليومي (${usage.dailyLimit || 10} فواتير)` : `⚠️ Daily limit reached (${usage.dailyLimit || 10} invoices)`)
-                        : (lang === 'ar' ? `🎁 متبقي لك ${(usage.dailyLimit || 10) - usage.dailyCount} فواتير للرفع اليوم` : `🎁 ${(usage.dailyLimit || 10) - usage.dailyCount} invoices left to upload today`)
-                      )
-                  }
-                </strong>
+              <div style={{ margin: '1.5rem 0', padding: '1.1rem 1.15rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', display: 'grid', gap: '0.9rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <span>🎯</span>
+                    <strong style={{ fontSize: '0.95rem' }}>
+                      {usage.isSubscribed
+                        ? (lang === 'ar' ? 'باقة FawterX نشطة: إرسال غير محدود للضرائب ✓' : 'FawterX Premium Active: Unlimited transmissions ✓')
+                        : (usageRemaining <= 0
+                            ? (lang === 'ar' ? `⚠️ استنفدت الحد اليومي (${usageLimit} فواتير)` : `⚠️ Daily limit reached (${usageLimit} invoices)`)
+                            : (lang === 'ar' ? `🎁 متبقي لك ${usageRemaining} فواتير للرفع اليوم` : `🎁 ${usageRemaining} invoices left to upload today`)
+                          )
+                      }
+                    </strong>
+                  </div>
+                  {!usage.isSubscribed && (
+                    <button className="btn btn-accent btn-sm" onClick={() => setShowPricingModal(true)}>
+                      {lang === 'ar' ? 'ترقية الاشتراك 👑' : 'Upgrade Plan 👑'}
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem' }}>
+                  <div style={{ padding: '0.8rem 0.9rem', borderRadius: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>{lang === 'ar' ? 'المستخدم اليوم' : 'Used Today'}</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{usageUsed}</div>
+                  </div>
+                  <div style={{ padding: '0.8rem 0.9rem', borderRadius: '10px', background: 'rgba(0, 224, 161, 0.05)', border: '1px solid rgba(0, 224, 161, 0.15)' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>{lang === 'ar' ? 'المتبقي اليوم' : 'Remaining Today'}</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--accent)' }}>{usage.isSubscribed ? '∞' : usageRemaining}</div>
+                  </div>
+                  <div style={{ padding: '0.8rem 0.9rem', borderRadius: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>{lang === 'ar' ? 'الحد اليومي' : 'Daily Limit'}</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{usage.isSubscribed ? '∞' : usageLimit}</div>
+                  </div>
+                </div>
                 {!usage.isSubscribed && (
-                  <button className="btn btn-accent btn-sm" style={{ marginLeft: '1rem' }} onClick={() => setShowPricingModal(true)}>
-                    {lang === 'ar' ? 'ترقية الاشتراك 👑' : 'Upgrade Plan 👑'}
-                  </button>
+                  <div style={{ display: 'grid', gap: '0.35rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      <span>{lang === 'ar' ? 'نسبة الاستخدام' : 'Usage Progress'}</span>
+                      <span>{usageProgress}%</span>
+                    </div>
+                    <div style={{ height: '10px', background: 'rgba(255,255,255,0.06)', borderRadius: '999px', overflow: 'hidden' }}>
+                      <div style={{ width: `${usageProgress}%`, height: '100%', background: 'linear-gradient(90deg, var(--accent), #7b61ff)', borderRadius: 'inherit', transition: 'width 0.2s ease' }} />
+                    </div>
+                  </div>
                 )}
               </div>
               

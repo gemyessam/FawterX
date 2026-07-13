@@ -114,8 +114,8 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className="fade-in" style={{ display: 'grid', gap: '1.25rem' }}>
-      <div className="card" style={{ padding: '1.5rem' }}>
+    <div className="fade-in" style={{ display: 'grid', gap: '1.25rem', width: '100%', maxWidth: '1600px', margin: '0 auto', paddingBottom: '1rem' }}>
+      <div className="card" style={{ padding: '1.5rem 1.75rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <div>
             <h2 className="card-title" style={{ marginBottom: '0.35rem' }}>
@@ -126,6 +126,11 @@ export default function AdminPanel() {
                 ? 'إدارة الصلاحيات وعدد الاستخدامات للحسابات المسجلة.'
                 : 'Manage permissions, quotas, and subscription status for registered users.'}
             </p>
+            <div style={{ marginTop: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              {lang === 'ar'
+                ? `الحساب المسموح: ${ADMIN_EMAIL}`
+                : `Approved admin account: ${ADMIN_EMAIL}`}
+            </div>
           </div>
           <button className="btn btn-accent" onClick={loadData}>
             {lang === 'ar' ? 'تحديث' : 'Refresh'}
@@ -133,7 +138,7 @@ export default function AdminPanel() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '1rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
         {[
           { label: lang === 'ar' ? 'إجمالي المستخدمين' : 'Total Users', value: stats.totalUsers },
           { label: lang === 'ar' ? 'الاشتراكات النشطة' : 'Subscribed', value: stats.subscribedUsers },
@@ -147,30 +152,30 @@ export default function AdminPanel() {
         ))}
       </div>
 
-      <div className="card" style={{ padding: '1.25rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+      <div className="card" style={{ padding: '1.35rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={lang === 'ar' ? 'بحث بالاسم أو البريد أو UID' : 'Search by name, email, or UID'}
-            style={{ minWidth: '280px', flex: '1', maxWidth: '420px' }}
+            style={{ minWidth: '320px', flex: '1', maxWidth: '520px' }}
           />
           <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', alignSelf: 'center' }}>
             {lang === 'ar' ? 'اختَر مستخدمًا لتعديل الصلاحيات' : 'Select a user to edit access rules'}
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr', gap: '1rem', alignItems: 'start' }}>
-          <div className="table-wrapper" style={{ maxHeight: '70vh', overflow: 'auto' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2.2fr) minmax(380px, 1fr)', gap: '1rem', alignItems: 'start' }}>
+          <div className="table-wrapper" style={{ maxHeight: '74vh', overflow: 'auto', borderRadius: '12px' }}>
             <table>
               <thead>
                 <tr>
-                  <th>{lang === 'ar' ? 'الحساب' : 'Email'}</th>
+                  <th style={{ minWidth: '300px' }}>{lang === 'ar' ? 'الحساب / البريد' : 'Account / Email'}</th>
                   <th>{lang === 'ar' ? 'الدور' : 'Role'}</th>
                   <th>{lang === 'ar' ? 'الحالة' : 'Status'}</th>
                   <th>{lang === 'ar' ? 'الحد اليومي' : 'Daily'}</th>
-                  <th>{lang === 'ar' ? 'الاستخدام' : 'Used'}</th>
+                  <th>{lang === 'ar' ? 'المستخدم' : 'Used'}</th>
                   <th>{lang === 'ar' ? 'المتبقي' : 'Remaining'}</th>
                   <th>{lang === 'ar' ? 'اشتراك' : 'Subs'}</th>
                   <th>{lang === 'ar' ? 'إجراء' : 'Action'}</th>
@@ -184,11 +189,12 @@ export default function AdminPanel() {
                   return (
                   <tr key={u.uid} style={{ background: selected?.uid === u.uid ? 'rgba(0, 224, 161, 0.08)' : 'transparent' }}>
                     <td>
-                      <div style={{ fontWeight: 700 }}>{u.displayName || '—'}</div>
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', wordBreak: 'break-all' }}>{u.email || u.uid}</div>
+                      <div style={{ fontWeight: 700, lineHeight: 1.25 }}>{u.displayName || '—'}</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', wordBreak: 'break-word', marginTop: '0.25rem' }}>{u.email || u.uid}</div>
+                      <div style={{ color: 'var(--text-dim)', fontSize: '0.72rem', marginTop: '0.2rem', wordBreak: 'break-all' }}>{u.uid}</div>
                     </td>
-                    <td>{u.role || 'user'}</td>
-                    <td>{u.status || 'active'}</td>
+                    <td><span className="badge badge-valid" style={{ textTransform: 'uppercase' }}>{u.role || 'user'}</span></td>
+                    <td><span className="badge" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }}>{u.status || 'active'}</span></td>
                     <td>{quota}</td>
                     <td>{used}</td>
                     <td style={{ fontWeight: 'bold', color: remaining > 0 ? 'var(--accent)' : '#ff4d4f' }}>{remaining}</td>
@@ -204,11 +210,25 @@ export default function AdminPanel() {
             </table>
           </div>
 
-          <div className="card" style={{ padding: '1.25rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+          <div className="card" style={{ padding: '1.25rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', position: 'sticky', top: '1rem' }}>
             {selected ? (
               <>
-                <h3 style={{ marginTop: 0, marginBottom: '0.5rem' }}>{selected.displayName || selected.email || selected.uid}</h3>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem', wordBreak: 'break-word' }}>{selected.uid}</div>
+                <h3 style={{ marginTop: 0, marginBottom: '0.35rem' }}>{selected.displayName || selected.email || selected.uid}</h3>
+                <div style={{ display: 'grid', gap: '0.35rem', marginBottom: '1rem' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', wordBreak: 'break-word' }}>{selected.email || (lang === 'ar' ? 'لا يوجد بريد محفوظ' : 'No email saved')}</div>
+                  <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem', wordBreak: 'break-all' }}>{selected.uid}</div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.65rem', marginBottom: '1rem' }}>
+                  <div style={{ padding: '0.85rem', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{lang === 'ar' ? 'الاستخدام' : 'Used'}</div>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, marginTop: '0.2rem' }}>{selected.submissionsCount || 0}</div>
+                  </div>
+                  <div style={{ padding: '0.85rem', borderRadius: '12px', background: 'rgba(0, 224, 161, 0.05)', border: '1px solid rgba(0, 224, 161, 0.18)' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{lang === 'ar' ? 'المتبقي' : 'Remaining'}</div>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, marginTop: '0.2rem', color: 'var(--accent)' }}>{Math.max(0, (selected.quotaDaily ?? 10) - (selected.submissionsCount || 0))}</div>
+                  </div>
+                </div>
 
                 <div style={{ display: 'grid', gap: '0.9rem' }}>
                   <label>
