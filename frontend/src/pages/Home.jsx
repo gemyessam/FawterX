@@ -89,10 +89,11 @@ export default function Home() {
 
   // Usage state from Backend
   const [usage, setUsage] = useState({ submissionsCount: 0, isSubscribed: false })
-  const usageLimit = usage.isSubscribed ? null : (usage.dailyLimit || 10)
-  const usageUsed = usage.dailyCount || 0
-  const usageRemaining = usage.isSubscribed ? null : Math.max(0, usageLimit - usageUsed)
-  const usageProgress = usage.isSubscribed ? 100 : Math.min(100, Math.round((usageUsed / Math.max(usageLimit || 1, 1)) * 100))
+  const [usageReady, setUsageReady] = useState(false)
+  const usageLimit = !usageReady ? null : (usage.isSubscribed ? null : (usage.dailyLimit || 10))
+  const usageUsed = usageReady ? (usage.dailyCount || 0) : null
+  const usageRemaining = !usageReady || usage.isSubscribed ? null : Math.max(0, usageLimit - usageUsed)
+  const usageProgress = !usageReady ? 0 : (usage.isSubscribed ? 100 : Math.min(100, Math.round((usageUsed / Math.max(usageLimit || 1, 1)) * 100)))
 
   // File Upload states
   const [file, setFile] = useState(null)
@@ -168,15 +169,27 @@ export default function Home() {
       const data = await getUsageStatus()
       if (data && data.usage) {
         const isMaster = user && user.email === 'gemy.essam.ge@gmail.com';
-        setUsage({
+        const normalizedUsage = {
           ...data.usage,
+          submissionsCount: Number(data.usage.submissionsCount || 0),
+          dailyCount: Number(data.usage.dailyCount || data.usage.submissionsCount || 0),
+          dailyLimit: Number(data.usage.dailyLimit || 10),
           isSubscribed: isMaster ? true : data.usage.isSubscribed
-        })
+        }
+
+        setUsage(normalizedUsage)
         setStats(prev => ({
           ...prev,
-          uploaded: data.usage.submissionsCount,
-          accepted: data.usage.submissionsCount
+          uploaded: normalizedUsage.submissionsCount,
+          accepted: normalizedUsage.submissionsCount
         }))
+
+        if (typeof window !== 'undefined' && user) {
+          const usageCacheKey = `fawterx_usage:${user.uid || user.email || 'guest'}`
+          window.localStorage.setItem(usageCacheKey, JSON.stringify(normalizedUsage))
+        }
+
+        setUsageReady(true)
       }
     } catch (e) {
       console.error("Error fetching usage status:", e)
@@ -185,6 +198,31 @@ export default function Home() {
 
   useEffect(() => {
     if (user) {
+      setUsageReady(false)
+
+      if (typeof window !== 'undefined') {
+        try {
+          const usageCacheKey = `fawterx_usage:${user.uid || user.email || 'guest'}`
+          const cachedUsage = window.localStorage.getItem(usageCacheKey)
+          if (cachedUsage) {
+            const parsedUsage = JSON.parse(cachedUsage)
+            if (parsedUsage && typeof parsedUsage === 'object') {
+              const isMaster = user.email === 'gemy.essam.ge@gmail.com'
+              setUsage({
+                ...parsedUsage,
+                submissionsCount: Number(parsedUsage.submissionsCount || 0),
+                dailyCount: Number(parsedUsage.dailyCount || parsedUsage.submissionsCount || 0),
+                dailyLimit: Number(parsedUsage.dailyLimit || 10),
+                isSubscribed: isMaster ? true : !!parsedUsage.isSubscribed
+              })
+              setUsageReady(true)
+            }
+          }
+        } catch (e) {
+          console.warn('Unable to read cached usage:', e)
+        }
+      }
+
       fetchUsage()
       fetchOperations()
     }
@@ -910,36 +948,38 @@ export default function Home() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                     <span>🎯</span>
                     <strong style={{ fontSize: '0.95rem' }}>
-                      {usage.isSubscribed
-                        ? (lang === 'ar' ? 'باقة FawterX نشطة: إرسال غير محدود للضرائب ✓' : 'FawterX Premium Active: Unlimited transmissions ✓')
-                        : (usageRemaining <= 0
-                            ? (lang === 'ar' ? `⚠️ استنفدت الحد اليومي (${usageLimit} فواتير)` : `⚠️ Daily limit reached (${usageLimit} invoices)`)
-                            : (lang === 'ar' ? `🎁 متبقي لك ${usageRemaining} فواتير للرفع اليوم` : `🎁 ${usageRemaining} invoices left to upload today`)
-                          )
+                      {!usageReady
+                        ? (lang === 'ar' ? 'جارٍ التحقق من حالة الحساب...' : 'Checking account status...')
+                        : usage.isSubscribed
+                          ? (lang === 'ar' ? 'باقة FawterX نشطة: إرسال غير محدود للضرائب ✓' : 'FawterX Premium Active: Unlimited transmissions ✓')
+                          : (usageRemaining <= 0
+                              ? (lang === 'ar' ? `⚠️ استنفدت الحد اليومي (${usageLimit} فواتير)` : `⚠️ Daily limit reached (${usageLimit} invoices)`)
+                              : (lang === 'ar' ? `🎁 متبقي لك ${usageRemaining} فواتير للرفع اليوم` : `🎁 ${usageRemaining} invoices left to upload today`)
+                            )
                       }
                     </strong>
                   </div>
-                  {!usage.isSubscribed && (
+                  {usageReady && !usage.isSubscribed && (
                     <button className="btn btn-accent btn-sm" onClick={() => setShowPricingModal(true)}>
-                      {lang === 'ar' ? 'ترقية الاشتراك 👑' : 'Upgrade Plan 👑'}
+                      {lang === 'ar' ? 'ترقية الاشتراك 🪙' : 'Upgrade Plan 🪙'}
                     </button>
                   )}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem' }}>
                   <div style={{ padding: '0.8rem 0.9rem', borderRadius: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                     <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>{lang === 'ar' ? 'المستخدم اليوم' : 'Used Today'}</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{usageUsed}</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{usageReady ? usageUsed : '—'}</div>
                   </div>
                   <div style={{ padding: '0.8rem 0.9rem', borderRadius: '10px', background: 'rgba(0, 224, 161, 0.05)', border: '1px solid rgba(0, 224, 161, 0.15)' }}>
                     <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>{lang === 'ar' ? 'المتبقي اليوم' : 'Remaining Today'}</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--accent)' }}>{usage.isSubscribed ? '∞' : usageRemaining}</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--accent)' }}>{!usageReady ? '—' : (usage.isSubscribed ? '∞' : usageRemaining)}</div>
                   </div>
                   <div style={{ padding: '0.8rem 0.9rem', borderRadius: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                     <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>{lang === 'ar' ? 'الحد اليومي' : 'Daily Limit'}</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{usage.isSubscribed ? '∞' : usageLimit}</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{!usageReady ? '—' : (usage.isSubscribed ? '∞' : usageLimit)}</div>
                   </div>
                 </div>
-                {!usage.isSubscribed && (
+                {usageReady && !usage.isSubscribed && (
                   <div style={{ display: 'grid', gap: '0.35rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                       <span>{lang === 'ar' ? 'نسبة الاستخدام' : 'Usage Progress'}</span>
@@ -951,11 +991,13 @@ export default function Home() {
                   </div>
                 )}
               </div>
-              
-              <br />
               <button 
                 className="btn btn-accent btn-lg" 
                 onClick={() => {
+                  if (!usageReady) {
+                    toast(lang === 'ar' ? 'جارٍ التحقق من حالة الاشتراك، لحظة واحدة...' : 'Checking subscription status, one moment...')
+                    return
+                  }
                   if (!usage.isSubscribed && usage.dailyCount >= (usage.dailyLimit || 10)) {
                     setShowPricingModal(true)
                   } else {
