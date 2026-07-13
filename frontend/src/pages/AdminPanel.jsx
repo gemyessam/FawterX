@@ -26,6 +26,9 @@ export default function AdminPanel() {
   const [form, setForm] = useState(emptyForm)
 
   const isAdmin = (user?.email || '').toLowerCase() === ADMIN_EMAIL
+  const selectedQuotaDaily = selected?.quotaDaily ?? 10
+  const selectedUsed = selected?.submissionsCount || 0
+  const selectedRemaining = Math.max(0, selectedQuotaDaily - selectedUsed)
 
   useEffect(() => {
     if (!isAdmin) {
@@ -114,188 +117,239 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className="fade-in" style={{ display: 'grid', gap: '1.25rem', width: '100%', maxWidth: '1600px', margin: '0 auto', paddingBottom: '1rem' }}>
-      <div className="card" style={{ padding: '1.5rem 1.75rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div>
-            <h2 className="card-title" style={{ marginBottom: '0.35rem' }}>
-              {lang === 'ar' ? 'لوحة تحكم الأدمن' : 'Admin Console'}
-            </h2>
-            <p className="card-sub" style={{ marginBottom: 0 }}>
-              {lang === 'ar'
-                ? 'إدارة الصلاحيات وعدد الاستخدامات للحسابات المسجلة.'
-                : 'Manage permissions, quotas, and subscription status for registered users.'}
-            </p>
-            <div style={{ marginTop: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-              {lang === 'ar'
-                ? `الحساب المسموح: ${ADMIN_EMAIL}`
-                : `Approved admin account: ${ADMIN_EMAIL}`}
-            </div>
+    <div className="admin-console-shell fade-in">
+      <div className="card admin-hero-card">
+        <div className="admin-hero-copy">
+          <h2 className="card-title" style={{ marginBottom: '0.35rem' }}>
+            {lang === 'ar' ? '???? ?????? ????????' : 'Admin Console'}
+          </h2>
+          <p className="card-sub" style={{ marginBottom: 0, maxWidth: '72ch' }}>
+            {lang === 'ar'
+              ? '????? ????????? ?????? ??????????? ????????? ????????? ?? ???? ????? ?????.'
+              : 'Manage permissions, quotas, subscriptions, and operational user data from one focused workspace.'}
+          </p>
+          <div className="admin-admin-chip">
+            <span>?</span>
+            <span>{lang === 'ar' ? '?????? ??????' : 'Approved admin account'}</span>
+            <strong>{ADMIN_EMAIL}</strong>
           </div>
-          <button className="btn btn-accent" onClick={loadData}>
-            {lang === 'ar' ? 'تحديث' : 'Refresh'}
-          </button>
         </div>
+        <button className="btn btn-accent" onClick={loadData}>
+          {lang === 'ar' ? '????? ????????' : 'Refresh data'}
+        </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+      <div className="admin-kpi-grid">
         {[
-          { label: lang === 'ar' ? 'إجمالي المستخدمين' : 'Total Users', value: stats.totalUsers },
-          { label: lang === 'ar' ? 'الاشتراكات النشطة' : 'Subscribed', value: stats.subscribedUsers },
-          { label: lang === 'ar' ? 'الموقوفون' : 'Suspended', value: stats.suspendedUsers },
-          { label: lang === 'ar' ? 'حسابات الأدمن' : 'Admins', value: stats.adminUsers },
+          { label: lang === 'ar' ? '?????? ??????????' : 'Total users', value: stats.totalUsers },
+          { label: lang === 'ar' ? '?????????? ??????' : 'Active subscriptions', value: stats.subscribedUsers },
+          { label: lang === 'ar' ? '???????? ????????' : 'Suspended users', value: stats.suspendedUsers },
+          { label: lang === 'ar' ? '?????? ??????' : 'Admin accounts', value: stats.adminUsers },
         ].map((item) => (
-          <div className="card" key={item.label} style={{ padding: '1.25rem' }}>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{item.label}</div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: '0.4rem', color: 'var(--accent)' }}>{item.value}</div>
+          <div className="card admin-kpi-card" key={item.label}>
+            <div className="admin-kpi-label">{item.label}</div>
+            <div className="admin-kpi-value">{item.value}</div>
           </div>
         ))}
       </div>
 
-      <div className="card" style={{ padding: '1.35rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={lang === 'ar' ? 'بحث بالاسم أو البريد أو UID' : 'Search by name, email, or UID'}
-            style={{ minWidth: '320px', flex: '1', maxWidth: '520px' }}
-          />
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', alignSelf: 'center' }}>
-            {lang === 'ar' ? 'اختَر مستخدمًا لتعديل الصلاحيات' : 'Select a user to edit access rules'}
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2.2fr) minmax(380px, 1fr)', gap: '1rem', alignItems: 'start' }}>
-          <div className="table-wrapper" style={{ maxHeight: '74vh', overflow: 'auto', borderRadius: '12px' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th style={{ minWidth: '300px' }}>{lang === 'ar' ? 'الحساب / البريد' : 'Account / Email'}</th>
-                  <th>{lang === 'ar' ? 'الدور' : 'Role'}</th>
-                  <th>{lang === 'ar' ? 'الحالة' : 'Status'}</th>
-                  <th>{lang === 'ar' ? 'الحد اليومي' : 'Daily'}</th>
-                  <th>{lang === 'ar' ? 'المستخدم' : 'Used'}</th>
-                  <th>{lang === 'ar' ? 'المتبقي' : 'Remaining'}</th>
-                  <th>{lang === 'ar' ? 'اشتراك' : 'Subs'}</th>
-                  <th>{lang === 'ar' ? 'إجراء' : 'Action'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((u) => {
-                  const quota = u.quotaDaily ?? 10;
-                  const used = u.submissionsCount || 0;
-                  const remaining = Math.max(0, quota - used);
-                  return (
-                  <tr key={u.uid} style={{ background: selected?.uid === u.uid ? 'rgba(0, 224, 161, 0.08)' : 'transparent' }}>
-                    <td>
-                      <div style={{ fontWeight: 700, lineHeight: 1.25 }}>{u.displayName || '—'}</div>
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', wordBreak: 'break-word', marginTop: '0.25rem' }}>{u.email || u.uid}</div>
-                      <div style={{ color: 'var(--text-dim)', fontSize: '0.72rem', marginTop: '0.2rem', wordBreak: 'break-all' }}>{u.uid}</div>
-                    </td>
-                    <td><span className="badge badge-valid" style={{ textTransform: 'uppercase' }}>{u.role || 'user'}</span></td>
-                    <td><span className="badge" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }}>{u.status || 'active'}</span></td>
-                    <td>{quota}</td>
-                    <td>{used}</td>
-                    <td style={{ fontWeight: 'bold', color: remaining > 0 ? 'var(--accent)' : '#ff4d4f' }}>{remaining}</td>
-                    <td>{u.isSubscribed ? (lang === 'ar' ? 'نعم' : 'Yes') : (lang === 'ar' ? 'لا' : 'No')}</td>
-                    <td>
-                      <button className="btn btn-ghost btn-sm" onClick={() => selectUser(u)}>
-                        {lang === 'ar' ? 'تعديل' : 'Edit'}
-                      </button>
-                    </td>
-                  </tr>
-                )})}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="card" style={{ padding: '1.25rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', position: 'sticky', top: '1rem' }}>
+      <div className="admin-workspace">
+        <div className="card admin-left-panel">
+          <div className="admin-user-summary">
             {selected ? (
               <>
-                <h3 style={{ marginTop: 0, marginBottom: '0.35rem' }}>{selected.displayName || selected.email || selected.uid}</h3>
-                <div style={{ display: 'grid', gap: '0.35rem', marginBottom: '1rem' }}>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', wordBreak: 'break-word' }}>{selected.email || (lang === 'ar' ? 'لا يوجد بريد محفوظ' : 'No email saved')}</div>
-                  <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem', wordBreak: 'break-all' }}>{selected.uid}</div>
+                <div className="admin-user-detail-head">
+                  <div>
+                    <h3 className="admin-user-detail-name">{selected.displayName || selected.email || selected.uid}</h3>
+                    <div className="admin-user-detail-sub">
+                      <span>{selected.email || (lang === 'ar' ? '?? ???? ???? ?????' : 'No saved email')}</span>
+                      <span>{selected.uid}</span>
+                    </div>
+                  </div>
+                  <span className="admin-pill">{selected.status || 'active'}</span>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.65rem', marginBottom: '1rem' }}>
-                  <div style={{ padding: '0.85rem', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{lang === 'ar' ? 'الاستخدام' : 'Used'}</div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: 800, marginTop: '0.2rem' }}>{selected.submissionsCount || 0}</div>
-                  </div>
-                  <div style={{ padding: '0.85rem', borderRadius: '12px', background: 'rgba(0, 224, 161, 0.05)', border: '1px solid rgba(0, 224, 161, 0.18)' }}>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{lang === 'ar' ? 'المتبقي' : 'Remaining'}</div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: 800, marginTop: '0.2rem', color: 'var(--accent)' }}>{Math.max(0, (selected.quotaDaily ?? 10) - (selected.submissionsCount || 0))}</div>
-                  </div>
+                <div className="admin-user-badge-row">
+                  <span className="admin-user-badge">
+                    <span>{lang === 'ar' ? '?????' : 'Role'}:</span>
+                    <strong>{selected.role || 'user'}</strong>
+                  </span>
+                  <span className="admin-user-badge">
+                    <span>{lang === 'ar' ? '??????' : 'Subscription'}:</span>
+                    <strong>{selected.isSubscribed ? (lang === 'ar' ? '???' : 'Active') : (lang === 'ar' ? '??' : 'No')}</strong>
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="admin-empty-state">
+                {lang === 'ar' ? '????? ???????? ?? ?????? ????? ??????? ???.' : 'Select a user from the table to see details here.'}
+              </div>
+            )}
+          </div>
+
+          {selected && (
+            <>
+              <div className="admin-metrics-two">
+                <div className="admin-mini-card">
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{lang === 'ar' ? '????????' : 'Used'}</div>
+                  <div style={{ fontSize: '1.55rem', fontWeight: 800, marginTop: '0.2rem' }}>{selectedUsed}</div>
+                </div>
+                <div className="admin-mini-card accent">
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{lang === 'ar' ? '???????' : 'Remaining'}</div>
+                  <div style={{ fontSize: '1.55rem', fontWeight: 800, marginTop: '0.2rem', color: 'var(--accent)' }}>{selectedRemaining}</div>
+                </div>
+              </div>
+
+              <div className="admin-form-grid">
+                <div className="admin-field">
+                  <label>{lang === 'ar' ? '?????' : 'Role'}</label>
+                  <select value={form.role} onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}>
+                    <option value="user">user</option>
+                    <option value="admin">admin</option>
+                    <option value="suspended">suspended</option>
+                  </select>
                 </div>
 
-                <div style={{ display: 'grid', gap: '0.9rem' }}>
-                  <label>
-                    <div style={{ marginBottom: '0.35rem', color: 'var(--text-muted)' }}>{lang === 'ar' ? 'الدور' : 'Role'}</div>
-                    <select value={form.role} onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}>
-                      <option value="user">user</option>
-                      <option value="admin">admin</option>
-                      <option value="suspended">suspended</option>
-                    </select>
-                  </label>
+                <div className="admin-field">
+                  <label>{lang === 'ar' ? '??????' : 'Status'}</label>
+                  <select value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}>
+                    <option value="active">active</option>
+                    <option value="suspended">suspended</option>
+                    <option value="blocked">blocked</option>
+                  </select>
+                </div>
 
-                  <label>
-                    <div style={{ marginBottom: '0.35rem', color: 'var(--text-muted)' }}>{lang === 'ar' ? 'الحالة' : 'Status'}</div>
-                    <select value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}>
-                      <option value="active">active</option>
-                      <option value="suspended">suspended</option>
-                      <option value="blocked">blocked</option>
-                    </select>
-                  </label>
-
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div className="admin-field" style={{ gridColumn: '1 / -1' }}>
+                  <label>{lang === 'ar' ? '???????? ?????' : 'Active subscription'}</label>
+                  <div className="admin-mini-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>{lang === 'ar' ? '??? ??? ?????? ?????? ??????? ???????' : 'Allow this account to submit directly'}</span>
                     <input
                       type="checkbox"
                       checked={form.isSubscribed}
                       onChange={(e) => setForm((p) => ({ ...p, isSubscribed: e.target.checked }))}
-                      style={{ width: '18px', height: '18px' }}
+                      style={{ width: '18px', height: '18px', accentColor: 'var(--accent)' }}
                     />
-                    <span>{lang === 'ar' ? 'اشتراك نشط' : 'Active subscription'}</span>
-                  </label>
-
-                  <label>
-                    <div style={{ marginBottom: '0.35rem', color: 'var(--text-muted)' }}>{lang === 'ar' ? 'الحد اليومي' : 'Daily quota'}</div>
-                    <input type="number" min="0" step="1" value={form.quotaDaily}
-                      onChange={(e) => setForm((p) => ({ ...p, quotaDaily: e.target.value }))} />
-                  </label>
-
-                  <label>
-                    <div style={{ marginBottom: '0.35rem', color: 'var(--text-muted)' }}>{lang === 'ar' ? 'الحد الشهري' : 'Monthly quota'}</div>
-                    <input type="number" min="0" step="1" value={form.quotaMonthly}
-                      onChange={(e) => setForm((p) => ({ ...p, quotaMonthly: e.target.value }))} />
-                  </label>
-
-                  <label>
-                    <div style={{ marginBottom: '0.35rem', color: 'var(--text-muted)' }}>{lang === 'ar' ? 'انتهاء الصلاحية' : 'Expires at'}</div>
-                    <input type="date" value={form.expiresAt}
-                      onChange={(e) => setForm((p) => ({ ...p, expiresAt: e.target.value }))} />
-                  </label>
-
-                  <label>
-                    <div style={{ marginBottom: '0.35rem', color: 'var(--text-muted)' }}>{lang === 'ar' ? 'ملاحظات' : 'Notes'}</div>
-                    <textarea rows="4" value={form.note}
-                      onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))} />
-                  </label>
-
-                  <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                    {saving ? <span className="spinner"></span> : (lang === 'ar' ? 'حفظ التغييرات' : 'Save Changes')}
-                  </button>
+                  </div>
                 </div>
-              </>
-            ) : (
-              <div style={{ color: 'var(--text-muted)' }}>
-                {lang === 'ar' ? 'اختَر مستخدمًا من الجدول لبدء التعديل.' : 'Pick a user from the table to start editing.'}
+
+                <div className="admin-field">
+                  <label>{lang === 'ar' ? '???? ??????' : 'Daily quota'}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={form.quotaDaily}
+                    onChange={(e) => setForm((p) => ({ ...p, quotaDaily: e.target.value }))}
+                  />
+                </div>
+
+                <div className="admin-field">
+                  <label>{lang === 'ar' ? '???? ??????' : 'Monthly quota'}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={form.quotaMonthly}
+                    onChange={(e) => setForm((p) => ({ ...p, quotaMonthly: e.target.value }))}
+                  />
+                </div>
+
+                <div className="admin-field">
+                  <label>{lang === 'ar' ? '?????? ????????' : 'Expires at'}</label>
+                  <input
+                    type="date"
+                    value={form.expiresAt}
+                    onChange={(e) => setForm((p) => ({ ...p, expiresAt: e.target.value }))}
+                  />
+                </div>
+
+                <div className="admin-field">
+                  <label>{lang === 'ar' ? '???????' : 'Notes'}</label>
+                  <textarea
+                    rows="4"
+                    value={form.note}
+                    onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))}
+                  />
+                </div>
               </div>
-            )}
+
+              <div className="admin-form-actions">
+                <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                  {saving ? <span className="spinner"></span> : (lang === 'ar' ? '??? ?????????' : 'Save changes')}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="card admin-right-panel">
+          <div className="admin-table-header">
+            <div className="admin-table-title">
+              <h3>{lang === 'ar' ? '????? ????? ??????????' : 'User access workspace'}</h3>
+              <p>{lang === 'ar' ? '????? ????? ?? ??? ????????? ??????????? ?? ??? ??????.' : 'Search, review, and update permissions from one workspace.'}</p>
+            </div>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={lang === 'ar' ? '???? ?????? ?? ?????? ?? UID' : 'Search by name, email, or UID'}
+              className="admin-search"
+              style={{ minWidth: '280px', maxWidth: '420px' }}
+            />
+          </div>
+
+          <div className="admin-table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ minWidth: '260px' }}>{lang === 'ar' ? '?????? / ??????' : 'Account / Email'}</th>
+                  <th>{lang === 'ar' ? '?????' : 'Role'}</th>
+                  <th>{lang === 'ar' ? '??????' : 'Status'}</th>
+                  <th>{lang === 'ar' ? '???? ??????' : 'Daily'}</th>
+                  <th>{lang === 'ar' ? '????????' : 'Used'}</th>
+                  <th>{lang === 'ar' ? '???????' : 'Remaining'}</th>
+                  <th>{lang === 'ar' ? '??????' : 'Subs'}</th>
+                  <th>{lang === 'ar' ? '?????' : 'Action'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.length ? filteredUsers.map((u) => {
+                  const quota = u.quotaDaily ?? 10
+                  const used = u.submissionsCount || 0
+                  const remaining = Math.max(0, quota - used)
+                  return (
+                    <tr key={u.uid} style={{ background: selected?.uid === u.uid ? 'rgba(0, 224, 161, 0.08)' : 'transparent' }}>
+                      <td>
+                        <div style={{ fontWeight: 700, lineHeight: 1.25 }}>{u.displayName || '?'}</div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', wordBreak: 'break-word', marginTop: '0.25rem' }}>{u.email || u.uid}</div>
+                        <div style={{ color: 'var(--text-dim)', fontSize: '0.72rem', marginTop: '0.2rem', wordBreak: 'break-all' }}>{u.uid}</div>
+                      </td>
+                      <td><span className="badge badge-valid" style={{ textTransform: 'uppercase' }}>{u.role || 'user'}</span></td>
+                      <td><span className="badge" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }}>{u.status || 'active'}</span></td>
+                      <td>{quota}</td>
+                      <td>{used}</td>
+                      <td style={{ fontWeight: 'bold', color: remaining > 0 ? 'var(--accent)' : '#ff4d4f' }}>{remaining}</td>
+                      <td>{u.isSubscribed ? (lang === 'ar' ? '???' : 'Yes') : (lang === 'ar' ? '??' : 'No')}</td>
+                      <td>
+                        <button className="btn btn-ghost btn-sm" onClick={() => selectUser(u)}>
+                          {lang === 'ar' ? '?????' : 'Edit'}
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                }) : (
+                  <tr>
+                    <td colSpan="8" className="admin-empty-state">
+                      {lang === 'ar' ? '?? ???? ????? ?????? ????? ??????.' : 'No users match the current search.'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
     </div>
   )
+
 }
