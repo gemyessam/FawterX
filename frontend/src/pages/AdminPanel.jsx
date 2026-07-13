@@ -45,7 +45,7 @@ export default function AdminPanel() {
       if (statsRes?.success && statsRes.stats) setStats(statsRes.stats)
       if (usersRes?.success && usersRes.users) setUsers(usersRes.users)
     } catch (error) {
-      toast.error(lang === 'ar' ? 'فشل تحميل لوحة الإدارة' : 'Failed to load admin panel')
+      toast.error(lang === 'ar' ? '??? ????? ???? ???????' : 'Failed to load admin panel')
     } finally {
       setLoading(false)
     }
@@ -89,11 +89,11 @@ export default function AdminPanel() {
       if (res?.success && res.user) {
         setUsers((prev) => prev.map((u) => (u.uid === res.user.uid ? res.user : u)))
         setSelected(res.user)
-        toast.success(lang === 'ar' ? 'تم حفظ التعديلات' : 'Changes saved')
+        toast.success(lang === 'ar' ? '?? ??? ?????????' : 'Changes saved')
         await loadData()
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || (lang === 'ar' ? 'فشل الحفظ' : 'Save failed'))
+      toast.error(error.response?.data?.message || (lang === 'ar' ? '??? ?????' : 'Save failed'))
     } finally {
       setSaving(false)
     }
@@ -105,7 +105,7 @@ export default function AdminPanel() {
         <h2 className="card-title">Admin Panel</h2>
         <p className="card-sub" style={{ marginBottom: 0 }}>
           {lang === 'ar'
-            ? 'هذه الصفحة متاحة للحساب الإداري فقط.'
+            ? '??? ?????? ????? ?????? ??????? ???.'
             : 'This area is restricted to the approved administrator account.'}
         </p>
       </div>
@@ -175,7 +175,7 @@ export default function AdminPanel() {
                     <strong>{selected.role || 'user'}</strong>
                   </span>
                   <span className="admin-user-badge">
-                    <span>{lang === 'ar' ? '??????' : 'Subscription'}:</span>
+                    <span>{lang === 'ar' ? '????????' : 'Subscription'}:</span>
                     <strong>{selected.isSubscribed ? (lang === 'ar' ? '???' : 'Active') : (lang === 'ar' ? '??' : 'No')}</strong>
                   </span>
                 </div>
@@ -234,42 +234,22 @@ export default function AdminPanel() {
 
                 <div className="admin-field">
                   <label>{lang === 'ar' ? '???? ??????' : 'Daily quota'}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={form.quotaDaily}
-                    onChange={(e) => setForm((p) => ({ ...p, quotaDaily: e.target.value }))}
-                  />
+                  <input type="number" min="0" step="1" value={form.quotaDaily} onChange={(e) => setForm((p) => ({ ...p, quotaDaily: e.target.value }))} />
                 </div>
 
                 <div className="admin-field">
                   <label>{lang === 'ar' ? '???? ??????' : 'Monthly quota'}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={form.quotaMonthly}
-                    onChange={(e) => setForm((p) => ({ ...p, quotaMonthly: e.target.value }))}
-                  />
+                  <input type="number" min="0" step="1" value={form.quotaMonthly} onChange={(e) => setForm((p) => ({ ...p, quotaMonthly: e.target.value }))} />
                 </div>
 
                 <div className="admin-field">
                   <label>{lang === 'ar' ? '?????? ????????' : 'Expires at'}</label>
-                  <input
-                    type="date"
-                    value={form.expiresAt}
-                    onChange={(e) => setForm((p) => ({ ...p, expiresAt: e.target.value }))}
-                  />
+                  <input type="date" value={form.expiresAt} onChange={(e) => setForm((p) => ({ ...p, expiresAt: e.target.value }))} />
                 </div>
 
                 <div className="admin-field">
                   <label>{lang === 'ar' ? '???????' : 'Notes'}</label>
-                  <textarea
-                    rows="4"
-                    value={form.note}
-                    onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))}
-                  />
+                  <textarea rows="4" value={form.note} onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))} />
                 </div>
               </div>
 
@@ -285,7 +265,7 @@ export default function AdminPanel() {
         <div className="card admin-right-panel">
           <div className="admin-table-header">
             <div className="admin-table-title">
-              <h3>{lang === 'ar' ? '????? ????? ??????????' : 'User access workspace'}</h3>
+              <h3>{lang === 'ar' ? '???? ????? ??????????' : 'User access workspace'}</h3>
               <p>{lang === 'ar' ? '????? ????? ?? ??? ????????? ??????????? ?? ??? ??????.' : 'Search, review, and update permissions from one workspace.'}</p>
             </div>
             <input
@@ -351,5 +331,4 @@ export default function AdminPanel() {
       </div>
     </div>
   )
-
 }
