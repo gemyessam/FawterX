@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react'
+﻿import React, { useState, useEffect, useContext } from 'react'
 import { SettingsContext } from '../App'
 import UploadStep from './UploadStep'
 import { generateInvoice, submitToETA, getETAStatus } from '../services/api'
@@ -341,41 +341,59 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
         <div style={{ flex: 1, padding: '2rem', background: 'var(--card-bg)', overflowY: 'auto' }}>
           {selectedDoc ? (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
-                <div>
-                  <h3 style={{ margin: 0, color: 'var(--accent)' }}>{selectedDoc.internalID}</h3>
-                  <p style={{ margin: '0.5rem 0 0', color: 'var(--text-dim)' }}>{selectedDoc.dateTimeIssued}</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div style={{ padding: '1rem 1.1rem', borderRadius: '14px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '0.35rem' }}>{lang === 'ar' ? 'بيانات الفاتورة' : 'Invoice Details'}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.85rem' }}>
+                    {selectedSummary.map((item) => (
+                      <div key={item.label} style={{ minHeight: '76px' }}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: '0.3rem' }}>{item.label}</div>
+                        <div style={{ fontWeight: 800, fontSize: '0.95rem', lineHeight: 1.35, wordBreak: 'break-word', color: item.label.includes('Total') || item.label.includes('الإجمالي') ? 'var(--accent)' : '#fff' }}>
+                          {item.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-        <div style={{ textAlign: lang === 'ar' ? 'left' : 'right' }}>
-          <h4 style={{ margin: 0 }}>{selectedDoc.receiver?.name}</h4>
-          <p style={{ margin: '0.25rem 0 0', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-            {selectedDoc.receiver?.id}
-          </p>
-        </div>
-      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.85rem', marginBottom: '1.5rem' }}>
-        {selectedSummary.map((item) => (
-          <div
-            key={item.label}
-            style={{
-              padding: '0.9rem 1rem',
-              borderRadius: '12px',
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid var(--border)',
-              minHeight: '88px',
-            }}
-          >
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.35rem' }}>{item.label}</div>
-            <div style={{ fontWeight: 800, fontSize: '0.95rem', lineHeight: 1.35, wordBreak: 'break-word', color: item.label.includes('Total') || item.label.includes('الإجمالي') ? 'var(--accent)' : '#fff' }}>
-              {item.value}
-            </div>
-          </div>
-        ))}
-      </div>
+                <div style={{ padding: '1rem 1.1rem', borderRadius: '14px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '0.35rem' }}>{lang === 'ar' ? 'ملخص الطرفين' : 'Parties Summary'}</div>
+                  <div style={{ display: 'grid', gap: '0.75rem' }}>
+                    <div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: '0.2rem' }}>{lang === 'ar' ? 'المرسل' : 'Issuer'}</div>
+                      <div style={{ fontWeight: 800, lineHeight: 1.35, wordBreak: 'break-word' }}>{selectedIssuer?.name || '—'}</div>
+                      <div style={{ color: 'var(--text-dim)', fontSize: '0.82rem', marginTop: '0.2rem', wordBreak: 'break-word' }}>{selectedIssuer?.id || selectedIssuer?.registrationNumber || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: '0.2rem' }}>{lang === 'ar' ? 'المستلم' : 'Receiver'}</div>
+                      <div style={{ fontWeight: 800, lineHeight: 1.35, wordBreak: 'break-word' }}>{selectedReceiver?.name || '—'}</div>
+                      <div style={{ color: 'var(--text-dim)', fontSize: '0.82rem', marginTop: '0.2rem', wordBreak: 'break-word' }}>{selectedReceiver?.id || '—'}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-      <div className="table-wrapper">
-        <table>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.85rem', marginBottom: '1.5rem' }}>
+                {selectedTotals.map((item) => (
+                  <div
+                    key={item.label}
+                    style={{
+                      padding: '0.9rem 1rem',
+                      borderRadius: '12px',
+                      background: item.accent ? 'rgba(0, 224, 161, 0.05)' : 'rgba(255,255,255,0.03)',
+                      border: item.accent ? '1px solid rgba(0, 224, 161, 0.18)' : '1px solid var(--border)',
+                    }}
+                  >
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.35rem' }}>{item.label}</div>
+                    <div style={{ fontWeight: 800, fontSize: '1rem', lineHeight: 1.35, wordBreak: 'break-word', color: item.accent ? 'var(--accent)' : '#fff' }}>
+                      {item.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="table-wrapper">
+                <table>
                   <thead>
                     <tr>
                       <th style={{ width: '5%' }}>#</th>
@@ -394,16 +412,13 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                         <td>{line.description}</td>
                         <td>{line.quantity} {line.unitType}</td>
                         <td>{line.unitValue?.amountEGP?.toLocaleString()}</td>
-                        <td style={{ fontWeight: 'bold', color: 'var(--accent)' }}>
-                          {line.total?.toLocaleString()}
-                        </td>
+                        <td style={{ fontWeight: 'bold', color: 'var(--accent)' }}>{line.total?.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
 
-              {/* Invoice Summary */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem', borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
                 <div style={{ width: '350px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', color: 'var(--text-dim)', fontSize: '1.05rem' }}>
