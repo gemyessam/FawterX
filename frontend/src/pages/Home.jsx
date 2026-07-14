@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AppContext, SettingsContext } from '../App'
 import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations } from '../services/api'
 import BatchWorkflow from '../components/BatchWorkflow'
+import { stampUploadIssuedTimestamp } from '../utils/uploadTime'
 import toast from 'react-hot-toast'
 
 export default function Home() {
@@ -335,7 +336,8 @@ export default function Home() {
     setError('')
     try {
       const res = await uploadExcel(file, parseMode)
-      setUploadResult(res)
+      const stampedRes = stampUploadIssuedTimestamp(res)
+      setUploadResult(stampedRes)
       toast.success(lang === 'ar' ? 'تم رفع وقراءة المستند بنجاح!' : 'Document uploaded and parsed successfully!')
 
       if (parseMode === 'smart') {
@@ -363,7 +365,7 @@ export default function Home() {
           taxPercent: 'taxPercent'
         }
 
-        const genRes = await generateInvoice(smartMapping, res.rows || [], issuer, res.metadata || {})
+        const genRes = await generateInvoice(smartMapping, res.rows || [], issuer, stampedRes.metadata || {})
         if (!genRes.success) throw new Error(genRes.message)
         const docs = genRes.documents || [genRes.document]
         setEtaDocs(docs)
@@ -724,7 +726,8 @@ export default function Home() {
         buildingNumber: '1'
       }
       
-      const genRes = await generateInvoice(mapping, uploadResult.rows || [], issuer, uploadResult.metadata || {})
+      const effectiveUploadResult = stampUploadIssuedTimestamp(uploadResult)
+      const genRes = await generateInvoice(mapping, uploadResult.rows || [], issuer, effectiveUploadResult.metadata || {})
       if (!genRes.success) throw new Error(genRes.message)
       const docs = genRes.documents || [genRes.document]
       // Clean all empty properties, arrays, and objects from the payload to guarantee 100% hash matching

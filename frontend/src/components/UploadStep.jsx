@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { uploadExcelBatch } from '../services/api' // Using a new batch function
+import { stampUploadIssuedTimestamp } from '../utils/uploadTime'
 
 export default function UploadStep({ onSuccess }) {
   const [dragging, setDragging] = useState(false)
@@ -51,12 +52,13 @@ export default function UploadStep({ onSuccess }) {
       // Call the batch upload API
       const result = await uploadExcelBatch(files)
       console.log("=== BATCH UPLOAD RESPONSE ===", result)
+      const stampedResult = stampUploadIssuedTimestamp(result)
       
-      if (result && result.success === false) {
-        setError(result.message || 'خطأ في معالجة الملفات')
+      if (stampedResult && stampedResult.success === false) {
+        setError(stampedResult.message || 'خطأ في معالجة الملفات')
       } else {
         // onSuccess should handle an array of results now
-        onSuccess(result.results || [result])
+        onSuccess(stampedResult.results || [stampedResult])
       }
     } catch (e) {
       console.error("=== UPLOAD ERROR ===", e)

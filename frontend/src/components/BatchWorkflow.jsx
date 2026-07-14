@@ -2,6 +2,7 @@
 import { SettingsContext } from '../App'
 import UploadStep from './UploadStep'
 import { generateInvoice, submitToETA, getETAStatus } from '../services/api'
+import { stampUploadIssuedTimestamp } from '../utils/uploadTime'
 import toast from 'react-hot-toast'
 
 function cleanObject(obj) {
@@ -102,6 +103,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
     toast.loading(lang === 'ar' ? 'جاري توليد الفواتير ومطابقتها...' : 'Generating and mapping invoices...', { id: 'batch-gen' })
     
     try {
+      const uploadTimestamp = new Date()
       const config = settings || {}
       
       const issuer = {
@@ -130,7 +132,8 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
         }
         
         try {
-          const genRes = await generateInvoice(smartMapping, res.rows || [], issuer, res.metadata || {})
+          const stampedRes = stampUploadIssuedTimestamp(res, uploadTimestamp)
+          const genRes = await generateInvoice(smartMapping, stampedRes.rows || [], issuer, stampedRes.metadata || {})
           if (genRes.success) {
             const docs = genRes.documents || [genRes.document]
             const cleanedDocs = docs.map(d => cleanObject(d))
