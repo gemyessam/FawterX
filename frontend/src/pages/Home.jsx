@@ -2391,7 +2391,7 @@ export default function Home() {
                     <div style={{ marginTop: '1rem', textAlign: 'right' }}>
                       <div className="ltr-layout" style={{ fontSize: '0.85rem' }}>
                         <strong>UUID:</strong> <span style={{ fontFamily: 'monospace', color: 'var(--primary)' }}>{verificationResult?.uuid || submissionResult?.requestId}</span><br />
-                        <strong>Submission Date:</strong> {new Date().toLocaleString()}<br />
+                        <strong>Submission Date:</strong> {formatCairoDateTime(new Date())}<br />
                         <strong>Compliance Status:</strong> <span className="badge badge-valid">🟢 Approved & Indexed</span>
                       </div>
                     </div>
