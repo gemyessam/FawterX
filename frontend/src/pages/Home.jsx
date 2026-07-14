@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AppContext, SettingsContext } from '../App'
 import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations } from '../services/api'
 import BatchWorkflow from '../components/BatchWorkflow'
-import { stampUploadIssuedTimestamp } from '../utils/uploadTime'
+import { stampUploadIssuedTimestamp, formatCairoDateTime } from '../utils/uploadTime'
 import toast from 'react-hot-toast'
 
 export default function Home() {
@@ -1442,7 +1442,7 @@ export default function Home() {
                     </div>
                     <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>{lang === 'ar' ? 'تاريخ الإصدار' : 'Issue Date'}</span>
-                      <strong style={{ fontSize: '0.9rem', color: 'var(--text)' }}>{uploadResult.metadata?.dateTimeIssued ? new Date(uploadResult.metadata?.dateTimeIssued).toLocaleString() : 'N/A'}</strong>
+                      <strong style={{ fontSize: '0.9rem', color: 'var(--text)' }}>{formatCairoDateTime(uploadResult.metadata?.dateTimeIssued)}</strong>
                     </div>
                     <div>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>{lang === 'ar' ? 'اسم الشركة البائعة (المصدر)' : 'Seller Company Name'}</span>
@@ -1665,6 +1665,9 @@ export default function Home() {
                       value={etaDocs[0]?.dateTimeIssued || ''} 
                       onChange={(e) => updateInvoiceMetadata('dateTimeIssued', e.target.value)} 
                     />
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                      {lang === 'ar' ? 'عرض القاهرة:' : 'Cairo display:'} {formatCairoDateTime(etaDocs[0]?.dateTimeIssued)}
+                    </div>
                   </div>
 
                   {/* Invoice Type */}

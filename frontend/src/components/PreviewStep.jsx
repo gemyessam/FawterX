@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateInvoice, submitToETA, getETAStatus } from '../services/api'
+import { formatCairoDateTime } from '../utils/uploadTime'
 import toast from 'react-hot-toast'
 
 const DEFAULT_ISSUER = {
@@ -250,7 +251,7 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
 
           <div style={{ padding: '0.5rem', background: 'var(--bg)', borderRadius: '6px' }}>
             <span style={{ color: 'var(--text-muted)' }}>تاريخ الإصدار (dateTimeIssued):</span>
-            <div style={{ fontWeight: 'bold', marginTop: '0.2rem', fontFamily: 'monospace' }}>{metadata.dateTimeIssued || new Date().toISOString()}</div>
+            <div style={{ fontWeight: 'bold', marginTop: '0.2rem', fontFamily: 'monospace' }}>{formatCairoDateTime(metadata.dateTimeIssued)}</div>
           </div>
 
           <div style={{ padding: '0.5rem', background: 'var(--bg)', borderRadius: '6px' }}>

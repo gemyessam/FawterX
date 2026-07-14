@@ -2,7 +2,7 @@
 import { SettingsContext } from '../App'
 import UploadStep from './UploadStep'
 import { generateInvoice, submitToETA, getETAStatus } from '../services/api'
-import { stampUploadIssuedTimestamp } from '../utils/uploadTime'
+import { stampUploadIssuedTimestamp, formatCairoDateTime } from '../utils/uploadTime'
 import toast from 'react-hot-toast'
 
 function cleanObject(obj) {
@@ -285,7 +285,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
   const selectedReceiver = selectedDoc?.receiver || {}
   const selectedSummary = [
     { label: lang === 'ar' ? 'رقم الفاتورة' : 'Invoice No.', value: selectedDoc?.internalID || `Invoice #${selectedIdx + 1}` },
-    { label: lang === 'ar' ? 'تاريخ الإصدار' : 'Issued At', value: selectedDoc?.dateTimeIssued || '—' },
+    { label: lang === 'ar' ? 'تاريخ الإصدار' : 'Issued At', value: formatCairoDateTime(selectedDoc?.dateTimeIssued) },
     { label: lang === 'ar' ? 'المرسل' : 'Issuer', value: selectedIssuer?.name || '—' },
     { label: lang === 'ar' ? 'المستلم' : 'Receiver', value: selectedReceiver?.name || '—' },
     { label: lang === 'ar' ? 'رقم التسجيل' : 'Receiver ID', value: selectedReceiver?.id || '—' },
