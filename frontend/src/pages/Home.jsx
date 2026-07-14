@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AppContext, SettingsContext } from '../App'
 import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations } from '../services/api'
 import BatchWorkflow from '../components/BatchWorkflow'
-import { stampUploadIssuedTimestamp, formatCairoDateTime } from '../utils/uploadTime'
+import { stampUploadIssuedTimestamp, formatCairoDateTime, formatCairoDateTimeInput, cairoLocalInputToUtcIso } from '../utils/uploadTime'
 import toast from 'react-hot-toast'
 
 export default function Home() {
@@ -1659,11 +1659,11 @@ export default function Home() {
                       📅 {lang === 'ar' ? 'تاريخ الإصدار' : 'Date Issued'}
                     </label>
                     <input 
-                      type="text" 
+                      type="datetime-local" 
                       className="input" 
                       style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
-                      value={etaDocs[0]?.dateTimeIssued || ''} 
-                      onChange={(e) => updateInvoiceMetadata('dateTimeIssued', e.target.value)} 
+                      value={formatCairoDateTimeInput(etaDocs[0]?.dateTimeIssued)} 
+                      onChange={(e) => updateInvoiceMetadata('dateTimeIssued', cairoLocalInputToUtcIso(e.target.value))} 
                     />
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
                       {lang === 'ar' ? 'عرض القاهرة:' : 'Cairo display:'} {formatCairoDateTime(etaDocs[0]?.dateTimeIssued)}
