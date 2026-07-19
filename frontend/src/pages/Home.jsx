@@ -1967,19 +1967,52 @@ export default function Home() {
                     />
                   </div>
 
-                  {/* Receiver Street */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
-                      🏠 {lang === 'ar' ? 'عنوان المستلم / الشارع' : 'Receiver Street / Address'}
-                    </label>
-                    <textarea
-                      className="input"
-                      dir={textDirection(etaDocs[0]?.receiver?.address?.street || etaDocs[0]?.receiver?.address?.addressLine)}
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.6rem', minHeight: '76px', resize: 'vertical', lineHeight: 1.5 }}
-                      value={etaDocs[0]?.receiver?.address?.street || etaDocs[0]?.receiver?.address?.addressLine || ''} 
-                      onChange={(e) => updateInvoiceMetadata('receiverStreet', e.target.value)} 
-                    />
+                  {/* Street & Saved Customers (Full Width Row) */}
+                  <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
+                    {/* Receiver Street */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                        🏠 {lang === 'ar' ? 'عنوان المستلم / الشارع' : 'Receiver Street / Address'}
+                      </label>
+                      <textarea
+                        className="input"
+                        dir={textDirection(etaDocs[0]?.receiver?.address?.street || etaDocs[0]?.receiver?.address?.addressLine)}
+                        style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.6rem', minHeight: '76px', resize: 'vertical', lineHeight: 1.5 }}
+                        value={etaDocs[0]?.receiver?.address?.street || etaDocs[0]?.receiver?.address?.addressLine || ''} 
+                        onChange={(e) => updateInvoiceMetadata('receiverStreet', e.target.value)} 
+                      />
+                    </div>
+
+                    {/* Saved Customers (Field-sized) */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                        📘 {lang === 'ar' ? 'دفتر العملاء المحفوظين' : 'Saved Customers'}
+                      </label>
+                      <div style={{ display: 'flex', gap: '0.5rem', height: '100%', alignItems: 'flex-start' }}>
+                        <select
+                          className="input"
+                          style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.55rem', flex: 1, minHeight: '38px' }}
+                          value={selectedCustomerId}
+                          onChange={(e) => applyCustomer(e.target.value)}
+                          disabled={customersLoading}
+                        >
+                          <option value="">{customersLoading ? (lang === 'ar' ? 'تحميل...' : 'Loading...') : (lang === 'ar' ? 'اختار عميل محفوظ...' : 'Choose saved...')}</option>
+                          {customers.map(customer => (
+                            <option key={customer.id} value={customer.id}>
+                              {customer.name || customer.id}
+                            </option>
+                          ))}
+                        </select>
+                        <button type="button" className="btn btn-accent btn-sm" onClick={handleSaveCurrentCustomer} style={{ padding: '0 0.75rem', height: '38px' }} title={lang === 'ar' ? 'حفظ العميل الحالي' : 'Save Current Customer'}>
+                          💾
+                        </button>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={fetchCustomers} style={{ padding: '0 0.75rem', height: '38px' }} title={lang === 'ar' ? 'تحديث القائمة' : 'Refresh List'}>
+                          🔄
+                        </button>
+                      </div>
+                    </div>
                   </div>
+
 
                   <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'minmax(160px, 0.7fr) minmax(220px, 1fr) minmax(220px, 1fr)', gap: '0.75rem', alignItems: 'end' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
@@ -2023,34 +2056,6 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Saved Customers (Field-sized at the bottom) */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
-                      📘 {lang === 'ar' ? 'دفتر العملاء المحفوظين' : 'Saved Customers'}
-                    </label>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <select
-                        className="input"
-                        style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.55rem', flex: 1 }}
-                        value={selectedCustomerId}
-                        onChange={(e) => applyCustomer(e.target.value)}
-                        disabled={customersLoading}
-                      >
-                        <option value="">{customersLoading ? (lang === 'ar' ? 'تحميل...' : 'Loading...') : (lang === 'ar' ? 'اختار عميل محفوظ...' : 'Choose saved...')}</option>
-                        {customers.map(customer => (
-                          <option key={customer.id} value={customer.id}>
-                            {customer.name || customer.id}
-                          </option>
-                        ))}
-                      </select>
-                      <button type="button" className="btn btn-accent btn-sm" onClick={handleSaveCurrentCustomer} style={{ padding: '0 0.75rem', height: '38px' }} title={lang === 'ar' ? 'حفظ العميل الحالي' : 'Save Current Customer'}>
-                        💾
-                      </button>
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={fetchCustomers} style={{ padding: '0 0.75rem', height: '38px' }} title={lang === 'ar' ? 'تحديث القائمة' : 'Refresh List'}>
-                        🔄
-                      </button>
-                    </div>
-                  </div>
 
                 </div>
               </div>
