@@ -2501,7 +2501,7 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="nav-actions" style={{ marginTop: '4rem' }}>
+              <div className="nav-actions" style={{ marginTop: '4rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                 <button className="btn btn-ghost" onClick={() => setStep(2)}>← {lang === 'ar' ? 'السابق' : 'Back'}</button>
                 <button
                   type="button"
