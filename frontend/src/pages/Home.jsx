@@ -1,10 +1,28 @@
 import { useState, useEffect, useContext } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppContext, SettingsContext } from '../App'
-import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations } from '../services/api'
+import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations, getCustomers, saveCustomer } from '../services/api'
 import BatchWorkflow from '../components/BatchWorkflow'
 import { stampUploadIssuedTimestamp, formatCairoDateTime, formatCairoDateTimeInput, cairoLocalInputToUtcIso } from '../utils/uploadTime'
 import toast from 'react-hot-toast'
+
+function textDirection(value) {
+  const firstLetter = String(value || '').match(/[A-Za-z\u0600-\u06FF]/)?.[0] || ''
+  return /[\u0600-\u06FF]/.test(firstLetter) ? 'rtl' : 'ltr'
+}
+
+function smartFieldStyle(value, extra = {}) {
+  const direction = textDirection(value)
+  return {
+    direction,
+    textAlign: direction === 'rtl' ? 'right' : 'left',
+    ...extra
+  }
+}
+
+function cleanCustomerId(value) {
+  return String(value || '').replace(/[^0-9A-Za-z]/g, '')
+}
 
 export default function Home() {
   const { lang, t, user, resetTrigger, showTutorialModal, setShowTutorialModal } = useContext(AppContext)
@@ -142,6 +160,9 @@ export default function Home() {
   const [showPricingModal, setShowPricingModal] = useState(false)
   const [pin, setPin] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [customers, setCustomers] = useState([])
+  const [selectedCustomerId, setSelectedCustomerId] = useState('')
+  const [customersLoading, setCustomersLoading] = useState(false)
 
   // Real-time verification response states
   const [submissionResult, setSubmissionResult] = useState(null)
@@ -226,6 +247,7 @@ export default function Home() {
 
       fetchUsage()
       fetchOperations()
+      fetchCustomers()
     }
   }, [user])
 
@@ -252,6 +274,21 @@ export default function Home() {
       }
     } catch (e) {
       console.error('Error fetching operations:', e)
+    }
+  }
+
+  async function fetchCustomers() {
+    if (!user) return
+    setCustomersLoading(true)
+    try {
+      const data = await getCustomers()
+      if (data?.success && Array.isArray(data.customers)) {
+        setCustomers(data.customers)
+      }
+    } catch (e) {
+      console.error('Error fetching customers:', e)
+    } finally {
+      setCustomersLoading(false)
     }
   }
 
@@ -612,6 +649,72 @@ export default function Home() {
   }
 
   // إضافة صنف جديد للفاتورة ببيانات افتراضية
+  function currentCustomerPayload() {
+    const doc = etaDocs?.[0]
+    const receiver = doc?.receiver || {}
+    const address = receiver.address || {}
+    return {
+      id: cleanCustomerId(receiver.id),
+      name: receiver.name || '',
+      type: receiver.type || 'B',
+      address: {
+        country: address.country || 'EG',
+        street: address.street || address.addressLine || '',
+        buildingNumber: address.buildingNumber || '',
+        regionCity: address.regionCity || '',
+        governate: address.governate || '',
+      },
+    }
+  }
+
+  async function handleSaveCurrentCustomer() {
+    const payload = currentCustomerPayload()
+    if (!payload.id) {
+      toast.error(lang === 'ar' ? 'رقم تسجيل/ضريبة العميل مطلوب للحفظ' : 'Receiver registration/VAT ID is required')
+      return
+    }
+
+    try {
+      const data = await saveCustomer(payload)
+      if (data?.success && data.customer) {
+        setCustomers(prev => {
+          const others = prev.filter(c => c.id !== data.customer.id)
+          return [data.customer, ...others]
+        })
+        setSelectedCustomerId(data.customer.id)
+        toast.success(lang === 'ar' ? 'تم حفظ العميل في حسابك' : 'Customer saved to your account')
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.message || e.message || (lang === 'ar' ? 'فشل حفظ العميل' : 'Failed to save customer'))
+    }
+  }
+
+  async function applyCustomer(customerId) {
+    setSelectedCustomerId(customerId)
+    const customer = customers.find(c => c.id === customerId)
+    if (!customer || !etaDocs?.[0]) return
+
+    const nextDocs = JSON.parse(JSON.stringify(etaDocs))
+    const doc = nextDocs[0]
+    if (!doc.receiver) doc.receiver = {}
+    if (!doc.receiver.address) doc.receiver.address = {}
+
+    doc.receiver.name = customer.name || ''
+    doc.receiver.id = customer.id || ''
+    doc.receiver.type = customer.type || 'B'
+    doc.receiver.address.country = customer.address?.country || 'EG'
+    doc.receiver.address.street = customer.address?.street || ''
+    doc.receiver.address.buildingNumber = customer.address?.buildingNumber || '1'
+    doc.receiver.address.regionCity = customer.address?.regionCity || ''
+    doc.receiver.address.governate = customer.address?.governate || ''
+
+    setEtaDocs(nextDocs)
+    try {
+      const dryRes = await submitToETA(nextDocs, true)
+      setValidation(dryRes.validation)
+    } catch (e) {}
+  }
+
   async function addInvoiceLine() {
     if (!etaDocs || !etaDocs[0]) return
     const nextDocs = JSON.parse(JSON.stringify(etaDocs))
@@ -750,6 +853,28 @@ export default function Home() {
         : `Error: ${errorMsg}`)
     } finally {
       setUploadLoading(false)
+    }
+  }
+
+  async function handleOpenSigner() {
+    try {
+      const pingRes = await fetch("http://localhost:8585/", { method: "GET" })
+      if (pingRes.ok) {
+        toast.success(lang === 'ar' ? 'أداة التوقيع شغالة بالفعل' : 'Signer is already running')
+        return
+      }
+    } catch (e) {}
+
+    try {
+      window.location.href = 'fawterx-signer://open'
+      toast(
+        lang === 'ar'
+          ? 'لو الأداة متسطبة، ويندوز هيفتحها الآن. لو لم تفتح، حمّل أحدث إصدار من بطاقة أداة التوقيع.'
+          : 'If the signer is installed, Windows will open it now. If nothing opens, download the latest signer from the signer card.',
+        { icon: '🔑', duration: 7000 }
+      )
+    } catch (e) {
+      window.open(`/FawterX-Signer.zip?t=${Date.now()}`, '_blank')
     }
   }
 
@@ -1779,6 +1904,34 @@ export default function Home() {
                     />
                   </div>
 
+                  <div style={{ gridColumn: '1 / -1', padding: '0.95rem', border: '1px solid rgba(0, 224, 161, 0.16)', borderRadius: '8px', background: 'rgba(0, 224, 161, 0.04)', display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) auto auto', gap: '0.75rem', alignItems: 'end' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
+                        {lang === 'ar' ? 'دفتر العملاء المحفوظين' : 'Saved Customers'}
+                      </label>
+                      <select
+                        className="input"
+                        style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.55rem' }}
+                        value={selectedCustomerId}
+                        onChange={(e) => applyCustomer(e.target.value)}
+                        disabled={customersLoading}
+                      >
+                        <option value="">{customersLoading ? (lang === 'ar' ? 'جاري التحميل...' : 'Loading...') : (lang === 'ar' ? 'اختار عميل محفوظ لتبديل بيانات المستلم' : 'Choose a saved customer to replace receiver data')}</option>
+                        {customers.map(customer => (
+                          <option key={customer.id} value={customer.id}>
+                            {customer.name || customer.id} - {customer.id}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button type="button" className="btn btn-accent btn-sm" onClick={handleSaveCurrentCustomer}>
+                      {lang === 'ar' ? 'حفظ العميل الحالي' : 'Save Current Customer'}
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={fetchCustomers}>
+                      {lang === 'ar' ? 'تحديث' : 'Refresh'}
+                    </button>
+                  </div>
+
                   {/* Receiver Name */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                     <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
@@ -1787,6 +1940,7 @@ export default function Home() {
                     <input 
                       type="text" 
                       className="input" 
+                      dir={textDirection(etaDocs[0]?.receiver?.name)}
                       style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
                       value={etaDocs[0]?.receiver?.name || ''} 
                       onChange={(e) => updateInvoiceMetadata('receiverName', e.target.value)} 
@@ -1801,6 +1955,7 @@ export default function Home() {
                     <input 
                       type="text" 
                       className="input" 
+                      dir={textDirection(etaDocs[0]?.receiver?.id)}
                       style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
                       value={etaDocs[0]?.receiver?.id || ''} 
                       onChange={(e) => updateInvoiceMetadata('receiverVat', e.target.value)} 
@@ -1832,6 +1987,7 @@ export default function Home() {
                     <input 
                       type="text" 
                       className="input" 
+                      dir={textDirection(etaDocs[0]?.receiver?.address?.country)}
                       style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
                       value={etaDocs[0]?.receiver?.address?.country || 'EG'} 
                       onChange={(e) => updateInvoiceMetadata('receiverCountry', e.target.value)} 
@@ -1845,13 +2001,14 @@ export default function Home() {
                     </label>
                     <textarea
                       className="input"
+                      dir={textDirection(etaDocs[0]?.receiver?.address?.street || etaDocs[0]?.receiver?.address?.addressLine)}
                       style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.6rem', minHeight: '76px', resize: 'vertical', lineHeight: 1.5 }}
                       value={etaDocs[0]?.receiver?.address?.street || etaDocs[0]?.receiver?.address?.addressLine || ''} 
                       onChange={(e) => updateInvoiceMetadata('receiverStreet', e.target.value)} 
                     />
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'minmax(160px, 0.7fr) minmax(220px, 1fr) minmax(220px, 1fr)', gap: '0.75rem', alignItems: 'end' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                       <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
                         🔢 {lang === 'ar' ? 'رقم المبنى' : 'Building Number'}
@@ -1859,6 +2016,7 @@ export default function Home() {
                       <input
                         type="text"
                         className="input"
+                        dir={textDirection(etaDocs[0]?.receiver?.address?.buildingNumber)}
                         style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
                         value={etaDocs[0]?.receiver?.address?.buildingNumber || ''} 
                         onChange={(e) => updateInvoiceMetadata('receiverBuildingNumber', e.target.value)} 
@@ -1871,24 +2029,25 @@ export default function Home() {
                       <input
                         type="text"
                         className="input"
+                        dir={textDirection(etaDocs[0]?.receiver?.address?.regionCity)}
                         style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }}
                         value={etaDocs[0]?.receiver?.address?.regionCity || ''} 
                         onChange={(e) => updateInvoiceMetadata('receiverRegionCity', e.target.value)} 
                       />
                     </div>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderInlineStart: '1px solid rgba(255,255,255,0.18)', paddingInlineStart: '0.9rem' }}>
                     <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
                       🗺️ {lang === 'ar' ? 'المحافظة / الولاية' : 'Governate / Province'}
                     </label>
                     <input
                       type="text"
                       className="input"
+                      dir={textDirection(etaDocs[0]?.receiver?.address?.governate)}
                       style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }}
                       value={etaDocs[0]?.receiver?.address?.governate || ''} 
                       onChange={(e) => updateInvoiceMetadata('receiverGovernate', e.target.value)} 
                     />
+                    </div>
                   </div>
 
 
@@ -2339,6 +2498,14 @@ export default function Home() {
 
               <div className="nav-actions" style={{ marginTop: '4rem' }}>
                 <button className="btn btn-ghost" onClick={() => setStep(2)}>← {lang === 'ar' ? 'السابق' : 'Back'}</button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={handleOpenSigner}
+                  disabled={submitting}
+                >
+                  🔑 {lang === 'ar' ? 'فتح أداة التوقيع' : 'Open Signer'}
+                </button>
                 <button 
                   className={`btn ${validation?.valid ? 'btn-primary' : 'btn-warning'}`} 
                   onClick={handleTriggerETA} 

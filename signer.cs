@@ -9,6 +9,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Windows.Forms;
 using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
+using Microsoft.Win32;
 
 namespace FawterXSigner
 {
@@ -23,6 +24,7 @@ namespace FawterXSigner
         {
             Console.OutputEncoding = Encoding.UTF8;
             Console.Title = "FawterX Digital Signer Bridge v1.8.9 ≡ƒöæ";
+            RegisterProtocolHandler();
             
             Console.WriteLine("===================================================");
             Console.WriteLine("    FawterX Digital Signer Bridge v1.8.9 (Egypt ETA)  ");
@@ -72,6 +74,28 @@ namespace FawterXSigner
                 Console.WriteLine("[CRITICAL] Failed to start HTTP server: " + ex.Message);
                 Console.WriteLine("Make sure no other application is using port 8585.");
                 Console.ReadLine();
+            }
+        }
+
+        private static void RegisterProtocolHandler()
+        {
+            try
+            {
+                string exePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\Classes\fawterx-signer"))
+                {
+                    key.SetValue("", "URL:FawterX Signer Protocol");
+                    key.SetValue("URL Protocol", "");
+                    using (RegistryKey commandKey = key.CreateSubKey(@"shell\open\command"))
+                    {
+                        commandKey.SetValue("", "\"" + exePath + "\" \"%1\"");
+                    }
+                }
+                Console.WriteLine("[INFO] Browser launch protocol registered: fawterx-signer://open");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[WARN] Could not register browser launch protocol: " + ex.Message);
             }
         }
 

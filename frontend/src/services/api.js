@@ -190,6 +190,21 @@ export async function saveCompanySettings(settings) {
 }
 
 /** جلب ملخص الإدارة */
+export async function getCustomers() {
+  const { data } = await api.get('/eta/customers')
+  return data
+}
+
+export async function saveCustomer(customer) {
+  const { data } = await api.post('/eta/customers', customer)
+  return data
+}
+
+export async function deleteCustomer(customerId) {
+  const { data } = await api.delete(`/eta/customers/${encodeURIComponent(customerId)}`)
+  return data
+}
+
 export async function getAdminStats() {
   const { data } = await api.get('/admin/stats')
   return data

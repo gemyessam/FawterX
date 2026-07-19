@@ -5,6 +5,7 @@ const { submitDocuments, getDocumentStatus } = require("../services/etaSubmit");
 const { validateETADocument } = require("../utils/etaValidator");
 const { saveDraft, getDraft, getAllDrafts, deleteDraft, recordOperation, getAllOperations } = require("../services/draftStore");
 const { canUserSubmit, recordSubmission, getUserUsage, saveUserSettings, getUserSettings } = require("../services/userStatsStore");
+const { listCustomers, saveCustomer, deleteCustomer } = require("../services/customerStore");
 const authMiddleware       = require("../middleware/auth");
 
 const router = express.Router();
@@ -12,6 +13,33 @@ router.use(express.json({ limit: "50mb" }));
 
 // تطبيق الـ authMiddleware لعزل الجلسات وربط المستندات بالمستخدم الحالي
 router.use(authMiddleware);
+
+router.get("/customers", async (req, res) => {
+  try {
+    const customers = await listCustomers(req.user.uid);
+    return res.json({ success: true, customers });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/customers", async (req, res) => {
+  try {
+    const customer = await saveCustomer(req.user.uid, req.body || {});
+    return res.json({ success: true, customer });
+  } catch (error) {
+    return res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+router.delete("/customers/:id", async (req, res) => {
+  try {
+    await deleteCustomer(req.user.uid, req.params.id);
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(400).json({ success: false, message: error.message });
+  }
+});
 
 // ══════════════════════════════════════════════════════════════════
 // GET /api/eta/usage
