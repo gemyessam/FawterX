@@ -95,7 +95,9 @@ function normalizeArabicText(str) {
     .trim();
 }
 
-const SUMMARY_ROW_PATTERN = /(subtotal|sub total|net amount|gross amount|vat amount|tax amount|grand total|total amount|invoice total|summary|total|net|gross|اجمالي|الصافي|صافي|المجموع|مجموع|توتال|التوتال|قيمة الضريبة|ضريبة|القيمة المضافة|الخصم|خصم|تخصيم)/i;
+const SUMMARY_ROW_PATTERN = /(subtotal|sub total|net amount|gross amount|vat amount|tax amount|grand total|total amount|invoice total|summary|total|net|gross|اجمالي|إجمالي|الصافي|الصافى|صافي|صافى|المجموع|مجموع|توتال|التوتال|قيمة الضريبة|ضريبة|القيمة المضافة|الخصم|خصم|تخصيم)/i;
+
+const METADATA_ROW_PATTERN = /(issuer|receiver|documenttype|document type|documenttypeversion|taxpayeractivitycode|activitycode|internalid|internal id|supplier|vendor|customer|issuervat|receivervat|suppliervat|customervat|datetimeissued|issuedate|المصدر|المستلم|رقمك الضريبي|الرقم الضريبي|كود النشاط|رمز النشاط|نشاط الممول|نوع المستند|إصدار المستند|نسخة المستند|الرقم التعريفي|رقم الفاتورة|أمر الشراء|أمر البيع)/i;
 
     const filteredGroupRows = groupRows.filter(({ row }) => {
       // 1. Full row text check (normalized for Arabic & English)
@@ -104,7 +106,7 @@ const SUMMARY_ROW_PATTERN = /(subtotal|sub total|net amount|gross amount|vat amo
           .filter(val => val !== null && val !== undefined && val !== "")
           .join(" ")
       );
-      if (SUMMARY_ROW_PATTERN.test(fullRowText)) {
+      if (SUMMARY_ROW_PATTERN.test(fullRowText) || METADATA_ROW_PATTERN.test(fullRowText)) {
         return false;
       }
 
@@ -113,7 +115,8 @@ const SUMMARY_ROW_PATTERN = /(subtotal|sub total|net amount|gross amount|vat amo
       const code = normalizeArabicText(row[mapping.itemCode] || row.itemCode);
       const internal = normalizeArabicText(row[mapping.internalCode] || row.internalCode);
 
-      if (SUMMARY_ROW_PATTERN.test(desc) || SUMMARY_ROW_PATTERN.test(code) || SUMMARY_ROW_PATTERN.test(internal)) {
+      if (SUMMARY_ROW_PATTERN.test(desc) || SUMMARY_ROW_PATTERN.test(code) || SUMMARY_ROW_PATTERN.test(internal) ||
+          METADATA_ROW_PATTERN.test(desc) || METADATA_ROW_PATTERN.test(code) || METADATA_ROW_PATTERN.test(internal)) {
         return false;
       }
 

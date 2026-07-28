@@ -60,6 +60,8 @@ const NOISE_PATTERNS = [
 
 const TOTAL_KEYWORDS = /(subtotal|sub total|net amount|gross amount|vat amount|tax amount|grand total|total amount|invoice total|summary|total|net|gross|اجمالي|إجمالي|الصافي|الصافى|صافي|صافى|المجموع|مجموع|توتال|التوتال|قيمة الضريبة|ضريبة|القيمة المضافة|الخصم|خصم|تخصيم)/i;
 
+const METADATA_ROW_PATTERN = /(issuer|receiver|documenttype|document type|documenttypeversion|taxpayeractivitycode|activitycode|internalid|internal id|supplier|vendor|customer|issuervat|receivervat|suppliervat|customervat|datetimeissued|issuedate|المصدر|المستلم|رقمك الضريبي|الرقم الضريبي|كود النشاط|رمز النشاط|نشاط الممول|نوع المستند|إصدار المستند|نسخة المستند|الرقم التعريفي|رقم الفاتورة|أمر الشراء|أمر البيع)/i;
+
 function normalizeSpaces(value) {
   return String(value || "").replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").trim();
 }

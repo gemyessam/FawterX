@@ -20,7 +20,9 @@ const HEADER_KEYWORDS = [
 ];
 
 // كلمات مفتاحية تدل على نهاية الجدول أو صفوف التعريف
-const SUMMARY_ROW_PATTERN = /(subtotal|sub total|net amount|gross amount|vat amount|tax amount|grand total|total amount|invoice total|summary|total|net|gross|اجمالي|الصافي|صافي|المجموع|مجموع|توتال|التوتال|قيمة الضريبة|ضريبة|القيمة المضافة|الخصم|خصم|تخصيم)/i;
+const SUMMARY_ROW_PATTERN = /(subtotal|sub total|net amount|gross amount|vat amount|tax amount|grand total|total amount|invoice total|summary|total|net|gross|اجمالي|إجمالي|الصافي|الصافى|صافي|صافى|المجموع|مجموع|توتال|التوتال|قيمة الضريبة|ضريبة|القيمة المضافة|الخصم|خصم|تخصيم)/i;
+
+const METADATA_ROW_PATTERN = /(issuer|receiver|documenttype|document type|documenttypeversion|taxpayeractivitycode|activitycode|internalid|internal id|supplier|vendor|customer|issuervat|receivervat|suppliervat|customervat|datetimeissued|issuedate|المصدر|المستلم|رقمك الضريبي|الرقم الضريبي|كود النشاط|رمز النشاط|نشاط الممول|نوع المستند|إصدار المستند|نسخة المستند|الرقم التعريفي|رقم الفاتورة|أمر الشراء|أمر البيع)/i;
 
 function isHeaderRow(rowArr) {
   let matchCount = 0;
@@ -41,7 +43,7 @@ function isFooterRow(rowArr) {
     const rawStr = normalizeArabicText(cell);
     if (!rawStr) continue;
 
-    if (SUMMARY_ROW_PATTERN.test(rawStr)) {
+    if (SUMMARY_ROW_PATTERN.test(rawStr) || METADATA_ROW_PATTERN.test(rawStr)) {
       return true;
     }
   }
@@ -218,9 +220,10 @@ function parseExcel(filePath) {
       reachedFooter = true;
     }
 
-    // Defensive check: if the row's combined text contains summary/total keywords, skip it
+    // Defensive check: if the row's combined text contains summary/total or metadata keywords, mark footer reached and skip it
     const rowJoinedText = normalizeArabicText(rowArr.filter(Boolean).join(" "));
-    if (SUMMARY_ROW_PATTERN.test(rowJoinedText)) {
+    if (SUMMARY_ROW_PATTERN.test(rowJoinedText) || METADATA_ROW_PATTERN.test(rowJoinedText)) {
+      reachedFooter = true;
       debugInfo.ignoredFooterRows++;
       continue;
     }
