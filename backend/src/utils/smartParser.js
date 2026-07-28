@@ -58,7 +58,7 @@ const NOISE_PATTERNS = [
   /(الصفحة|البنك|حساب|تليفون|هاتف|البريد|توقيع|شروط|ملاحظات)/i
 ];
 
-const TOTAL_KEYWORDS = /(subtotal|sub total|net amount|vat amount|tax amount|grand total|total amount|invoice total|إجمالي|اجمالي|الصافي|المجموع|مجموع|ضريبة|القيمة المضافة)/i;
+const TOTAL_KEYWORDS = /(subtotal|sub total|net amount|gross amount|vat amount|tax amount|grand total|total amount|invoice total|summary|total|net|gross|اجمالي|إجمالي|الصافي|الصافى|صافي|صافى|المجموع|مجموع|توتال|التوتال|قيمة الضريبة|ضريبة|القيمة المضافة|الخصم|خصم|تخصيم)/i;
 
 function normalizeSpaces(value) {
   return String(value || "").replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").trim();

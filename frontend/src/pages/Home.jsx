@@ -2085,7 +2085,7 @@ export default function Home() {
                 boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.5)',
                 padding: '1.25rem'
               }}>
-                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 12px', minWidth: '1300px' }}>
+                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 12px', minWidth: '1450px' }}>
                   <thead>
                     <tr style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px' }}>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '40px' }}>#</th>
@@ -2096,7 +2096,7 @@ export default function Home() {
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '90px' }}>Quantity</th>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '100px' }}>Qty Unit</th>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '70px' }}>Currency</th>
-                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '110px' }}>Unit Price EGP</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '160px' }}>Unit Price EGP</th>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '100px' }}>Tax</th>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: lang === 'ar' ? 'left' : 'right', borderBottom: 'none', width: '160px' }}>Total</th>
                       <th style={{ padding: '1.2rem 0.5rem', borderBottom: 'none', width: '50px' }}></th>

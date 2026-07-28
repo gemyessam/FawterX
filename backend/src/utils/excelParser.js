@@ -1,5 +1,17 @@
 const XLSX = require("xlsx");
 
+function normalizeArabicText(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670]/g, "")      // Harakat
+    .replace(/[\u0649]/g, "\u064A")             // ى -> ي
+    .replace(/[\u0622\u0623\u0625]/g, "\u0627") // أ, إ, آ -> ا
+    .replace(/[\u0640]/g, "")                   // Tatweel
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // كلمات مفتاحية للبحث عن صف العناوين (Headers) باللغتين الإنجليزية والعربية
 const HEADER_KEYWORDS = [
   "pos", "item", "no", "description", "quantity", "qty", "unit", "measure", "measurement",
@@ -8,18 +20,13 @@ const HEADER_KEYWORDS = [
 ];
 
 // كلمات مفتاحية تدل على نهاية الجدول أو صفوف التعريف
-const FOOTER_KEYWORDS = [
-  "total", "net", "subtotal", "sub total", "grand total", "amount", "summary",
-  "إجمالي", "اجمالي", "الصافي", "المجموع", "مجموع", "قيمة الضريبة", "ضريبة", "القيمة المضافة",
-  "issuer", "receiver", "documenttype", "datetimeissued", "taxpayeractivitycode", "internalid",
-  "supplier", "vendor", "customer"
-];
+const SUMMARY_ROW_PATTERN = /(subtotal|sub total|net amount|gross amount|vat amount|tax amount|grand total|total amount|invoice total|summary|total|net|gross|اجمالي|الصافي|صافي|المجموع|مجموع|توتال|التوتال|قيمة الضريبة|ضريبة|القيمة المضافة|الخصم|خصم|تخصيم)/i;
 
 function isHeaderRow(rowArr) {
   let matchCount = 0;
   for (const cell of rowArr) {
     if (!cell) continue;
-    const val = String(cell).toLowerCase().trim();
+    const val = normalizeArabicText(cell);
     if (HEADER_KEYWORDS.some(kw => val.includes(kw))) {
       matchCount++;
     }
@@ -31,10 +38,10 @@ function isFooterRow(rowArr) {
   for (let i = 0; i < rowArr.length; i++) {
     const cell = rowArr[i];
     if (cell === undefined || cell === null || cell === "") continue;
-    const rawStr = String(cell).trim().toLowerCase();
+    const rawStr = normalizeArabicText(cell);
     if (!rawStr) continue;
 
-    if (FOOTER_KEYWORDS.some(kw => rawStr.includes(kw) || rawStr === kw)) {
+    if (SUMMARY_ROW_PATTERN.test(rawStr)) {
       return true;
     }
   }
@@ -212,8 +219,8 @@ function parseExcel(filePath) {
     }
 
     // Defensive check: if the row's combined text contains summary/total keywords, skip it
-    const rowJoinedText = rowArr.filter(Boolean).join(" ").toLowerCase();
-    if (/(subtotal|sub total|net amount|vat amount|tax amount|grand total|total amount|invoice total|إجمالي|اجمالي|الصافي|المجموع|مجموع|قيمة الضريبة|ضريبة|القيمة المضافة)/i.test(rowJoinedText)) {
+    const rowJoinedText = normalizeArabicText(rowArr.filter(Boolean).join(" "));
+    if (SUMMARY_ROW_PATTERN.test(rowJoinedText)) {
       debugInfo.ignoredFooterRows++;
       continue;
     }

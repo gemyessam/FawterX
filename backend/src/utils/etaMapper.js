@@ -83,15 +83,46 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       buildingNumber: metadata.receiverBuildingNumber || "1"
     };
 
-    const SUMMARY_ROW_PATTERN = /(subtotal|sub total|net amount|vat amount|tax amount|grand total|total amount|invoice total|إجمالي|اجمالي|الصافي|المجموع|مجموع|قيمة الضريبة|ضريبة|القيمة المضافة)/i;
-    
+function normalizeArabicText(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670]/g, "")      // Harakat
+    .replace(/[\u0649]/g, "\u064A")             // ى -> ي
+    .replace(/[\u0622\u0623\u0625]/g, "\u0627") // أ, إ, آ -> ا
+    .replace(/[\u0640]/g, "")                   // Tatweel
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const SUMMARY_ROW_PATTERN = /(subtotal|sub total|net amount|gross amount|vat amount|tax amount|grand total|total amount|invoice total|summary|total|net|gross|اجمالي|الصافي|صافي|المجموع|مجموع|توتال|التوتال|قيمة الضريبة|ضريبة|القيمة المضافة|الخصم|خصم|تخصيم)/i;
+
     const filteredGroupRows = groupRows.filter(({ row }) => {
-      const desc = String(row[mapping.description] || row.description || "").trim();
-      const code = String(row[mapping.itemCode] || row.itemCode || "").trim();
-      const internal = String(row[mapping.internalCode] || row.internalCode || "").trim();
+      // 1. Full row text check (normalized for Arabic & English)
+      const fullRowText = normalizeArabicText(
+        Object.values(row)
+          .filter(val => val !== null && val !== undefined && val !== "")
+          .join(" ")
+      );
+      if (SUMMARY_ROW_PATTERN.test(fullRowText)) {
+        return false;
+      }
+
+      // 2. Mapped fields check
+      const desc = normalizeArabicText(row[mapping.description] || row.description);
+      const code = normalizeArabicText(row[mapping.itemCode] || row.itemCode);
+      const internal = normalizeArabicText(row[mapping.internalCode] || row.internalCode);
+
       if (SUMMARY_ROW_PATTERN.test(desc) || SUMMARY_ROW_PATTERN.test(code) || SUMMARY_ROW_PATTERN.test(internal)) {
         return false;
       }
+
+      // 3. Skip rows with no description, code, and 0 price
+      const priceVal = parseFloat(row[mapping.unitValue] || row.unitValue);
+      if (!desc && !code && !internal && (isNaN(priceVal) || priceVal === 0)) {
+        return false;
+      }
+
       return true;
     });
 

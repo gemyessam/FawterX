@@ -497,7 +497,7 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
                     <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Quantity</th>
                     <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Quantity Measurement</th>
                     <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Currency</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Unit Price EGP</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5', minWidth: '160px' }}>Unit Price EGP</th>
                     <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Tax</th>
                     <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5', minWidth: '150px' }}>Total (EGP)</th>
                   </tr>
