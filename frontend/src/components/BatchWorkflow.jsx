@@ -1106,20 +1106,20 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                 boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.5)',
                 padding: '1.25rem'
               }}>
-                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 12px', minWidth: '1300px' }}>
+                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 12px', minWidth: '1450px' }}>
                   <thead>
                     <tr style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px' }}>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', width: '40px' }}>#</th>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', width: '90px' }}>Code Type</th>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', width: '170px' }}>Item Code</th>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', width: '110px' }}>Internal Code</th>
-                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: lang === 'ar' ? 'right' : 'left', width: '300px' }}>Item Description</th>
-                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', width: '90px' }}>Quantity</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: lang === 'ar' ? 'right' : 'left', width: '320px' }}>Item Description</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', width: '95px' }}>Quantity</th>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', width: '100px' }}>Qty Unit</th>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', width: '70px' }}>Currency</th>
-                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', width: '110px' }}>Unit Price EGP</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', width: '160px' }}>Unit Price EGP</th>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', width: '100px' }}>Tax</th>
-                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: lang === 'ar' ? 'left' : 'right', width: '160px' }}>Total</th>
+                      <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: lang === 'ar' ? 'left' : 'right', width: '170px' }}>Total</th>
                       <th style={{ padding: '1.2rem 0.5rem', width: '50px' }}></th>
                     </tr>
                   </thead>

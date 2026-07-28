@@ -83,7 +83,19 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
       buildingNumber: metadata.receiverBuildingNumber || "1"
     };
 
-    const invoiceLines = groupRows.map(({ row, idx }) => {
+    const SUMMARY_ROW_PATTERN = /(subtotal|sub total|net amount|vat amount|tax amount|grand total|total amount|invoice total|إجمالي|اجمالي|الصافي|المجموع|مجموع|قيمة الضريبة|ضريبة|القيمة المضافة)/i;
+    
+    const filteredGroupRows = groupRows.filter(({ row }) => {
+      const desc = String(row[mapping.description] || row.description || "").trim();
+      const code = String(row[mapping.itemCode] || row.itemCode || "").trim();
+      const internal = String(row[mapping.internalCode] || row.internalCode || "").trim();
+      if (SUMMARY_ROW_PATTERN.test(desc) || SUMMARY_ROW_PATTERN.test(code) || SUMMARY_ROW_PATTERN.test(internal)) {
+        return false;
+      }
+      return true;
+    });
+
+    const invoiceLines = filteredGroupRows.map(({ row, idx }) => {
       const parsedVal = parseFloat(row[mapping.unitValue]);
       const unitValue = parseFloat((isNaN(parsedVal) ? 0 : parsedVal).toFixed(5));
 

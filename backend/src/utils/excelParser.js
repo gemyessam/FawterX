@@ -9,7 +9,8 @@ const HEADER_KEYWORDS = [
 
 // كلمات مفتاحية تدل على نهاية الجدول أو صفوف التعريف
 const FOOTER_KEYWORDS = [
-  "total", "net", "subtotal", "الإجمالي", "الصافي", "المجموع", 
+  "total", "net", "subtotal", "sub total", "grand total", "amount", "summary",
+  "إجمالي", "اجمالي", "الصافي", "المجموع", "مجموع", "قيمة الضريبة", "ضريبة", "القيمة المضافة",
   "issuer", "receiver", "documenttype", "datetimeissued", "taxpayeractivitycode", "internalid",
   "supplier", "vendor", "customer"
 ];
@@ -29,9 +30,11 @@ function isHeaderRow(rowArr) {
 function isFooterRow(rowArr) {
   for (let i = 0; i < rowArr.length; i++) {
     const cell = rowArr[i];
-    if (!cell) continue;
-    const val = String(cell).toLowerCase().trim().replace(/[^a-z0-9]/g, "");
-    if (FOOTER_KEYWORDS.some(kw => val.includes(kw) || val === kw)) {
+    if (cell === undefined || cell === null || cell === "") continue;
+    const rawStr = String(cell).trim().toLowerCase();
+    if (!rawStr) continue;
+
+    if (FOOTER_KEYWORDS.some(kw => rawStr.includes(kw) || rawStr === kw)) {
       return true;
     }
   }
@@ -206,6 +209,13 @@ function parseExcel(filePath) {
 
     if (isFooterRow(rowArr)) {
       reachedFooter = true;
+    }
+
+    // Defensive check: if the row's combined text contains summary/total keywords, skip it
+    const rowJoinedText = rowArr.filter(Boolean).join(" ").toLowerCase();
+    if (/(subtotal|sub total|net amount|vat amount|tax amount|grand total|total amount|invoice total|إجمالي|اجمالي|الصافي|المجموع|مجموع|قيمة الضريبة|ضريبة|القيمة المضافة)/i.test(rowJoinedText)) {
+      debugInfo.ignoredFooterRows++;
+      continue;
     }
 
     if (reachedFooter) {
