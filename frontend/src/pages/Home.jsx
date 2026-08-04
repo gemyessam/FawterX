@@ -295,6 +295,24 @@ export default function Home() {
     return []
   }
 
+  useEffect(() => {
+    if (!etaDocs?.length || !customers.length || selectedCustomerId) return
+
+    const matched = applySavedCustomerMatches(etaDocs, customers)
+    if (!matched.firstMatch) return
+
+    const docsChanged = JSON.stringify(matched.documents) !== JSON.stringify(etaDocs)
+    setSelectedCustomerId(matched.firstMatch.id)
+    if (docsChanged) {
+      setEtaDocs(matched.documents)
+      toast.success(
+        lang === 'ar'
+          ? `تم تطبيق بيانات العميل المحفوظ تلقائيًا: ${matched.firstMatch.name || matched.firstMatch.id}`
+          : `Saved customer applied automatically: ${matched.firstMatch.name || matched.firstMatch.id}`
+      )
+    }
+  }, [customers, etaDocs, selectedCustomerId, lang])
+
   // Auto mapping helper
   useEffect(() => {
     if (uploadResult && uploadResult.headers) {

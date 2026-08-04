@@ -133,6 +133,24 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
     return []
   }
 
+  useEffect(() => {
+    if (!invoices.length || !customers.length || selectedCustomerId) return
+
+    const matched = applySavedCustomerMatches(invoices, customers)
+    if (!matched.firstMatch) return
+
+    const docsChanged = JSON.stringify(matched.documents) !== JSON.stringify(invoices)
+    setSelectedCustomerId(matched.firstMatch.id)
+    if (docsChanged) {
+      setInvoices(matched.documents)
+      toast.success(
+        lang === 'ar'
+          ? `تم تطبيق بيانات ${matched.matchCount} عميل محفوظ تلقائيًا`
+          : `Applied ${matched.matchCount} saved customer profiles automatically`
+      )
+    }
+  }, [customers, invoices, selectedCustomerId, lang])
+
   async function handleBatchUploadSuccess(resultsArray) {
     setStep(2)
     toast.loading(lang === 'ar' ? 'جاري توليد الفواتير ومطابقتها...' : 'Generating and mapping invoices...', { id: 'batch-gen' })
