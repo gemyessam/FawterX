@@ -3,6 +3,7 @@ import { SettingsContext } from '../App'
 import UploadStep from './UploadStep'
 import { generateInvoice, submitToETA, getETAStatus, getCustomers, saveCustomer } from '../services/api'
 import { stampUploadIssuedTimestamp, formatCairoDateTime, formatCairoDateTimeInput, cairoLocalInputToUtcIso } from '../utils/uploadTime'
+import { applySavedCustomerMatches } from '../utils/customerMatching'
 import toast from 'react-hot-toast'
 
 function textDirection(str) {
@@ -122,12 +123,14 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
       const res = await getCustomers()
       if (res?.success && Array.isArray(res.customers)) {
         setCustomers(res.customers)
+        return res.customers
       }
     } catch (e) {
       console.error("Failed to fetch customers:", e)
     } finally {
       setCustomersLoading(false)
     }
+    return []
   }
 
   async function handleBatchUploadSuccess(resultsArray) {
@@ -155,6 +158,8 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
       }
 
       const generatedDocs = []
+      const customerList = customers.length ? customers : await fetchCustomers()
+      let autoMatchedCustomers = 0
 
       for (const res of resultsArray) {
         if (!res.success) {
@@ -168,8 +173,10 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
           if (genRes.success) {
             const docs = genRes.documents || [genRes.document]
             const cleanedDocs = docs.map(d => cleanObject(d))
-            cleanedDocs[0]._fileName = res.fileName 
-            generatedDocs.push(cleanedDocs[0])
+            const matched = applySavedCustomerMatches(cleanedDocs, customerList)
+            autoMatchedCustomers += matched.matchCount
+            matched.documents[0]._fileName = res.fileName 
+            generatedDocs.push(matched.documents[0])
           }
         } catch (genErr) {
           console.error("Error generating doc for", res.fileName, genErr)
@@ -178,6 +185,13 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
       }
 
       setInvoices(generatedDocs)
+      if (autoMatchedCustomers > 0) {
+        toast.success(
+          lang === 'ar'
+            ? `تم تطبيق بيانات ${autoMatchedCustomers} عميل محفوظ تلقائيًا`
+            : `Applied ${autoMatchedCustomers} saved customer profiles automatically`
+        )
+      }
       toast.success(lang === 'ar' ? `تم تحضير ${generatedDocs.length} فاتورة بنجاح` : `Prepared ${generatedDocs.length} invoices successfully`, { id: 'batch-gen' })
       setStep(3)
     } catch (e) {

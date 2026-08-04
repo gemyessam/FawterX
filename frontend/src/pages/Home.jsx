@@ -4,6 +4,7 @@ import { AppContext, SettingsContext } from '../App'
 import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations, getCustomers, saveCustomer } from '../services/api'
 import BatchWorkflow from '../components/BatchWorkflow'
 import { stampUploadIssuedTimestamp, formatCairoDateTime, formatCairoDateTimeInput, cairoLocalInputToUtcIso } from '../utils/uploadTime'
+import { applySavedCustomerMatches } from '../utils/customerMatching'
 import toast from 'react-hot-toast'
 
 function textDirection(value) {
@@ -278,18 +279,20 @@ export default function Home() {
   }
 
   async function fetchCustomers() {
-    if (!user) return
+    if (!user) return []
     setCustomersLoading(true)
     try {
       const data = await getCustomers()
       if (data?.success && Array.isArray(data.customers)) {
         setCustomers(data.customers)
+        return data.customers
       }
     } catch (e) {
       console.error('Error fetching customers:', e)
     } finally {
       setCustomersLoading(false)
     }
+    return []
   }
 
   // Auto mapping helper
@@ -405,10 +408,21 @@ export default function Home() {
         const genRes = await generateInvoice(smartMapping, res.rows || [], issuer, stampedRes.metadata || {})
         if (!genRes.success) throw new Error(genRes.message)
         const docs = genRes.documents || [genRes.document]
-        setEtaDocs(docs)
+        const customerList = customers.length ? customers : await fetchCustomers()
+        const matched = applySavedCustomerMatches(docs, customerList)
+        const finalDocs = matched.documents
+        if (matched.firstMatch) {
+          setSelectedCustomerId(matched.firstMatch.id)
+          toast.success(
+            lang === 'ar'
+              ? `تم تطبيق بيانات العميل المحفوظ تلقائيًا: ${matched.firstMatch.name || matched.firstMatch.id}`
+              : `Saved customer applied automatically: ${matched.firstMatch.name || matched.firstMatch.id}`
+          )
+        }
+        setEtaDocs(finalDocs)
 
         // Get local validation copy (Dry-run call)
-        const dryRes = await submitToETA(docs, true)
+        const dryRes = await submitToETA(finalDocs, true)
         setValidation(dryRes.validation)
         setDraftId(dryRes.draftId)
 
