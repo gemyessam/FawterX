@@ -60,15 +60,25 @@ export default function Warehouse() {
   async function loadProjects() {
     setLoading(true)
     try {
-      const res = await getWarehouseProjects()
-      if (res.success && res.projects) {
+      const fetchPromise = getWarehouseProjects()
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Server response timeout')), 10000)
+      )
+
+      const res = await Promise.race([fetchPromise, timeoutPromise])
+      if (res && res.success && Array.isArray(res.projects) && res.projects.length > 0) {
         setProjects(res.projects)
-        if (res.projects.length > 0 && !selectedProjectId) {
-          setSelectedProjectId(res.projects[0].id)
-        }
+        setSelectedProjectId((prev) => prev || res.projects[0].id)
+      } else {
+        const defaultProj = { id: 'default_canex', name: 'Canex Stock', code: 'CANEX', description: 'المخزن الرئيسي لقطاعات وإكسسوارات كانكس' }
+        setProjects([defaultProj])
+        setSelectedProjectId((prev) => prev || defaultProj.id)
       }
     } catch (err) {
-      toast.error(isAr ? 'فشل تحميل مشاريع المخزن' : 'Failed to load warehouse projects')
+      console.warn('Warehouse projects loading timeout/error:', err)
+      const defaultProj = { id: 'default_canex', name: 'Canex Stock', code: 'CANEX', description: 'المخزن الرئيسي لقطاعات وإكسسوارات كانكس' }
+      setProjects([defaultProj])
+      setSelectedProjectId((prev) => prev || defaultProj.id)
     } finally {
       setLoading(false)
     }
@@ -281,8 +291,14 @@ export default function Warehouse() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', gap: '1rem' }}>
         <span className="spinner"></span>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
+          {isAr ? 'جاري الاتصال بالسيرفر وجلب بيانات المخزن...' : 'Connecting to server and loading warehouse data...'}
+        </p>
+        <button className="btn btn-secondary" onClick={() => loadProjects()} style={{ marginTop: '0.5rem' }}>
+          {isAr ? 'إعادة المحاولة الأن' : 'Retry Now'}
+        </button>
       </div>
     )
   }
