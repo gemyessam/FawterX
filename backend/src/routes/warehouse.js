@@ -1,0 +1,159 @@
+const express = require("express");
+const authMiddleware = require("../middleware/auth");
+const {
+  getUserWarehouseAccess,
+  listWarehouseUsers,
+  updateWarehouseUserAccess,
+  listProjects,
+  createProject,
+  getProjectStock,
+  processInboundInvoice,
+} = require("../services/warehouseStore");
+
+const router = express.Router();
+router.use(express.json());
+router.use(authMiddleware);
+
+/**
+ * GET /api/warehouse/access
+ * Check current user's warehouse access permissions
+ */
+router.get("/access", async (req, res) => {
+  try {
+    const access = await getUserWarehouseAccess(req.user.uid, req.user.email);
+    return res.json({ success: true, ...access });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * Middleware: Require Warehouse Permission
+ */
+async function requireWarehouse(req, res, next) {
+  try {
+    const access = await getUserWarehouseAccess(req.user.uid, req.user.email);
+    if (!access.enabled) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: Warehouse access is disabled for your account. Please contact Admin.",
+      });
+    }
+    req.warehouseRole = access.role;
+    next();
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+/**
+ * Middleware: Require Admin Only
+ */
+function requireAdmin(req, res, next) {
+  if (!req.user || !req.user.isAdmin) {
+    return res.status(403).json({
+      success: false,
+      message: "Forbidden: Action restricted to Admin only.",
+    });
+  }
+  next();
+}
+
+/**
+ * GET /api/warehouse/users
+ * List all users with warehouse access (Admin Only)
+ */
+router.get("/users", requireAdmin, async (req, res) => {
+  try {
+    const users = await listWarehouseUsers();
+    return res.json({ success: true, users });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/warehouse/users/:uid
+ * Enable/Disable warehouse access for a specific user (Admin Only)
+ */
+router.post("/users/:uid", requireAdmin, async (req, res) => {
+  try {
+    const { warehouseEnabled, warehouseRole } = req.body;
+    const result = await updateWarehouseUserAccess(
+      req.params.uid,
+      { warehouseEnabled, warehouseRole },
+      req.user.email
+    );
+    return res.json({ success: true, access: result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/warehouse/projects
+ * List warehouse projects
+ */
+router.get("/projects", requireWarehouse, async (req, res) => {
+  try {
+    const projects = await listProjects();
+    return res.json({ success: true, projects });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/warehouse/projects
+ * Create a new warehouse project
+ */
+router.post("/projects", requireWarehouse, async (req, res) => {
+  try {
+    const { name, code, description } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: "Project name is required." });
+    }
+    const project = await createProject({ name, code, description }, req.user.uid);
+    return res.json({ success: true, project });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/warehouse/projects/:projectId/stock
+ * Fetch current stock snapshot for a project
+ */
+router.get("/projects/:projectId/stock", requireWarehouse, async (req, res) => {
+  try {
+    const stock = await getProjectStock(req.params.projectId);
+    return res.json({ success: true, stock });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/warehouse/projects/:projectId/invoices/process
+ * Save reviewed purchase invoice & lines into inbound stock movements
+ */
+router.post("/projects/:projectId/invoices/process", requireWarehouse, async (req, res) => {
+  try {
+    const { invoiceMeta, lines } = req.body;
+    if (!lines || !Array.isArray(lines) || lines.length === 0) {
+      return res.status(400).json({ success: false, message: "At least one valid line is required." });
+    }
+
+    const result = await processInboundInvoice(
+      req.params.projectId,
+      invoiceMeta || {},
+      lines,
+      req.user.uid
+    );
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+module.exports = router;

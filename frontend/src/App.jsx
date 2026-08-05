@@ -5,7 +5,9 @@ import Home from './pages/Home'
 import Drafts from './pages/Drafts'
 import DraftDetails from './pages/DraftDetails'
 import AdminPanel from './pages/AdminPanel'
+import Warehouse from './pages/Warehouse'
 import { testETAAuth, getCompanySettings, saveCompanySettings } from './services/api'
+import { getWarehouseAccess } from './services/warehouseApi'
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase'
 
 // bilingual context
@@ -14,13 +16,14 @@ export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
-    logo: 'فاوتر إكس v2.14.23',
+    logo: 'فاوتر إكس v2.15.0',
     logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
     navCreate: 'أتمتة إكسيل',
     navDrafts: 'المسودات الموقوفة',
     navSettings: 'إعدادات الشركة',
+    navWarehouse: 'المخزون',
     logout: 'خروج',
     footer: 'منصة فاوتر إكس لأتمتة الفواتير الإلكترونية المعتمدة · خوادم مصلحة الضرائب المصرية',
     loginTitle: 'تسجيل الدخول إلى FawterX',
@@ -43,13 +46,14 @@ const TRANSLATIONS = {
     statsTitle: 'إحصائيات الأداء'
   },
   en: {
-    logo: 'FawterX v2.14.23',
+    logo: 'FawterX v2.15.0',
     logoSub: 'ERP Alternative for ETA Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
     navCreate: 'Excel Auto',
     navDrafts: 'Saved Recovery',
     navSettings: 'Company Setup',
+    navWarehouse: 'Warehouse',
     navAdmin: 'Admin Panel',
     logout: 'Log Out',
     footer: 'FawterX ETA Invoicing Automation Platform · Egyptian Tax Authority Servers',
@@ -75,7 +79,7 @@ const TRANSLATIONS = {
 }
 
 function Layout({ children }) {
-  const { lang, setLang, t, user, isAdmin, handleLogout, triggerReset, showTutorialModal, setShowTutorialModal } = useContext(AppContext)
+  const { lang, setLang, t, user, isAdmin, hasWarehouseAccess, handleLogout, triggerReset, showTutorialModal, setShowTutorialModal } = useContext(AppContext)
   const location = useLocation()
   const handleLogoClick = (e) => {
     e.preventDefault();
@@ -214,13 +218,18 @@ function Layout({ children }) {
               <span>{t.logoSub}</span>
             </div>
             <span className="premium-badge">{t.badge}</span>
-            <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v2.14.23 (Customer Auto Match)</span>
+            <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v2.15.0 (Warehouse Module)</span>
           </div>
         </Link>
 
         <nav className="header-nav">
           <Link to="/" onClick={handleLogoClick} className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>{t.navHome}</Link>
           <Link to="/drafts" className={`nav-link ${location.pathname.includes('/drafts') ? 'active' : ''}`}>{t.navDrafts}</Link>
+          {hasWarehouseAccess && (
+            <Link to="/warehouse" className={`nav-link ${location.pathname.includes('/warehouse') ? 'active' : ''}`}>
+              📦 {t.navWarehouse || (lang === 'ar' ? 'المخزون' : 'Warehouse')}
+            </Link>
+          )}
           {isAdmin && (
             <Link to="/admin" className={`nav-link ${location.pathname.includes('/admin') ? 'active' : ''}`}>{t.navAdmin || (lang === 'ar' ? 'لوحة الأدمن' : 'Admin Panel')}</Link>
           )}
@@ -400,6 +409,7 @@ function Layout({ children }) {
 export default function App() {
   const [lang, setLang] = useState('ar')
   const [user, setUser] = useState(null)
+  const [hasWarehouseAccess, setHasWarehouseAccess] = useState(false)
   const [loadingAuth, setLoadingAuth] = useState(true)
   const [resetTrigger, setResetTrigger] = useState(0)
   const triggerReset = () => setResetTrigger(prev => prev + 1)
@@ -409,6 +419,20 @@ export default function App() {
 
   const t = TRANSLATIONS[lang]
   const isAdmin = (user?.email || '').toLowerCase() === 'gemy.essam.ge@gmail.com'
+
+  useEffect(() => {
+    if (user) {
+      if (isAdmin) {
+        setHasWarehouseAccess(true)
+      } else {
+        getWarehouseAccess()
+          .then((res) => setHasWarehouseAccess(!!(res && res.enabled)))
+          .catch(() => setHasWarehouseAccess(false))
+      }
+    } else {
+      setHasWarehouseAccess(false)
+    }
+  }, [user, isAdmin])
 
   useEffect(() => {    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
@@ -451,7 +475,7 @@ export default function App() {
   }
 
   return (
-    <AppContext.Provider value={{ lang, setLang, t, user, isAdmin, handleLogout, resetTrigger, triggerReset, showTutorialModal, setShowTutorialModal }}>
+    <AppContext.Provider value={{ lang, setLang, t, user, isAdmin, hasWarehouseAccess, handleLogout, resetTrigger, triggerReset, showTutorialModal, setShowTutorialModal }}>
       <BrowserRouter>
         <Toaster position="bottom-center" toastOptions={{ style: { background: '#101223', color: '#e8eaf6', border: '1px solid #202442', borderRadius: '12px' } }} />
         
@@ -519,6 +543,16 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/drafts" element={<Drafts />} />
               <Route path="/drafts/:id" element={<DraftDetails />} />
+              <Route path="/warehouse" element={hasWarehouseAccess ? <Warehouse /> : (
+                <div className="card fade-in" style={{ padding: '2rem' }}>
+                  <h2 className="card-title">{lang === 'ar' ? 'غير مصرح بالوصول' : 'Access Denied'}</h2>
+                  <p className="card-sub" style={{ marginBottom: 0 }}>
+                    {lang === 'ar'
+                      ? 'صفحة المخازن مخصصة للمسؤولين والمستخدمين المصرح لهم فقط.'
+                      : 'Warehouse access is restricted to authorized users.'}
+                  </p>
+                </div>
+              )} />
               <Route path="/admin" element={isAdmin ? <AdminPanel /> : (
                 <div className="card fade-in" style={{ padding: '2rem' }}>
                   <h2 className="card-title">Access Denied</h2>
