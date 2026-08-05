@@ -30,7 +30,8 @@ export default function Warehouse() {
 
   // Upload & Review State
   const [uploading, setUploading] = useState(false)
-  const [parsedMeta, setParsedMeta] = useState({ invoiceNumber: '', supplier: 'Canex', currency: 'EGP' })
+  const [movementType, setMovementType] = useState('inbound') // 'inbound' | 'outbound'
+  const [parsedMeta, setParsedMeta] = useState({ invoiceNumber: '', supplier: 'Canex', currency: 'EGP', movementType: 'inbound' })
   const [reviewLines, setReviewLines] = useState([])
   const [savingInvoice, setSavingInvoice] = useState(false)
 
@@ -157,9 +158,10 @@ export default function Warehouse() {
 
         setParsedMeta({
           invoiceNumber: res.metadata?.invoiceNumber || `INV-${Date.now().toString().slice(-6)}`,
-          supplier: res.metadata?.supplier || 'Canex',
+          supplier: res.metadata?.supplier || 'Schüco',
           currency: 'EGP',
           fileName: file.name,
+          movementType: movementType,
         })
         setReviewLines(parsed)
         setActiveTab('upload')
@@ -201,9 +203,17 @@ export default function Warehouse() {
 
     setSavingInvoice(true)
     try {
-      const res = await processWarehouseInvoice(selectedProjectId, parsedMeta, validLines)
+      const payloadMeta = { ...parsedMeta, movementType: movementType }
+      const res = await processWarehouseInvoice(selectedProjectId, payloadMeta, validLines)
       if (res.success) {
-        toast.success(isAr ? `تم حفظ الحركة بنجاح! (+${res.movementsCount} أصناف)` : `Movements recorded! (+${res.movementsCount} items)`)
+        const isOut = movementType === 'outbound'
+        const msgAr = isOut
+          ? `تم خصم البنود من المخزن بنجاح! (-${res.movementsCount} أصناف)`
+          : `تم إضافة البنود إلى المخزن بنجاح! (+${res.movementsCount} أصناف)`
+        const msgEn = isOut
+          ? `Stock deducted successfully! (-${res.movementsCount} items)`
+          : `Stock added successfully! (+${res.movementsCount} items)`
+        toast.success(isAr ? msgAr : msgEn)
         setReviewLines([])
         loadStock(selectedProjectId)
         setActiveTab('stock')
@@ -362,7 +372,7 @@ export default function Warehouse() {
           className={`btn ${activeTab === 'upload' ? 'btn-primary' : 'btn-ghost'}`}
           onClick={() => setActiveTab('upload')}
         >
-          📥 {isAr ? 'رفع ومراجعة فاتورة توريد' : 'Upload & Review Inbound Invoice'}
+          🧾 {isAr ? 'حركات الفواتير (إضافة / خصم)' : 'Invoice Movements (In / Out)'}
         </button>
         {isAdmin && (
           <button
@@ -455,17 +465,55 @@ export default function Warehouse() {
         </div>
       )}
 
-      {/* ─── TAB 2: Upload & Review Purchase Invoice ─── */}
+      {/* ─── TAB 2: Upload & Review Invoice Movements ─── */}
       {activeTab === 'upload' && (
         <div className="card fade-in" style={{ padding: '1.5rem' }}>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-            📥 {isAr ? 'رفع ومراجعة فاتورة توريد (إضافة رصيد)' : 'Upload & Review Purchase Invoice'}
-          </h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-            {isAr
-              ? 'يتم استخراج البنود آلياً ثم عرضها في شاشة المراجعة لمنع إضافة مصاريف الشحن أو التغليف في المخزون'
-              : 'Extracted items will be shown in a review table before committing to prevent non-stock items from altering inventory'}
-          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.2rem' }}>
+                {movementType === 'outbound'
+                  ? (isAr ? '📤 رفع ومراجعة فاتورة صرف (خصم من الرصيد)' : 'Outbound Invoice (Stock Deduction)')
+                  : (isAr ? '📥 رفع ومراجعة فاتورة توريد (إضافة رصيد)' : 'Inbound Purchase Invoice (Stock Addition)')}
+              </h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                {isAr
+                  ? 'اختر نوع الحركة (إضافة أو خصم) ثم ارفع ملف الفاتورة لمراجعته واعتماده تلقائياً'
+                  : 'Select movement type (Addition or Deduction), then upload invoice to review and confirm'}
+              </p>
+            </div>
+
+            {/* Movement Type Toggle */}
+            <div style={{ display: 'flex', gap: '0.5rem', background: '#101223', padding: '0.3rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+              <button
+                type="button"
+                className={`btn btn-sm ${movementType === 'inbound' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => {
+                  setMovementType('inbound')
+                  setParsedMeta((p) => ({ ...p, movementType: 'inbound' }))
+                }}
+                style={{ borderRadius: '7px', fontWeight: 700 }}
+              >
+                📥 {isAr ? 'إذن إضافة (توريد)' : 'Inbound (+ Add)'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => {
+                  setMovementType('outbound')
+                  setParsedMeta((p) => ({ ...p, movementType: 'outbound' }))
+                }}
+                style={{
+                  borderRadius: '7px',
+                  fontWeight: 700,
+                  background: movementType === 'outbound' ? '#ff4d4f' : 'transparent',
+                  borderColor: movementType === 'outbound' ? '#ff4d4f' : 'transparent',
+                  color: '#fff',
+                }}
+              >
+                📤 {isAr ? 'إذن صرف (مبيعات / خصم)' : 'Outbound (- Deduct)'}
+              </button>
+            </div>
+          </div>
 
           {reviewLines.length === 0 ? (
             <div
@@ -621,8 +669,24 @@ export default function Warehouse() {
                 <button className="btn btn-ghost" onClick={() => setReviewLines([])}>
                   {isAr ? 'إلغاء' : 'Cancel'}
                 </button>
-                <button className="btn btn-primary" onClick={handleSaveInboundInvoice} disabled={savingInvoice}>
-                  {savingInvoice ? <span className="spinner"></span> : isAr ? '💾 اعتماد وإضافة للمخزن' : 'Confirm & Save Stock Movements'}
+                <button
+                  className="btn"
+                  onClick={handleSaveInboundInvoice}
+                  disabled={savingInvoice}
+                  style={{
+                    background: movementType === 'outbound' ? '#ff4d4f' : 'var(--primary)',
+                    borderColor: movementType === 'outbound' ? '#ff4d4f' : 'var(--primary)',
+                    color: '#fff',
+                    fontWeight: 700,
+                  }}
+                >
+                  {savingInvoice ? (
+                    <span className="spinner"></span>
+                  ) : movementType === 'outbound' ? (
+                    isAr ? '📤 اعتماد وخصم البنود من رصيد المخزن (-)' : 'Confirm & Deduct Stock (-)'
+                  ) : (
+                    isAr ? '📥 اعتماد وإضافة البنود إلى رصيد المخزن (+)' : 'Confirm & Add Stock (+)'
+                  )}
                 </button>
               </div>
             </div>

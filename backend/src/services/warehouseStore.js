@@ -189,12 +189,16 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
 
   const projectRef = db.collection("warehouseProjects").doc(projectId);
 
+  const movementType = (invoiceMeta.movementType || "inbound").toLowerCase();
+  const isOutbound = movementType === "outbound";
+  const docType = isOutbound ? "sales_invoice" : "purchase_invoice";
+
   // 1. Save Invoice Document
   const invoiceDoc = {
     invoiceNumber: invoiceMeta.invoiceNumber || `INV-${Date.now()}`,
     supplier: invoiceMeta.supplier || "Canex",
-    documentType: "purchase_invoice",
-    movementType: "inbound",
+    documentType: docType,
+    movementType: isOutbound ? "outbound" : "inbound",
     currency: invoiceMeta.currency || "EGP",
     totalAmount: Number(invoiceMeta.totalAmount || 0),
     fileName: invoiceMeta.fileName || "manual_upload",
@@ -226,12 +230,17 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
     const unitPrice = Number(line.unitPrice || 0);
     const netTotal = Number(line.netTotal || qtyBar * unitPrice);
 
+    // Factors for stock balance updates (+ for inbound, - for outbound)
+    const factorBar = isOutbound ? -qtyBar : qtyBar;
+    const factorLm = isOutbound ? -qtyLm : qtyLm;
+    const factorKg = isOutbound ? -qtyKg : qtyKg;
+
     // Create Movement
     const mvtRef = projectRef.collection("movements").doc();
     const movementData = {
       invoiceId,
       invoiceNumber: invoiceDoc.invoiceNumber,
-      movementType: "inbound",
+      movementType: isOutbound ? "outbound" : "inbound",
       itemKey,
       itemCode,
       description: line.description || "Glazing Bead / Profile",
@@ -279,9 +288,9 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
         finish,
         lengthMm,
         unit: line.unit || "BAR",
-        quantityBar: admin.firestore.FieldValue.increment(qtyBar),
-        quantityLm: admin.firestore.FieldValue.increment(qtyLm),
-        quantityKg: admin.firestore.FieldValue.increment(qtyKg),
+        quantityBar: admin.firestore.FieldValue.increment(factorBar),
+        quantityLm: admin.firestore.FieldValue.increment(factorLm),
+        quantityKg: admin.firestore.FieldValue.increment(factorKg),
         lastUnitCost: unitPrice,
         currency: invoiceDoc.currency,
         updatedAt: new Date().toISOString(),
@@ -295,6 +304,7 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
   return {
     success: true,
     invoiceId,
+    movementType: isOutbound ? "outbound" : "inbound",
     movementsCount: createdMovements.length,
   };
 }
