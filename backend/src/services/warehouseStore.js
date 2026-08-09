@@ -328,6 +328,53 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
   };
 }
 
+/**
+ * Update a specific stock item in a project (Admin Only)
+ */
+async function updateStockItem(projectId, itemKey, updateData, userUid) {
+  const db = getDb();
+  if (!db) throw new Error("Firestore is unavailable.");
+
+  const stockRef = db.collection("warehouseProjects").doc(projectId).collection("stock").doc(itemKey);
+  const doc = await stockRef.get();
+  if (!doc.exists) throw new Error("Stock item not found in warehouse.");
+
+  const existing = doc.data() || {};
+  const lengthMm = Number(updateData.lengthMm !== undefined ? updateData.lengthMm : (existing.lengthMm || 6000));
+  const qtyBar = Number(updateData.quantityBar !== undefined ? updateData.quantityBar : (existing.quantityBar || 0));
+  const qtyLm = Number(updateData.quantityLm !== undefined ? updateData.quantityLm : ((qtyBar * lengthMm) / 1000));
+  const qtyKg = Number(updateData.quantityKg !== undefined ? updateData.quantityKg : (existing.quantityKg || 0));
+
+  const payload = {
+    itemCode: updateData.itemCode !== undefined ? updateData.itemCode : existing.itemCode,
+    customerCode: updateData.customerCode !== undefined ? updateData.customerCode : (existing.customerCode || ""),
+    description: updateData.description !== undefined ? updateData.description : existing.description,
+    finish: updateData.finish !== undefined ? updateData.finish : existing.finish,
+    lengthMm,
+    quantityBar: qtyBar,
+    quantityLm: qtyLm,
+    quantityKg: qtyKg,
+    lastUnitCost: updateData.lastUnitCost !== undefined ? Number(updateData.lastUnitCost) : existing.lastUnitCost,
+    updatedBy: userUid,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await stockRef.set(payload, { merge: true });
+  return { itemKey, ...existing, ...payload };
+}
+
+/**
+ * Delete a specific stock item from a project (Admin Only)
+ */
+async function deleteStockItem(projectId, itemKey) {
+  const db = getDb();
+  if (!db) throw new Error("Firestore is unavailable.");
+
+  const stockRef = db.collection("warehouseProjects").doc(projectId).collection("stock").doc(itemKey);
+  await stockRef.delete();
+  return { itemKey, deleted: true };
+}
+
 module.exports = {
   getUserWarehouseAccess,
   listWarehouseUsers,
@@ -336,4 +383,6 @@ module.exports = {
   createProject,
   getProjectStock,
   processInboundInvoice,
+  updateStockItem,
+  deleteStockItem,
 };

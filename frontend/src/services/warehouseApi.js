@@ -71,3 +71,15 @@ export async function processWarehouseInvoice(projectId, invoiceMeta, lines) {
   const { data } = await api.post(`/warehouse/projects/${projectId}/invoices/process`, { invoiceMeta, lines })
   return data
 }
+
+/** Update stock item quantity / properties (Admin only) */
+export async function updateStockItem(projectId, itemKey, payload) {
+  const { data } = await api.put(`/warehouse/projects/${projectId}/stock/${itemKey}`, payload)
+  return data
+}
+
+/** Delete stock item from inventory (Admin only) */
+export async function deleteStockItem(projectId, itemKey) {
+  const { data } = await api.delete(`/warehouse/projects/${projectId}/stock/${itemKey}`)
+  return data
+}

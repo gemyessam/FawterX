@@ -12,6 +12,8 @@ const {
   createProject,
   getProjectStock,
   processInboundInvoice,
+  updateStockItem,
+  deleteStockItem,
 } = require("../services/warehouseStore");
 
 const router = express.Router();
@@ -201,6 +203,37 @@ router.post("/projects/:projectId/invoices/process", requireWarehouse, async (re
       lines,
       req.user.uid
     );
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * PUT /api/warehouse/projects/:projectId/stock/:itemKey
+ * Update stock item details & quantity (Admin Only)
+ */
+router.put("/projects/:projectId/stock/:itemKey", requireAdmin, async (req, res) => {
+  try {
+    const result = await updateStockItem(
+      req.params.projectId,
+      req.params.itemKey,
+      req.body,
+      req.user.uid
+    );
+    return res.json({ success: true, item: result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * DELETE /api/warehouse/projects/:projectId/stock/:itemKey
+ * Delete stock item from inventory (Admin Only)
+ */
+router.delete("/projects/:projectId/stock/:itemKey", requireAdmin, async (req, res) => {
+  try {
+    const result = await deleteStockItem(req.params.projectId, req.params.itemKey);
     return res.json({ success: true, ...result });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

@@ -9,6 +9,8 @@ import {
   processWarehouseInvoice,
   getWarehouseUsers,
   updateWarehouseUserAccess,
+  updateStockItem,
+  deleteStockItem,
 } from '../services/warehouseApi'
 
 export default function Warehouse() {
@@ -40,6 +42,55 @@ export default function Warehouse() {
   const [newProjectCode, setNewProjectCode] = useState('')
   const [newProjectDesc, setNewProjectDesc] = useState('')
   const [creatingProject, setCreatingProject] = useState(false)
+
+  // Stock Item Admin Management State
+  const [editingStockKey, setEditingStockKey] = useState(null)
+  const [editingStockData, setEditingStockData] = useState({})
+  const [savingStockEdit, setSavingStockEdit] = useState(false)
+
+  const handleStartStockEdit = (item) => {
+    setEditingStockKey(item.itemKey)
+    setEditingStockData({
+      customerCode: item.customerCode || '',
+      description: item.description || '',
+      finish: item.finish || 'STD',
+      lengthMm: item.lengthMm || 6000,
+      quantityBar: item.quantityBar || 0,
+      quantityKg: item.quantityKg || 0,
+      lastUnitCost: item.lastUnitCost || 0,
+    })
+  }
+
+  const handleSaveStockEdit = async (itemKey) => {
+    if (!selectedProjectId) return
+    try {
+      setSavingStockEdit(true)
+      await updateStockItem(selectedProjectId, itemKey, editingStockData)
+      toast.success(isAr ? 'تم تحديث بيانات الصنف والأعواد بنجاح' : 'Item updated successfully')
+      setEditingStockKey(null)
+      loadStock(selectedProjectId)
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل تحديث بيانات الصنف' : 'Failed to update item'))
+    } finally {
+      setSavingStockEdit(false)
+    }
+  }
+
+  const handleDeleteStockItem = async (item) => {
+    if (!selectedProjectId) return
+    const confirmMsg = isAr
+      ? `هل أنت تأكد من حذف الصنف (${item.itemCode}) نهائياً من أرصدة المخزن؟`
+      : `Are you sure you want to delete item (${item.itemCode}) from stock?`
+    if (!window.confirm(confirmMsg)) return
+
+    try {
+      await deleteStockItem(selectedProjectId, item.itemKey)
+      toast.success(isAr ? 'تم حذف الصنف من المخزن' : 'Item deleted from stock')
+      loadStock(selectedProjectId)
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل حذف الصنف' : 'Failed to delete item'))
+    }
+  }
 
   useEffect(() => {
     loadProjects()
@@ -454,32 +505,149 @@ export default function Warehouse() {
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأمتار (LM)' : 'Meters (LM)'}</th>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الوزن (KG)' : 'Weight (KG)'}</th>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'آخر سعر توريد' : 'Last Cost'}</th>
+                  {isAdmin && <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>{isAr ? 'التحكم' : 'Actions'}</th>}
                 </tr>
               </thead>
               <tbody>
                 {filteredStock.length > 0 ? (
-                  filteredStock.map((item) => (
-                    <tr key={item.itemKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                      <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>{item.itemCode}</td>
-                      <td style={{ padding: '0.75rem 1rem', color: '#8ab4ff', fontWeight: 600 }}>{item.customerCode || '—'}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{item.description}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <span className="badge" style={{ background: 'rgba(255,215,0,0.1)', color: '#FFD700', border: '1px solid rgba(255,215,0,0.3)' }}>
-                          {item.finish || 'STD'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{item.lengthMm} mm</td>
-                      <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#ffffff' }}>{item.quantityBar}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{item.quantityLm ? item.quantityLm.toFixed(1) : '—'} m</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{item.quantityKg ? item.quantityKg.toFixed(1) : '—'} kg</td>
-                      <td style={{ padding: '0.75rem 1rem', color: '#64b5f6' }}>
-                        {item.lastUnitCost ? `${item.lastUnitCost} ${item.currency || 'EGP'}` : '—'}
-                      </td>
-                    </tr>
-                  ))
+                  filteredStock.map((item) => {
+                    const isEditing = editingStockKey === item.itemKey
+                    return (
+                      <tr key={item.itemKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: isEditing ? 'rgba(0, 224, 161, 0.05)' : 'transparent' }}>
+                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>{item.itemCode}</td>
+                        <td style={{ padding: '0.75rem 1rem', color: '#8ab4ff', fontWeight: 600 }}>
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editingStockData.customerCode}
+                              onChange={(e) => setEditingStockData({ ...editingStockData, customerCode: e.target.value })}
+                              style={{ width: '90px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                            />
+                          ) : (
+                            item.customerCode || '—'
+                          )}
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editingStockData.description}
+                              onChange={(e) => setEditingStockData({ ...editingStockData, description: e.target.value })}
+                              style={{ width: '100%', minWidth: '220px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                            />
+                          ) : (
+                            item.description
+                          )}
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editingStockData.finish}
+                              onChange={(e) => setEditingStockData({ ...editingStockData, finish: e.target.value })}
+                              style={{ width: '70px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                            />
+                          ) : (
+                            <span className="badge" style={{ background: 'rgba(255,215,0,0.1)', color: '#FFD700', border: '1px solid rgba(255,215,0,0.3)' }}>
+                              {item.finish || 'STD'}
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editingStockData.lengthMm}
+                              onChange={(e) => setEditingStockData({ ...editingStockData, lengthMm: Number(e.target.value) })}
+                              style={{ width: '80px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                            />
+                          ) : (
+                            `${item.lengthMm} mm`
+                          )}
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#ffffff' }}>
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editingStockData.quantityBar}
+                              onChange={(e) => setEditingStockData({ ...editingStockData, quantityBar: Number(e.target.value) })}
+                              style={{ width: '90px', background: '#101223', color: '#00e0a1', fontWeight: 'bold', border: '1px solid #00e0a1', borderRadius: '4px', padding: '4px 6px' }}
+                            />
+                          ) : (
+                            item.quantityBar
+                          )}
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          {isEditing
+                            ? `${(((editingStockData.quantityBar || 0) * (editingStockData.lengthMm || 6000)) / 1000).toFixed(1)} m`
+                            : item.quantityLm ? `${item.quantityLm.toFixed(1)} m` : '—'}
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={editingStockData.quantityKg}
+                              onChange={(e) => setEditingStockData({ ...editingStockData, quantityKg: Number(e.target.value) })}
+                              style={{ width: '80px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                            />
+                          ) : (
+                            item.quantityKg ? `${item.quantityKg.toFixed(1)} kg` : '—'
+                          )}
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', color: '#64b5f6' }}>
+                          {item.lastUnitCost ? `${item.lastUnitCost} ${item.currency || 'EGP'}` : '—'}
+                        </td>
+                        {isAdmin && (
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            {isEditing ? (
+                              <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
+                                <button
+                                  className="btn btn-sm"
+                                  disabled={savingStockEdit}
+                                  onClick={() => handleSaveStockEdit(item.itemKey)}
+                                  style={{ background: '#00e0a1', color: '#000', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 600 }}
+                                  title={isAr ? 'حفظ التعديلات' : 'Save'}
+                                >
+                                  {savingStockEdit ? '...' : (isAr ? '💾 حفظ' : 'Save')}
+                                </button>
+                                <button
+                                  className="btn btn-sm"
+                                  onClick={() => setEditingStockKey(null)}
+                                  style={{ background: 'rgba(255,255,255,0.1)', color: '#ccc', padding: '2px 8px', fontSize: '0.8rem' }}
+                                  title={isAr ? 'إلغاء' : 'Cancel'}
+                                >
+                                  {isAr ? 'إلغاء' : 'Cancel'}
+                                </button>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
+                                <button
+                                  className="btn btn-sm"
+                                  onClick={() => handleStartStockEdit(item)}
+                                  style={{ background: 'rgba(0, 168, 255, 0.15)', color: '#70a1ff', border: '1px solid rgba(0, 168, 255, 0.3)', padding: '2px 8px', fontSize: '0.8rem' }}
+                                  title={isAr ? 'تعديل الصنف أو عدد الأعواد' : 'Edit item'}
+                                >
+                                  ✏️ {isAr ? 'تعديل' : 'Edit'}
+                                </button>
+                                <button
+                                  className="btn btn-sm"
+                                  onClick={() => handleDeleteStockItem(item)}
+                                  style={{ background: 'rgba(255, 71, 87, 0.15)', color: '#ff4757', border: '1px solid rgba(255, 71, 87, 0.3)', padding: '2px 8px', fontSize: '0.8rem' }}
+                                  title={isAr ? 'حذف من المخزن' : 'Delete item'}
+                                >
+                                  🗑️ {isAr ? 'حذف' : 'Delete'}
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    )
+                  })
                 ) : (
                   <tr>
-                    <td colSpan="9" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                    <td colSpan={isAdmin ? 10 : 9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                       {isAr ? 'لا توجد أصناف مسجلة في هذا المشروع حتى الآن' : 'No items recorded in this project yet'}
                     </td>
                   </tr>
