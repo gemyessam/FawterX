@@ -568,6 +568,18 @@ export default function Warehouse() {
             </div>
           ) : (
             <div>
+              {/* Review Header Stats & Actions */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <h4 style={{ margin: 0, fontWeight: 700, fontSize: '1.05rem' }}>
+                    {isAr ? 'مراجعة بيانات البنود للفاتورة' : 'Review Invoice Lines'}
+                  </h4>
+                  <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.3)', padding: '0.3rem 0.75rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 700 }}>
+                    {isAr ? `إجمالي البنود: ${reviewLines.length}` : `Total Lines: ${reviewLines.length}`}
+                  </span>
+                </div>
+              </div>
+
               {/* Invoice Metadata Header */}
               <div
                 style={{
@@ -601,8 +613,9 @@ export default function Warehouse() {
 
               {/* Review Table */}
               <div style={{ overflowX: 'auto', marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
-                <table style={{ minWidth: '1980px', width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', tableLayout: 'fixed' }}>
+                <table style={{ minWidth: '2030px', width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', tableLayout: 'fixed' }}>
                   <colgroup>
+                    <col style={{ width: '50px' }} />
                     <col style={{ width: '60px' }} />
                     <col style={{ width: '150px' }} />
                     <col style={{ width: '140px' }} />
@@ -618,6 +631,7 @@ export default function Warehouse() {
                   </colgroup>
                   <thead>
                     <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>{isAr ? 'م' : '#'}</th>
                       <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'تجاهل' : 'Ignore'}</th>
                       <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'كود الصنف' : 'Item'}</th>
                       <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
@@ -643,6 +657,9 @@ export default function Warehouse() {
                           verticalAlign: 'top',
                         }}
                       >
+                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)' }}>
+                          {idx + 1}
+                        </td>
                         <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>
                           <input
                             type="checkbox"
