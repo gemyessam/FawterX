@@ -102,7 +102,7 @@ function cleanVat(value) {
 function normalizeSchucoInvoiceNumber(value) {
   const digits = String(value || "").replace(/\D/g, "");
   if (!digits) return "";
-  if (digits.startsWith("202303") && digits.length >= 9) return digits;
+  if (digits.length >= 6) return digits;
   const last3 = digits.slice(-3).padStart(3, "0");
   return `202303${last3}`;
 }
@@ -1638,7 +1638,7 @@ function parseSchucoInvoice(text) {
 
     // LM is the primary billing unit for ETA, but keep the bar count as a human hint.
     const quantity = lmQty || barQty || 0;
-    const unitType = lmQty ? 'LM' : (barQty ? 'BAR' : 'EA');
+    const unitType = lmQty ? 'M' : (barQty ? 'BAR' : 'EA');
     const parsedUnitPrice = unitPriceFromLmTotal || unitPricePerMeter || unitPricePerBar || 0;
     const packagingLabel = barQty && lmQty
       ? `${Number(barQty).toLocaleString('en-US')} Bar / ${Number(lmQty).toLocaleString('en-US')} LM`

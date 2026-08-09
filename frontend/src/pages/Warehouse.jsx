@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext, useMemo } from 'react'
 import { toast } from 'react-hot-toast'
 import { AppContext } from '../App'
+import * as XLSX from 'xlsx'
 import {
   getWarehouseProjects,
   createWarehouseProject,
@@ -333,6 +334,114 @@ export default function Warehouse() {
     )
   }, [stock, searchQuery])
 
+  // Item Financial Value Calculator
+  const getItemValue = (item) => {
+    const barCost = Number(item.lastBarCost || item.lastUnitCost || 0)
+    if (barCost > 0) {
+      return Number(item.quantityBar || 0) * barCost
+    }
+    if (item.lastUnitCost && Number(item.lastUnitCost) > 0) {
+      if (String(item.priceUnit).toUpperCase() === 'M') {
+        return Number(item.quantityLm || 0) * Number(item.lastUnitCost)
+      }
+      return Number(item.quantityBar || 0) * Number(item.lastUnitCost)
+    }
+    return 0
+  }
+
+  // Stock Totals for Cards and Excel Summary
+  const stockTotals = useMemo(() => {
+    let bars = 0
+    let lm = 0
+    let kg = 0
+    let totalValue = 0
+
+    filteredStock.forEach((item) => {
+      bars += Number(item.quantityBar || 0)
+      lm += Number(item.quantityLm || 0)
+      kg += Number(item.quantityKg || 0)
+      totalValue += getItemValue(item)
+    })
+
+    return {
+      itemCount: filteredStock.length,
+      bars,
+      lm,
+      kg,
+      totalValue,
+    }
+  }, [filteredStock])
+
+  // Export Stock to Excel (.xlsx)
+  const handleExportStockToExcel = () => {
+    if (!filteredStock || filteredStock.length === 0) {
+      toast.error(isAr ? 'لا توجد بيانات أصناف للتصدير' : 'No stock items available to export')
+      return
+    }
+
+    const exportRows = filteredStock.map((item, idx) => {
+      const val = getItemValue(item)
+      return {
+        [isAr ? 'م' : '#']: idx + 1,
+        [isAr ? 'كود الصنف' : 'Item Code']: item.itemCode,
+        [isAr ? 'كود العميل' : 'Customer Code']: item.customerCode || '—',
+        [isAr ? 'بيان الصنف' : 'Description']: item.description || '',
+        [isAr ? 'نوع الدهان/اللون' : 'Finish/Color']: item.finish || 'STD',
+        [isAr ? 'الطول (mm)' : 'Length (mm)']: item.lengthMm || 0,
+        [isAr ? 'الأعواد (BAR)' : 'Bars (BAR)']: item.quantityBar || 0,
+        [isAr ? 'الأمتار (LM)' : 'Meters (LM)']: Number((item.quantityLm || 0).toFixed(2)),
+        [isAr ? 'الوزن (KG)' : 'Weight (KG)']: Number((item.quantityKg || 0).toFixed(2)),
+        [isAr ? 'سعر التوريد (EGP)' : 'Last Unit Cost (EGP)']: item.lastUnitCost || 0,
+        [isAr ? 'إجمالي قيمة البند (EGP)' : 'Total Item Value (EGP)']: Number(val.toFixed(2)),
+      }
+    })
+
+    const totalBars = filteredStock.reduce((acc, i) => acc + Number(i.quantityBar || 0), 0)
+    const totalLm = filteredStock.reduce((acc, i) => acc + Number(i.quantityLm || 0), 0)
+    const totalKg = filteredStock.reduce((acc, i) => acc + Number(i.quantityKg || 0), 0)
+    const grandTotalVal = filteredStock.reduce((acc, i) => acc + getItemValue(i), 0)
+
+    // Append Grand Total Summary Row
+    exportRows.push({
+      [isAr ? 'م' : '#']: '',
+      [isAr ? 'كود الصنف' : 'Item Code']: isAr ? 'الإجمالي الكلي' : 'GRAND TOTAL',
+      [isAr ? 'كود العميل' : 'Customer Code']: '',
+      [isAr ? 'بيان الصنف' : 'Description']: `${isAr ? 'عدد الأصناف:' : 'Total Items:'} ${filteredStock.length}`,
+      [isAr ? 'نوع الدهان/اللون' : 'Finish/Color']: '',
+      [isAr ? 'الطول (mm)' : 'Length (mm)']: '',
+      [isAr ? 'الأعواد (BAR)' : 'Bars (BAR)']: totalBars,
+      [isAr ? 'الأمتار (LM)' : 'Meters (LM)']: Number(totalLm.toFixed(2)),
+      [isAr ? 'الوزن (KG)' : 'Weight (KG)']: Number(totalKg.toFixed(2)),
+      [isAr ? 'سعر التوريد (EGP)' : 'Last Unit Cost (EGP)']: '',
+      [isAr ? 'إجمالي قيمة البند (EGP)' : 'Total Item Value (EGP)']: Number(grandTotalVal.toFixed(2)),
+    })
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows)
+    worksheet['!cols'] = [
+      { wch: 6 },
+      { wch: 16 },
+      { wch: 15 },
+      { wch: 45 },
+      { wch: 16 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 20 },
+      { wch: 25 },
+    ]
+
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Stock_Inventory')
+
+    const selectedProjObj = projects.find((p) => p.id === selectedProjectId)
+    const dateStr = new Date().toISOString().slice(0, 10)
+    const filename = `Stock_Inventory_${selectedProjObj?.code || 'CANEX'}_${dateStr}.xlsx`
+
+    XLSX.writeFile(workbook, filename)
+    toast.success(isAr ? 'تم تصدير ملف Excel بنجاح!' : 'Exported to Excel successfully!')
+  }
+
   // Aggregate Stats
   const stats = useMemo(() => {
     let totalSKUs = stock.length
@@ -467,6 +576,42 @@ export default function Warehouse() {
       {/* ─── TAB 1: Stock Balance ─── */}
       {activeTab === 'stock' && (
         <div className="card fade-in" style={{ padding: '1.5rem' }}>
+          {/* Summary Stat Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem' }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '0.2rem' }}>
+                {isAr ? 'عدد الأصناف' : 'Total Items'}
+              </div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#fff' }}>
+                {stockTotals.itemCount}
+              </div>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem' }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '0.2rem' }}>
+                {isAr ? 'إجمالي عدد الأعواد' : 'Total Bars'}
+              </div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#8ab4ff' }}>
+                <span dir="ltr">{stockTotals.bars.toLocaleString()} BAR</span>
+              </div>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem' }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '0.2rem' }}>
+                {isAr ? 'إجمالي الأمتار' : 'Total Meters'}
+              </div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#ffb74d' }}>
+                <span dir="ltr">{stockTotals.lm.toLocaleString('en-US', { maximumFractionDigits: 1 })} m</span>
+              </div>
+            </div>
+            <div style={{ background: 'rgba(0, 224, 161, 0.08)', border: '1px solid rgba(0, 224, 161, 0.3)', borderRadius: '10px', padding: '1rem' }}>
+              <div style={{ color: '#00e0a1', fontSize: '0.8rem', marginBottom: '0.2rem', fontWeight: 600 }}>
+                {isAr ? 'إجمالي قيمة المخزون الحالية' : 'Grand Total Stock Value'}
+              </div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#00e0a1' }}>
+                <span dir="ltr">{stockTotals.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP</span>
+              </div>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
@@ -476,20 +621,42 @@ export default function Warehouse() {
                 {isAr ? 'يتم التحديث تلقائياً من حركات التوريد والصرف المؤكدة' : 'Auto-updated from confirmed inbound and outbound movements'}
               </p>
             </div>
-            <input
-              type="search"
-              placeholder={isAr ? 'ابحث برقم الصنف، الوصف، أو الدهان...' : 'Search item code, description, finish...'}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                minWidth: '280px',
-                background: '#101223',
-                border: '1px solid var(--border)',
-                padding: '0.5rem 1rem',
-                borderRadius: '8px',
-                color: '#fff',
-              }}
-            />
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="search"
+                placeholder={isAr ? 'ابحث برقم الصنف، الوصف، أو الدهان...' : 'Search item code, description, finish...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  minWidth: '260px',
+                  background: '#101223',
+                  border: '1px solid var(--border)',
+                  padding: '0.55rem 1rem',
+                  borderRadius: '8px',
+                  color: '#fff',
+                }}
+              />
+              <button
+                className="btn"
+                onClick={handleExportStockToExcel}
+                style={{
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '0.55rem 1.2rem',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
+                }}
+                title={isAr ? 'تصدير المخزون الحالي إلى ملف اكسيل مع إجمالي القيم' : 'Export inventory to Excel with values'}
+              >
+                📊 {isAr ? 'تصدير Excel' : 'Export Excel'}
+              </button>
+            </div>
           </div>
 
           <div style={{ overflowX: 'auto' }}>
@@ -505,6 +672,7 @@ export default function Warehouse() {
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأمتار (LM)' : 'Meters (LM)'}</th>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الوزن (KG)' : 'Weight (KG)'}</th>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'آخر سعر توريد' : 'Last Cost'}</th>
+                  <th style={{ padding: '0.75rem 1rem', color: '#00e0a1' }}>{isAr ? 'إجمالي القيمة' : 'Total Value'}</th>
                   {isAdmin && <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>{isAr ? 'التحكم' : 'Actions'}</th>}
                 </tr>
               </thead>
@@ -512,6 +680,7 @@ export default function Warehouse() {
                 {filteredStock.length > 0 ? (
                   filteredStock.map((item) => {
                     const isEditing = editingStockKey === item.itemKey
+                    const itemVal = getItemValue(item)
                     return (
                       <tr key={item.itemKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: isEditing ? 'rgba(0, 224, 161, 0.05)' : 'transparent' }}>
                         <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>{item.itemCode}</td>
@@ -562,7 +731,7 @@ export default function Warehouse() {
                               style={{ width: '80px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
                             />
                           ) : (
-                            `${item.lengthMm} mm`
+                            <span dir="ltr">{item.lengthMm} mm</span>
                           )}
                         </td>
                         <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#ffffff' }}>
@@ -578,9 +747,11 @@ export default function Warehouse() {
                           )}
                         </td>
                         <td style={{ padding: '0.75rem 1rem' }}>
-                          {isEditing
-                            ? `${(((editingStockData.quantityBar || 0) * (editingStockData.lengthMm || 6000)) / 1000).toFixed(1)} m`
-                            : item.quantityLm ? `${item.quantityLm.toFixed(1)} m` : '—'}
+                          <span dir="ltr">
+                            {isEditing
+                              ? `${(((editingStockData.quantityBar || 0) * (editingStockData.lengthMm || 6000)) / 1000).toFixed(1)} m`
+                              : item.quantityLm ? `${item.quantityLm.toFixed(1)} m` : '—'}
+                          </span>
                         </td>
                         <td style={{ padding: '0.75rem 1rem' }}>
                           {isEditing ? (
@@ -592,11 +763,18 @@ export default function Warehouse() {
                               style={{ width: '80px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
                             />
                           ) : (
-                            item.quantityKg ? `${item.quantityKg.toFixed(1)} kg` : '—'
+                            <span dir="ltr">{item.quantityKg ? `${item.quantityKg.toFixed(1)} kg` : '—'}</span>
                           )}
                         </td>
                         <td style={{ padding: '0.75rem 1rem', color: '#64b5f6' }}>
-                          {item.lastUnitCost ? `${item.lastUnitCost} ${item.currency || 'EGP'}` : '—'}
+                          <span dir="ltr">{item.lastUnitCost ? `${item.lastUnitCost} ${item.currency || 'EGP'}` : '—'}</span>
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', color: '#00e0a1', fontWeight: 700 }}>
+                          <span dir="ltr">
+                            {itemVal > 0
+                              ? `${itemVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP`
+                              : '—'}
+                          </span>
                         </td>
                         {isAdmin && (
                           <td style={{ padding: '0.75rem 1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
@@ -647,7 +825,7 @@ export default function Warehouse() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={isAdmin ? 10 : 9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                    <td colSpan={isAdmin ? 11 : 10} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                       {isAr ? 'لا توجد أصناف مسجلة في هذا المشروع حتى الآن' : 'No items recorded in this project yet'}
                     </td>
                   </tr>

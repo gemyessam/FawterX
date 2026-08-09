@@ -67,7 +67,7 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     expect(Number(l1.unitValue.toFixed(2))).toBe(623.53);
     expect(l1.net).toBe(12314.80);
     // Rich description matching template
-    expect(l1.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM | 50.47 KG | 3,950 mm | RAL9007SD');
+    expect(l1.description).toBe('Aluminium | 9655090 | UNIT FACADE FEMALE MULLION 170MM | 5 Bar / 19.75 LM | 50.47 KG | 3,950 mm | RAL9007SD');
 
     // Line 2: LM qty=14.70, net=9,165.89
     const l2 = invoiceLines[1];
