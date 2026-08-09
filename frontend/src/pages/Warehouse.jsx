@@ -2,6 +2,7 @@ import { useState, useEffect, useContext, useMemo } from 'react'
 import { toast } from 'react-hot-toast'
 import { AppContext } from '../App'
 import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import {
   getWarehouseProjects,
   createWarehouseProject,
@@ -433,126 +434,302 @@ export default function Warehouse() {
     }
   }, [filteredStock])
 
-  // Export Stock to Excel (.xlsx)
-  const handleExportStockToExcel = () => {
+  // Export Stock to Excel (.xlsx) using ExcelJS for rich styling matching the user reference image
+  const handleExportStockToExcel = async () => {
     if (!filteredStock || filteredStock.length === 0) {
       toast.error(isAr ? 'لا توجد بيانات أصناف للتصدير' : 'No stock items available to export')
       return
     }
 
-    const exportRows = filteredStock.map((item, idx) => {
-      const val = getItemValue(item)
-      return {
-        [isAr ? 'م' : '#']: idx + 1,
-        [isAr ? 'رقم الفاتورة / الفواتير' : 'Invoice No']: (Array.isArray(item.invoiceNumbers) && item.invoiceNumbers.length > 0)
-          ? item.invoiceNumbers.join(', ')
-          : (item.lastInvoiceNumber || item.invoiceNumber || '—'),
-        [isAr ? 'كود الصنف' : 'Item Code']: item.itemCode,
-        [isAr ? 'كود العميل' : 'Customer Code']: item.customerCode || '—',
-        [isAr ? 'بيان الصنف' : 'Description']: item.description || '',
-        [isAr ? 'نوع الدهان/اللون' : 'Finish/Color']: item.finish || 'STD',
-        [isAr ? 'الطول (mm)' : 'Length (mm)']: item.lengthMm || 0,
-        [isAr ? 'الأعواد (BAR)' : 'Bars (BAR)']: item.quantityBar || 0,
-        [isAr ? 'الأمتار (LM)' : 'Meters (LM)']: Number((item.quantityLm || 0).toFixed(2)),
-        [isAr ? 'الوزن (KG)' : 'Weight (KG)']: Number((item.quantityKg || 0).toFixed(2)),
-        [isAr ? 'سعر التوريد (EGP)' : 'Last Unit Cost (EGP)']: item.lastUnitCost || 0,
-        [isAr ? 'إجمالي قيمة البند (EGP)' : 'Total Item Value (EGP)']: Number(val.toFixed(2)),
+    try {
+      const workbook = new ExcelJS.Workbook()
+      workbook.creator = 'FawterX Warehouse'
+      workbook.created = new Date()
+
+      const worksheet = workbook.addWorksheet(isAr ? 'المخزون' : 'Stock_Inventory', {
+        views: [{ showGridLines: true }]
+      })
+
+      // Column Definitions
+      const columns = [
+        { header: isAr ? 'م' : '#', key: 'idx', width: 6 },
+        { header: isAr ? 'رقم الفاتورة / الفواتير' : 'Invoice No', key: 'invoiceNo', width: 22 },
+        { header: isAr ? 'كود الصنف' : 'Item Code', key: 'itemCode', width: 18 },
+        { header: isAr ? 'كود العميل' : 'Customer Code', key: 'customerCode', width: 16 },
+        { header: isAr ? 'بيان الصنف' : 'Description', key: 'description', width: 52 },
+        { header: isAr ? 'نوع الدهان/اللون' : 'Finish/Color', key: 'finish', width: 18 },
+        { header: isAr ? 'الطول (mm)' : 'Length (mm)', key: 'lengthMm', width: 15 },
+        { header: isAr ? 'الأعواد (BAR)' : 'Bars (BAR)', key: 'quantityBar', width: 15 },
+        { header: isAr ? 'الأمتار (LM)' : 'Meters (LM)', key: 'quantityLm', width: 15 },
+        { header: isAr ? 'الوزن (KG)' : 'Weight (KG)', key: 'quantityKg', width: 14 },
+        { header: isAr ? 'سعر التوريد (EGP)' : 'Last Unit Cost (EGP)', key: 'lastUnitCost', width: 22 },
+        { header: isAr ? 'إجمالي قيمة البند (EGP)' : 'Total Item Value (EGP)', key: 'totalValue', width: 26 },
+      ]
+
+      worksheet.columns = columns
+
+      // Style Header Row (Row 1) matching Image 2: Dark Blue background, bold white text, centered, thin grid borders
+      const headerRow = worksheet.getRow(1)
+      headerRow.height = 28
+      headerRow.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF2F5597' }
+        }
+        cell.font = {
+          name: 'Calibri',
+          size: 11,
+          bold: true,
+          color: { argb: 'FFFFFFFF' }
+        }
+        cell.alignment = {
+          horizontal: 'center',
+          vertical: 'middle',
+          wrapText: true
+        }
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+          left: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+          bottom: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+          right: { style: 'thin', color: { argb: 'FFFFFFFF' } }
+        }
+      })
+
+      const borderStyle = {
+        top: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+        left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+        bottom: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+        right: { style: 'thin', color: { argb: 'FFD9D9D9' } }
       }
-    })
 
-    const totalBars = filteredStock.reduce((acc, i) => acc + Number(i.quantityBar || 0), 0)
-    const totalLm = filteredStock.reduce((acc, i) => acc + Number(i.quantityLm || 0), 0)
-    const totalKg = filteredStock.reduce((acc, i) => acc + Number(i.quantityKg || 0), 0)
-    const grandTotalVal = filteredStock.reduce((acc, i) => acc + getItemValue(i), 0)
+      // Populate Data Rows
+      filteredStock.forEach((item, idx) => {
+        const val = getItemValue(item)
+        const invNo = (Array.isArray(item.invoiceNumbers) && item.invoiceNumbers.length > 0)
+          ? item.invoiceNumbers.join(', ')
+          : (item.lastInvoiceNumber || item.invoiceNumber || '—')
+        const kgVal = Number(item.quantityKg || 0)
 
-    // Append Grand Total Summary Row
-    exportRows.push({
-      [isAr ? 'م' : '#']: '',
-      [isAr ? 'رقم الفاتورة / الفواتير' : 'Invoice No']: '',
-      [isAr ? 'كود الصنف' : 'Item Code']: isAr ? 'الإجمالي الكلي' : 'GRAND TOTAL',
-      [isAr ? 'كود العميل' : 'Customer Code']: '',
-      [isAr ? 'بيان الصنف' : 'Description']: `${isAr ? 'عدد الأصناف:' : 'Total Items:'} ${filteredStock.length}`,
-      [isAr ? 'نوع الدهان/اللون' : 'Finish/Color']: '',
-      [isAr ? 'الطول (mm)' : 'Length (mm)']: '',
-      [isAr ? 'الأعواد (BAR)' : 'Bars (BAR)']: totalBars,
-      [isAr ? 'الأمتار (LM)' : 'Meters (LM)']: Number(totalLm.toFixed(2)),
-      [isAr ? 'الوزن (KG)' : 'Weight (KG)']: Number(totalKg.toFixed(2)),
-      [isAr ? 'سعر التوريد (EGP)' : 'Last Unit Cost (EGP)']: '',
-      [isAr ? 'إجمالي قيمة البند (EGP)' : 'Total Item Value (EGP)']: Number(grandTotalVal.toFixed(2)),
-    })
+        const row = worksheet.addRow({
+          idx: idx + 1,
+          invoiceNo: invNo,
+          itemCode: item.itemCode,
+          customerCode: item.customerCode || '—',
+          description: item.description || '',
+          finish: item.finish || 'STD',
+          lengthMm: Number(item.lengthMm || 0),
+          quantityBar: Number(item.quantityBar || 0),
+          quantityLm: Number(item.quantityLm || 0),
+          quantityKg: kgVal > 0 ? kgVal : '-',
+          lastUnitCost: Number(item.lastUnitCost || 0),
+          totalValue: Number(val || 0)
+        })
 
-    const worksheet = XLSX.utils.json_to_sheet(exportRows)
-    worksheet['!cols'] = [
-      { wch: 6 },
-      { wch: 20 },
-      { wch: 16 },
-      { wch: 15 },
-      { wch: 45 },
-      { wch: 16 },
-      { wch: 12 },
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 20 },
-      { wch: 25 },
-    ]
+        row.height = 20
+        row.eachCell((cell, colNumber) => {
+          cell.border = borderStyle
+          cell.font = { name: 'Calibri', size: 10 }
 
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Stock_Inventory')
+          if (colNumber === 1 || colNumber === 2 || colNumber === 3 || colNumber === 4 || colNumber === 6) {
+            cell.alignment = { horizontal: 'center', vertical: 'middle' }
+          } else if (colNumber === 5) {
+            cell.alignment = { horizontal: 'left', vertical: 'middle' }
+          } else if (colNumber === 10 && cell.value === '-') {
+            cell.alignment = { horizontal: 'center', vertical: 'middle' }
+          } else {
+            cell.alignment = { horizontal: 'right', vertical: 'middle' }
+            cell.numFmt = '#,##0.00'
+          }
+        })
+      })
 
-    const selectedProjObj = projects.find((p) => p.id === selectedProjectId)
-    const dateStr = new Date().toISOString().slice(0, 10)
-    const filename = `Stock_Inventory_${selectedProjObj?.code || 'CANEX'}_${dateStr}.xlsx`
+      // Add Grand Total Summary Row
+      const totalBars = filteredStock.reduce((acc, i) => acc + Number(i.quantityBar || 0), 0)
+      const totalLm = filteredStock.reduce((acc, i) => acc + Number(i.quantityLm || 0), 0)
+      const totalKg = filteredStock.reduce((acc, i) => acc + Number(i.quantityKg || 0), 0)
+      const grandTotalVal = filteredStock.reduce((acc, i) => acc + getItemValue(i), 0)
 
-    XLSX.writeFile(workbook, filename)
-    toast.success(isAr ? 'تم تصدير ملف Excel بنجاح!' : 'Exported to Excel successfully!')
+      const summaryRow = worksheet.addRow({
+        idx: '',
+        invoiceNo: '',
+        itemCode: isAr ? 'الإجمالي الكلي' : 'GRAND TOTAL',
+        customerCode: '',
+        description: `${isAr ? 'عدد الأصناف:' : 'Total Items:'} ${filteredStock.length}`,
+        finish: '',
+        lengthMm: '',
+        quantityBar: totalBars,
+        quantityLm: totalLm,
+        quantityKg: totalKg > 0 ? totalKg : '-',
+        lastUnitCost: '',
+        totalValue: grandTotalVal
+      })
+
+      summaryRow.height = 24
+      const summaryBorderStyle = {
+        top: { style: 'thin', color: { argb: 'FF595959' } },
+        bottom: { style: 'double', color: { argb: 'FF595959' } },
+        left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+        right: { style: 'thin', color: { argb: 'FFD9D9D9' } }
+      }
+
+      summaryRow.eachCell((cell, colNumber) => {
+        cell.border = summaryBorderStyle
+        cell.font = { name: 'Calibri', size: 10, bold: true }
+
+        if (colNumber === 3) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' }
+        } else if (colNumber === 5) {
+          cell.alignment = { horizontal: 'left', vertical: 'middle' }
+        } else if (colNumber === 10 && cell.value === '-') {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' }
+        } else if (colNumber === 8 || colNumber === 9 || colNumber === 10 || colNumber === 12) {
+          cell.alignment = { horizontal: 'right', vertical: 'middle' }
+          cell.numFmt = '#,##0.00'
+        } else {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' }
+        }
+      })
+
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const selectedProjObj = projects.find((p) => p.id === selectedProjectId)
+      const dateStr = new Date().toISOString().slice(0, 10)
+      const filename = `Stock_Inventory_${selectedProjObj?.code || 'CANEX'}_${dateStr}.xlsx`
+
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      window.URL.revokeObjectURL(url)
+
+      toast.success(isAr ? 'تم تصدير ملف Excel المنظم بنجاح!' : 'Exported to Excel with full styling successfully!')
+    } catch (err) {
+      console.error('Excel Export Error:', err)
+      toast.error(isAr ? 'حدث خطأ أثناء تصدير ملف Excel' : 'Error exporting Excel file')
+    }
   }
 
   // Export Transaction History to Excel
-  const handleExportHistoryToExcel = () => {
+  const handleExportHistoryToExcel = async () => {
     if (!invoices || invoices.length === 0) {
       toast.error(isAr ? 'لا يوجد سجل حركات للتصدير' : 'No history transactions available to export')
       return
     }
 
-    const exportRows = invoices.map((inv, idx) => ({
-      [isAr ? 'م' : '#']: idx + 1,
-      [isAr ? 'رقم الفاتورة' : 'Invoice No']: inv.invoiceNumber || '—',
-      [isAr ? 'نوع الحركة' : 'Movement Type']: inv.movementType === 'outbound' ? (isAr ? 'صرف (خصم من المخزن)' : 'Outbound') : (isAr ? 'توريد (إضافة للمخزن)' : 'Inbound'),
-      [isAr ? 'المورد / الجهة' : 'Supplier']: inv.supplier || 'Canex',
-      [isAr ? 'اسم الملف' : 'File Name']: inv.fileName || 'منفذ يدوياً',
-      [isAr ? 'عدد البنود' : 'Line Items']: inv.lineItemsCount || 0,
-      [isAr ? 'إجمالي الأعواد' : 'Total Bars']: inv.totalQuantityBar || 0,
-      [isAr ? 'إجمالي الأمتار' : 'Total LM']: Number((inv.totalQuantityLm || 0).toFixed(2)),
-      [isAr ? 'إجمالي القيمة (EGP)' : 'Total Amount (EGP)']: Number((inv.totalAmount || 0).toFixed(2)),
-      [isAr ? 'تاريخ الفاتورة' : 'Invoice Date']: inv.invoiceDate || '—',
-      [isAr ? 'تاريخ التسجيل' : 'Recorded At']: inv.createdAt ? new Date(inv.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US') : '—',
-    }))
+    try {
+      const workbook = new ExcelJS.Workbook()
+      workbook.creator = 'FawterX Warehouse'
+      workbook.created = new Date()
 
-    const worksheet = XLSX.utils.json_to_sheet(exportRows)
-    worksheet['!cols'] = [
-      { wch: 6 },
-      { wch: 22 },
-      { wch: 24 },
-      { wch: 18 },
-      { wch: 30 },
-      { wch: 12 },
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 20 },
-      { wch: 14 },
-      { wch: 24 },
-    ]
+      const worksheet = workbook.addWorksheet(isAr ? 'سجل الحركات' : 'Transaction_History', {
+        views: [{ showGridLines: true }]
+      })
 
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Transaction_History')
+      const columns = [
+        { header: isAr ? 'م' : '#', key: 'idx', width: 6 },
+        { header: isAr ? 'رقم الفاتورة' : 'Invoice No', key: 'invoiceNo', width: 22 },
+        { header: isAr ? 'نوع الحركة' : 'Movement Type', key: 'movementType', width: 24 },
+        { header: isAr ? 'المورد / الجهة' : 'Supplier', key: 'supplier', width: 18 },
+        { header: isAr ? 'اسم الملف' : 'File Name', key: 'fileName', width: 32 },
+        { header: isAr ? 'عدد البنود' : 'Line Items', key: 'lineItemsCount', width: 14 },
+        { header: isAr ? 'إجمالي الأعواد' : 'Total Bars', key: 'totalQuantityBar', width: 16 },
+        { header: isAr ? 'إجمالي الأمتار' : 'Total LM', key: 'totalQuantityLm', width: 16 },
+        { header: isAr ? 'إجمالي القيمة (EGP)' : 'Total Amount (EGP)', key: 'totalAmount', width: 22 },
+        { header: isAr ? 'تاريخ الفاتورة' : 'Invoice Date', key: 'invoiceDate', width: 16 },
+        { header: isAr ? 'تاريخ التسجيل' : 'Recorded At', key: 'recordedAt', width: 24 },
+      ]
 
-    const selectedProjObj = projects.find((p) => p.id === selectedProjectId)
-    const dateStr = new Date().toISOString().slice(0, 10)
-    const filename = `Warehouse_History_${selectedProjObj?.code || 'CANEX'}_${dateStr}.xlsx`
+      worksheet.columns = columns
 
-    XLSX.writeFile(workbook, filename)
-    toast.success(isAr ? 'تم تصدير سجل الحركات إلى Excel بنجاح!' : 'Exported history to Excel successfully!')
+      const headerRow = worksheet.getRow(1)
+      headerRow.height = 28
+      headerRow.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF2F5597' }
+        }
+        cell.font = {
+          name: 'Calibri',
+          size: 11,
+          bold: true,
+          color: { argb: 'FFFFFFFF' }
+        }
+        cell.alignment = {
+          horizontal: 'center',
+          vertical: 'middle',
+          wrapText: true
+        }
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+          left: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+          bottom: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+          right: { style: 'thin', color: { argb: 'FFFFFFFF' } }
+        }
+      })
+
+      const borderStyle = {
+        top: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+        left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+        bottom: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+        right: { style: 'thin', color: { argb: 'FFD9D9D9' } }
+      }
+
+      invoices.forEach((inv, idx) => {
+        const row = worksheet.addRow({
+          idx: idx + 1,
+          invoiceNo: inv.invoiceNumber || '—',
+          movementType: inv.movementType === 'outbound' ? (isAr ? 'صرف (خصم من المخزن)' : 'Outbound') : (isAr ? 'توريد (إضافة للمخزن)' : 'Inbound'),
+          supplier: inv.supplier || 'Canex',
+          fileName: inv.fileName || 'منفذ يدوياً',
+          lineItemsCount: Number(inv.lineItemsCount || 0),
+          totalQuantityBar: Number(inv.totalQuantityBar || 0),
+          totalQuantityLm: Number(inv.totalQuantityLm || 0),
+          totalAmount: Number(inv.totalAmount || 0),
+          invoiceDate: inv.invoiceDate || '—',
+          recordedAt: inv.createdAt ? new Date(inv.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US') : '—',
+        })
+
+        row.height = 20
+        row.eachCell((cell, colNumber) => {
+          cell.border = borderStyle
+          cell.font = { name: 'Calibri', size: 10 }
+
+          if (colNumber === 1 || colNumber === 2 || colNumber === 3 || colNumber === 4 || colNumber === 10 || colNumber === 11) {
+            cell.alignment = { horizontal: 'center', vertical: 'middle' }
+          } else if (colNumber === 5) {
+            cell.alignment = { horizontal: 'left', vertical: 'middle' }
+          } else {
+            cell.alignment = { horizontal: 'right', vertical: 'middle' }
+            if (colNumber === 8 || colNumber === 9) {
+              cell.numFmt = '#,##0.00'
+            } else if (colNumber === 6 || colNumber === 7) {
+              cell.numFmt = '#,##0'
+            }
+          }
+        })
+      })
+
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const selectedProjObj = projects.find((p) => p.id === selectedProjectId)
+      const dateStr = new Date().toISOString().slice(0, 10)
+      const filename = `Warehouse_History_${selectedProjObj?.code || 'CANEX'}_${dateStr}.xlsx`
+
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      window.URL.revokeObjectURL(url)
+
+      toast.success(isAr ? 'تم تصدير سجل الحركات إلى Excel بنجاح!' : 'Exported history to Excel successfully!')
+    } catch (err) {
+      console.error('History Excel Export Error:', err)
+      toast.error(isAr ? 'حدث خطأ أثناء تصدير سجل الحركات' : 'Error exporting history Excel file')
+    }
   }
 
   // Aggregate Stats
