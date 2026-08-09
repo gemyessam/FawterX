@@ -537,11 +537,8 @@ async function getProjectInvoices(projectId) {
   if (invoiceMap.size === 0 || projectId === "default_canex") {
     try {
       const allProjSnap = await db.collection("warehouseProjects").get();
-      for (const pDoc of allProjSnap.docs) {
-        if (pDoc.id !== projectId) {
-          await fetchInvoicesFromProj(pDoc.id);
-        }
-      }
+      const otherProjects = allProjSnap.docs.filter((pDoc) => pDoc.id !== projectId);
+      await Promise.all(otherProjects.map((pDoc) => fetchInvoicesFromProj(pDoc.id)));
     } catch (err) {
       console.warn("Error scanning all warehouseProjects for invoices:", err.message);
     }
@@ -583,11 +580,8 @@ async function getProjectMovements(projectId, invoiceId) {
   if (mvtMap.size === 0 || projectId === "default_canex") {
     try {
       const allProjSnap = await db.collection("warehouseProjects").get();
-      for (const pDoc of allProjSnap.docs) {
-        if (pDoc.id !== projectId) {
-          await fetchMovementsFromProj(pDoc.id);
-        }
-      }
+      const otherProjects = allProjSnap.docs.filter((pDoc) => pDoc.id !== projectId);
+      await Promise.all(otherProjects.map((pDoc) => fetchMovementsFromProj(pDoc.id)));
     } catch (err) {
       console.warn("Error scanning all warehouseProjects for movements:", err.message);
     }
@@ -685,11 +679,8 @@ async function getItemMovementsHistory(projectId, itemKey, itemCode) {
   if (mvtMap.size === 0 || projectId === "default_canex") {
     try {
       const allProjSnap = await db.collection("warehouseProjects").get();
-      for (const pDoc of allProjSnap.docs) {
-        if (pDoc.id !== projectId) {
-          await fetchItemMovementsFromProj(pDoc.id);
-        }
-      }
+      const otherProjects = allProjSnap.docs.filter((pDoc) => pDoc.id !== projectId);
+      await Promise.all(otherProjects.map((pDoc) => fetchItemMovementsFromProj(pDoc.id)));
     } catch (err) {
       console.warn("Error scanning all warehouseProjects for movements:", err.message);
     }
