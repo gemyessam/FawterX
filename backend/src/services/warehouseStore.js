@@ -470,6 +470,64 @@ async function deleteStockItem(projectId, itemKey) {
   return { itemKey, deleted: true };
 }
 
+/**
+ * Get movement history for a specific stock item across all invoices
+ */
+async function getItemMovementsHistory(projectId, itemKey, itemCode) {
+  const db = getDb();
+  if (!db) return [];
+
+  let querySnapshot = await db
+    .collection("warehouseProjects")
+    .doc(projectId)
+    .collection("movements")
+    .where("itemKey", "==", itemKey)
+    .get();
+
+  if (querySnapshot.empty && itemCode) {
+    querySnapshot = await db
+      .collection("warehouseProjects")
+      .doc(projectId)
+      .collection("movements")
+      .where("itemCode", "==", itemCode)
+      .get();
+  }
+
+  const movements = querySnapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+
+  // Sort chronologically ascending to calculate running stock balance
+  movements.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+
+  let runningBar = 0;
+  let runningLm = 0;
+
+  const movementsWithBalance = movements.map((m) => {
+    const isOutbound = m.movementType === "outbound";
+    const barQty = Number(m.quantityBar || m.quantity || 0);
+    const lmQty = Number(m.quantityLm || 0);
+
+    if (isOutbound) {
+      runningBar -= barQty;
+      runningLm -= lmQty;
+    } else {
+      runningBar += barQty;
+      runningLm += lmQty;
+    }
+
+    return {
+      ...m,
+      runningBar,
+      runningLm: Number(runningLm.toFixed(2)),
+    };
+  });
+
+  // Reverse to show newest transactions at top
+  return movementsWithBalance.reverse();
+}
+
 module.exports = {
   getUserWarehouseAccess,
   listWarehouseUsers,
@@ -480,6 +538,7 @@ module.exports = {
   processInboundInvoice,
   getProjectInvoices,
   getProjectMovements,
+  getItemMovementsHistory,
   updateStockItem,
   deleteStockItem,
 };

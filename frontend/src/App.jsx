@@ -16,7 +16,7 @@ export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
-    logo: 'فاوتر إكس v2.15.2',
+    logo: 'فاوتر إكس v2.22.1',
     logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
@@ -24,6 +24,7 @@ const TRANSLATIONS = {
     navDrafts: 'المسودات الموقوفة',
     navSettings: 'إعدادات الشركة',
     navWarehouse: 'المخزون',
+    navAdmin: 'لوحة الأدمن',
     logout: 'خروج',
     footer: 'منصة فاوتر إكس لأتمتة الفواتير الإلكترونية المعتمدة · خوادم مصلحة الضرائب المصرية',
     loginTitle: 'تسجيل الدخول إلى FawterX',
@@ -46,7 +47,7 @@ const TRANSLATIONS = {
     statsTitle: 'إحصائيات الأداء'
   },
   en: {
-    logo: 'FawterX v2.15.2',
+    logo: 'FawterX v2.22.1',
     logoSub: 'ERP Alternative for ETA Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
@@ -218,7 +219,7 @@ function Layout({ children }) {
               <span>{t.logoSub}</span>
             </div>
             <span className="premium-badge">{t.badge}</span>
-            <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v2.15.1 (Warehouse Inbound & Outbound)</span>
+            <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v2.22.1 (Warehouse Audit Transparency)</span>
           </div>
         </Link>
 

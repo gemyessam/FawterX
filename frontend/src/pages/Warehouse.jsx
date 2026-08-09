@@ -14,6 +14,7 @@ import {
   deleteStockItem,
   getWarehouseInvoices,
   getInvoiceMovements,
+  getItemMovementsHistory,
 } from '../services/warehouseApi'
 
 export default function Warehouse() {
@@ -32,6 +33,25 @@ export default function Warehouse() {
   const [selectedInvoice, setSelectedInvoice] = useState(null)
   const [invoiceMovements, setInvoiceMovements] = useState([])
   const [loadingMovements, setLoadingMovements] = useState(false)
+
+  // Item Movement History Modal State
+  const [selectedStockItemHistory, setSelectedStockItemHistory] = useState(null)
+  const [itemMovements, setItemMovements] = useState([])
+  const [loadingItemMovements, setLoadingItemMovements] = useState(false)
+
+  const handleViewItemHistory = async (item) => {
+    setSelectedStockItemHistory(item)
+    setLoadingItemMovements(true)
+    try {
+      const res = await getItemMovementsHistory(selectedProjectId, item.itemKey, item.itemCode)
+      setItemMovements(res.movements || [])
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل جلب سجل حركات البند' : 'Failed to load item movement history'))
+      setItemMovements([])
+    } finally {
+      setLoadingItemMovements(false)
+    }
+  }
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('')
@@ -424,7 +444,7 @@ export default function Warehouse() {
       const val = getItemValue(item)
       return {
         [isAr ? 'م' : '#']: idx + 1,
-        [isAr ? 'رقم الفاتورة' : 'Invoice No']: item.lastInvoiceNumber || (Array.isArray(item.invoiceNumbers) ? item.invoiceNumbers.join(', ') : '—'),
+        [isAr ? 'رقم الفاتورة / الفواتير' : 'Invoice No']: item.lastInvoiceNumber || (Array.isArray(item.invoiceNumbers) && item.invoiceNumbers.length > 0 ? item.invoiceNumbers.join(', ') : (item.invoiceNumber || '—')),
         [isAr ? 'كود الصنف' : 'Item Code']: item.itemCode,
         [isAr ? 'كود العميل' : 'Customer Code']: item.customerCode || '—',
         [isAr ? 'بيان الصنف' : 'Description']: item.description || '',
@@ -761,7 +781,6 @@ export default function Warehouse() {
               <thead>
                 <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
                   <th style={{ padding: '0.75rem 1rem', width: '45px' }}>#</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'رقم الفاتورة' : 'Invoice No'}</th>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
@@ -772,7 +791,7 @@ export default function Warehouse() {
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الوزن (KG)' : 'Weight (KG)'}</th>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'آخر سعر توريد' : 'Last Cost'}</th>
                   <th style={{ padding: '0.75rem 1rem', color: '#00e0a1' }}>{isAr ? 'إجمالي القيمة' : 'Total Value'}</th>
-                  {isAdmin && <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>{isAr ? 'التحكم' : 'Actions'}</th>}
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>{isAr ? 'السجل والتحكم' : 'History & Actions'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -780,16 +799,18 @@ export default function Warehouse() {
                   filteredStock.map((item, idx) => {
                     const isEditing = editingStockKey === item.itemKey
                     const itemVal = getItemValue(item)
-                    const invBadge = item.lastInvoiceNumber || (Array.isArray(item.invoiceNumbers) && item.invoiceNumbers.length > 0 ? item.invoiceNumbers[item.invoiceNumbers.length - 1] : '—')
                     return (
                       <tr key={item.itemKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: isEditing ? 'rgba(0, 224, 161, 0.05)' : 'transparent' }}>
                         <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600 }}>{idx + 1}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <span className="badge" style={{ background: 'rgba(100, 181, 246, 0.1)', color: '#64b5f6', border: '1px solid rgba(100, 181, 246, 0.3)', fontSize: '0.8rem' }}>
-                            {invBadge}
-                          </span>
+                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>
+                          <button
+                            onClick={() => handleViewItemHistory(item)}
+                            style={{ background: 'transparent', border: 'none', color: '#00e0a1', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: '0.9rem' }}
+                            title={isAr ? 'عرض سجل حركات هذا البند' : 'View item history'}
+                          >
+                            📜 {item.itemCode}
+                          </button>
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>{item.itemCode}</td>
                         <td style={{ padding: '0.75rem 1rem', color: '#8ab4ff', fontWeight: 600 }}>
                           {isEditing ? (
                             <input
@@ -882,56 +903,66 @@ export default function Warehouse() {
                               : '—'}
                           </span>
                         </td>
-                        {isAdmin && (
-                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            {isEditing ? (
-                              <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
-                                <button
-                                  className="btn btn-sm"
-                                  disabled={savingStockEdit}
-                                  onClick={() => handleSaveStockEdit(item.itemKey)}
-                                  style={{ background: '#00e0a1', color: '#000', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 600 }}
-                                  title={isAr ? 'حفظ التعديلات' : 'Save'}
-                                >
-                                  {savingStockEdit ? '...' : (isAr ? '💾 حفظ' : 'Save')}
-                                </button>
-                                <button
-                                  className="btn btn-sm"
-                                  onClick={() => setEditingStockKey(null)}
-                                  style={{ background: 'rgba(255,255,255,0.1)', color: '#ccc', padding: '2px 8px', fontSize: '0.8rem' }}
-                                  title={isAr ? 'إلغاء' : 'Cancel'}
-                                >
-                                  {isAr ? 'إلغاء' : 'Cancel'}
-                                </button>
-                              </div>
-                            ) : (
-                              <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
-                                <button
-                                  className="btn btn-sm"
-                                  onClick={() => handleStartStockEdit(item)}
-                                  style={{ background: 'rgba(0, 168, 255, 0.15)', color: '#70a1ff', border: '1px solid rgba(0, 168, 255, 0.3)', padding: '2px 8px', fontSize: '0.8rem' }}
-                                  title={isAr ? 'تعديل الصنف أو عدد الأعواد' : 'Edit item'}
-                                >
-                                  ✏️ {isAr ? 'تعديل' : 'Edit'}
-                                </button>
-                                <button
-                                  className="btn btn-sm"
-                                  onClick={() => handleDeleteStockItem(item)}
-                                  style={{ background: 'rgba(255, 71, 87, 0.15)', color: '#ff4757', border: '1px solid rgba(255, 71, 87, 0.3)', padding: '2px 8px', fontSize: '0.8rem' }}
-                                  title={isAr ? 'حذف من المخزن' : 'Delete item'}
-                                >
-                                  🗑️ {isAr ? 'حذف' : 'Delete'}
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        )}
+                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          {isEditing ? (
+                            <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
+                              <button
+                                className="btn btn-sm"
+                                disabled={savingStockEdit}
+                                onClick={() => handleSaveStockEdit(item.itemKey)}
+                                style={{ background: '#00e0a1', color: '#000', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 600 }}
+                                title={isAr ? 'حفظ التعديلات' : 'Save'}
+                              >
+                                {savingStockEdit ? '...' : (isAr ? '💾 حفظ' : 'Save')}
+                              </button>
+                              <button
+                                className="btn btn-sm"
+                                onClick={() => setEditingStockKey(null)}
+                                style={{ background: 'rgba(255,255,255,0.1)', color: '#ccc', padding: '2px 8px', fontSize: '0.8rem' }}
+                                title={isAr ? 'إلغاء' : 'Cancel'}
+                              >
+                                {isAr ? 'إلغاء' : 'Cancel'}
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
+                              <button
+                                className="btn btn-sm"
+                                onClick={() => handleViewItemHistory(item)}
+                                style={{ background: 'rgba(255, 215, 0, 0.15)', color: '#FFD700', border: '1px solid rgba(255, 215, 0, 0.3)', padding: '2px 8px', fontSize: '0.8rem' }}
+                                title={isAr ? 'عرض سجل حركات هذا البند' : 'View item history'}
+                              >
+                                📜 {isAr ? 'السجل' : 'History'}
+                              </button>
+                              {isAdmin && (
+                                <>
+                                  <button
+                                    className="btn btn-sm"
+                                    onClick={() => handleStartStockEdit(item)}
+                                    style={{ background: 'rgba(0, 168, 255, 0.15)', color: '#70a1ff', border: '1px solid rgba(0, 168, 255, 0.3)', padding: '2px 8px', fontSize: '0.8rem' }}
+                                    title={isAr ? 'تعديل الصنف أو عدد الأعواد' : 'Edit item'}
+                                  >
+                                    ✏️ {isAr ? 'تعديل' : 'Edit'}
+                                  </button>
+                                  <button
+                                    className="btn btn-sm"
+                                    onClick={() => handleDeleteStockItem(item)}
+                                    style={{ background: 'rgba(255, 71, 87, 0.15)', color: '#ff4757', border: '1px solid rgba(255, 71, 87, 0.3)', padding: '2px 8px', fontSize: '0.8rem' }}
+                                    title={isAr ? 'حذف من المخزن' : 'Delete item'}
+                                  >
+                                    🗑️ {isAr ? 'حذف' : 'Delete'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     )
                   })
                 ) : (
                   <tr>
-                    <td colSpan={isAdmin ? 11 : 10} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                    <td colSpan={12} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                       {isAr ? 'لا توجد أصناف مسجلة في هذا المشروع حتى الآن' : 'No items recorded in this project yet'}
                     </td>
                   </tr>
@@ -1172,6 +1203,156 @@ export default function Warehouse() {
               <button
                 className="btn btn-secondary"
                 onClick={() => { setSelectedInvoice(null); setInvoiceMovements([]); }}
+              >
+                {isAr ? 'إغلاق' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── ITEM MOVEMENT HISTORY MODAL ─── */}
+      {selectedStockItemHistory && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
+          <div style={{ background: '#121629', border: '1px solid rgba(0, 224, 161, 0.3)', borderRadius: '16px', maxWidth: '1050px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+            {/* Modal Header */}
+            <div style={{ padding: '1.2rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.2)' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#00e0a1', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  📜 {isAr ? `سجل حركات وتتبع البند: ${selectedStockItemHistory.itemCode}` : `Movement History: ${selectedStockItemHistory.itemCode}`}
+                </h3>
+                <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  {selectedStockItemHistory.description} | {isAr ? 'الدهان' : 'Finish'}: <span style={{ color: '#FFD700' }}>{selectedStockItemHistory.finish || 'STD'}</span> | {isAr ? 'الطول' : 'Length'}: <span dir="ltr">{selectedStockItemHistory.lengthMm || 6000} mm</span> | {isAr ? 'كود العميل' : 'Cust Code'}: <span style={{ color: '#64b5f6' }}>{selectedStockItemHistory.customerCode || '—'}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => { setSelectedStockItemHistory(null); setItemMovements([]) }}
+                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Content Body */}
+            <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
+              {/* Summary Stats Banner */}
+              {(() => {
+                const totalInBar = itemMovements.filter(m => m.movementType !== 'outbound').reduce((acc, m) => acc + Number(m.quantityBar || m.quantity || 0), 0)
+                const totalInLm = itemMovements.filter(m => m.movementType !== 'outbound').reduce((acc, m) => acc + Number(m.quantityLm || 0), 0)
+                const totalOutBar = itemMovements.filter(m => m.movementType === 'outbound').reduce((acc, m) => acc + Number(m.quantityBar || m.quantity || 0), 0)
+                const totalOutLm = itemMovements.filter(m => m.movementType === 'outbound').reduce((acc, m) => acc + Number(m.quantityLm || 0), 0)
+
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div style={{ background: 'rgba(0, 224, 161, 0.08)', border: '1px solid rgba(0, 224, 161, 0.25)', borderRadius: '12px', padding: '1rem' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'إجمالي التوريد (الوارد +)' : 'Total Inbound (+)'}</div>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#00e0a1', marginTop: '0.2rem' }}>
+                        +{totalInBar} <span style={{ fontSize: '0.85rem' }}>{isAr ? 'عود / قطاع' : 'bars'}</span>
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: '#00e0a1', opacity: 0.8 }}>
+                        +{totalInLm.toFixed(1)} m
+                      </div>
+                    </div>
+
+                    <div style={{ background: 'rgba(255, 71, 87, 0.08)', border: '1px solid rgba(255, 71, 87, 0.25)', borderRadius: '12px', padding: '1rem' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'إجمالي الصرف (المنصرف -)' : 'Total Outbound (-)'}</div>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#ff4757', marginTop: '0.2rem' }}>
+                        -{totalOutBar} <span style={{ fontSize: '0.85rem' }}>{isAr ? 'عود / قطاع' : 'bars'}</span>
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: '#ff4757', opacity: 0.8 }}>
+                        -{totalOutLm.toFixed(1)} m
+                      </div>
+                    </div>
+
+                    <div style={{ background: 'rgba(255, 215, 0, 0.08)', border: '1px solid rgba(255, 215, 0, 0.25)', borderRadius: '12px', padding: '1rem' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'الرصيد المتبقي بالمخزن' : 'Current Net Stock'}</div>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#FFD700', marginTop: '0.2rem' }}>
+                        {selectedStockItemHistory.quantityBar || 0} <span style={{ fontSize: '0.85rem' }}>{isAr ? 'عود' : 'bars'}</span>
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: '#FFD700', opacity: 0.8 }}>
+                        {(selectedStockItemHistory.quantityLm || 0).toFixed(1)} m
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Movements Timeline Table */}
+              {loadingItemMovements ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                  ⏳ {isAr ? 'جاري تحميل سجل حركات البند...' : 'Loading item movement history...'}
+                </div>
+              ) : itemMovements.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.2)', borderRadius: '12px' }}>
+                  📭 {isAr ? 'لا توجد حركات تفصيلية مسجلة لهذا البند حتى الآن' : 'No movement history recorded for this item yet.'}
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
+                        <th style={{ padding: '0.75rem 1rem' }}>#</th>
+                        <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'التاريخ والوقت' : 'Date & Time'}</th>
+                        <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'نوع الحركة' : 'Type'}</th>
+                        <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'رقم الفاتورة' : 'Invoice #'}</th>
+                        <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'المورد / الجهة' : 'Supplier / Dest'}</th>
+                        <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأعواد (BAR)' : 'Bars'}</th>
+                        <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأمتار (LM)' : 'Meters'}</th>
+                        <th style={{ padding: '0.75rem 1rem', color: '#FFD700' }}>{isAr ? 'الرصيد التراكمي' : 'Running Stock'}</th>
+                        <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'سعر الوحدة' : 'Unit Cost'}</th>
+                        <th style={{ padding: '0.75rem 1rem', color: '#00e0a1' }}>{isAr ? 'الإجمالي' : 'Total'}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itemMovements.map((m, idx) => {
+                        const isOut = m.movementType === 'outbound'
+                        const barQty = Number(m.quantityBar || m.quantity || 0)
+                        const lmQty = Number(m.quantityLm || 0)
+                        const dateStr = m.createdAt ? new Date(m.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US') : '—'
+                        return (
+                          <tr key={m.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                            <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{idx + 1}</td>
+                            <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{dateStr}</td>
+                            <td style={{ padding: '0.75rem 1rem' }}>
+                              <span className="badge" style={{ background: isOut ? 'rgba(255, 71, 87, 0.15)' : 'rgba(0, 224, 161, 0.15)', color: isOut ? '#ff4757' : '#00e0a1', border: `1px solid ${isOut ? 'rgba(255, 71, 87, 0.3)' : 'rgba(0, 224, 161, 0.3)'}` }}>
+                                {isOut ? (isAr ? '📤 صرف (-)' : 'Outbound') : (isAr ? '📥 توريد (+)' : 'Inbound')}
+                              </span>
+                            </td>
+                            <td style={{ padding: '0.75rem 1rem' }}>
+                              <span className="badge" style={{ background: 'rgba(100, 181, 246, 0.15)', color: '#64b5f6', border: '1px solid rgba(100, 181, 246, 0.3)' }}>
+                                {m.invoiceNumber || m.invoiceId || '—'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '0.75rem 1rem', color: '#fff' }}>{m.supplier || 'Canex'}</td>
+                            <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: isOut ? '#ff4757' : '#00e0a1' }}>
+                              {isOut ? `-${barQty}` : `+${barQty}`}
+                            </td>
+                            <td style={{ padding: '0.75rem 1rem', color: isOut ? '#ff4757' : '#00e0a1' }}>
+                              <span dir="ltr">{isOut ? `-${lmQty.toFixed(1)}` : `+${lmQty.toFixed(1)}`} m</span>
+                            </td>
+                            <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#FFD700' }}>
+                              <span dir="ltr">{m.runningBar !== undefined ? `${m.runningBar} BAR (${m.runningLm} m)` : '—'}</span>
+                            </td>
+                            <td style={{ padding: '0.75rem 1rem', color: '#8ab4ff' }}>
+                              <span dir="ltr">{m.unitPrice ? `${m.unitPrice} EGP` : '—'}</span>
+                            </td>
+                            <td style={{ padding: '0.75rem 1rem', color: '#00e0a1', fontWeight: 700 }}>
+                              <span dir="ltr">{m.netTotal ? `${Number(m.netTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })} EGP` : '—'}</span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.2)', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => { setSelectedStockItemHistory(null); setItemMovements([]) }}
               >
                 {isAr ? 'إغلاق' : 'Close'}
               </button>

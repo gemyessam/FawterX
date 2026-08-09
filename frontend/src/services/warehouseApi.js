@@ -95,3 +95,11 @@ export async function getInvoiceMovements(projectId, invoiceId) {
   const { data } = await api.get(`/warehouse/projects/${projectId}/invoices/${invoiceId}/movements`)
   return data
 }
+
+/** Fetch transaction history for a specific stock item */
+export async function getItemMovementsHistory(projectId, itemKey, itemCode) {
+  const { data } = await api.get(`/warehouse/projects/${projectId}/stock/${itemKey}/movements`, {
+    params: { itemCode },
+  })
+  return data
+}
