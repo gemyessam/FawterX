@@ -444,7 +444,9 @@ export default function Warehouse() {
       const val = getItemValue(item)
       return {
         [isAr ? 'م' : '#']: idx + 1,
-        [isAr ? 'رقم الفاتورة / الفواتير' : 'Invoice No']: item.lastInvoiceNumber || (Array.isArray(item.invoiceNumbers) && item.invoiceNumbers.length > 0 ? item.invoiceNumbers.join(', ') : (item.invoiceNumber || '—')),
+        [isAr ? 'رقم الفاتورة / الفواتير' : 'Invoice No']: (Array.isArray(item.invoiceNumbers) && item.invoiceNumbers.length > 0)
+          ? item.invoiceNumbers.join(', ')
+          : (item.lastInvoiceNumber || item.invoiceNumber || '—'),
         [isAr ? 'كود الصنف' : 'Item Code']: item.itemCode,
         [isAr ? 'كود العميل' : 'Customer Code']: item.customerCode || '—',
         [isAr ? 'بيان الصنف' : 'Description']: item.description || '',
@@ -466,7 +468,7 @@ export default function Warehouse() {
     // Append Grand Total Summary Row
     exportRows.push({
       [isAr ? 'م' : '#']: '',
-      [isAr ? 'رقم الفاتورة' : 'Invoice No']: '',
+      [isAr ? 'رقم الفاتورة / الفواتير' : 'Invoice No']: '',
       [isAr ? 'كود الصنف' : 'Item Code']: isAr ? 'الإجمالي الكلي' : 'GRAND TOTAL',
       [isAr ? 'كود العميل' : 'Customer Code']: '',
       [isAr ? 'بيان الصنف' : 'Description']: `${isAr ? 'عدد الأصناف:' : 'Total Items:'} ${filteredStock.length}`,

@@ -173,7 +173,7 @@ async function createProject({ name, code, description }, actorUid) {
 }
 
 /**
- * Get current stock snapshot for a project (with cross-project aggregation fallback)
+ * Get current stock snapshot for a project (with cross-project aggregation fallback & movement invoice enrichment)
  */
 async function getProjectStock(projectId) {
   const db = getDb();
@@ -221,7 +221,72 @@ async function getProjectStock(projectId) {
     }
   }
 
-  return Array.from(stockMap.values());
+  // Enrich stock items with invoice numbers from movements history if missing or incomplete
+  const itemInvoicesMap = new Map(); // key/code -> Set of invoice numbers
+  const itemLatestInvoiceMap = new Map(); // key/code -> { invoiceNumber, createdAt }
+
+  const fetchMovementsForEnrichment = async (pid) => {
+    try {
+      const mvtsSnap = await db.collection("warehouseProjects").doc(pid).collection("movements").get();
+      mvtsSnap.docs.forEach((mDoc) => {
+        const mData = mDoc.data() || {};
+        const invNo = mData.invoiceNumber;
+        if (!invNo || invNo === "-" || invNo === "—") return;
+
+        const keys = [mData.itemKey, mData.itemCode].filter(Boolean);
+        keys.forEach((k) => {
+          if (!itemInvoicesMap.has(k)) itemInvoicesMap.set(k, new Set());
+          itemInvoicesMap.get(k).add(invNo);
+
+          const existingLatest = itemLatestInvoiceMap.get(k);
+          const mvtDate = mData.createdAt || 0;
+          if (!existingLatest || new Date(mvtDate) > new Date(existingLatest.createdAt || 0)) {
+            itemLatestInvoiceMap.set(k, { invoiceNumber: invNo, createdAt: mvtDate });
+          }
+        });
+      });
+    } catch (e) {
+      console.warn(`Error fetching movements for enrichment in ${pid}:`, e.message);
+    }
+  };
+
+  await fetchMovementsForEnrichment(projectId);
+  if (projectId === "default_canex") {
+    try {
+      const allProjSnap = await db.collection("warehouseProjects").get();
+      for (const pDoc of allProjSnap.docs) {
+        if (pDoc.id !== projectId) {
+          await fetchMovementsForEnrichment(pDoc.id);
+        }
+      }
+    } catch (err) {
+      console.warn("Error scanning all warehouseProjects movements for enrichment:", err.message);
+    }
+  }
+
+  // Attach enriched invoice numbers to stock items
+  const finalStock = Array.from(stockMap.values()).map((item) => {
+    const keyInvoices = itemInvoicesMap.get(item.itemKey) || itemInvoicesMap.get(item.itemCode) || new Set();
+    const existingInvoices = new Set(Array.isArray(item.invoiceNumbers) ? item.invoiceNumbers : []);
+    if (item.lastInvoiceNumber && item.lastInvoiceNumber !== "—" && item.lastInvoiceNumber !== "-") {
+      existingInvoices.add(item.lastInvoiceNumber);
+    }
+    keyInvoices.forEach((inv) => existingInvoices.add(inv));
+
+    const combinedInvoices = Array.from(existingInvoices).filter(Boolean);
+    const latestFromMvts = itemLatestInvoiceMap.get(item.itemKey) || itemLatestInvoiceMap.get(item.itemCode);
+    const lastInvoiceNumber = item.lastInvoiceNumber && item.lastInvoiceNumber !== "—" && item.lastInvoiceNumber !== "-"
+      ? item.lastInvoiceNumber
+      : (latestFromMvts ? latestFromMvts.invoiceNumber : (combinedInvoices[combinedInvoices.length - 1] || "—"));
+
+    return {
+      ...item,
+      invoiceNumbers: combinedInvoices,
+      lastInvoiceNumber,
+    };
+  });
+
+  return finalStock;
 }
 
 /**
