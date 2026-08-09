@@ -83,3 +83,15 @@ export async function deleteStockItem(projectId, itemKey) {
   const { data } = await api.delete(`/warehouse/projects/${projectId}/stock/${itemKey}`)
   return data
 }
+
+/** Fetch transaction invoice history for a project */
+export async function getWarehouseInvoices(projectId) {
+  const { data } = await api.get(`/warehouse/projects/${projectId}/invoices`)
+  return data
+}
+
+/** Fetch granular line-item stock movements for a transaction/invoice */
+export async function getInvoiceMovements(projectId, invoiceId) {
+  const { data } = await api.get(`/warehouse/projects/${projectId}/invoices/${invoiceId}/movements`)
+  return data
+}

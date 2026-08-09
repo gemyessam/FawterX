@@ -194,6 +194,10 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
   const docType = isOutbound ? "sales_invoice" : "purchase_invoice";
 
   // 1. Save Invoice Document
+  const validLinesCount = lines.filter((l) => !l.ignored && !l.isService).length;
+  const totalQtyBar = lines.reduce((acc, l) => acc + (l.ignored || l.isService ? 0 : Number(l.quantityBar || l.quantity || 0)), 0);
+  const totalQtyLm = lines.reduce((acc, l) => acc + (l.ignored || l.isService ? 0 : Number(l.quantityLm || 0)), 0);
+
   const invoiceDoc = {
     invoiceNumber: invoiceMeta.invoiceNumber || `INV-${Date.now()}`,
     invoiceDate: invoiceMeta.invoiceDate || "",
@@ -202,7 +206,10 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
     documentType: docType,
     movementType: isOutbound ? "outbound" : "inbound",
     currency: invoiceMeta.currency || "EGP",
-    totalAmount: Number(invoiceMeta.totalAmount || 0),
+    lineItemsCount: validLinesCount,
+    totalQuantityBar: totalQtyBar,
+    totalQuantityLm: totalQtyLm,
+    totalAmount: Number(invoiceMeta.totalAmount || lines.reduce((sum, l) => sum + (l.ignored || l.isService ? 0 : Number(l.netTotal || 0)), 0)),
     fileName: invoiceMeta.fileName || "manual_upload",
     uploadedBy: userUid,
     status: "reviewed_and_saved",
@@ -312,6 +319,9 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
         lastBarCost: barPrice,
         priceUnit,
         currency: invoiceDoc.currency,
+        lastInvoiceNumber: invoiceDoc.invoiceNumber,
+        lastMovementType: invoiceDoc.movementType,
+        invoiceNumbers: admin.firestore.FieldValue.arrayUnion(invoiceDoc.invoiceNumber),
         updatedAt: new Date().toISOString(),
       },
       { merge: true }
@@ -326,6 +336,38 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
     movementType: isOutbound ? "outbound" : "inbound",
     movementsCount: createdMovements.length,
   };
+}
+
+/**
+ * Get transaction invoice history for a project
+ */
+async function getProjectInvoices(projectId) {
+  const db = getDb();
+  if (!db) return [];
+
+  const snapshot = await db
+    .collection("warehouseProjects")
+    .doc(projectId)
+    .collection("invoices")
+    .orderBy("createdAt", "desc")
+    .get();
+
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
+/**
+ * Get item movement log for a project or specific invoice
+ */
+async function getProjectMovements(projectId, invoiceId) {
+  const db = getDb();
+  if (!db) return [];
+
+  let query = db.collection("warehouseProjects").doc(projectId).collection("movements");
+  if (invoiceId) {
+    query = query.where("invoiceId", "==", invoiceId);
+  }
+  const snapshot = await query.get();
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
 /**
@@ -383,6 +425,8 @@ module.exports = {
   createProject,
   getProjectStock,
   processInboundInvoice,
+  getProjectInvoices,
+  getProjectMovements,
   updateStockItem,
   deleteStockItem,
 };

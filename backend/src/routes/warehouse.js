@@ -12,6 +12,8 @@ const {
   createProject,
   getProjectStock,
   processInboundInvoice,
+  getProjectInvoices,
+  getProjectMovements,
   updateStockItem,
   deleteStockItem,
 } = require("../services/warehouseStore");
@@ -204,6 +206,32 @@ router.post("/projects/:projectId/invoices/process", requireWarehouse, async (re
       req.user.uid
     );
     return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/warehouse/projects/:projectId/invoices
+ * Fetch transaction invoice history for a project
+ */
+router.get("/projects/:projectId/invoices", requireWarehouse, async (req, res) => {
+  try {
+    const invoices = await getProjectInvoices(req.params.projectId);
+    return res.json({ success: true, invoices });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/warehouse/projects/:projectId/invoices/:invoiceId/movements
+ * Fetch granular stock movements for a specific transaction/invoice
+ */
+router.get("/projects/:projectId/invoices/:invoiceId/movements", requireWarehouse, async (req, res) => {
+  try {
+    const movements = await getProjectMovements(req.params.projectId, req.params.invoiceId);
+    return res.json({ success: true, movements });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

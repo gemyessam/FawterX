@@ -12,6 +12,8 @@ import {
   updateWarehouseUserAccess,
   updateStockItem,
   deleteStockItem,
+  getWarehouseInvoices,
+  getInvoiceMovements,
 } from '../services/warehouseApi'
 
 export default function Warehouse() {
@@ -22,7 +24,14 @@ export default function Warehouse() {
   const [selectedProjectId, setSelectedProjectId] = useState('')
   const [stock, setStock] = useState([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('stock') // 'stock' | 'upload' | 'users' | 'projects'
+  const [activeTab, setActiveTab] = useState('stock') // 'stock' | 'history' | 'upload' | 'users' | 'projects'
+
+  // Transaction History State
+  const [invoices, setInvoices] = useState([])
+  const [loadingInvoices, setLoadingInvoices] = useState(false)
+  const [selectedInvoice, setSelectedInvoice] = useState(null)
+  const [invoiceMovements, setInvoiceMovements] = useState([])
+  const [loadingMovements, setLoadingMovements] = useState(false)
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('')
@@ -100,14 +109,46 @@ export default function Warehouse() {
   useEffect(() => {
     if (selectedProjectId) {
       loadStock(selectedProjectId)
+      if (activeTab === 'history') {
+        loadInvoices(selectedProjectId)
+      }
     }
-  }, [selectedProjectId])
+  }, [selectedProjectId, activeTab])
 
   useEffect(() => {
     if (activeTab === 'users' && isAdmin) {
       loadUsers()
     }
   }, [activeTab, isAdmin])
+
+  async function loadInvoices(projectId) {
+    setLoadingInvoices(true)
+    try {
+      const res = await getWarehouseInvoices(projectId)
+      if (res.success && res.invoices) {
+        setInvoices(res.invoices)
+      }
+    } catch (err) {
+      toast.error(isAr ? 'فشل تحميل سجل الحركات' : 'Failed to load transaction history')
+    } finally {
+      setLoadingInvoices(false)
+    }
+  }
+
+  async function handleViewInvoiceDetails(inv) {
+    setSelectedInvoice(inv)
+    setLoadingMovements(true)
+    try {
+      const res = await getInvoiceMovements(selectedProjectId, inv.id)
+      if (res.success && res.movements) {
+        setInvoiceMovements(res.movements)
+      }
+    } catch (err) {
+      toast.error(isAr ? 'فشل تحميل تفاصيل الحركة' : 'Failed to load movement details')
+    } finally {
+      setLoadingMovements(false)
+    }
+  }
 
   async function loadProjects() {
     setLoading(true)
@@ -383,6 +424,7 @@ export default function Warehouse() {
       const val = getItemValue(item)
       return {
         [isAr ? 'م' : '#']: idx + 1,
+        [isAr ? 'رقم الفاتورة' : 'Invoice No']: item.lastInvoiceNumber || (Array.isArray(item.invoiceNumbers) ? item.invoiceNumbers.join(', ') : '—'),
         [isAr ? 'كود الصنف' : 'Item Code']: item.itemCode,
         [isAr ? 'كود العميل' : 'Customer Code']: item.customerCode || '—',
         [isAr ? 'بيان الصنف' : 'Description']: item.description || '',
@@ -404,6 +446,7 @@ export default function Warehouse() {
     // Append Grand Total Summary Row
     exportRows.push({
       [isAr ? 'م' : '#']: '',
+      [isAr ? 'رقم الفاتورة' : 'Invoice No']: '',
       [isAr ? 'كود الصنف' : 'Item Code']: isAr ? 'الإجمالي الكلي' : 'GRAND TOTAL',
       [isAr ? 'كود العميل' : 'Customer Code']: '',
       [isAr ? 'بيان الصنف' : 'Description']: `${isAr ? 'عدد الأصناف:' : 'Total Items:'} ${filteredStock.length}`,
@@ -419,6 +462,7 @@ export default function Warehouse() {
     const worksheet = XLSX.utils.json_to_sheet(exportRows)
     worksheet['!cols'] = [
       { wch: 6 },
+      { wch: 20 },
       { wch: 16 },
       { wch: 15 },
       { wch: 45 },
@@ -440,6 +484,53 @@ export default function Warehouse() {
 
     XLSX.writeFile(workbook, filename)
     toast.success(isAr ? 'تم تصدير ملف Excel بنجاح!' : 'Exported to Excel successfully!')
+  }
+
+  // Export Transaction History to Excel
+  const handleExportHistoryToExcel = () => {
+    if (!invoices || invoices.length === 0) {
+      toast.error(isAr ? 'لا يوجد سجل حركات للتصدير' : 'No history transactions available to export')
+      return
+    }
+
+    const exportRows = invoices.map((inv, idx) => ({
+      [isAr ? 'م' : '#']: idx + 1,
+      [isAr ? 'رقم الفاتورة' : 'Invoice No']: inv.invoiceNumber || '—',
+      [isAr ? 'نوع الحركة' : 'Movement Type']: inv.movementType === 'outbound' ? (isAr ? 'صرف (خصم من المخزن)' : 'Outbound') : (isAr ? 'توريد (إضافة للمخزن)' : 'Inbound'),
+      [isAr ? 'المورد / الجهة' : 'Supplier']: inv.supplier || 'Canex',
+      [isAr ? 'اسم الملف' : 'File Name']: inv.fileName || 'منفذ يدوياً',
+      [isAr ? 'عدد البنود' : 'Line Items']: inv.lineItemsCount || 0,
+      [isAr ? 'إجمالي الأعواد' : 'Total Bars']: inv.totalQuantityBar || 0,
+      [isAr ? 'إجمالي الأمتار' : 'Total LM']: Number((inv.totalQuantityLm || 0).toFixed(2)),
+      [isAr ? 'إجمالي القيمة (EGP)' : 'Total Amount (EGP)']: Number((inv.totalAmount || 0).toFixed(2)),
+      [isAr ? 'تاريخ الفاتورة' : 'Invoice Date']: inv.invoiceDate || '—',
+      [isAr ? 'تاريخ التسجيل' : 'Recorded At']: inv.createdAt ? new Date(inv.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US') : '—',
+    }))
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows)
+    worksheet['!cols'] = [
+      { wch: 6 },
+      { wch: 22 },
+      { wch: 24 },
+      { wch: 18 },
+      { wch: 30 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 20 },
+      { wch: 14 },
+      { wch: 24 },
+    ]
+
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Transaction_History')
+
+    const selectedProjObj = projects.find((p) => p.id === selectedProjectId)
+    const dateStr = new Date().toISOString().slice(0, 10)
+    const filename = `Warehouse_History_${selectedProjObj?.code || 'CANEX'}_${dateStr}.xlsx`
+
+    XLSX.writeFile(workbook, filename)
+    toast.success(isAr ? 'تم تصدير سجل الحركات إلى Excel بنجاح!' : 'Exported history to Excel successfully!')
   }
 
   // Aggregate Stats
@@ -550,6 +641,12 @@ export default function Warehouse() {
           onClick={() => setActiveTab('stock')}
         >
           📦 {isAr ? 'رصيد أصناف المخزن' : 'Stock Balance'}
+        </button>
+        <button
+          className={`btn ${activeTab === 'history' ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => setActiveTab('history')}
+        >
+          📜 {isAr ? 'سجل الحركات والتوريدات' : 'Transaction History'}
         </button>
         <button
           className={`btn ${activeTab === 'upload' ? 'btn-primary' : 'btn-ghost'}`}
@@ -663,6 +760,8 @@ export default function Warehouse() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
               <thead>
                 <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
+                  <th style={{ padding: '0.75rem 1rem', width: '45px' }}>#</th>
+                  <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'رقم الفاتورة' : 'Invoice No'}</th>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
@@ -678,11 +777,18 @@ export default function Warehouse() {
               </thead>
               <tbody>
                 {filteredStock.length > 0 ? (
-                  filteredStock.map((item) => {
+                  filteredStock.map((item, idx) => {
                     const isEditing = editingStockKey === item.itemKey
                     const itemVal = getItemValue(item)
+                    const invBadge = item.lastInvoiceNumber || (Array.isArray(item.invoiceNumbers) && item.invoiceNumbers.length > 0 ? item.invoiceNumbers[item.invoiceNumbers.length - 1] : '—')
                     return (
                       <tr key={item.itemKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: isEditing ? 'rgba(0, 224, 161, 0.05)' : 'transparent' }}>
+                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600 }}>{idx + 1}</td>
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <span className="badge" style={{ background: 'rgba(100, 181, 246, 0.1)', color: '#64b5f6', border: '1px solid rgba(100, 181, 246, 0.3)', fontSize: '0.8rem' }}>
+                            {invBadge}
+                          </span>
+                        </td>
                         <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>{item.itemCode}</td>
                         <td style={{ padding: '0.75rem 1rem', color: '#8ab4ff', fontWeight: 600 }}>
                           {isEditing ? (
@@ -832,6 +938,201 @@ export default function Warehouse() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB: Transaction History (Audit Log) ─── */}
+      {activeTab === 'history' && (
+        <div className="card fade-in" style={{ padding: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                📜 {isAr ? 'سجل الحركات والتوريدات (Audit Trail)' : 'Transaction History & Audit Log'}
+              </h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                {isAr
+                  ? 'سجل زمني شامل لكافة حركات التوريد والصرف مع ربط الأصناف برقم الفاتورة والتفاصيل'
+                  : 'Comprehensive chronological record of all stock additions and deductions per invoice'}
+              </p>
+            </div>
+            <button
+              className="btn"
+              onClick={handleExportHistoryToExcel}
+              style={{
+                background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                color: '#fff',
+                border: 'none',
+                padding: '0.55rem 1.2rem',
+                borderRadius: '8px',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.25)',
+              }}
+            >
+              📊 {isAr ? 'تصدير سجل الحركات إلى Excel' : 'Export History to Excel'}
+            </button>
+          </div>
+
+          {loadingInvoices ? (
+            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+              ⏳ {isAr ? 'جاري تحميل سجل الحركات...' : 'Loading transaction history...'}
+            </div>
+          ) : invoices.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+              📭 {isAr ? 'لا توجد حركات مسجلة لهذا المشروع بعد' : 'No transactions recorded for this project yet'}
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
+                    <th style={{ padding: '0.75rem 1rem', width: '45px' }}>#</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'رقم الفاتورة' : 'Invoice No'}</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'نوع الحركة' : 'Movement'}</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'المورد / الجهة' : 'Supplier'}</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'اسم الملف المرفوع' : 'File Name'}</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'عدد البنود' : 'Line Items'}</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأعواد / الأمتار' : 'Bars / Meters'}</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'إجمالي القيمة' : 'Total Amount'}</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'تاريخ التسجيل' : 'Date & Time'}</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>{isAr ? 'التفاصيل' : 'Details'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map((inv, idx) => {
+                    const isOut = inv.movementType === 'outbound'
+                    return (
+                      <tr key={inv.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600 }}>{idx + 1}</td>
+                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#64b5f6' }}>{inv.invoiceNumber || '—'}</td>
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <span
+                            className="badge"
+                            style={{
+                              background: isOut ? 'rgba(255,71,87,0.15)' : 'rgba(0,224,161,0.15)',
+                              color: isOut ? '#ff4757' : '#00e0a1',
+                              border: `1px solid ${isOut ? 'rgba(255,71,87,0.3)' : 'rgba(0,224,161,0.3)'}`,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {isOut ? (isAr ? '📤 صرف (-)' : 'Outbound (-)') : (isAr ? '📥 توريد (+)' : 'Inbound (+)')}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem' }}>{inv.supplier || 'Canex'}</td>
+                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{inv.fileName || 'يدوي'}</td>
+                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#FFD700' }}>
+                          {inv.lineItemsCount || 0} {isAr ? 'بند' : 'items'}
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <div><span dir="ltr">{inv.totalQuantityBar || 0} BAR</span></div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}><span dir="ltr">{(inv.totalQuantityLm || 0).toFixed(1)} m</span></div>
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>
+                          <span dir="ltr">{(inv.totalAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} EGP</span>
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                          {inv.createdAt ? new Date(inv.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US') : '—'}
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                          <button
+                            className="btn btn-sm"
+                            onClick={() => handleViewInvoiceDetails(inv)}
+                            style={{ background: 'rgba(0, 168, 255, 0.15)', color: '#70a1ff', border: '1px solid rgba(0, 168, 255, 0.3)' }}
+                          >
+                            👁️ {isAr ? 'عرض البنود' : 'Items'}
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── MODAL: Invoice Movement Items Details ─── */}
+      {selectedInvoice && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div className="card fade-in" style={{ width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', background: '#121629', border: '1px solid #00e0a1', padding: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#00e0a1' }}>
+                  🧾 {isAr ? `تفاصيل الفاتورة: ${selectedInvoice.invoiceNumber}` : `Invoice Details: ${selectedInvoice.invoiceNumber}`}
+                </h3>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  {isAr ? 'المورد:' : 'Supplier:'} {selectedInvoice.supplier || 'Canex'} | {isAr ? 'التاريخ:' : 'Date:'} {selectedInvoice.invoiceDate || '—'}
+                </span>
+              </div>
+              <button
+                className="btn btn-sm"
+                onClick={() => { setSelectedInvoice(null); setInvoiceMovements([]); }}
+                style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '1.1rem', padding: '4px 10px' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {loadingMovements ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                ⏳ {isAr ? 'جاري تحميل بنود الحركة...' : 'Loading movement items...'}
+              </div>
+            ) : invoiceMovements.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                📭 {isAr ? 'لا توجد تفاصيل بنود لهذه الحركة' : 'No movement details found for this transaction'}
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(255,255,255,0.05)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
+                      <th style={{ padding: '0.6rem 0.8rem', width: '40px' }}>#</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>{isAr ? 'الدهان' : 'Finish'}</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>{isAr ? 'الطول' : 'Length'}</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>{isAr ? 'الأعواد' : 'Bars'}</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>{isAr ? 'الأمتار' : 'Meters'}</th>
+                      <th style={{ padding: '0.6rem 0.8rem' }}>{isAr ? 'سعر الوحدة' : 'Unit Price'}</th>
+                      <th style={{ padding: '0.6rem 0.8rem', color: '#00e0a1' }}>{isAr ? 'الإجمالي' : 'Total'}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoiceMovements.map((mov, idx) => (
+                      <tr key={mov.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                        <td style={{ padding: '0.6rem 0.8rem', color: 'var(--text-muted)' }}>{idx + 1}</td>
+                        <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: '#00e0a1' }}>{mov.itemCode}</td>
+                        <td style={{ padding: '0.6rem 0.8rem', color: '#8ab4ff' }}>{mov.customerCode || '—'}</td>
+                        <td style={{ padding: '0.6rem 0.8rem' }}>{mov.description}</td>
+                        <td style={{ padding: '0.6rem 0.8rem' }}>{mov.finish || 'STD'}</td>
+                        <td style={{ padding: '0.6rem 0.8rem' }}><span dir="ltr">{mov.lengthMm} mm</span></td>
+                        <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: '#fff' }}>{mov.quantityBar}</td>
+                        <td style={{ padding: '0.6rem 0.8rem' }}><span dir="ltr">{(mov.quantityLm || 0).toFixed(1)} m</span></td>
+                        <td style={{ padding: '0.6rem 0.8rem' }}><span dir="ltr">{mov.unitPrice || 0} EGP</span></td>
+                        <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: '#00e0a1' }}>
+                          <span dir="ltr">{(mov.netTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} EGP</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => { setSelectedInvoice(null); setInvoiceMovements([]); }}
+              >
+                {isAr ? 'إغلاق' : 'Close'}
+              </button>
+            </div>
           </div>
         </div>
       )}
