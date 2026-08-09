@@ -383,18 +383,76 @@ export default function Warehouse() {
     }
   }
 
-  // Filter Stock List
+  // Filter Stock List (Comprehensive Search across all fields)
   const filteredStock = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return stock
-    return stock.filter(
-      (item) =>
-        String(item.itemCode || '').toLowerCase().includes(q) ||
-        String(item.description || '').toLowerCase().includes(q) ||
-        String(item.finish || '').toLowerCase().includes(q) ||
-        String(item.itemKey || '').toLowerCase().includes(q)
-    )
+
+    const searchTerms = q.split(/\s+/).filter(Boolean)
+
+    return stock.filter((item) => {
+      const invStr = Array.isArray(item.invoiceNumbers)
+        ? item.invoiceNumbers.join(' ')
+        : String(item.invoiceNumbers || '')
+
+      const fullItemText = [
+        item.itemCode,
+        item.customerCode,
+        item.description,
+        item.finish,
+        item.color,
+        item.itemKey,
+        item.lengthMm,
+        item.lastInvoiceNumber,
+        invStr,
+        item.supplier,
+        item.supplierName,
+        item.priceUnit,
+        item.quantityBar,
+        item.quantityLm,
+        item.quantityKg,
+        item.lastUnitCost,
+        item.lastBarCost,
+      ]
+        .filter((val) => val !== undefined && val !== null && val !== '')
+        .join(' ')
+        .toLowerCase()
+
+      return searchTerms.every((term) => fullItemText.includes(term))
+    })
   }, [stock, searchQuery])
+
+  // Filter Transaction History List
+  const filteredInvoices = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return invoices
+
+    const searchTerms = q.split(/\s+/).filter(Boolean)
+
+    return invoices.filter((inv) => {
+      const itemsText = Array.isArray(inv.items)
+        ? inv.items
+            .map((i) => `${i.itemCode || ''} ${i.customerCode || ''} ${i.description || ''} ${i.finish || ''} ${i.color || ''}`)
+            .join(' ')
+        : ''
+
+      const fullInvText = [
+        inv.invoiceNumber,
+        inv.supplier,
+        inv.fileName,
+        inv.movementType,
+        inv.notes,
+        inv.totalAmount,
+        inv.lineItemsCount,
+        itemsText,
+      ]
+        .filter((val) => val !== undefined && val !== null && val !== '')
+        .join(' ')
+        .toLowerCase()
+
+      return searchTerms.every((term) => fullInvText.includes(term))
+    })
+  }, [invoices, searchQuery])
 
   // Item Financial Value Calculator
   const getItemValue = (item) => {
@@ -613,7 +671,7 @@ export default function Warehouse() {
 
   // Export Transaction History to Excel
   const handleExportHistoryToExcel = async () => {
-    if (!invoices || invoices.length === 0) {
+    if (!filteredInvoices || filteredInvoices.length === 0) {
       toast.error(isAr ? 'لا يوجد سجل حركات للتصدير' : 'No history transactions available to export')
       return
     }
@@ -677,7 +735,7 @@ export default function Warehouse() {
         right: { style: 'thin', color: { argb: 'FFD9D9D9' } }
       }
 
-      invoices.forEach((inv, idx) => {
+      filteredInvoices.forEach((inv, idx) => {
         const row = worksheet.addRow({
           idx: idx + 1,
           invoiceNo: inv.invoiceNumber || '—',
@@ -1166,34 +1224,50 @@ export default function Warehouse() {
                   : 'Comprehensive chronological record of all stock additions and deductions per invoice'}
               </p>
             </div>
-            <button
-              className="btn"
-              onClick={handleExportHistoryToExcel}
-              style={{
-                background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                color: '#fff',
-                border: 'none',
-                padding: '0.55rem 1.2rem',
-                borderRadius: '8px',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.25)',
-              }}
-            >
-              📊 {isAr ? 'تصدير سجل الحركات إلى Excel' : 'Export History to Excel'}
-            </button>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="search"
+                placeholder={isAr ? 'ابحث برقم الفاتورة، كود العميل، المورد، أو اسم الملف...' : 'Search by invoice #, customer code, supplier, filename...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  minWidth: '260px',
+                  background: '#101223',
+                  border: '1px solid var(--border)',
+                  padding: '0.55rem 1rem',
+                  borderRadius: '8px',
+                  color: '#fff',
+                }}
+              />
+              <button
+                className="btn"
+                onClick={handleExportHistoryToExcel}
+                style={{
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '0.55rem 1.2rem',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.25)',
+                }}
+              >
+                📊 {isAr ? 'تصدير سجل الحركات إلى Excel' : 'Export History to Excel'}
+              </button>
+            </div>
           </div>
 
           {loadingInvoices ? (
             <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
               ⏳ {isAr ? 'جاري تحميل سجل الحركات...' : 'Loading transaction history...'}
             </div>
-          ) : invoices.length === 0 ? (
+          ) : filteredInvoices.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-              📭 {isAr ? 'لا توجد حركات مسجلة لهذا المشروع بعد' : 'No transactions recorded for this project yet'}
+              📭 {isAr ? 'لا توجد حركات مسجلة تطابق البحث' : 'No transactions found matching your search'}
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
@@ -1214,7 +1288,7 @@ export default function Warehouse() {
                   </tr>
                 </thead>
                 <tbody>
-                  {invoices.map((inv, idx) => {
+                  {filteredInvoices.map((inv, idx) => {
                     const isOut = inv.movementType === 'outbound'
                     return (
                       <tr key={inv.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
