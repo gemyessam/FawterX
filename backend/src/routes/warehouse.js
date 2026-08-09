@@ -1,5 +1,9 @@
 const express = require("express");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 const authMiddleware = require("../middleware/auth");
+const { parseWarehouseInvoice } = require("../utils/warehouseCanexParser");
 const {
   getUserWarehouseAccess,
   listWarehouseUsers,
@@ -13,6 +17,26 @@ const {
 const router = express.Router();
 router.use(express.json());
 router.use(authMiddleware);
+
+const uploadsDir = path.join(__dirname, "../../uploads");
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadsDir),
+    filename: (_req, file, cb) => {
+      const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      cb(null, `${unique}${path.extname(file.originalname).toLowerCase()}`);
+    },
+  }),
+  fileFilter: (_req, file, cb) => {
+    const allowed = [".xlsx", ".xls", ".csv", ".pdf"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) cb(null, true);
+    else cb(new Error("Warehouse invoice must be Excel, CSV, or PDF."));
+  },
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 
 /**
  * GET /api/warehouse/access
@@ -130,6 +154,33 @@ router.get("/projects/:projectId/stock", requireWarehouse, async (req, res) => {
     return res.json({ success: true, stock });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/warehouse/invoices/parse
+ * Parse a supplier PDF/Excel invoice into warehouse review metadata and lines
+ */
+router.post("/invoices/parse", requireWarehouse, upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No invoice file was uploaded." });
+    }
+
+    const result = await parseWarehouseInvoice(req.file.path, req.file.originalname);
+    return res.json({
+      success: true,
+      fileName: req.file.originalname,
+      ...result,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  } finally {
+    try {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    } catch (e) {
+      console.error("Failed to delete warehouse upload temp file:", e.message);
+    }
   }
 });
 

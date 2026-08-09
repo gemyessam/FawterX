@@ -56,6 +56,16 @@ export async function getProjectStock(projectId) {
   return data
 }
 
+/** Parse supplier invoice into warehouse review lines */
+export async function parseWarehouseInvoice(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const { data } = await api.post('/warehouse/invoices/parse', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}
+
 /** Save reviewed purchase invoice lines into inbound stock movements */
 export async function processWarehouseInvoice(projectId, invoiceMeta, lines) {
   const { data } = await api.post(`/warehouse/projects/${projectId}/invoices/process`, { invoiceMeta, lines })

@@ -1,0 +1,303 @@
+const fs = require("fs");
+const path = require("path");
+const XLSX = require("xlsx");
+
+function clean(value) {
+  return String(value || "").replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").trim();
+}
+
+function parseNum(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const text = String(value || "").replace(/,/g, "").replace(/[^\d.-]/g, "");
+  const n = Number(text);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function parseCanexDate(value) {
+  const text = clean(value);
+  if (!text) return "";
+  const monthMap = {
+    jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
+    jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12"
+  };
+  const named = text.match(/^(\d{1,2})\s*[-/\s]\s*([A-Za-z]{3,})\.?\s*[-/\s]\s*(\d{4})$/);
+  if (named) {
+    const dd = named[1].padStart(2, "0");
+    const mm = monthMap[named[2].slice(0, 3).toLowerCase()];
+    if (mm) return `${named[3]}-${mm}-${dd}`;
+  }
+  const isoMatch = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`;
+  }
+  const dMatch = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (dMatch) {
+    return `${dMatch[3]}-${dMatch[2].padStart(2, '0')}-${dMatch[1].padStart(2, '0')}`;
+  }
+  return text;
+}
+
+function extractLabel(text, label) {
+  const idx = text.toLowerCase().indexOf(label.toLowerCase());
+  if (idx === -1) return "";
+  const after = text.slice(idx + label.length).split(/\r?\n/).map(clean).filter(Boolean);
+  return after[0] || "";
+}
+
+function extractMetadata(text, fileName) {
+  const allDates = text.match(/\b\d{1,2}\s+[A-Za-z]{3,}\s+\d{4}\b/g) || [];
+  const invoiceNumber = clean(text.match(/\bCNX3-\d{3,}\b/i)?.[0]) ||
+    extractLabel(text, "Commercial Invoice #:") ||
+    clean(text.match(/Commercial Invoice #:\s*([A-Z0-9$-]+)/i)?.[1]);
+  
+  const invoiceDateStr = text.match(/Commercial Invoice Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || allDates[0] || "";
+  const deliveryDateStr = text.match(/Delivery Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || (allDates.length >= 3 ? allDates[2] : allDates[allDates.length - 1]) || "";
+
+  const salesOrder =
+    extractLabel(text, "Sales Order #:") ||
+    clean(text.match(/Sales Order #:\s*([A-Z0-9-]+)/i)?.[1]);
+  const currency = clean(text.match(/\bCurrency:\s*([A-Z]{3})\b/i)?.[1]) || "EGP";
+  const invoiceAmount = parseNum(text.match(/Invoice Amount\s+([\d,]+\.\d{2})/i)?.[1]);
+  const taxAmount = parseNum(text.match(/Tax Amount\s+([\d,]+\.\d{2})/i)?.[1]);
+  const totalAmount = parseNum(text.match(/Total Amount\s+([\d,]+\.\d{2})/i)?.[1]);
+
+  return {
+    invoiceNumber: invoiceNumber || `INV-${Date.now().toString().slice(-6)}`,
+    invoiceDate: parseCanexDate(invoiceDateStr),
+    receiptDate: parseCanexDate(deliveryDateStr),
+    deliveryDate: parseCanexDate(deliveryDateStr),
+    supplier: "Canex",
+    currency,
+    salesOrder,
+    invoiceAmount,
+    taxAmount,
+    totalAmount,
+    fileName,
+  };
+}
+
+function extractDescriptionAttrs(description) {
+  const text = clean(description);
+  const lengthMatch = text.match(/length\s*:\s*([\d,.]+)\s*(m|meter|meters|mm)\b/i);
+  const lengthValue = parseNum(lengthMatch?.[1]);
+  const lengthUnit = (lengthMatch?.[2] || "m").toLowerCase();
+  const lengthMm = lengthUnit === "mm" ? lengthValue : lengthValue * 1000;
+  const finish = clean(text.match(/surface\s*finish\s*:\s*([^,\n]+)/i)?.[1]) || "MF";
+  const temper = clean(text.match(/temper\s*:\s*([^,\n]+)/i)?.[1]);
+  const alloy = clean(text.match(/alloy\s*:\s*([^,\n]+)/i)?.[1]);
+  const hsCode = clean(text.match(/HS\s*Code\s*:\s*([0-9.]+)/i)?.[1]);
+
+  return {
+    lengthMm: lengthMm || 6000,
+    finish: finish || "MF",
+    temper,
+    alloy,
+    hsCode,
+  };
+}
+
+function splitTwoDecimalNumbers(value) {
+  const text = String(value || "");
+  const results = [];
+  for (let i = 0; i < text.length - 1; i += 1) {
+    const left = text.slice(0, i + 1);
+    const right = text.slice(i + 1);
+    if (/^\d[\d,]*\.\d{2}$/.test(left) && /^\d[\d,]*\.\d{2}$/.test(right)) {
+      results.push([parseNum(left), parseNum(right)]);
+    }
+  }
+  return results;
+}
+
+function parseCompactQuantityLine(line, lengthMm) {
+  const compact = clean(line).replace(/\s+/g, "");
+  const match = compact.match(/^(\d[\d,.\-]*)([A-Za-z]+)(\d[\d,.\-]*)$/);
+  if (!match) return null;
+
+  const beforeUnit = match[1];
+  const unit = match[2];
+  const afterUnit = match[3];
+  const lengthM = Number(lengthMm || 0) / 1000 || 0;
+  let best = null;
+
+  for (let prefixLen = 1; prefixLen <= Math.min(5, beforeUnit.length - 6); prefixLen += 1) {
+    const bars = parseNum(beforeUnit.slice(0, prefixLen));
+    if (!bars) continue;
+    const beforeRest = beforeUnit.slice(prefixLen);
+    const leftCandidates = splitTwoDecimalNumbers(beforeRest);
+    const rightCandidates = splitTwoDecimalNumbers(afterUnit);
+
+    leftCandidates.forEach(([barPrice, lmQty]) => {
+      rightCandidates.forEach(([unitPrice, amount]) => {
+        const expectedLm = lengthM ? bars * lengthM : lmQty;
+        const expectedAmount = lmQty * unitPrice;
+        const score =
+          Math.abs(lmQty - expectedLm) +
+          Math.abs(amount - expectedAmount) / Math.max(1, amount);
+        const candidate = { bars, barPrice, lmQty, unit, unitPrice, amount, score };
+        if (!best || candidate.score < best.score) best = candidate;
+      });
+    });
+  }
+
+  return best;
+}
+
+function matchLineStart(lineStr) {
+  let m = lineStr.match(/^(\d+)(\d{3}-\d{6})(\d{3,})(.+)$/);
+  if (m) return { position: m[1], itemCode: m[2], customerCode: m[3], rest: m[4] };
+  m = lineStr.match(/^(\d+)\s+([A-Za-z0-9_-]+-\d+|[A-Za-z0-9_-]{5,})\s+(\d{3,})\s+(.+)$/);
+  if (m) return { position: m[1], itemCode: m[2], customerCode: m[3], rest: m[4] };
+  m = lineStr.match(/^(\d+)\s+([A-Za-z0-9_-]+-\d+|[A-Za-z0-9_-]{5,})\s+(.+)$/);
+  if (m) return { position: m[1], itemCode: m[2], customerCode: "", rest: m[3] };
+  return null;
+}
+
+function parseTextLines(text, metadata) {
+  const lines = text.split(/\r?\n/).map(clean).filter(Boolean);
+  const parsed = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const matchedStart = matchLineStart(lines[i]);
+    if (!matchedStart) continue;
+
+    const { position, itemCode, customerCode } = matchedStart;
+    const descParts = [matchedStart.rest];
+    let qtyLine = "";
+
+    for (let j = i + 1; j < Math.min(lines.length, i + 8); j += 1) {
+      const candidate = lines[j];
+      if (matchLineStart(candidate) || /^Invoice Amount/i.test(candidate)) break;
+      if (/\d[\d,.\-]*[A-Za-z]+\d[\d,.\-]*$/.test(candidate.replace(/\s+/g, ""))) {
+        qtyLine = candidate;
+        i = j;
+        break;
+      }
+      descParts.push(candidate);
+    }
+
+    const description = clean(descParts.join(" "));
+    const attrs = extractDescriptionAttrs(description);
+    const qty = parseCompactQuantityLine(qtyLine, attrs.lengthMm);
+    if (!qty) continue;
+
+    parsed.push({
+      id: `line_${position}`,
+      position,
+      itemCode,
+      customerCode,
+      description,
+      finish: attrs.finish || "MF",
+      color: attrs.finish || "MF",
+      lengthMm: attrs.lengthMm,
+      quantityBar: qty.bars,
+      quantityLm: qty.lmQty,
+      quantityKg: 0,
+      unit: "BAR",
+      priceUnit: qty.unit.toLowerCase() === "m" ? "M" : qty.unit.toUpperCase(),
+      unitPrice: qty.unitPrice,
+      barPrice: qty.barPrice,
+      netTotal: qty.amount,
+      currency: metadata.currency || "EGP",
+      temper: attrs.temper,
+      alloy: attrs.alloy,
+      hsCode: attrs.hsCode,
+      isService: false,
+      ignored: false,
+    });
+  }
+
+  return parsed;
+}
+
+function rowValue(row, names) {
+  for (const name of names) {
+    const found = Object.keys(row).find(key => clean(key).toLowerCase().includes(name));
+    if (found) return row[found];
+  }
+  return "";
+}
+
+function parseWorkbook(filePath, fileName) {
+  const workbook = XLSX.readFile(filePath);
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+  const metadata = { invoiceNumber: "", invoiceDate: "", receiptDate: "", supplier: "Canex", currency: "EGP", fileName };
+  const lines = rows
+    .map((row, idx) => {
+      const description = clean(rowValue(row, ["description"]));
+      if (!description || /invoice amount|tax amount|total amount/i.test(description)) return null;
+      const attrs = extractDescriptionAttrs(description);
+      const qtyBar = parseNum(rowValue(row, ["bars"]));
+      const qtyLm = parseNum(rowValue(row, ["actual total", "qty"]));
+      const unitPrice = parseNum(rowValue(row, ["unit price"]));
+      return {
+        id: `line_${idx + 1}`,
+        position: idx + 1,
+        itemCode: clean(rowValue(row, ["item"])),
+        customerCode: clean(rowValue(row, ["customer code"])),
+        description,
+        finish: attrs.finish || "MF",
+        color: attrs.finish || "MF",
+        lengthMm: attrs.lengthMm,
+        quantityBar: qtyBar,
+        quantityLm: qtyLm || (qtyBar * attrs.lengthMm) / 1000,
+        quantityKg: 0,
+        unit: "BAR",
+        priceUnit: "M",
+        unitPrice,
+        barPrice: parseNum(rowValue(row, ["bar price"])),
+        netTotal: parseNum(rowValue(row, ["amount"])) || (qtyLm * unitPrice),
+        currency: "EGP",
+        temper: attrs.temper,
+        alloy: attrs.alloy,
+        hsCode: attrs.hsCode,
+        isService: false,
+        ignored: false,
+      };
+    })
+    .filter(line => line && line.itemCode && Number(line.quantityBar) > 0);
+
+  return { metadata, lines };
+}
+
+async function readPdfText(filePath) {
+  let pdfParseModule;
+  try {
+    pdfParseModule = require("pdf-parse");
+  } catch (error) {
+    throw new Error("PDF parsing dependency is not installed.");
+  }
+
+  const dataBuffer = fs.readFileSync(filePath);
+  if (typeof pdfParseModule === "function") {
+    const pdfData = await pdfParseModule(dataBuffer);
+    return pdfData.text || "";
+  }
+  if (pdfParseModule && pdfParseModule.PDFParse) {
+    const pdfInstance = new pdfParseModule.PDFParse({ data: dataBuffer });
+    const parsed = await pdfInstance.getText();
+    return parsed.text || "";
+  }
+  return "";
+}
+
+async function parseWarehouseInvoice(filePath, originalName = "") {
+  const ext = path.extname(originalName || filePath).toLowerCase();
+  if (ext === ".pdf") {
+    const text = await readPdfText(filePath);
+    if (!text.trim()) throw new Error("No readable text was found in the warehouse invoice.");
+    const metadata = extractMetadata(text, originalName);
+    const lines = parseTextLines(text, metadata);
+    return {
+      metadata,
+      lines,
+      warnings: lines.length ? [] : ["No Canex stock lines were detected."],
+      parser: "canex-warehouse-pdf-v1",
+    };
+  }
+
+  return { ...parseWorkbook(filePath, originalName), warnings: [], parser: "canex-warehouse-excel-v1" };
+}
+
+module.exports = { parseWarehouseInvoice };

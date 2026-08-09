@@ -1,11 +1,11 @@
 import { useState, useEffect, useContext, useMemo } from 'react'
 import { toast } from 'react-hot-toast'
 import { AppContext } from '../App'
-import { uploadExcel } from '../services/api'
 import {
   getWarehouseProjects,
   createWarehouseProject,
   getProjectStock,
+  parseWarehouseInvoice,
   processWarehouseInvoice,
   getWarehouseUsers,
   updateWarehouseUserAccess,
@@ -31,7 +31,7 @@ export default function Warehouse() {
   // Upload & Review State
   const [uploading, setUploading] = useState(false)
   const [movementType, setMovementType] = useState('inbound') // 'inbound' | 'outbound'
-  const [parsedMeta, setParsedMeta] = useState({ invoiceNumber: '', supplier: 'Canex', currency: 'EGP', movementType: 'inbound' })
+  const [parsedMeta, setParsedMeta] = useState({ invoiceNumber: '', invoiceDate: '', receiptDate: '', supplier: 'Canex', currency: 'EGP', movementType: 'inbound' })
   const [reviewLines, setReviewLines] = useState([])
   const [savingInvoice, setSavingInvoice] = useState(false)
 
@@ -137,39 +137,40 @@ export default function Warehouse() {
 
     setUploading(true)
     try {
-      const res = await uploadExcel(file, 'template')
+      const res = await parseWarehouseInvoice(file)
       if (res.success) {
-        const rows = res.rows || []
-        const parsed = rows.map((r, idx) => {
-          const rawDesc = String(r.description || r.itemDescription || r.item || r.name || '').trim()
-          const itemCode = String(r.itemCode || r.code || r.internalCode || `ITEM-${idx + 1}`).trim()
-          const finish = String(r.finish || r.color || r.powderCoating || 'STD').trim()
-          const lengthMm = Number(r.lengthMm || r.length || 6000)
-          const qtyBar = Number(r.quantity || r.qty || r.quantityBar || 0)
-          const unitPrice = Number(r.unitPrice || r.price || 0)
-          const isService = /مصاريف|شحن|نقل|تغليف|خدمة|ضريبة|tax|freight|packing/i.test(rawDesc)
-
-          return {
-            id: `line_${idx}`,
-            itemCode,
-            description: rawDesc || `Glazing Bead / Profile ${itemCode}`,
-            finish,
-            lengthMm,
-            unit: 'BAR',
-            quantityBar: qtyBar,
-            quantityLm: (qtyBar * lengthMm) / 1000,
-            quantityKg: Number(r.weightKg || qtyBar * 1.5),
-            unitPrice,
-            netTotal: qtyBar * unitPrice,
-            isService,
-            ignored: isService,
-          }
-        })
+        const parsed = (res.lines || []).map((line, idx) => ({
+          id: line.id || `line_${idx + 1}`,
+          itemCode: line.itemCode || `ITEM-${idx + 1}`,
+          customerCode: line.customerCode || '',
+          description: line.description || '',
+          finish: line.finish || line.color || 'MF',
+          color: line.color || line.finish || 'MF',
+          lengthMm: Number(line.lengthMm || 6000),
+          unit: line.unit || 'BAR',
+          priceUnit: line.priceUnit || 'M',
+          quantityBar: Number(line.quantityBar || 0),
+          quantityLm: Number(line.quantityLm || 0),
+          quantityKg: Number(line.quantityKg || 0),
+          unitPrice: Number(line.unitPrice || 0),
+          barPrice: Number(line.barPrice || 0),
+          netTotal: Number(line.netTotal || 0),
+          temper: line.temper || '',
+          alloy: line.alloy || '',
+          hsCode: line.hsCode || '',
+          isService: Boolean(line.isService),
+          ignored: Boolean(line.ignored || line.isService),
+        }))
 
         setParsedMeta({
           invoiceNumber: res.metadata?.invoiceNumber || `INV-${Date.now().toString().slice(-6)}`,
-          supplier: res.metadata?.supplier || 'Schüco',
-          currency: 'EGP',
+          invoiceDate: res.metadata?.invoiceDate || '',
+          receiptDate: res.metadata?.receiptDate || res.metadata?.deliveryDate || '',
+          supplier: res.metadata?.supplier || 'Canex',
+          currency: res.metadata?.currency || 'EGP',
+          totalAmount: res.metadata?.totalAmount || 0,
+          invoiceAmount: res.metadata?.invoiceAmount || 0,
+          taxAmount: res.metadata?.taxAmount || 0,
           fileName: file.name,
           movementType: movementType,
         })
@@ -178,9 +179,10 @@ export default function Warehouse() {
         toast.success(isAr ? 'تم تحليل الفاتورة بنجاح! يرجى مراجعة البنود قبل الحفظ' : 'Invoice parsed! Review lines before saving.')
       }
     } catch (err) {
-      toast.error(isAr ? 'فشل تحليل الفاتورة' : 'Failed to parse invoice')
+      toast.error(err.response?.data?.message || (isAr ? 'فشل تحليل الفاتورة' : 'Failed to parse invoice'))
     } finally {
       setUploading(false)
+      e.target.value = ''
     }
   }
 
@@ -188,12 +190,17 @@ export default function Warehouse() {
     setReviewLines((prev) => {
       const copy = [...prev]
       copy[index] = { ...copy[index], [field]: value }
-      if (field === 'quantityBar' || field === 'lengthMm' || field === 'unitPrice') {
+      if (field === 'quantityBar' || field === 'quantityLm' || field === 'lengthMm' || field === 'unitPrice' || field === 'barPrice' || field === 'priceUnit') {
         const bar = Number(copy[index].quantityBar || 0)
         const len = Number(copy[index].lengthMm || 6000)
-        const price = Number(copy[index].unitPrice || 0)
-        copy[index].quantityLm = (bar * len) / 1000
-        copy[index].netTotal = bar * price
+        if (field === 'quantityBar' || field === 'lengthMm') {
+          copy[index].quantityLm = (bar * len) / 1000
+        }
+        const lm = Number(copy[index].quantityLm || 0)
+        const priceUnit = String(copy[index].priceUnit || 'M').toUpperCase()
+        const unitPrice = Number(copy[index].unitPrice || 0)
+        const barPrice = Number(copy[index].barPrice || 0)
+        copy[index].netTotal = priceUnit === 'BAR' ? bar * (barPrice || unitPrice) : lm * unitPrice
       }
       return copy
     })
@@ -439,6 +446,7 @@ export default function Warehouse() {
               <thead>
                 <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
+                  <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'نوع الدهان/اللون' : 'Finish/Color'}</th>
                   <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الطول (mm)' : 'Length (mm)'}</th>
@@ -453,6 +461,7 @@ export default function Warehouse() {
                   filteredStock.map((item) => (
                     <tr key={item.itemKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                       <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>{item.itemCode}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: '#8ab4ff', fontWeight: 600 }}>{item.customerCode || '—'}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>{item.description}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>
                         <span className="badge" style={{ background: 'rgba(255,215,0,0.1)', color: '#FFD700', border: '1px solid rgba(255,215,0,0.3)' }}>
@@ -470,7 +479,7 @@ export default function Warehouse() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="8" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                    <td colSpan="9" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                       {isAr ? 'لا توجد أصناف مسجلة في هذا المشروع حتى الآن' : 'No items recorded in this project yet'}
                     </td>
                   </tr>
@@ -562,48 +571,65 @@ export default function Warehouse() {
               {/* Invoice Metadata Header */}
               <div
                 style={{
-                  display: 'flex',
-                  gap: '1rem',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                  gap: '0.9rem',
                   marginBottom: '1rem',
                   padding: '1rem',
                   background: 'rgba(255,255,255,0.02)',
                   borderRadius: '8px',
-                  flexWrap: 'wrap',
                 }}
               >
-                <div>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{isAr ? 'رقم الفاتورة:' : 'Invoice No:'}</span>
-                  <input
-                    type="text"
-                    value={parsedMeta.invoiceNumber}
-                    onChange={(e) => setParsedMeta((p) => ({ ...p, invoiceNumber: e.target.value }))}
-                    style={{ background: '#101223', border: '1px solid var(--border)', padding: '0.3rem 0.6rem', color: '#fff', borderRadius: '4px', display: 'block', marginTop: '0.2rem' }}
-                  />
-                </div>
-                <div>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{isAr ? 'المورد:' : 'Supplier:'}</span>
-                  <input
-                    type="text"
-                    value={parsedMeta.supplier}
-                    onChange={(e) => setParsedMeta((p) => ({ ...p, supplier: e.target.value }))}
-                    style={{ background: '#101223', border: '1px solid var(--border)', padding: '0.3rem 0.6rem', color: '#fff', borderRadius: '4px', display: 'block', marginTop: '0.2rem' }}
-                  />
-                </div>
+                {[
+                  { key: 'invoiceNumber', label: isAr ? 'رقم الفاتورة' : 'Invoice No.' },
+                  { key: 'invoiceDate', label: isAr ? 'تاريخ الفاتورة' : 'Invoice Date', type: 'date' },
+                  { key: 'receiptDate', label: isAr ? 'تاريخ الاستلام' : 'Receipt Date', type: 'date' },
+                  { key: 'supplier', label: isAr ? 'اسم المورد' : 'Supplier' },
+                  { key: 'currency', label: isAr ? 'العملة' : 'Currency' },
+                ].map((field) => (
+                  <div key={field.key}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{field.label}</span>
+                    <input
+                      type={field.type || 'text'}
+                      value={parsedMeta[field.key] || ''}
+                      onChange={(e) => setParsedMeta((p) => ({ ...p, [field.key]: e.target.value }))}
+                      style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.45rem 0.65rem', color: '#fff', borderRadius: '6px', display: 'block', marginTop: '0.25rem' }}
+                    />
+                  </div>
+                ))}
               </div>
 
               {/* Review Table */}
-              <div style={{ overflowX: 'auto', marginBottom: '1.5rem' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <div style={{ overflowX: 'auto', marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
+                <table style={{ minWidth: '1980px', width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: '60px' }} />
+                    <col style={{ width: '150px' }} />
+                    <col style={{ width: '140px' }} />
+                    <col style={{ width: '580px' }} />
+                    <col style={{ width: '110px' }} />
+                    <col style={{ width: '105px' }} />
+                    <col style={{ width: '130px' }} />
+                    <col style={{ width: '130px' }} />
+                    <col style={{ width: '110px' }} />
+                    <col style={{ width: '130px' }} />
+                    <col style={{ width: '130px' }} />
+                    <col style={{ width: '145px' }} />
+                  </colgroup>
                   <thead>
                     <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)' }}>
-                      <th style={{ padding: '0.5rem' }}>{isAr ? 'تجاهل' : 'Ignore'}</th>
-                      <th style={{ padding: '0.5rem' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
-                      <th style={{ padding: '0.5rem' }}>{isAr ? 'البيان' : 'Description'}</th>
-                      <th style={{ padding: '0.5rem' }}>{isAr ? 'الدهان' : 'Finish'}</th>
-                      <th style={{ padding: '0.5rem' }}>{isAr ? 'الطول mm' : 'Length mm'}</th>
-                      <th style={{ padding: '0.5rem' }}>{isAr ? 'أعواد BAR' : 'Bars'}</th>
-                      <th style={{ padding: '0.5rem' }}>{isAr ? 'سعر الوحدة' : 'Unit Price'}</th>
-                      <th style={{ padding: '0.5rem' }}>{isAr ? 'الإجمالي' : 'Total'}</th>
+                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'تجاهل' : 'Ignore'}</th>
+                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'كود الصنف' : 'Item'}</th>
+                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
+                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'وصف الصنف / القطاع' : 'Description'}</th>
+                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'التشطيب' : 'Finish'}</th>
+                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'الطول mm' : 'Length mm'}</th>
+                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'إجمالي الأمتار' : 'Total LM'}</th>
+                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'إجمالي الوزن' : 'Total KG'}</th>
+                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'الأعواد' : 'Bars'}</th>
+                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'سعر المتر' : 'Meter Price'}</th>
+                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'سعر العود' : 'Bar Price'}</th>
+                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'الإجمالي' : 'Total'}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -614,65 +640,68 @@ export default function Warehouse() {
                           borderBottom: '1px solid rgba(255,255,255,0.04)',
                           opacity: line.ignored ? 0.4 : 1,
                           background: line.isService ? 'rgba(255, 77, 79, 0.05)' : 'transparent',
+                          verticalAlign: 'top',
                         }}
                       >
-                        <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>
                           <input
                             type="checkbox"
                             checked={line.ignored}
                             onChange={(e) => updateReviewLine(idx, 'ignored', e.target.checked)}
                           />
                         </td>
-                        <td style={{ padding: '0.5rem' }}>
+                        <td style={{ padding: '0.6rem 0.5rem' }}>
                           <input
                             type="text"
                             value={line.itemCode}
                             onChange={(e) => updateReviewLine(idx, 'itemCode', e.target.value)}
-                            style={{ background: '#101223', border: '1px solid var(--border)', color: '#00e0a1', padding: '0.2rem 0.4rem', borderRadius: '4px', width: '110px' }}
+                            style={{ background: '#101223', border: '1px solid var(--border)', color: '#00e0a1', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%' }}
                           />
                         </td>
-                        <td style={{ padding: '0.5rem' }}>
+                        <td style={{ padding: '0.6rem 0.5rem' }}>
                           <input
                             type="text"
-                            value={line.description}
-                            onChange={(e) => updateReviewLine(idx, 'description', e.target.value)}
-                            style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.2rem 0.4rem', borderRadius: '4px', width: '220px' }}
+                            value={line.customerCode || ''}
+                            onChange={(e) => updateReviewLine(idx, 'customerCode', e.target.value)}
+                            style={{ background: '#101223', border: '1px solid var(--border)', color: '#8ab4ff', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%' }}
                           />
                         </td>
-                        <td style={{ padding: '0.5rem' }}>
+                        <td style={{ padding: '0.6rem 0.5rem' }}>
+                          <textarea
+                            value={line.description}
+                            rows={Math.max(2, Math.ceil(String(line.description || '').length / 70))}
+                            onChange={(e) => updateReviewLine(idx, 'description', e.target.value)}
+                            style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.45rem 0.55rem', borderRadius: '4px', width: '100%', minHeight: '54px', resize: 'vertical', lineHeight: 1.45 }}
+                          />
+                        </td>
+                        <td style={{ padding: '0.6rem 0.5rem' }}>
                           <input
                             type="text"
                             value={line.finish}
                             onChange={(e) => updateReviewLine(idx, 'finish', e.target.value)}
-                            style={{ background: '#101223', border: '1px solid var(--border)', color: '#FFD700', padding: '0.2rem 0.4rem', borderRadius: '4px', width: '90px' }}
+                            style={{ background: '#101223', border: '1px solid var(--border)', color: '#FFD700', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%' }}
                           />
                         </td>
-                        <td style={{ padding: '0.5rem' }}>
-                          <input
-                            type="number"
-                            value={line.lengthMm}
-                            onChange={(e) => updateReviewLine(idx, 'lengthMm', e.target.value)}
-                            style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.2rem 0.4rem', borderRadius: '4px', width: '70px' }}
-                          />
+                        <td style={{ padding: '0.6rem 0.5rem' }}>
+                          <input type="number" value={line.lengthMm} onChange={(e) => updateReviewLine(idx, 'lengthMm', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%' }} />
                         </td>
-                        <td style={{ padding: '0.5rem' }}>
-                          <input
-                            type="number"
-                            value={line.quantityBar}
-                            onChange={(e) => updateReviewLine(idx, 'quantityBar', e.target.value)}
-                            style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.2rem 0.4rem', borderRadius: '4px', width: '70px', fontWeight: 700 }}
-                          />
+                        <td style={{ padding: '0.6rem 0.5rem' }}>
+                          <input type="number" step="0.001" value={line.quantityLm} onChange={(e) => updateReviewLine(idx, 'quantityLm', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%', fontWeight: 700 }} />
                         </td>
-                        <td style={{ padding: '0.5rem' }}>
-                          <input
-                            type="number"
-                            value={line.unitPrice}
-                            onChange={(e) => updateReviewLine(idx, 'unitPrice', e.target.value)}
-                            style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.2rem 0.4rem', borderRadius: '4px', width: '80px' }}
-                          />
+                        <td style={{ padding: '0.6rem 0.5rem' }}>
+                          <input type="number" step="0.001" value={line.quantityKg} onChange={(e) => updateReviewLine(idx, 'quantityKg', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%' }} />
                         </td>
-                        <td style={{ padding: '0.5rem', fontWeight: 700, color: '#64b5f6' }}>
-                          {line.netTotal ? line.netTotal.toLocaleString() : 0}
+                        <td style={{ padding: '0.6rem 0.5rem' }}>
+                          <input type="number" value={line.quantityBar} onChange={(e) => updateReviewLine(idx, 'quantityBar', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%', fontWeight: 700 }} />
+                        </td>
+                        <td style={{ padding: '0.6rem 0.5rem' }}>
+                          <input type="number" step="0.0001" value={line.unitPrice} onChange={(e) => updateReviewLine(idx, 'unitPrice', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%' }} />
+                        </td>
+                        <td style={{ padding: '0.6rem 0.5rem' }}>
+                          <input type="number" step="0.0001" value={line.barPrice || ''} onChange={(e) => updateReviewLine(idx, 'barPrice', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%' }} />
+                        </td>
+                        <td style={{ padding: '0.6rem 0.5rem', fontWeight: 700, color: '#64b5f6', whiteSpace: 'nowrap' }}>
+                          {Number(line.netTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
                     ))}

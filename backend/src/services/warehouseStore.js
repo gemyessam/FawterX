@@ -196,6 +196,8 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
   // 1. Save Invoice Document
   const invoiceDoc = {
     invoiceNumber: invoiceMeta.invoiceNumber || `INV-${Date.now()}`,
+    invoiceDate: invoiceMeta.invoiceDate || "",
+    receiptDate: invoiceMeta.receiptDate || invoiceMeta.deliveryDate || "",
     supplier: invoiceMeta.supplier || "Canex",
     documentType: docType,
     movementType: isOutbound ? "outbound" : "inbound",
@@ -219,6 +221,7 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
 
     const supplier = line.supplier || invoiceMeta.supplier || "CANEX";
     const itemCode = line.itemCode || line.internalCode || "CODE";
+    const customerCode = line.customerCode || "";
     const finish = line.finish || line.color || "STD";
     const lengthMm = Number(line.lengthMm || line.length || 6000);
 
@@ -228,6 +231,8 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
     const qtyLm = Number(line.quantityLm || (qtyBar * lengthMm) / 1000);
     const qtyKg = Number(line.quantityKg || line.weightKg || 0);
     const unitPrice = Number(line.unitPrice || 0);
+    const barPrice = Number(line.barPrice || 0);
+    const priceUnit = line.priceUnit || (unitPrice ? "M" : "BAR");
     const netTotal = Number(line.netTotal || qtyBar * unitPrice);
 
     // Factors for stock balance updates (+ for inbound, - for outbound)
@@ -243,6 +248,7 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
       movementType: isOutbound ? "outbound" : "inbound",
       itemKey,
       itemCode,
+      customerCode,
       description: line.description || "Glazing Bead / Profile",
       finish,
       lengthMm,
@@ -251,6 +257,8 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
       quantityLm: qtyLm,
       quantityKg: qtyKg,
       unitPrice,
+      barPrice,
+      priceUnit,
       netTotal,
       currency: invoiceDoc.currency,
       createdBy: userUid,
@@ -266,12 +274,19 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
       {
         itemKey,
         itemCode,
+        customerCode,
         description: line.description || "",
         finish,
+        color: line.color || finish,
         lengthMm,
         unit: line.unit || "BAR",
         secondaryUnit: "LM",
+        priceUnit,
+        barPrice,
         weightKg: qtyKg,
+        temper: line.temper || "",
+        alloy: line.alloy || "",
+        hsCode: line.hsCode || "",
         updatedAt: new Date().toISOString(),
       },
       { merge: true }
@@ -284,14 +299,18 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
       {
         itemKey,
         itemCode,
+        customerCode,
         description: line.description || "",
         finish,
+        color: line.color || finish,
         lengthMm,
         unit: line.unit || "BAR",
         quantityBar: admin.firestore.FieldValue.increment(factorBar),
         quantityLm: admin.firestore.FieldValue.increment(factorLm),
         quantityKg: admin.firestore.FieldValue.increment(factorKg),
         lastUnitCost: unitPrice,
+        lastBarCost: barPrice,
+        priceUnit,
         currency: invoiceDoc.currency,
         updatedAt: new Date().toISOString(),
       },
