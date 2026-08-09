@@ -120,20 +120,35 @@ async function listProjects() {
   const snapshot = await db.collection("warehouseProjects").get();
   let projects = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-  if (projects.length === 0) {
-    const defaultProject = {
-      name: "Canex Stock",
-      code: "CANEX",
-      description: "المخزن الرئيسي لقطاعات وإكسسوارات كانكس",
-      status: "active",
+  const defaultProjectData = {
+    name: "Canex Stock",
+    code: "CANEX",
+    description: "المخزن الرئيسي لقطاعات وإكسسوارات كانكس",
+    status: "active",
+  };
+
+  // Ensure default_canex exists
+  let hasDefault = projects.some((p) => p.id === "default_canex" || p.code === "CANEX");
+  if (!hasDefault) {
+    await db.collection("warehouseProjects").doc("default_canex").set({
+      ...defaultProjectData,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    };
-    const ref = await db.collection("warehouseProjects").add(defaultProject);
-    projects = [{ id: ref.id, ...defaultProject }];
+    }, { merge: true });
+    projects.unshift({ id: "default_canex", ...defaultProjectData });
   }
 
-  return projects;
+  // Deduplicate and ensure default_canex project is present with id "default_canex"
+  const projectMap = new Map();
+  projects.forEach((p) => {
+    const isCanex = p.id === "default_canex" || p.code === "CANEX";
+    const id = isCanex ? "default_canex" : p.id;
+    if (!projectMap.has(id)) {
+      projectMap.set(id, { ...p, id, name: isCanex ? "Canex Stock" : (p.name || id) });
+    }
+  });
+
+  return Array.from(projectMap.values());
 }
 
 /**
@@ -158,14 +173,55 @@ async function createProject({ name, code, description }, actorUid) {
 }
 
 /**
- * Get current stock snapshot for a project
+ * Get current stock snapshot for a project (with cross-project aggregation fallback)
  */
 async function getProjectStock(projectId) {
   const db = getDb();
   if (!db) return [];
 
-  const snapshot = await db.collection("warehouseProjects").doc(projectId).collection("stock").get();
-  return snapshot.docs.map((doc) => ({ itemKey: doc.id, ...doc.data() }));
+  const stockMap = new Map();
+
+  const fetchStockFromProj = async (pid) => {
+    try {
+      const snapshot = await db.collection("warehouseProjects").doc(pid).collection("stock").get();
+      snapshot.docs.forEach((doc) => {
+        const itemKey = doc.id;
+        const data = doc.data() || {};
+        if (!stockMap.has(itemKey)) {
+          stockMap.set(itemKey, { itemKey, ...data });
+        } else {
+          const existing = stockMap.get(itemKey);
+          stockMap.set(itemKey, {
+            ...existing,
+            ...data,
+            quantityBar: (Number(existing.quantityBar) || 0) + (Number(data.quantityBar) || 0),
+            quantityLm: (Number(existing.quantityLm) || 0) + (Number(data.quantityLm) || 0),
+            quantityKg: (Number(existing.quantityKg) || 0) + (Number(data.quantityKg) || 0),
+          });
+        }
+      });
+    } catch (e) {
+      console.warn(`Error fetching stock for project ${pid}:`, e.message);
+    }
+  };
+
+  await fetchStockFromProj(projectId);
+
+  // Fallback: If stock is empty or target is default_canex, scan all project collections in Firestore
+  if (stockMap.size === 0 || projectId === "default_canex") {
+    try {
+      const allProjSnap = await db.collection("warehouseProjects").get();
+      for (const pDoc of allProjSnap.docs) {
+        if (pDoc.id !== projectId) {
+          await fetchStockFromProj(pDoc.id);
+        }
+      }
+    } catch (err) {
+      console.warn("Error scanning all warehouseProjects for stock:", err.message);
+    }
+  }
+
+  return Array.from(stockMap.values());
 }
 
 /**
@@ -346,81 +402,133 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
 }
 
 /**
- * Get transaction invoice history for a project
+ * Get transaction invoice history for a project (with cross-project aggregation fallback)
  */
 async function getProjectInvoices(projectId) {
   const db = getDb();
   if (!db) return [];
 
-  const snapshot = await db
-    .collection("warehouseProjects")
-    .doc(projectId)
-    .collection("invoices")
-    .orderBy("createdAt", "desc")
-    .get();
+  const invoiceMap = new Map();
 
-  const invoices = [];
-  for (const doc of snapshot.docs) {
-    const data = doc.data() || {};
-    let lineItemsCount = Number(data.lineItemsCount || data.movementsCount || 0);
-    let totalQuantityBar = Number(data.totalQuantityBar || data.totalBars || 0);
-    let totalQuantityLm = Number(data.totalQuantityLm || data.totalLm || 0);
-
-    // Dynamic fallback: query movements if metrics are 0 or undefined
-    if (!lineItemsCount || !totalQuantityBar) {
-      let mvtsSnapshot = await db
+  const fetchInvoicesFromProj = async (pid) => {
+    try {
+      const snapshot = await db
         .collection("warehouseProjects")
-        .doc(projectId)
-        .collection("movements")
-        .where("invoiceId", "==", doc.id)
+        .doc(pid)
+        .collection("invoices")
         .get();
 
-      if (mvtsSnapshot.empty && data.invoiceNumber) {
-        mvtsSnapshot = await db
-          .collection("warehouseProjects")
-          .doc(projectId)
-          .collection("movements")
-          .where("invoiceNumber", "==", data.invoiceNumber)
-          .get();
-      }
+      for (const doc of snapshot.docs) {
+        if (invoiceMap.has(doc.id)) continue;
+        const data = doc.data() || {};
+        let lineItemsCount = Number(data.lineItemsCount || data.movementsCount || 0);
+        let totalQuantityBar = Number(data.totalQuantityBar || data.totalBars || 0);
+        let totalQuantityLm = Number(data.totalQuantityLm || data.totalLm || 0);
 
-      if (!mvtsSnapshot.empty) {
-        lineItemsCount = mvtsSnapshot.size;
-        totalQuantityBar = 0;
-        totalQuantityLm = 0;
-        mvtsSnapshot.forEach((mDoc) => {
-          const mData = mDoc.data() || {};
-          totalQuantityBar += Number(mData.quantityBar || mData.quantity || mData.qtyBar || 0);
-          totalQuantityLm += Number(mData.quantityLm || mData.qtyLm || 0);
+        if (!lineItemsCount || !totalQuantityBar) {
+          let mvtsSnapshot = await db
+            .collection("warehouseProjects")
+            .doc(pid)
+            .collection("movements")
+            .where("invoiceId", "==", doc.id)
+            .get();
+
+          if (mvtsSnapshot.empty && data.invoiceNumber) {
+            mvtsSnapshot = await db
+              .collection("warehouseProjects")
+              .doc(pid)
+              .collection("movements")
+              .where("invoiceNumber", "==", data.invoiceNumber)
+              .get();
+          }
+
+          if (!mvtsSnapshot.empty) {
+            lineItemsCount = mvtsSnapshot.size;
+            totalQuantityBar = 0;
+            totalQuantityLm = 0;
+            mvtsSnapshot.forEach((mDoc) => {
+              const mData = mDoc.data() || {};
+              totalQuantityBar += Number(mData.quantityBar || mData.quantity || mData.qtyBar || 0);
+              totalQuantityLm += Number(mData.quantityLm || mData.qtyLm || 0);
+            });
+          }
+        }
+
+        invoiceMap.set(doc.id, {
+          id: doc.id,
+          ...data,
+          lineItemsCount,
+          totalQuantityBar,
+          totalQuantityLm,
         });
       }
+    } catch (e) {
+      console.warn(`Error fetching invoices for project ${pid}:`, e.message);
     }
+  };
 
-    invoices.push({
-      id: doc.id,
-      ...data,
-      lineItemsCount,
-      totalQuantityBar,
-      totalQuantityLm,
-    });
+  await fetchInvoicesFromProj(projectId);
+
+  if (invoiceMap.size === 0 || projectId === "default_canex") {
+    try {
+      const allProjSnap = await db.collection("warehouseProjects").get();
+      for (const pDoc of allProjSnap.docs) {
+        if (pDoc.id !== projectId) {
+          await fetchInvoicesFromProj(pDoc.id);
+        }
+      }
+    } catch (err) {
+      console.warn("Error scanning all warehouseProjects for invoices:", err.message);
+    }
   }
 
-  return invoices;
+  const result = Array.from(invoiceMap.values());
+  result.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  return result;
 }
 
 /**
- * Get item movement log for a project or specific invoice
+ * Get item movement log for a project or specific invoice (with cross-project fallback)
  */
 async function getProjectMovements(projectId, invoiceId) {
   const db = getDb();
   if (!db) return [];
 
-  let query = db.collection("warehouseProjects").doc(projectId).collection("movements");
-  if (invoiceId) {
-    query = query.where("invoiceId", "==", invoiceId);
+  const mvtMap = new Map();
+
+  const fetchMovementsFromProj = async (pid) => {
+    try {
+      let query = db.collection("warehouseProjects").doc(pid).collection("movements");
+      if (invoiceId) {
+        query = query.where("invoiceId", "==", invoiceId);
+      }
+      const snapshot = await query.get();
+      snapshot.docs.forEach((doc) => {
+        if (!mvtMap.has(doc.id)) {
+          mvtMap.set(doc.id, { id: doc.id, ...doc.data() });
+        }
+      });
+    } catch (e) {
+      console.warn(`Error fetching project movements for ${pid}:`, e.message);
+    }
+  };
+
+  await fetchMovementsFromProj(projectId);
+
+  if (mvtMap.size === 0 || projectId === "default_canex") {
+    try {
+      const allProjSnap = await db.collection("warehouseProjects").get();
+      for (const pDoc of allProjSnap.docs) {
+        if (pDoc.id !== projectId) {
+          await fetchMovementsFromProj(pDoc.id);
+        }
+      }
+    } catch (err) {
+      console.warn("Error scanning all warehouseProjects for movements:", err.message);
+    }
   }
-  const snapshot = await query.get();
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+  return Array.from(mvtMap.values());
 }
 
 /**
@@ -471,32 +579,58 @@ async function deleteStockItem(projectId, itemKey) {
 }
 
 /**
- * Get movement history for a specific stock item across all invoices
+ * Get movement history for a specific stock item across all invoices and projects
  */
 async function getItemMovementsHistory(projectId, itemKey, itemCode) {
   const db = getDb();
   if (!db) return [];
 
-  let querySnapshot = await db
-    .collection("warehouseProjects")
-    .doc(projectId)
-    .collection("movements")
-    .where("itemKey", "==", itemKey)
-    .get();
+  const mvtMap = new Map();
 
-  if (querySnapshot.empty && itemCode) {
-    querySnapshot = await db
-      .collection("warehouseProjects")
-      .doc(projectId)
-      .collection("movements")
-      .where("itemCode", "==", itemCode)
-      .get();
+  const fetchItemMovementsFromProj = async (pid) => {
+    try {
+      let snap = await db
+        .collection("warehouseProjects")
+        .doc(pid)
+        .collection("movements")
+        .where("itemKey", "==", itemKey)
+        .get();
+
+      if (snap.empty && itemCode) {
+        snap = await db
+          .collection("warehouseProjects")
+          .doc(pid)
+          .collection("movements")
+          .where("itemCode", "==", itemCode)
+          .get();
+      }
+
+      snap.docs.forEach((doc) => {
+        if (!mvtMap.has(doc.id)) {
+          mvtMap.set(doc.id, { id: doc.id, ...doc.data() });
+        }
+      });
+    } catch (e) {
+      console.warn(`Error fetching movements for project ${pid}:`, e.message);
+    }
+  };
+
+  await fetchItemMovementsFromProj(projectId);
+
+  if (mvtMap.size === 0 || projectId === "default_canex") {
+    try {
+      const allProjSnap = await db.collection("warehouseProjects").get();
+      for (const pDoc of allProjSnap.docs) {
+        if (pDoc.id !== projectId) {
+          await fetchItemMovementsFromProj(pDoc.id);
+        }
+      }
+    } catch (err) {
+      console.warn("Error scanning all warehouseProjects for movements:", err.message);
+    }
   }
 
-  const movements = querySnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  const movements = Array.from(mvtMap.values());
 
   // Sort chronologically ascending to calculate running stock balance
   movements.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
