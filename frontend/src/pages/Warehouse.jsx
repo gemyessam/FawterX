@@ -996,7 +996,8 @@ export default function Warehouse() {
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'المورد / الجهة' : 'Supplier'}</th>
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'اسم الملف المرفوع' : 'File Name'}</th>
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'عدد البنود' : 'Line Items'}</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأعواد / الأمتار' : 'Bars / Meters'}</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأعواد / القطاعات' : 'Bars / Profiles'}</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'إجمالي الأمتار' : 'Total Meters'}</th>
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'إجمالي القيمة' : 'Total Amount'}</th>
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'تاريخ التسجيل' : 'Date & Time'}</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>{isAr ? 'التفاصيل' : 'Details'}</th>
@@ -1027,9 +1028,11 @@ export default function Warehouse() {
                         <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#FFD700' }}>
                           {inv.lineItemsCount || 0} {isAr ? 'بند' : 'items'}
                         </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <div><span dir="ltr">{inv.totalQuantityBar || 0} BAR</span></div>
-                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}><span dir="ltr">{(inv.totalQuantityLm || 0).toFixed(1)} m</span></div>
+                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#64b5f6' }}>
+                          <span dir="ltr">{inv.totalQuantityBar || 0} BAR</span>
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#a29bfe' }}>
+                          <span dir="ltr">{(inv.totalQuantityLm || 0).toFixed(1)} m</span>
                         </td>
                         <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>
                           <span dir="ltr">{(inv.totalAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} EGP</span>
@@ -1087,8 +1090,47 @@ export default function Warehouse() {
                 📭 {isAr ? 'لا توجد تفاصيل بنود لهذه الحركة' : 'No movement details found for this transaction'}
               </div>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <>
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: '1.25rem',
+                    flexWrap: 'wrap',
+                    marginBottom: '1rem',
+                    background: 'rgba(255,255,255,0.03)',
+                    padding: '0.85rem 1.2rem',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(255,255,255,0.07)',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <div>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'عدد البنود:' : 'Line Items:'} </span>
+                    <strong style={{ color: '#FFD700', fontSize: '1rem' }}>{invoiceMovements.length} {isAr ? 'بند' : 'items'}</strong>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'إجمالي الأعواد / القطاعات:' : 'Total Bars:'} </span>
+                    <strong style={{ color: '#64b5f6', fontSize: '1rem' }}>
+                      {invoiceMovements.reduce((acc, m) => acc + Number(m.quantityBar || 0), 0)} BAR
+                    </strong>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'إجمالي الأمتار:' : 'Total Meters:'} </span>
+                    <strong style={{ color: '#a29bfe', fontSize: '1rem' }}>
+                      {invoiceMovements.reduce((acc, m) => acc + Number(m.quantityLm || 0), 0).toFixed(1)} m
+                    </strong>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'إجمالي القيمة:' : 'Total Value:'} </span>
+                    <strong style={{ color: '#00e0a1', fontSize: '1rem' }}>
+                      {invoiceMovements.reduce((acc, m) => acc + Number(m.netTotal || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} EGP
+                    </strong>
+                  </div>
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                   <thead>
                     <tr style={{ background: 'rgba(255,255,255,0.05)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
                       <th style={{ padding: '0.6rem 0.8rem', width: '40px' }}>#</th>
@@ -1123,7 +1165,8 @@ export default function Warehouse() {
                   </tbody>
                 </table>
               </div>
-            )}
+            </>
+          )}
 
             <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
               <button

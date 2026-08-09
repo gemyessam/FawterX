@@ -195,8 +195,15 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
 
   // 1. Save Invoice Document
   const validLinesCount = lines.filter((l) => !l.ignored && !l.isService).length;
-  const totalQtyBar = lines.reduce((acc, l) => acc + (l.ignored || l.isService ? 0 : Number(l.quantityBar || l.quantity || 0)), 0);
-  const totalQtyLm = lines.reduce((acc, l) => acc + (l.ignored || l.isService ? 0 : Number(l.quantityLm || 0)), 0);
+  const totalQtyBar = lines.reduce((acc, l) => acc + (l.ignored || l.isService ? 0 : Number(l.quantityBar || l.quantity || l.qtyBar || l.bars || 0)), 0);
+  const totalQtyLm = lines.reduce((acc, l) => {
+    if (l.ignored || l.isService) return acc;
+    const qLm = Number(l.quantityLm || l.qtyLm || 0);
+    if (qLm > 0) return acc + qLm;
+    const qBar = Number(l.quantityBar || l.quantity || l.qtyBar || l.bars || 0);
+    const lenMm = Number(l.lengthMm || l.length || 6000);
+    return acc + (qBar * lenMm) / 1000;
+  }, 0);
 
   const invoiceDoc = {
     invoiceNumber: invoiceMeta.invoiceNumber || `INV-${Date.now()}`,
@@ -352,7 +359,53 @@ async function getProjectInvoices(projectId) {
     .orderBy("createdAt", "desc")
     .get();
 
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const invoices = [];
+  for (const doc of snapshot.docs) {
+    const data = doc.data() || {};
+    let lineItemsCount = Number(data.lineItemsCount || data.movementsCount || 0);
+    let totalQuantityBar = Number(data.totalQuantityBar || data.totalBars || 0);
+    let totalQuantityLm = Number(data.totalQuantityLm || data.totalLm || 0);
+
+    // Dynamic fallback: query movements if metrics are 0 or undefined
+    if (!lineItemsCount || !totalQuantityBar) {
+      let mvtsSnapshot = await db
+        .collection("warehouseProjects")
+        .doc(projectId)
+        .collection("movements")
+        .where("invoiceId", "==", doc.id)
+        .get();
+
+      if (mvtsSnapshot.empty && data.invoiceNumber) {
+        mvtsSnapshot = await db
+          .collection("warehouseProjects")
+          .doc(projectId)
+          .collection("movements")
+          .where("invoiceNumber", "==", data.invoiceNumber)
+          .get();
+      }
+
+      if (!mvtsSnapshot.empty) {
+        lineItemsCount = mvtsSnapshot.size;
+        totalQuantityBar = 0;
+        totalQuantityLm = 0;
+        mvtsSnapshot.forEach((mDoc) => {
+          const mData = mDoc.data() || {};
+          totalQuantityBar += Number(mData.quantityBar || mData.quantity || mData.qtyBar || 0);
+          totalQuantityLm += Number(mData.quantityLm || mData.qtyLm || 0);
+        });
+      }
+    }
+
+    invoices.push({
+      id: doc.id,
+      ...data,
+      lineItemsCount,
+      totalQuantityBar,
+      totalQuantityLm,
+    });
+  }
+
+  return invoices;
 }
 
 /**
