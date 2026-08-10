@@ -122,6 +122,10 @@ export default function Warehouse() {
   const [reviewLines, setReviewLines] = useState([])
   const [savingInvoice, setSavingInvoice] = useState(false)
 
+  // Batch Upload & Review State
+  const [batchInvoices, setBatchInvoices] = useState([])
+  const [savingBatch, setSavingBatch] = useState(false)
+
   // New Project Form
   const [newProjectName, setNewProjectName] = useState('')
   const [newProjectCode, setNewProjectCode] = useState('')
@@ -325,59 +329,285 @@ export default function Warehouse() {
   }
 
   async function handleFileUpload(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
 
     setUploading(true)
-    try {
-      const res = await parseWarehouseInvoice(file)
-      if (res.success) {
-        const parsed = (res.lines || []).map((line, idx) => ({
-          id: line.id || `line_${idx + 1}`,
-          itemCode: line.itemCode || `ITEM-${idx + 1}`,
-          customerCode: line.customerCode || '',
-          description: line.description || '',
-          finish: line.finish || line.color || 'MF',
-          color: line.color || line.finish || 'MF',
-          lengthMm: Number(line.lengthMm || 6000),
-          unit: line.unit || 'BAR',
-          priceUnit: line.priceUnit || 'M',
-          quantityBar: Number(line.quantityBar || 0),
-          quantityLm: Number(line.quantityLm || 0),
-          quantityKg: Number(line.quantityKg || 0),
-          unitPrice: Number(line.unitPrice || 0),
-          barPrice: Number(line.barPrice || 0),
-          netTotal: Number(line.netTotal || 0),
-          temper: line.temper || '',
-          alloy: line.alloy || '',
-          hsCode: line.hsCode || '',
-          isService: Boolean(line.isService),
-          ignored: Boolean(line.ignored || line.isService),
-        }))
+    let parsedCount = 0
+    const newBatchItems = []
 
-        setParsedMeta({
-          invoiceNumber: res.metadata?.invoiceNumber || `INV-${Date.now().toString().slice(-6)}`,
-          salesOrder: res.metadata?.salesOrder || '',
-          customerReference: res.metadata?.customerReference || '',
-          invoiceDate: res.metadata?.invoiceDate || '',
-          receiptDate: res.metadata?.receiptDate || res.metadata?.deliveryDate || '',
-          supplier: res.metadata?.supplier || 'Canex',
-          currency: res.metadata?.currency || 'EGP',
-          totalAmount: res.metadata?.totalAmount || 0,
-          invoiceAmount: res.metadata?.invoiceAmount || 0,
-          taxAmount: res.metadata?.taxAmount || 0,
-          fileName: file.name,
-          movementType: movementType,
-        })
-        setReviewLines(parsed)
-        setActiveTab('upload')
-        toast.success(isAr ? 'تم تحليل الفاتورة بنجاح! يرجى مراجعة البنود قبل الحفظ' : 'Invoice parsed! Review lines before saving.')
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      try {
+        const res = await parseWarehouseInvoice(file)
+        if (res.success) {
+          const parsed = (res.lines || []).map((line, idx) => ({
+            id: line.id || `line_${idx + 1}`,
+            itemCode: line.itemCode || `ITEM-${idx + 1}`,
+            customerCode: line.customerCode || '',
+            description: line.description || '',
+            finish: line.finish || line.color || 'MF',
+            color: line.color || line.finish || 'MF',
+            lengthMm: Number(line.lengthMm || 6000),
+            unit: line.unit || 'BAR',
+            priceUnit: line.priceUnit || 'M',
+            quantityBar: Number(line.quantityBar || 0),
+            quantityLm: Number(line.quantityLm || 0),
+            quantityKg: Number(line.quantityKg || 0),
+            unitPrice: Number(line.unitPrice || 0),
+            barPrice: Number(line.barPrice || 0),
+            netTotal: Number(line.netTotal || 0),
+            temper: line.temper || '',
+            alloy: line.alloy || '',
+            hsCode: line.hsCode || '',
+            isService: Boolean(line.isService),
+            ignored: Boolean(line.ignored || line.isService),
+          }))
+
+          const invoiceMeta = {
+            invoiceNumber: res.metadata?.invoiceNumber || `INV-${Date.now().toString().slice(-6)}_${i + 1}`,
+            salesOrder: res.metadata?.salesOrder || '',
+            customerReference: res.metadata?.customerReference || '',
+            invoiceDate: res.metadata?.invoiceDate || '',
+            receiptDate: res.metadata?.receiptDate || res.metadata?.deliveryDate || '',
+            supplier: res.metadata?.supplier || 'Canex',
+            currency: res.metadata?.currency || 'EGP',
+            totalAmount: res.metadata?.totalAmount || 0,
+            invoiceAmount: res.metadata?.invoiceAmount || 0,
+            taxAmount: res.metadata?.taxAmount || 0,
+            fileName: file.name,
+            movementType: movementType,
+          }
+
+          newBatchItems.push({
+            id: `batch_inv_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 6)}`,
+            fileName: file.name,
+            movementType: movementType,
+            parsedMeta: invoiceMeta,
+            reviewLines: parsed,
+            status: 'ready', // 'ready' | 'saving' | 'saved' | 'error'
+            errorMessage: null,
+            expanded: true,
+          })
+          parsedCount++
+        }
+      } catch (err) {
+        toast.error(`${file.name}: ${err.response?.data?.message || (isAr ? 'فشل تحليل الفاتورة' : 'Failed to parse invoice')}`)
+      }
+    }
+
+    if (newBatchItems.length > 0) {
+      setBatchInvoices((prev) => [...prev, ...newBatchItems])
+      setActiveTab('upload')
+      toast.success(
+        isAr
+          ? `تم تحليل ${parsedCount} فاتورة بنجاح! يرجى مراجعة البنود وإتمام الحفظ`
+          : `Parsed ${parsedCount} invoice(s) successfully! Review items before saving.`
+      )
+    }
+
+    setUploading(false)
+    e.target.value = ''
+  }
+
+  function updateBatchInvoiceMeta(batchId, field, value) {
+    setBatchInvoices((prev) =>
+      prev.map((item) =>
+        item.id === batchId
+          ? { ...item, parsedMeta: { ...item.parsedMeta, [field]: value } }
+          : item
+      )
+    )
+  }
+
+  function updateBatchInvoiceMovementType(batchId, mType) {
+    setBatchInvoices((prev) =>
+      prev.map((item) =>
+        item.id === batchId
+          ? { ...item, movementType: mType, parsedMeta: { ...item.parsedMeta, movementType: mType } }
+          : item
+      )
+    )
+  }
+
+  function setAllBatchMovementType(mType) {
+    setMovementType(mType)
+    setBatchInvoices((prev) =>
+      prev.map((item) => ({
+        ...item,
+        movementType: mType,
+        parsedMeta: { ...item.parsedMeta, movementType: mType },
+      }))
+    )
+  }
+
+  function toggleBatchInvoiceExpand(batchId) {
+    setBatchInvoices((prev) =>
+      prev.map((item) => (item.id === batchId ? { ...item, expanded: !item.expanded } : item))
+    )
+  }
+
+  function removeBatchInvoice(batchId) {
+    setBatchInvoices((prev) => prev.filter((item) => item.id !== batchId))
+  }
+
+  function updateBatchInvoiceLine(batchId, index, field, value) {
+    setBatchInvoices((prev) =>
+      prev.map((batch) => {
+        if (batch.id !== batchId) return batch
+        const copyLines = [...batch.reviewLines]
+        copyLines[index] = { ...copyLines[index], [field]: value }
+        if (
+          field === 'quantityBar' ||
+          field === 'quantityLm' ||
+          field === 'lengthMm' ||
+          field === 'unitPrice' ||
+          field === 'barPrice' ||
+          field === 'priceUnit'
+        ) {
+          const bar = Number(copyLines[index].quantityBar || 0)
+          const len = Number(copyLines[index].lengthMm || 6000)
+          if (field === 'quantityBar' || field === 'lengthMm') {
+            copyLines[index].quantityLm = (bar * len) / 1000
+          }
+          const lm = Number(copyLines[index].quantityLm || 0)
+          const priceUnit = String(copyLines[index].priceUnit || 'M').toUpperCase()
+          const unitPrice = Number(copyLines[index].unitPrice || 0)
+          const barPrice = Number(copyLines[index].barPrice || 0)
+          copyLines[index].netTotal = priceUnit === 'BAR' ? bar * (barPrice || unitPrice) : lm * unitPrice
+        }
+        return { ...batch, reviewLines: copyLines }
+      })
+    )
+  }
+
+  async function handleSaveSingleBatchInvoice(batchId) {
+    if (!selectedProjectId) {
+      toast.error(isAr ? 'يرجى اختيار المشروع أولاً' : 'Please select a project first')
+      return
+    }
+
+    const batch = batchInvoices.find((b) => b.id === batchId)
+    if (!batch) return
+
+    const validLines = batch.reviewLines.filter((l) => !l.ignored && !l.isService && Number(l.quantityBar) > 0)
+    if (validLines.length === 0) {
+      toast.error(isAr ? 'لا توجد بنود مخزنية صالحة للحفظ' : 'No valid stock lines to save')
+      return
+    }
+
+    setBatchInvoices((prev) =>
+      prev.map((item) => (item.id === batchId ? { ...item, status: 'saving', errorMessage: null } : item))
+    )
+
+    try {
+      const payloadMeta = { ...batch.parsedMeta, movementType: batch.movementType }
+      const res = await processWarehouseInvoice(selectedProjectId, payloadMeta, validLines)
+      if (res.success) {
+        if (res.isDuplicate) {
+          toast.info(res.message || (isAr ? 'تم تحديث بيانات الفاتورة المسجلة سابقاً' : 'Updated duplicate invoice metadata'))
+        } else {
+          const isOut = batch.movementType === 'outbound'
+          toast.success(
+            isAr
+              ? `تم ${isOut ? 'خصم' : 'إضافة'} الفاتورة (${batch.parsedMeta.invoiceNumber}) بنجاح!`
+              : `Invoice ${batch.parsedMeta.invoiceNumber} processed successfully!`
+          )
+        }
+        setBatchInvoices((prev) =>
+          prev.map((item) =>
+            item.id === batchId ? { ...item, status: 'saved', isDuplicate: res.isDuplicate } : item
+          )
+        )
+        loadStock(selectedProjectId)
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || (isAr ? 'فشل تحليل الفاتورة' : 'Failed to parse invoice'))
-    } finally {
-      setUploading(false)
-      e.target.value = ''
+      const errMsg = err.response?.data?.message || err.message || (isAr ? 'فشل الحفظ' : 'Failed to save')
+      toast.error(errMsg)
+      setBatchInvoices((prev) =>
+        prev.map((item) => (item.id === batchId ? { ...item, status: 'error', errorMessage: errMsg } : item))
+      )
+    }
+  }
+
+  async function handleSaveBatchInvoices() {
+    if (!selectedProjectId) {
+      toast.error(isAr ? 'يرجى اختيار المشروع أولاً' : 'Please select a project first')
+      return
+    }
+
+    const pendingInvoices = batchInvoices.filter((b) => b.status !== 'saved')
+    if (pendingInvoices.length === 0) {
+      toast.info(isAr ? 'جميع الفواتير في القائمة تم حفظها بالفعل' : 'All batch invoices have already been saved')
+      return
+    }
+
+    setSavingBatch(true)
+    let successCount = 0
+    let duplicateCount = 0
+    let errorCount = 0
+
+    for (let i = 0; i < batchInvoices.length; i++) {
+      const inv = batchInvoices[i]
+      if (inv.status === 'saved') continue
+
+      setBatchInvoices((prev) =>
+        prev.map((item) => (item.id === inv.id ? { ...item, status: 'saving', errorMessage: null } : item))
+      )
+
+      const validLines = inv.reviewLines.filter((l) => !l.ignored && !l.isService && Number(l.quantityBar) > 0)
+      if (validLines.length === 0) {
+        setBatchInvoices((prev) =>
+          prev.map((item) =>
+            item.id === inv.id
+              ? { ...item, status: 'error', errorMessage: isAr ? 'لا توجد بنود صالحة' : 'No valid lines' }
+              : item
+          )
+        )
+        errorCount++
+        continue
+      }
+
+      try {
+        const payloadMeta = { ...inv.parsedMeta, movementType: inv.movementType }
+        const res = await processWarehouseInvoice(selectedProjectId, payloadMeta, validLines)
+        if (res.success) {
+          if (res.isDuplicate) duplicateCount++
+          successCount++
+          setBatchInvoices((prev) =>
+            prev.map((item) =>
+              item.id === inv.id ? { ...item, status: 'saved', isDuplicate: res.isDuplicate } : item
+            )
+          )
+        }
+      } catch (err) {
+        errorCount++
+        const errMsg = err.response?.data?.message || err.message || (isAr ? 'فشل الحفظ' : 'Failed to save')
+        setBatchInvoices((prev) =>
+          prev.map((item) => (item.id === inv.id ? { ...item, status: 'error', errorMessage: errMsg } : item))
+        )
+      }
+    }
+
+    setSavingBatch(false)
+    loadStock(selectedProjectId)
+
+    if (errorCount === 0) {
+      toast.success(
+        isAr
+          ? `✅ تم حفظ وإتمام جميع الفواتير (${successCount}) بنجاح!`
+          : `✅ Successfully processed all ${successCount} invoice(s)!`
+      )
+      setTimeout(() => {
+        setBatchInvoices([])
+        setActiveTab('stock')
+      }, 1200)
+    } else {
+      toast.warning(
+        isAr
+          ? `تم إتمام ${successCount} فاتورة، وحدثت أخطاء في ${errorCount} فاتورة. يرجى المراجعة.`
+          : `Processed ${successCount} invoice(s), ${errorCount} failed. Please review errors.`
+      )
     }
   }
 
@@ -1885,43 +2115,41 @@ export default function Warehouse() {
         </div>
       )}
 
-      {/* ─── TAB 2: Upload & Review Invoice Movements ─── */}
+      {/* ─── TAB 2: Upload & Review Invoice Movements (Single & Batch) ─── */}
       {activeTab === 'upload' && (
         <div className="card fade-in" style={{ padding: '1.5rem' }}>
+          {/* Header Controls */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
             <div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.2rem' }}>
-                {movementType === 'outbound'
-                  ? (isAr ? '📤 رفع ومراجعة فاتورة صرف (خصم من الرصيد)' : 'Outbound Invoice (Stock Deduction)')
-                  : (isAr ? '📥 رفع ومراجعة فاتورة توريد (إضافة رصيد)' : 'Inbound Purchase Invoice (Stock Addition)')}
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                🧾 {isAr ? 'رفع ومعالجة الفواتير (فردي أو دفعة واحدة)' : 'Upload & Process Invoices (Single or Batch)'}
+                {batchInvoices.length > 0 && (
+                  <span className="badge" style={{ background: 'rgba(0,224,161,0.15)', color: '#00e0a1', border: '1px solid rgba(0,224,161,0.3)', borderRadius: '12px' }}>
+                    {batchInvoices.length} {isAr ? 'فواتير في الدفعة' : 'invoices in queue'}
+                  </span>
+                )}
               </h3>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                 {isAr
-                  ? 'اختر نوع الحركة (إضافة أو خصم) ثم ارفع ملف الفاتورة لمراجعته واعتماده تلقائياً'
-                  : 'Select movement type (Addition or Deduction), then upload invoice to review and confirm'}
+                  ? 'يمكنك اختيار فاتورة واحدة أو عدة فواتير معا للتوريد (+) أو الصرف (-) ومراجعتها ثم اعتمادها في خطوة واحدة'
+                  : 'Select single or multiple invoices for inbound (+) or outbound (-) movement, review, and commit at once'}
               </p>
             </div>
 
-            {/* Movement Type Toggle */}
+            {/* Global Movement Mode Switcher */}
             <div style={{ display: 'flex', gap: '0.5rem', background: '#101223', padding: '0.3rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
               <button
                 type="button"
                 className={`btn btn-sm ${movementType === 'inbound' ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => {
-                  setMovementType('inbound')
-                  setParsedMeta((p) => ({ ...p, movementType: 'inbound' }))
-                }}
+                onClick={() => setAllBatchMovementType('inbound')}
                 style={{ borderRadius: '7px', fontWeight: 700 }}
               >
-                📥 {isAr ? 'إذن إضافة (توريد)' : 'Inbound (+ Add)'}
+                📥 {isAr ? 'تعيين الكل: توريد (+)' : 'Set All: Inbound (+)'}
               </button>
               <button
                 type="button"
                 className="btn btn-sm"
-                onClick={() => {
-                  setMovementType('outbound')
-                  setParsedMeta((p) => ({ ...p, movementType: 'outbound' }))
-                }}
+                onClick={() => setAllBatchMovementType('outbound')}
                 style={{
                   borderRadius: '7px',
                   fontWeight: 700,
@@ -1930,12 +2158,13 @@ export default function Warehouse() {
                   color: '#fff',
                 }}
               >
-                📤 {isAr ? 'إذن صرف (مبيعات / خصم)' : 'Outbound (- Deduct)'}
+                📤 {isAr ? 'تعيين الكل: صرف (-)' : 'Set All: Outbound (-)'}
               </button>
             </div>
           </div>
 
-          {reviewLines.length === 0 ? (
+          {/* Upload Dropzone (always available or when queue empty) */}
+          {batchInvoices.length === 0 ? (
             <div
               style={{
                 border: '2px dashed var(--border)',
@@ -1944,209 +2173,415 @@ export default function Warehouse() {
                 textAlign: 'center',
                 background: 'rgba(255,255,255,0.01)',
               }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault()
+                if (e.dataTransfer.files?.length > 0) {
+                  handleFileUpload({ target: { files: e.dataTransfer.files } })
+                }
+              }}
             >
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📁</div>
-              <h4 style={{ marginBottom: '0.5rem' }}>{isAr ? 'اختر فاتورة المورد (Excel أو PDF)' : 'Select Supplier Invoice (Excel or PDF)'}</h4>
+              <div style={{ fontSize: '2.8rem', marginBottom: '0.5rem' }}>📁</div>
+              <h4 style={{ marginBottom: '0.5rem', fontWeight: 700 }}>
+                {isAr ? 'اختر فواتير الموردين (يمكن اختيار كذا فاتورة سوا)' : 'Select Supplier Invoices (Select multiple files at once)'}
+              </h4>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-                {isAr ? 'يدعم فواتير Canex، Schüco، وفواتير التوريد العامة' : 'Supports Canex, Schüco, and general purchase invoices'}
+                {isAr ? 'يدعم فواتير Excel و PDF لشركة Canex و Schüco والتوريدات العامة' : 'Supports Excel & PDF files for Canex, Schüco, and general suppliers'}
               </p>
               <input
                 type="file"
+                multiple
                 accept=".xlsx,.xls,.csv,.pdf"
                 id="warehouse-file-input"
                 style={{ display: 'none' }}
                 onChange={handleFileUpload}
               />
-              <label htmlFor="warehouse-file-input" className="btn btn-primary" style={{ cursor: 'pointer' }}>
-                {uploading ? <span className="spinner"></span> : isAr ? 'رفع ملف الفاتورة' : 'Select Invoice File'}
+              <label htmlFor="warehouse-file-input" className="btn btn-primary" style={{ cursor: 'pointer', padding: '0.7rem 1.8rem', fontSize: '1rem', fontWeight: 700 }}>
+                {uploading ? <span className="spinner"></span> : isAr ? '📂 اختيار ملفات الفواتير (تحديد متعدد)' : '📂 Choose Invoice Files (Multi-Select)'}
               </label>
             </div>
           ) : (
             <div>
-              {/* Review Header Stats & Actions */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <h4 style={{ margin: 0, fontWeight: 700, fontSize: '1.05rem' }}>
-                    {isAr ? 'مراجعة بيانات البنود للفاتورة' : 'Review Invoice Lines'}
-                  </h4>
-                  <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.3)', padding: '0.3rem 0.75rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 700 }}>
-                    {isAr ? `إجمالي البنود: ${reviewLines.length}` : `Total Lines: ${reviewLines.length}`}
+              {/* Batch Action Toolbar */}
+              <div
+                style={{
+                  display: 'flex',
+                  justify: 'space-between',
+                  alignItems: 'center',
+                  background: 'rgba(0, 224, 161, 0.05)',
+                  border: '1px solid rgba(0, 224, 161, 0.2)',
+                  borderRadius: '12px',
+                  padding: '1rem 1.25rem',
+                  marginBottom: '1.5rem',
+                  flexWrap: 'wrap',
+                  gap: '1rem',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, color: '#00e0a1', fontSize: '1.05rem' }}>
+                    📦 {isAr ? `دفعة المعالجة: ${batchInvoices.length} فواتير` : `Batch Queue: ${batchInvoices.length} Invoices`}
                   </span>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    ({batchInvoices.filter((b) => b.status === 'saved').length} {isAr ? 'تم حفظها' : 'saved'}, {batchInvoices.filter((b) => b.status !== 'saved').length} {isAr ? 'متبقية' : 'pending'})
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".xlsx,.xls,.csv,.pdf"
+                    id="warehouse-file-input-more"
+                    style={{ display: 'none' }}
+                    onChange={handleFileUpload}
+                  />
+                  <label htmlFor="warehouse-file-input-more" className="btn btn-sm btn-ghost" style={{ cursor: 'pointer', border: '1px solid var(--border)' }}>
+                    ➕ {isAr ? 'إضافة فواتير أخرى' : 'Add More Files'}
+                  </label>
+
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => setBatchInvoices([])}
+                    style={{ background: 'rgba(255, 77, 79, 0.15)', color: '#ff4757', border: '1px solid rgba(255, 77, 79, 0.3)' }}
+                  >
+                    🗑️ {isAr ? 'مسح القائمة' : 'Clear Queue'}
+                  </button>
+
+                  <button
+                    className="btn"
+                    onClick={handleSaveBatchInvoices}
+                    disabled={savingBatch || batchInvoices.filter((b) => b.status !== 'saved').length === 0}
+                    style={{
+                      background: 'linear-gradient(135deg, #00e0a1 0%, #00b884 100%)',
+                      color: '#000',
+                      fontWeight: 800,
+                      padding: '0.6rem 1.4rem',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 15px rgba(0, 224, 161, 0.3)',
+                    }}
+                  >
+                    {savingBatch ? (
+                      <span className="spinner"></span>
+                    ) : (
+                      `💾 ${isAr ? `حفظ وإتمام كافة الفواتير (${batchInvoices.filter((b) => b.status !== 'saved').length})` : `Save & Process All (${batchInvoices.filter((b) => b.status !== 'saved').length})`}`
+                    )}
+                  </button>
                 </div>
               </div>
 
-              {/* Invoice Metadata Header */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                  gap: '0.9rem',
-                  marginBottom: '1rem',
-                  padding: '1rem',
-                  background: 'rgba(255,255,255,0.02)',
-                  borderRadius: '8px',
-                }}
-              >
-                {[
-                  { key: 'invoiceNumber', label: isAr ? 'رقم الفاتورة' : 'Invoice No.' },
-                  { key: 'salesOrder', label: isAr ? 'أمر البيع (Sales Order)' : 'Sales Order #' },
-                  { key: 'customerReference', label: isAr ? 'مرجع العميل' : 'Customer Ref' },
-                  { key: 'invoiceDate', label: isAr ? 'تاريخ الفاتورة' : 'Invoice Date', type: 'date' },
-                  { key: 'receiptDate', label: isAr ? 'تاريخ الاستلام' : 'Receipt Date', type: 'date' },
-                  { key: 'supplier', label: isAr ? 'اسم المورد' : 'Supplier' },
-                  { key: 'currency', label: isAr ? 'العملة' : 'Currency' },
-                ].map((field) => (
-                  <div key={field.key}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{field.label}</span>
-                    <input
-                      type={field.type || 'text'}
-                      value={parsedMeta[field.key] || ''}
-                      onChange={(e) => setParsedMeta((p) => ({ ...p, [field.key]: e.target.value }))}
-                      style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.45rem 0.65rem', color: '#fff', borderRadius: '6px', display: 'block', marginTop: '0.25rem' }}
-                    />
-                  </div>
-                ))}
-              </div>
+              {/* Batch Invoices Accordion List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                {batchInvoices.map((batch, bIdx) => {
+                  const isOut = batch.movementType === 'outbound'
+                  const validLinesCount = batch.reviewLines.filter((l) => !l.ignored && !l.isService && Number(l.quantityBar) > 0).length
+                  const totalBars = batch.reviewLines.reduce((acc, l) => acc + (l.ignored ? 0 : Number(l.quantityBar || 0)), 0)
 
-              {/* Review Table */}
-              <div style={{ overflowX: 'auto', marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
-                <table style={{ minWidth: '2030px', width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', tableLayout: 'fixed' }}>
-                  <colgroup>
-                    <col style={{ width: '50px' }} />
-                    <col style={{ width: '60px' }} />
-                    <col style={{ width: '150px' }} />
-                    <col style={{ width: '140px' }} />
-                    <col style={{ width: '580px' }} />
-                    <col style={{ width: '110px' }} />
-                    <col style={{ width: '105px' }} />
-                    <col style={{ width: '130px' }} />
-                    <col style={{ width: '130px' }} />
-                    <col style={{ width: '110px' }} />
-                    <col style={{ width: '130px' }} />
-                    <col style={{ width: '130px' }} />
-                    <col style={{ width: '145px' }} />
-                  </colgroup>
-                  <thead>
-                    <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)' }}>
-                      <th style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>{isAr ? 'م' : '#'}</th>
-                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'تجاهل' : 'Ignore'}</th>
-                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'كود الصنف' : 'Item'}</th>
-                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
-                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'وصف الصنف / القطاع' : 'Description'}</th>
-                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'التشطيب' : 'Finish'}</th>
-                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'الطول mm' : 'Length mm'}</th>
-                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'إجمالي الأمتار' : 'Total LM'}</th>
-                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'إجمالي الوزن' : 'Total KG'}</th>
-                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'الأعواد' : 'Bars'}</th>
-                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'سعر المتر' : 'Meter Price'}</th>
-                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'سعر العود' : 'Bar Price'}</th>
-                      <th style={{ padding: '0.65rem 0.5rem' }}>{isAr ? 'الإجمالي' : 'Total'}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reviewLines.map((line, idx) => (
-                      <tr
-                        key={line.id}
+                  return (
+                    <div
+                      key={batch.id}
+                      style={{
+                        background: 'rgba(18, 22, 41, 0.95)',
+                        border: `1px solid ${batch.status === 'saved' ? '#00e0a1' : batch.status === 'error' ? '#ff4757' : 'rgba(255,255,255,0.1)'}`,
+                        borderRadius: '12px',
+                        overflow: 'hidden',
+                        transition: 'all 0.2s ease-in-out',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                      }}
+                    >
+                      {/* Invoice Card Header */}
+                      <div
                         style={{
-                          borderBottom: '1px solid rgba(255,255,255,0.04)',
-                          opacity: line.ignored ? 0.4 : 1,
-                          background: line.isService ? 'rgba(255, 77, 79, 0.05)' : 'transparent',
-                          verticalAlign: 'top',
+                          padding: '1rem 1.25rem',
+                          background: batch.status === 'saved' ? 'rgba(0,224,161,0.06)' : 'rgba(255,255,255,0.02)',
+                          display: 'flex',
+                          justify: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '1rem',
+                          borderBottom: batch.expanded ? '1px solid rgba(255,255,255,0.08)' : 'none',
                         }}
                       >
-                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)' }}>
-                          {idx + 1}
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>
-                          <input
-                            type="checkbox"
-                            checked={line.ignored}
-                            onChange={(e) => updateReviewLine(idx, 'ignored', e.target.checked)}
-                          />
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem' }}>
-                          <input
-                            type="text"
-                            value={line.itemCode}
-                            onChange={(e) => updateReviewLine(idx, 'itemCode', e.target.value)}
-                            style={{ background: '#101223', border: '1px solid var(--border)', color: '#00e0a1', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%' }}
-                          />
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem' }}>
-                          <input
-                            type="text"
-                            value={line.customerCode || ''}
-                            onChange={(e) => updateReviewLine(idx, 'customerCode', e.target.value)}
-                            style={{ background: '#101223', border: '1px solid var(--border)', color: '#8ab4ff', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%' }}
-                          />
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem' }}>
-                          <textarea
-                            value={line.description}
-                            rows={Math.max(2, Math.ceil(String(line.description || '').length / 70))}
-                            onChange={(e) => updateReviewLine(idx, 'description', e.target.value)}
-                            style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.45rem 0.55rem', borderRadius: '4px', width: '100%', minHeight: '54px', resize: 'vertical', lineHeight: 1.45 }}
-                          />
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem' }}>
-                          <input
-                            type="text"
-                            value={line.finish}
-                            onChange={(e) => updateReviewLine(idx, 'finish', e.target.value)}
-                            style={{ background: '#101223', border: '1px solid var(--border)', color: '#FFD700', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%' }}
-                          />
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem' }}>
-                          <input type="number" value={line.lengthMm} onChange={(e) => updateReviewLine(idx, 'lengthMm', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%' }} />
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem' }}>
-                          <input type="number" step="0.001" value={line.quantityLm} onChange={(e) => updateReviewLine(idx, 'quantityLm', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%', fontWeight: 700 }} />
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem' }}>
-                          <input type="number" step="0.001" value={line.quantityKg} onChange={(e) => updateReviewLine(idx, 'quantityKg', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%' }} />
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem' }}>
-                          <input type="number" value={line.quantityBar} onChange={(e) => updateReviewLine(idx, 'quantityBar', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%', fontWeight: 700 }} />
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem' }}>
-                          <input type="number" step="0.0001" value={line.unitPrice} onChange={(e) => updateReviewLine(idx, 'unitPrice', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%' }} />
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem' }}>
-                          <input type="number" step="0.0001" value={line.barPrice || ''} onChange={(e) => updateReviewLine(idx, 'barPrice', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.5rem', borderRadius: '4px', width: '100%' }} />
-                        </td>
-                        <td style={{ padding: '0.6rem 0.5rem', fontWeight: 700, color: '#64b5f6', whiteSpace: 'nowrap' }}>
-                          {Number(line.netTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        {/* Title & Metadata fields */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap', flex: 1 }}>
+                          <button
+                            onClick={() => toggleBatchInvoiceExpand(batch.id)}
+                            style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '1.1rem', cursor: 'pointer', padding: 0 }}
+                          >
+                            {batch.expanded ? '▼' : '►'}
+                          </button>
 
-              {/* Save Controls */}
-              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-                <button className="btn btn-ghost" onClick={() => setReviewLines([])}>
-                  {isAr ? 'إلغاء' : 'Cancel'}
-                </button>
-                <button
-                  className="btn"
-                  onClick={handleSaveInboundInvoice}
-                  disabled={savingInvoice}
-                  style={{
-                    background: movementType === 'outbound' ? '#ff4d4f' : 'var(--primary)',
-                    borderColor: movementType === 'outbound' ? '#ff4d4f' : 'var(--primary)',
-                    color: '#fff',
-                    fontWeight: 700,
-                  }}
-                >
-                  {savingInvoice ? (
-                    <span className="spinner"></span>
-                  ) : movementType === 'outbound' ? (
-                    isAr ? '📤 اعتماد وخصم البنود من رصيد المخزن (-)' : 'Confirm & Deduct Stock (-)'
-                  ) : (
-                    isAr ? '📥 اعتماد وإضافة البنود إلى رصيد المخزن (+)' : 'Confirm & Add Stock (+)'
-                  )}
-                </button>
+                          <span style={{ fontWeight: 800, color: '#fff', fontSize: '1rem' }}>
+                            #{bIdx + 1}
+                          </span>
+
+                          {/* Editable Invoice No */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{isAr ? 'رقم الفاتورة:' : 'Inv #:'}</span>
+                            <input
+                              type="text"
+                              value={batch.parsedMeta.invoiceNumber || ''}
+                              onChange={(e) => updateBatchInvoiceMeta(batch.id, 'invoiceNumber', e.target.value)}
+                              style={{ background: '#101223', border: '1px solid var(--border)', color: '#64b5f6', fontWeight: 700, padding: '0.3rem 0.6rem', borderRadius: '6px', fontSize: '0.88rem', width: '140px' }}
+                            />
+                          </div>
+
+                          {/* Editable SO # */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>SO #:</span>
+                            <input
+                              type="text"
+                              value={batch.parsedMeta.salesOrder || ''}
+                              onChange={(e) => updateBatchInvoiceMeta(batch.id, 'salesOrder', e.target.value)}
+                              placeholder="SO-10023"
+                              style={{ background: '#101223', border: '1px solid var(--border)', color: '#00e0a1', fontWeight: 700, padding: '0.3rem 0.6rem', borderRadius: '6px', fontSize: '0.88rem', width: '130px' }}
+                            />
+                          </div>
+
+                          {/* Movement Type Badge Toggle per Invoice */}
+                          <select
+                            value={batch.movementType}
+                            onChange={(e) => updateBatchInvoiceMovementType(batch.id, e.target.value)}
+                            style={{
+                              background: isOut ? '#ff4757' : '#00e0a1',
+                              color: '#000',
+                              border: 'none',
+                              padding: '0.35rem 0.75rem',
+                              borderRadius: '8px',
+                              fontWeight: 800,
+                              fontSize: '0.85rem',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <option value="inbound">{isAr ? '📥 توريد (إضافة +)' : '📥 Inbound (+)'}</option>
+                            <option value="outbound">{isAr ? '📤 صرف (خصم -)' : '📤 Outbound (-)'}</option>
+                          </select>
+
+                          {/* Badges */}
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            📄 {batch.fileName}
+                          </span>
+                          <span className="badge" style={{ background: 'rgba(255, 215, 0, 0.1)', color: '#FFD700', border: '1px solid rgba(255, 215, 0, 0.3)', fontSize: '0.8rem' }}>
+                            {validLinesCount} {isAr ? 'بنود صالحة' : 'valid lines'}
+                          </span>
+                          <span className="badge" style={{ background: 'rgba(100, 181, 246, 0.1)', color: '#64b5f6', border: '1px solid rgba(100, 181, 246, 0.3)', fontSize: '0.8rem' }}>
+                            {totalBars} BAR
+                          </span>
+                        </div>
+
+                        {/* Status & Single Save/Remove controls */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          {batch.status === 'saved' ? (
+                            <span className="badge badge-valid" style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}>
+                              ✅ {batch.isDuplicate ? (isAr ? 'مدمجة (تحديث بيانات)' : 'Merged Duplicate') : (isAr ? 'تم الحفظ' : 'Saved')}
+                            </span>
+                          ) : batch.status === 'saving' ? (
+                            <span className="badge" style={{ background: 'rgba(255,215,0,0.15)', color: '#FFD700', border: '1px solid rgba(255,215,0,0.3)', fontSize: '0.85rem' }}>
+                              ⏳ {isAr ? 'جاري الحفظ...' : 'Saving...'}
+                            </span>
+                          ) : batch.status === 'error' ? (
+                            <span className="badge" style={{ background: 'rgba(255,77,79,0.15)', color: '#ff4757', border: '1px solid rgba(255,77,79,0.3)', fontSize: '0.85rem' }} title={batch.errorMessage}>
+                              ❌ {batch.errorMessage || (isAr ? 'خطأ' : 'Error')}
+                            </span>
+                          ) : (
+                            <span className="badge" style={{ background: 'rgba(255,255,255,0.08)', color: '#ccc', border: '1px solid rgba(255,255,255,0.2)', fontSize: '0.85rem' }}>
+                              🟡 {isAr ? 'جاهز للمراجعة' : 'Ready'}
+                            </span>
+                          )}
+
+                          {batch.status !== 'saved' && (
+                            <button
+                              className="btn btn-sm btn-primary"
+                              disabled={batch.status === 'saving'}
+                              onClick={() => handleSaveSingleBatchInvoice(batch.id)}
+                              style={{ padding: '0.35rem 0.85rem', fontSize: '0.85rem', fontWeight: 700 }}
+                            >
+                              💾 {isAr ? 'حفظ هذه الفاتورة' : 'Save Invoice'}
+                            </button>
+                          )}
+
+                          <button
+                            className="btn btn-sm"
+                            onClick={() => removeBatchInvoice(batch.id)}
+                            style={{ background: 'rgba(255, 255, 255, 0.08)', color: '#ff7875', border: '1px solid rgba(255,255,255,0.1)', padding: '0.35rem 0.6rem' }}
+                            title={isAr ? 'حذف من الدفعة' : 'Remove from batch'}
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Card Expanded Content: Editable Fields & Line Items */}
+                      {batch.expanded && (
+                        <div style={{ padding: '1.25rem' }}>
+                          {/* Invoice Metadata Row */}
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                              gap: '0.8rem',
+                              marginBottom: '1.25rem',
+                              background: 'rgba(0,0,0,0.2)',
+                              padding: '0.85rem 1rem',
+                              borderRadius: '8px',
+                              border: '1px solid rgba(255,255,255,0.05)',
+                            }}
+                          >
+                            <div>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{isAr ? 'مرجع العميل (Ref):' : 'Customer Ref:'}</span>
+                              <input
+                                type="text"
+                                value={batch.parsedMeta.customerReference || ''}
+                                onChange={(e) => updateBatchInvoiceMeta(batch.id, 'customerReference', e.target.value)}
+                                style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.4rem 0.6rem', color: '#ffb74d', borderRadius: '6px', fontSize: '0.85rem', marginTop: '0.2rem' }}
+                              />
+                            </div>
+                            <div>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{isAr ? 'اسم المورد:' : 'Supplier:'}</span>
+                              <input
+                                type="text"
+                                value={batch.parsedMeta.supplier || 'Canex'}
+                                onChange={(e) => updateBatchInvoiceMeta(batch.id, 'supplier', e.target.value)}
+                                style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.4rem 0.6rem', color: '#fff', borderRadius: '6px', fontSize: '0.85rem', marginTop: '0.2rem' }}
+                              />
+                            </div>
+                            <div>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{isAr ? 'تاريخ الفاتورة:' : 'Invoice Date:'}</span>
+                              <input
+                                type="date"
+                                value={batch.parsedMeta.invoiceDate || ''}
+                                onChange={(e) => updateBatchInvoiceMeta(batch.id, 'invoiceDate', e.target.value)}
+                                style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.4rem 0.6rem', color: '#fff', borderRadius: '6px', fontSize: '0.85rem', marginTop: '0.2rem' }}
+                              />
+                            </div>
+                            <div>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{isAr ? 'تاريخ الاستلام:' : 'Receipt Date:'}</span>
+                              <input
+                                type="date"
+                                value={batch.parsedMeta.receiptDate || ''}
+                                onChange={(e) => updateBatchInvoiceMeta(batch.id, 'receiptDate', e.target.value)}
+                                style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.4rem 0.6rem', color: '#fff', borderRadius: '6px', fontSize: '0.85rem', marginTop: '0.2rem' }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Line Items Table */}
+                          <div style={{ overflowX: 'auto', marginBottom: '0.5rem' }}>
+                            <table style={{ minWidth: '1950px', width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
+                              <colgroup>
+                                <col style={{ width: '45px' }} />
+                                <col style={{ width: '60px' }} />
+                                <col style={{ width: '150px' }} />
+                                <col style={{ width: '140px' }} />
+                                <col style={{ width: '550px' }} />
+                                <col style={{ width: '110px' }} />
+                                <col style={{ width: '100px' }} />
+                                <col style={{ width: '120px' }} />
+                                <col style={{ width: '120px' }} />
+                                <col style={{ width: '100px' }} />
+                                <col style={{ width: '120px' }} />
+                                <col style={{ width: '120px' }} />
+                                <col style={{ width: '140px' }} />
+                              </colgroup>
+                              <thead>
+                                <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)' }}>
+                                  <th style={{ padding: '0.6rem 0.4rem', textAlign: 'center' }}>#</th>
+                                  <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'تجاهل' : 'Ignore'}</th>
+                                  <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'كود الصنف' : 'Item'}</th>
+                                  <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
+                                  <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'وصف الصنف / القطاع' : 'Description'}</th>
+                                  <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'التشطيب' : 'Finish'}</th>
+                                  <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'الطول mm' : 'Length mm'}</th>
+                                  <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'إجمالي الأمتار' : 'Total LM'}</th>
+                                  <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'إجمالي الوزن' : 'Total KG'}</th>
+                                  <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'الأعواد' : 'Bars'}</th>
+                                  <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'سعر المتر' : 'Meter Price'}</th>
+                                  <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'سعر العود' : 'Bar Price'}</th>
+                                  <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'الإجمالي' : 'Total'}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {batch.reviewLines.map((line, idx) => (
+                                  <tr
+                                    key={line.id}
+                                    style={{
+                                      borderBottom: '1px solid rgba(255,255,255,0.03)',
+                                      opacity: line.ignored ? 0.4 : 1,
+                                      background: line.isService ? 'rgba(255, 77, 79, 0.05)' : 'transparent',
+                                    }}
+                                  >
+                                    <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)' }}>
+                                      {idx + 1}
+                                    </td>
+                                    <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center' }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={line.ignored}
+                                        onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'ignored', e.target.checked)}
+                                      />
+                                    </td>
+                                    <td style={{ padding: '0.5rem 0.4rem' }}>
+                                      <input
+                                        type="text"
+                                        value={line.itemCode}
+                                        onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'itemCode', e.target.value)}
+                                        style={{ background: '#101223', border: '1px solid var(--border)', color: '#00e0a1', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }}
+                                      />
+                                    </td>
+                                    <td style={{ padding: '0.5rem 0.4rem' }}>
+                                      <input
+                                        type="text"
+                                        value={line.customerCode || ''}
+                                        onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'customerCode', e.target.value)}
+                                        style={{ background: '#101223', border: '1px solid var(--border)', color: '#8ab4ff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }}
+                                      />
+                                    </td>
+                                    <td style={{ padding: '0.5rem 0.4rem' }}>
+                                      <textarea
+                                        value={line.description}
+                                        rows={Math.max(1, Math.ceil(String(line.description || '').length / 65))}
+                                        onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'description', e.target.value)}
+                                        style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%', resize: 'vertical', lineHeight: 1.35 }}
+                                      />
+                                    </td>
+                                    <td style={{ padding: '0.5rem 0.4rem' }}>
+                                      <input
+                                        type="text"
+                                        value={line.finish}
+                                        onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'finish', e.target.value)}
+                                        style={{ background: '#101223', border: '1px solid var(--border)', color: '#FFD700', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }}
+                                      />
+                                    </td>
+                                    <td style={{ padding: '0.5rem 0.4rem' }}>
+                                      <input type="number" value={line.lengthMm} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'lengthMm', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }} />
+                                    </td>
+                                    <td style={{ padding: '0.5rem 0.4rem' }}>
+                                      <input type="number" step="0.001" value={line.quantityLm} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'quantityLm', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%', fontWeight: 700 }} />
+                                    </td>
+                                    <td style={{ padding: '0.5rem 0.4rem' }}>
+                                      <input type="number" step="0.001" value={line.quantityKg} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'quantityKg', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }} />
+                                    </td>
+                                    <td style={{ padding: '0.5rem 0.4rem' }}>
+                                      <input type="number" value={line.quantityBar} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'quantityBar', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%', fontWeight: 700 }} />
+                                    </td>
+                                    <td style={{ padding: '0.5rem 0.4rem' }}>
+                                      <input type="number" step="0.0001" value={line.unitPrice} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'unitPrice', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }} />
+                                    </td>
+                                    <td style={{ padding: '0.5rem 0.4rem' }}>
+                                      <input type="number" step="0.0001" value={line.barPrice || ''} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'barPrice', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }} />
+                                    </td>
+                                    <td style={{ padding: '0.5rem 0.4rem', fontWeight: 700, color: '#64b5f6', whiteSpace: 'nowrap' }}>
+                                      {Number(line.netTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
