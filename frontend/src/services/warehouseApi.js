@@ -109,3 +109,10 @@ export async function updateWarehouseInvoiceMetadata(projectId, invoiceId, paylo
   const { data } = await api.patch(`/warehouse/projects/${projectId}/invoices/${invoiceId}`, payload)
   return data
 }
+
+/** Get audit logs for warehouse operations (Admin only) */
+export async function getWarehouseAuditLogs(projectId) {
+  const { data } = await api.get(`/warehouse/projects/${projectId}/audit-logs`)
+  return data
+}
+

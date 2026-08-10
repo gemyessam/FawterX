@@ -366,9 +366,59 @@ function generateItemKey(supplier, itemCode, finish, lengthMm) {
 }
 
 /**
+ * Log an audit entry for warehouse actions
+ */
+async function logWarehouseAudit(projectId, { action, userUid, userEmail, userName, details, itemKey, invoiceId }) {
+  const db = getDb();
+  if (!db) return;
+
+  try {
+    const auditRef = db.collection("warehouseProjects").doc(projectId).collection("auditLogs").doc();
+    const logDoc = {
+      id: auditRef.id,
+      projectId,
+      action, // 'PROCESS_INVOICE', 'EDIT_STOCK_ITEM', 'DELETE_STOCK_ITEM', 'UPDATE_INVOICE_META', 'DELETE_INVOICE'
+      userUid: userUid || "system",
+      userEmail: userEmail || "غير معروف",
+      userName: userName || userEmail || "مستخدم",
+      details: details || {},
+      itemKey: itemKey || null,
+      invoiceId: invoiceId || null,
+      timestamp: new Date().toISOString(),
+    };
+    await auditRef.set(logDoc);
+  } catch (err) {
+    console.error("Failed to write warehouse audit log:", err.message);
+  }
+}
+
+/**
+ * Fetch audit activity logs for a project (Admin Only)
+ */
+async function getWarehouseAuditLogs(projectId, limit = 150) {
+  const db = getDb();
+  if (!db) return [];
+
+  try {
+    const snap = await db
+      .collection("warehouseProjects")
+      .doc(projectId)
+      .collection("auditLogs")
+      .orderBy("timestamp", "desc")
+      .limit(limit)
+      .get();
+
+    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  } catch (err) {
+    console.error("Error fetching warehouse audit logs:", err.message);
+    return [];
+  }
+}
+
+/**
  * Process reviewed purchase invoice lines into immutable movements and updated stock
  */
-async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
+async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
 
@@ -583,6 +633,8 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
         priceUnit,
         currency: invoiceDoc.currency,
         lastInvoiceNumber: invoiceDoc.invoiceNumber,
+        lastSalesOrder: invoiceDoc.salesOrder || "",
+        lastCustomerRef: invoiceDoc.customerReference || "",
         lastMovementType: invoiceDoc.movementType,
         invoiceNumbers: admin.firestore.FieldValue.arrayUnion(invoiceDoc.invoiceNumber),
         updatedAt: new Date().toISOString(),
@@ -592,6 +644,25 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
   }
 
   await batch.commit();
+
+  await logWarehouseAudit(projectId, {
+    action: "PROCESS_INVOICE",
+    userUid,
+    userEmail,
+    userName,
+    invoiceId,
+    details: {
+      invoiceNumber: invoiceDoc.invoiceNumber,
+      movementType: isOutbound ? "خصم (Outbound)" : "إضافة (Inbound)",
+      supplier: invoiceDoc.supplier,
+      salesOrder: invoiceDoc.salesOrder,
+      customerReference: invoiceDoc.customerReference,
+      lineItemsCount: validLinesCount,
+      totalQuantityBar: totalQtyBar,
+      totalAmount: invoiceDoc.totalAmount,
+      fileName: invoiceDoc.fileName,
+    },
+  });
 
   return {
     success: true,
@@ -728,7 +799,7 @@ async function getProjectMovements(projectId, invoiceId) {
 /**
  * Update a specific stock item in a project (Admin Only)
  */
-async function updateStockItem(projectId, itemKey, updateData, userUid) {
+async function updateStockItem(projectId, itemKey, updateData, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
 
@@ -742,6 +813,14 @@ async function updateStockItem(projectId, itemKey, updateData, userUid) {
   const qtyLm = Number(updateData.quantityLm !== undefined ? updateData.quantityLm : ((qtyBar * lengthMm) / 1000));
   const qtyKg = Number(updateData.quantityKg !== undefined ? updateData.quantityKg : (existing.quantityKg || 0));
 
+  const newSalesOrder = updateData.lastSalesOrder !== undefined 
+    ? updateData.lastSalesOrder 
+    : (updateData.salesOrder !== undefined ? updateData.salesOrder : (existing.lastSalesOrder || existing.salesOrder || ""));
+
+  const newCustomerRef = updateData.lastCustomerRef !== undefined 
+    ? updateData.lastCustomerRef 
+    : (updateData.customerReference !== undefined ? updateData.customerReference : (existing.lastCustomerRef || existing.customerReference || ""));
+
   const payload = {
     itemCode: updateData.itemCode !== undefined ? updateData.itemCode : existing.itemCode,
     customerCode: updateData.customerCode !== undefined ? updateData.customerCode : (existing.customerCode || ""),
@@ -751,24 +830,61 @@ async function updateStockItem(projectId, itemKey, updateData, userUid) {
     quantityBar: qtyBar,
     quantityLm: qtyLm,
     quantityKg: qtyKg,
+    lastSalesOrder: newSalesOrder,
+    lastCustomerRef: newCustomerRef,
     lastUnitCost: updateData.lastUnitCost !== undefined ? Number(updateData.lastUnitCost) : existing.lastUnitCost,
     updatedBy: userUid,
     updatedAt: new Date().toISOString(),
   };
 
   await stockRef.set(payload, { merge: true });
+
+  await logWarehouseAudit(projectId, {
+    action: "EDIT_STOCK_ITEM",
+    userUid,
+    userEmail,
+    userName,
+    itemKey,
+    details: {
+      itemCode: payload.itemCode,
+      description: payload.description,
+      quantityBar: { old: existing.quantityBar || 0, new: payload.quantityBar },
+      salesOrder: { old: existing.lastSalesOrder || existing.salesOrder || "", new: newSalesOrder },
+      customerRef: { old: existing.lastCustomerRef || existing.customerReference || "", new: newCustomerRef },
+      finish: payload.finish,
+      customerCode: payload.customerCode,
+    },
+  });
+
   return { itemKey, ...existing, ...payload };
 }
 
 /**
  * Delete a specific stock item from a project (Admin Only)
  */
-async function deleteStockItem(projectId, itemKey) {
+async function deleteStockItem(projectId, itemKey, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
 
   const stockRef = db.collection("warehouseProjects").doc(projectId).collection("stock").doc(itemKey);
+  const doc = await stockRef.get();
+  const existing = doc.exists ? doc.data() : {};
+
   await stockRef.delete();
+
+  await logWarehouseAudit(projectId, {
+    action: "DELETE_STOCK_ITEM",
+    userUid,
+    userEmail,
+    userName,
+    itemKey,
+    details: {
+      itemCode: existing.itemCode || itemKey,
+      description: existing.description || "",
+      quantityBar: existing.quantityBar || 0,
+    },
+  });
+
   return { itemKey, deleted: true };
 }
 
@@ -856,7 +972,7 @@ async function getItemMovementsHistory(projectId, itemKey, itemCode) {
 /**
  * Update invoice metadata (Sales Order & Customer Reference) and sync to movements
  */
-async function updateInvoiceMetadata(projectId, invoiceId, { salesOrder, customerReference }) {
+async function updateInvoiceMetadata(projectId, invoiceId, { salesOrder, customerReference }, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
 
@@ -864,9 +980,13 @@ async function updateInvoiceMetadata(projectId, invoiceId, { salesOrder, custome
   const invDoc = await invoiceRef.get();
   if (!invDoc.exists) throw new Error("Invoice not found.");
 
+  const existingData = invDoc.data() || {};
+  const newSO = String(salesOrder || "").trim();
+  const newRef = String(customerReference || "").trim();
+
   const payload = {
-    salesOrder: String(salesOrder || "").trim(),
-    customerReference: String(customerReference || "").trim(),
+    salesOrder: newSO,
+    customerReference: newRef,
     updatedAt: new Date().toISOString(),
   };
 
@@ -888,6 +1008,19 @@ async function updateInvoiceMetadata(projectId, invoiceId, { salesOrder, custome
     await batch.commit();
   }
 
+  await logWarehouseAudit(projectId, {
+    action: "UPDATE_INVOICE_META",
+    userUid,
+    userEmail,
+    userName,
+    invoiceId,
+    details: {
+      invoiceNumber: existingData.invoiceNumber || "",
+      salesOrder: { old: existingData.salesOrder || "", new: newSO },
+      customerReference: { old: existingData.customerReference || "", new: newRef },
+    },
+  });
+
   return { invoiceId, ...payload };
 }
 
@@ -905,4 +1038,6 @@ module.exports = {
   updateStockItem,
   deleteStockItem,
   updateInvoiceMetadata,
+  logWarehouseAudit,
+  getWarehouseAuditLogs,
 };

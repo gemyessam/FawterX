@@ -18,6 +18,7 @@ const {
   updateStockItem,
   deleteStockItem,
   updateInvoiceMetadata,
+  getWarehouseAuditLogs,
 } = require("../services/warehouseStore");
 
 const router = express.Router();
@@ -201,11 +202,14 @@ router.post("/projects/:projectId/invoices/process", requireWarehouse, async (re
       return res.status(400).json({ success: false, message: "At least one valid line is required." });
     }
 
+    const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await processInboundInvoice(
       req.params.projectId,
       invoiceMeta || {},
       lines,
-      req.user.uid
+      req.user.uid,
+      req.user.email,
+      userName
     );
     return res.json({ success: true, ...result });
   } catch (error) {
@@ -221,6 +225,19 @@ router.get("/projects/:projectId/invoices", requireWarehouse, async (req, res) =
   try {
     const invoices = await getProjectInvoices(req.params.projectId);
     return res.json({ success: true, invoices });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/warehouse/projects/:projectId/audit-logs
+ * Fetch audit logs for warehouse operations (Admin Only)
+ */
+router.get("/projects/:projectId/audit-logs", requireAdmin, async (req, res) => {
+  try {
+    const logs = await getWarehouseAuditLogs(req.params.projectId);
+    return res.json({ success: true, logs });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -259,11 +276,14 @@ router.get("/projects/:projectId/stock/:itemKey/movements", requireWarehouse, as
  */
 router.put("/projects/:projectId/stock/:itemKey", requireAdmin, async (req, res) => {
   try {
+    const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await updateStockItem(
       req.params.projectId,
       req.params.itemKey,
       req.body,
-      req.user.uid
+      req.user.uid,
+      req.user.email,
+      userName
     );
     return res.json({ success: true, item: result });
   } catch (error) {
@@ -277,7 +297,14 @@ router.put("/projects/:projectId/stock/:itemKey", requireAdmin, async (req, res)
  */
 router.delete("/projects/:projectId/stock/:itemKey", requireAdmin, async (req, res) => {
   try {
-    const result = await deleteStockItem(req.params.projectId, req.params.itemKey);
+    const userName = req.user.name || req.user.displayName || req.user.email;
+    const result = await deleteStockItem(
+      req.params.projectId,
+      req.params.itemKey,
+      req.user.uid,
+      req.user.email,
+      userName
+    );
     return res.json({ success: true, ...result });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -291,10 +318,15 @@ router.delete("/projects/:projectId/stock/:itemKey", requireAdmin, async (req, r
 router.patch("/projects/:projectId/invoices/:invoiceId", requireWarehouse, async (req, res) => {
   try {
     const { salesOrder, customerReference } = req.body;
-    const result = await updateInvoiceMetadata(req.params.projectId, req.params.invoiceId, {
-      salesOrder,
-      customerReference,
-    });
+    const userName = req.user.name || req.user.displayName || req.user.email;
+    const result = await updateInvoiceMetadata(
+      req.params.projectId,
+      req.params.invoiceId,
+      { salesOrder, customerReference },
+      req.user.uid,
+      req.user.email,
+      userName
+    );
     return res.json({ success: true, ...result });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

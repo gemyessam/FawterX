@@ -17,6 +17,7 @@ import {
   getInvoiceMovements,
   getItemMovementsHistory,
   updateWarehouseInvoiceMetadata,
+  getWarehouseAuditLogs,
 } from '../services/warehouseApi'
 
 export default function Warehouse() {
@@ -132,6 +133,11 @@ export default function Warehouse() {
   const [newProjectDesc, setNewProjectDesc] = useState('')
   const [creatingProject, setCreatingProject] = useState(false)
 
+  // Audit Trail State (Admin Only)
+  const [auditLogs, setAuditLogs] = useState([])
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState(false)
+  const [auditSearchQuery, setAuditSearchQuery] = useState('')
+
   // Stock Item Admin Management State
   const [editingStockKey, setEditingStockKey] = useState(null)
   const [editingStockData, setEditingStockData] = useState({})
@@ -143,6 +149,8 @@ export default function Warehouse() {
       customerCode: item.customerCode || '',
       description: item.description || '',
       finish: item.finish || 'STD',
+      lastSalesOrder: item.lastSalesOrder || item.salesOrder || '',
+      lastCustomerRef: item.lastCustomerRef || item.customerReference || '',
       lengthMm: item.lengthMm || 6000,
       quantityBar: item.quantityBar || 0,
       quantityKg: item.quantityKg || 0,
@@ -199,6 +207,26 @@ export default function Warehouse() {
       loadUsers()
     }
   }, [activeTab, isAdmin])
+
+  useEffect(() => {
+    if (activeTab === 'audit' && isAdmin && selectedProjectId) {
+      loadAuditLogs(selectedProjectId)
+    }
+  }, [activeTab, isAdmin, selectedProjectId])
+
+  async function loadAuditLogs(projectId) {
+    setLoadingAuditLogs(true)
+    try {
+      const res = await getWarehouseAuditLogs(projectId)
+      if (res.success && res.logs) {
+        setAuditLogs(res.logs)
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل تحميل سجل التدقيق' : 'Failed to load audit logs'))
+    } finally {
+      setLoadingAuditLogs(false)
+    }
+  }
 
   async function loadInvoices(projectId) {
     setLoadingInvoices(true)
@@ -1242,6 +1270,14 @@ export default function Warehouse() {
             ⚙️ {isAr ? 'إدارة صلاحيات المستخدمين' : 'Access Control'}
           </button>
         )}
+        {isAdmin && (
+          <button
+            className={`btn ${activeTab === 'audit' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setActiveTab('audit')}
+          >
+            🛡️ {isAr ? 'سجل التدقيق والتغييرات' : 'Audit Trail Logs'}
+          </button>
+        )}
         <button
           className={`btn ${activeTab === 'projects' ? 'btn-primary' : 'btn-ghost'}`}
           onClick={() => setActiveTab('projects')}
@@ -1503,12 +1539,30 @@ export default function Warehouse() {
                         )}
                         {stockColumns.salesOrder && (
                           <td style={{ padding: '0.75rem 1rem', color: '#00e0a1', fontWeight: 600 }}>
-                            {item.lastSalesOrder || item.salesOrder || '—'}
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editingStockData.lastSalesOrder || ''}
+                                onChange={(e) => setEditingStockData({ ...editingStockData, lastSalesOrder: e.target.value })}
+                                style={{ width: '100px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                              />
+                            ) : (
+                              item.lastSalesOrder || item.salesOrder || '—'
+                            )}
                           </td>
                         )}
                         {stockColumns.customerRef && (
                           <td style={{ padding: '0.75rem 1rem', color: '#ffb74d', fontWeight: 600 }}>
-                            {item.lastCustomerRef || item.customerReference || '—'}
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editingStockData.lastCustomerRef || ''}
+                                onChange={(e) => setEditingStockData({ ...editingStockData, lastCustomerRef: e.target.value })}
+                                style={{ width: '100px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                              />
+                            ) : (
+                              item.lastCustomerRef || item.customerReference || '—'
+                            )}
                           </td>
                         )}
                         {stockColumns.lengthMm && (
@@ -2641,6 +2695,177 @@ export default function Warehouse() {
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── TAB 5: Audit Log Trail (Admin Only) ─── */}
+      {activeTab === 'audit' && isAdmin && (
+        <div className="card fade-in" style={{ padding: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                🛡️ {isAr ? 'سجل التدقيق والتغييرات (Audit Trail Logs)' : 'System Audit Trail Logs'}
+              </h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                {isAr
+                  ? 'تسجيل تفصيلي لكافة التعديلات والإضافات والخصومات (المستخدم، نوع وتاريخ الحركة، والتغيرات)'
+                  : 'Detailed tracking of all modifications, additions, and deductions (who, what, when)'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              <input
+                type="text"
+                placeholder={isAr ? 'بحث في السجل...' : 'Search audit log...'}
+                value={auditSearchQuery}
+                onChange={(e) => setAuditSearchQuery(e.target.value)}
+                style={{
+                  background: '#101223',
+                  color: '#fff',
+                  border: '1px solid var(--border)',
+                  padding: '0.5rem 0.9rem',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem',
+                  width: '240px',
+                }}
+              />
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => loadAuditLogs(selectedProjectId)}
+                disabled={loadingAuditLogs}
+              >
+                🔄 {isAr ? 'تحديث' : 'Refresh'}
+              </button>
+            </div>
+          </div>
+
+          {loadingAuditLogs ? (
+            <div style={{ textAlign: 'center', padding: '2rem' }}><span className="spinner"></span></div>
+          ) : auditLogs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+              {isAr ? 'لا توجد سجلات تدقيق حتى الآن لهذا المشروع' : 'No audit records found for this project'}
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)', color: '#8ab4ff' }}>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'التاريخ والوقت' : 'Timestamp'}</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'المستخدم' : 'User'}</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'نوع العملية' : 'Action'}</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'تفاصيل الحركة والتغييرات' : 'Details & Changes'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs
+                    .filter((log) => {
+                      if (!auditSearchQuery.trim()) return true
+                      const q = auditSearchQuery.toLowerCase()
+                      const txt = `${log.userName} ${log.userEmail} ${log.action} ${JSON.stringify(log.details)}`.toLowerCase()
+                      return txt.includes(q)
+                    })
+                    .map((log) => {
+                      let actionBadge = null
+                      switch (log.action) {
+                        case 'PROCESS_INVOICE':
+                          actionBadge = (
+                            <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.3)' }}>
+                              🧾 {log.details?.movementType === 'outbound' ? (isAr ? 'فاتورة خصم' : 'Outbound Invoice') : (isAr ? 'فاتورة إضافة' : 'Inbound Invoice')}
+                            </span>
+                          )
+                          break
+                        case 'UPDATE_INVOICE_META':
+                          actionBadge = (
+                            <span className="badge" style={{ background: 'rgba(255, 183, 77, 0.15)', color: '#ffb74d', border: '1px solid rgba(255, 183, 77, 0.3)' }}>
+                              ✏️ {isAr ? 'تعديل بيانات فاتورة' : 'Edit Invoice Meta'}
+                            </span>
+                          )
+                          break
+                        case 'EDIT_STOCK_ITEM':
+                          actionBadge = (
+                            <span className="badge" style={{ background: 'rgba(100, 181, 246, 0.15)', color: '#64b5f6', border: '1px solid rgba(100, 181, 246, 0.3)' }}>
+                              ⚙️ {isAr ? 'تعديل صنف بالمخزن' : 'Edit Stock Item'}
+                            </span>
+                          )
+                          break
+                        case 'DELETE_STOCK_ITEM':
+                          actionBadge = (
+                            <span className="badge" style={{ background: 'rgba(255, 77, 79, 0.15)', color: '#ff4d4f', border: '1px solid rgba(255, 77, 79, 0.3)' }}>
+                              🗑️ {isAr ? 'حذف صنف من المخزن' : 'Delete Stock Item'}
+                            </span>
+                          )
+                          break
+                        default:
+                          actionBadge = <span className="badge">{log.action}</span>
+                      }
+
+                      return (
+                        <tr key={log.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                          <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                            {log.timestamp ? new Date(log.timestamp).toLocaleString(isAr ? 'ar-EG' : 'en-US') : '—'}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontWeight: 700, color: '#ffffff' }}>{log.userName || 'Unknown User'}</div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{log.userEmail}</div>
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>{actionBadge}</td>
+                          <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem' }}>
+                            {log.action === 'PROCESS_INVOICE' && (
+                              <div>
+                                <span>{isAr ? 'الفاتورة:' : 'Invoice:'} <strong>{log.details?.invoiceNumber}</strong></span>
+                                {log.details?.salesOrder && <span style={{ marginRight: '10px', marginLeft: '10px', color: '#00e0a1' }}>SO: {log.details.salesOrder}</span>}
+                                {log.details?.customerReference && <span style={{ color: '#ffb74d' }}>Ref: {log.details.customerReference}</span>}
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                  {isAr ? `عدد البنود: ${log.details?.movementsCount || 0}` : `Items count: ${log.details?.movementsCount || 0}`}
+                                  {log.details?.isDuplicate && <span style={{ color: '#ffb74d', marginLeft: '8px', marginRight: '8px' }}>(تحديث فاتورة سابقة)</span>}
+                                </div>
+                              </div>
+                            )}
+
+                            {log.action === 'UPDATE_INVOICE_META' && (
+                              <div>
+                                <div>{isAr ? 'الفاتورة:' : 'Invoice:'} <strong>{log.details?.invoiceNumber}</strong></div>
+                                {log.details?.oldMeta && log.details?.newMeta && (
+                                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                    {log.details.oldMeta.salesOrder !== log.details.newMeta.salesOrder && (
+                                      <div>SO: <span style={{ textDecoration: 'line-through' }}>{log.details.oldMeta.salesOrder || '—'}</span> ➔ <strong style={{ color: '#00e0a1' }}>{log.details.newMeta.salesOrder}</strong></div>
+                                    )}
+                                    {log.details.oldMeta.customerReference !== log.details.newMeta.customerReference && (
+                                      <div>Customer Ref: <span style={{ textDecoration: 'line-through' }}>{log.details.oldMeta.customerReference || '—'}</span> ➔ <strong style={{ color: '#ffb74d' }}>{log.details.newMeta.customerReference}</strong></div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {log.action === 'EDIT_STOCK_ITEM' && (
+                              <div>
+                                <div>{isAr ? 'كود الصنف:' : 'Item Code:'} <strong>{log.details?.itemCode}</strong></div>
+                                {log.details?.changes && (
+                                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                    {Object.entries(log.details.changes).map(([k, v]) => (
+                                      <span key={k} style={{ background: 'rgba(255,255,255,0.04)', padding: '2px 6px', borderRadius: '4px' }}>
+                                        {k}: <span style={{ textDecoration: 'line-through' }}>{String(v.old ?? '—')}</span> ➔ <strong style={{ color: '#00e0a1' }}>{String(v.new ?? '—')}</strong>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {log.action === 'DELETE_STOCK_ITEM' && (
+                              <div>
+                                <div>{isAr ? 'كود الصنف المحذوف:' : 'Deleted Item Code:'} <strong style={{ color: '#ff4d4f' }}>{log.details?.itemCode}</strong></div>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{log.details?.description}</div>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                 </tbody>
               </table>
             </div>
