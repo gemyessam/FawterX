@@ -1125,6 +1125,8 @@ export default function Warehouse() {
         { header: isAr ? 'كود العميل' : 'Customer Code', key: 'customerCode', width: 16 },
         { header: isAr ? 'بيان الصنف' : 'Description', key: 'description', width: 52 },
         { header: isAr ? 'نوع الدهان/اللون' : 'Finish/Color', key: 'finish', width: 18 },
+        { header: isAr ? 'أمر البيع (SO)' : 'Sales Order #', key: 'salesOrder', width: 20 },
+        { header: isAr ? 'مرجع العميل' : 'Customer Ref', key: 'customerRef', width: 22 },
         { header: isAr ? 'الطول (mm)' : 'Length (mm)', key: 'lengthMm', width: 15 },
         { header: isAr ? 'الأعواد (BAR)' : 'Bars (BAR)', key: 'quantityBar', width: 15 },
         { header: isAr ? 'الأمتار (LM)' : 'Meters (LM)', key: 'quantityLm', width: 15 },
@@ -1185,6 +1187,8 @@ export default function Warehouse() {
           customerCode: item.customerCode || '—',
           description: item.description || '',
           finish: item.finish || 'STD',
+          salesOrder: item.lastSalesOrder || item.salesOrder || '—',
+          customerRef: item.lastCustomerRef || item.customerReference || '—',
           lengthMm: Number(item.lengthMm || 0),
           quantityBar: Number(item.quantityBar || 0),
           quantityLm: Number(item.quantityLm || 0),
@@ -1198,15 +1202,15 @@ export default function Warehouse() {
           cell.border = borderStyle
           cell.font = { name: 'Calibri', size: 10 }
 
-          if (colNumber === 1 || colNumber === 2 || colNumber === 3 || colNumber === 4 || colNumber === 6) {
+          if ((colNumber >= 1 && colNumber <= 4) || colNumber === 6 || colNumber === 7 || colNumber === 8) {
             cell.alignment = { horizontal: 'center', vertical: 'middle' }
           } else if (colNumber === 5) {
             cell.alignment = { horizontal: 'left', vertical: 'middle' }
-          } else if (colNumber === 10 && cell.value === '-') {
+          } else if (colNumber === 12 && cell.value === '-') {
             cell.alignment = { horizontal: 'center', vertical: 'middle' }
           } else {
             cell.alignment = { horizontal: 'right', vertical: 'middle' }
-            cell.numFmt = '#,##0.00'
+            cell.numFmt = colNumber === 9 ? '#,##0' : '#,##0.00'
           }
         })
       })
@@ -1224,6 +1228,8 @@ export default function Warehouse() {
         customerCode: '',
         description: `${isAr ? 'عدد الأصناف:' : 'Total Items:'} ${filteredStock.length}`,
         finish: '',
+        salesOrder: '',
+        customerRef: '',
         lengthMm: '',
         quantityBar: totalBars,
         quantityLm: totalLm,
@@ -1248,9 +1254,9 @@ export default function Warehouse() {
           cell.alignment = { horizontal: 'center', vertical: 'middle' }
         } else if (colNumber === 5) {
           cell.alignment = { horizontal: 'left', vertical: 'middle' }
-        } else if (colNumber === 10 && cell.value === '-') {
+        } else if (colNumber === 12 && cell.value === '-') {
           cell.alignment = { horizontal: 'center', vertical: 'middle' }
-        } else if (colNumber === 8 || colNumber === 9 || colNumber === 10 || colNumber === 12) {
+        } else if (colNumber === 10 || colNumber === 11 || colNumber === 12 || colNumber === 14) {
           cell.alignment = { horizontal: 'right', vertical: 'middle' }
           cell.numFmt = '#,##0.00'
         } else {
