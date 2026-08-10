@@ -71,27 +71,28 @@ function isKnownLabel(str) {
 
 function sanitizeMetaValue(val) {
   if (!val) return "";
-  let cleaned = clean(val).replace(/^[:,#\t\s]+|[:,#\t\s]+$/g, "").trim();
+  let cleaned = clean(val).replace(/^[:,#\t\s,]+|[:,#\t\s,]+$/g, "").trim();
   if (!cleaned) return "";
   if (/^[:#]/.test(cleaned)) return "";
 
-  // Handle cases where label remnants or colons exist (e.g., "erence: Q-00235" or "Ref: Q-00235")
+  // 1. Strip trailing label headers first if multiple fields exist on the same line (e.g. "Q-00235 Inquiry Date: 26 Feb")
+  const splitLabelsRegex = /(?:Inquiry Date|Payment Term|Commercial Invoice|Sales Order|Delivery Date|Invoice Date|Receipt Date|Buyer|Seller|Customer Reference|Customer Ref|Cust Ref|PO #|Purchase Order|Total Amount|Tax Amount|Invoice Amount|Currency|Description|Item Code|Customer Code)/i;
+  cleaned = cleaned.split(splitLabelsRegex)[0].trim();
+  cleaned = cleaned.replace(/^[:,#\t\s,]+|[:,#\t\s,]+$/g, "").trim();
+
+  // 2. Handle leftover colon prefixes if any exist (e.g. "Ref: Q-00235")
   if (cleaned.includes(":")) {
     const parts = cleaned.split(":");
     const prefix = clean(parts[0]).toLowerCase();
     if (prefix.length <= 15 && (/erence|rence|reference|order|date|invoice|ref|cust|so|po/i.test(prefix) || KNOWN_LABELS.some(l => l.includes(prefix)))) {
-      cleaned = clean(parts.slice(1).join(":")).replace(/^[:,#\t\s]+|[:,#\t\s]+$/g, "").trim();
+      cleaned = clean(parts.slice(1).join(":")).replace(/^[:,#\t\s,]+|[:,#\t\s,]+$/g, "").trim();
     }
   }
-
-  // Strip trailing label headers if text contains multiple fields on same line (e.g., "Q-00235 Inquiry Date:")
-  cleaned = cleaned.split(/(?:Inquiry Date|Payment Term|Commercial Invoice|Sales Order|Delivery Date|Buyer|Seller|Customer Reference|Customer Ref|Cust Ref|PO #|Purchase Order)/i)[0].trim();
-  cleaned = cleaned.replace(/^[:,#\t\s]+|[:,#\t\s]+$/g, "").trim();
 
   if (!cleaned) return "";
   const lower = cleaned.toLowerCase();
 
-  // Explicit label fragments to discard
+  // Explicit label fragments or single-word label matches to discard
   if (/^(erence|rence|reference|ref|order|invoice|date|customer)$/i.test(lower)) {
     return "";
   }
@@ -105,24 +106,48 @@ function sanitizeMetaValue(val) {
 function extractLabelValue(text, labelVariants) {
   for (const label of labelVariants) {
     const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const endBoundary = /\w$/.test(label) ? '\\b' : '';
-    const regexSameLine = new RegExp(`(?:\\b)${escapedLabel}${endBoundary}\\s*:?\\s*([^\\r\\n]+)`, 'i');
+    
+    // Pattern 1: Same line (supports colons, tabs, commas, spaces)
+    const regexSameLine = new RegExp(`(?:\\b|_)${escapedLabel}(?:\\b|_)?\\s*[:,\t]*\\s*([^\\r\\n]+)`, 'i');
     const matchSame = text.match(regexSameLine);
     if (matchSame) {
       const cand = sanitizeMetaValue(matchSame[1]);
       if (cand) return cand;
     }
 
-    const regexIdx = new RegExp(`(?:\\b)${escapedLabel}${endBoundary}`, 'i');
+    // Pattern 2: Subsequent line(s) / Column-block layout
+    const regexIdx = new RegExp(`(?:\\b|_)${escapedLabel}(?:\\b|_)?`, 'i');
     const matchIdx = text.match(regexIdx);
     if (matchIdx) {
       const idx = matchIdx.index;
       const afterText = text.slice(idx + matchIdx[0].length);
       const afterLines = afterText.split(/\r?\n/).map(clean).filter(Boolean);
-      for (const line of afterLines.slice(0, 3)) {
-        const cand = sanitizeMetaValue(line);
-        if (cand) return cand;
-        if (isKnownLabel(line) || /^[:#]/.test(line) || line.endsWith(":")) break;
+
+      if (afterLines.length > 0) {
+        if (!isKnownLabel(afterLines[0]) && !afterLines[0].endsWith(":") && !/^[:#]/.test(afterLines[0])) {
+          // Direct next line is a value!
+          const cand = sanitizeMetaValue(afterLines[0]);
+          if (cand) return cand;
+        } else {
+          // Grouped labels block followed by values block (typical in 2-column pdf-parse output)
+          let labelCount = 0;
+          let i = 0;
+          while (i < afterLines.length && (isKnownLabel(afterLines[i]) || afterLines[i].endsWith(":") || /^[:#]/.test(afterLines[i]))) {
+            labelCount++;
+            i++;
+          }
+          // Corresponding value in column-block layout
+          const targetValueIdx = i + labelCount;
+          if (targetValueIdx < afterLines.length) {
+            const cand = sanitizeMetaValue(afterLines[targetValueIdx]);
+            if (cand) return cand;
+          }
+          // Fallback: check first available non-label line
+          for (let j = i; j < Math.min(afterLines.length, i + 5); j++) {
+            const cand = sanitizeMetaValue(afterLines[j]);
+            if (cand) return cand;
+          }
+        }
       }
     }
   }
@@ -139,30 +164,47 @@ function extractMetadata(text, fileName) {
   const invoiceDateStr = text.match(/Commercial Invoice Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || allDates[0] || "";
   const deliveryDateStr = text.match(/Delivery Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || (allDates.length >= 3 ? allDates[2] : allDates[allDates.length - 1]) || "";
 
-  // Direct regex extraction for Sales Order (e.g., SO-008411, SO-12345)
-  let salesOrder = clean(
-    text.match(/Sales\s*Order\s*#?\s*:?\s*([A-Za-z0-9_-]+)/i)?.[1] ||
-    text.match(/\bSO-\d{3,}\b/i)?.[0]
+  // 1. Direct match for Customer Reference (supports Q-code, SO-code, Arabic/English words, phrases, numbers)
+  let customerReference = clean(
+    text.match(/(?:Customer\s*Reference|Customer\s*Ref\.?|Cust\.?\s*Ref\.?|Client\s*Ref\.?|Purchase\s*Order|PO\s*#?)\s*[:,\t]*\s*([^\r\n]+)/i)?.[1]
   );
-  if (!salesOrder || isKnownLabel(salesOrder) || /^erence/i.test(salesOrder)) {
+  if (customerReference) {
+    customerReference = sanitizeMetaValue(customerReference);
+  }
+
+  // Fallback 1: extractLabelValue with label variants
+  if (!customerReference || isKnownLabel(customerReference)) {
+    customerReference = extractLabelValue(text, [
+      "Customer Reference:", "Customer Reference", "Customer Ref:", "Customer Ref",
+      "Cust. Ref:", "Cust Ref", "Client Ref:", "Client Ref",
+      "Purchase Order:", "Purchase Order #:", "PO #:", "PO #"
+    ]);
+  }
+
+  // Fallback 2: Standalone Q-code pattern if still uncaptured
+  if (!customerReference) {
+    const qMatch = text.match(/\bQ-?\d{3,}[A-Za-z0-9_-]*\b/i)?.[0];
+    if (qMatch) customerReference = clean(qMatch);
+  }
+
+  // 2. Direct match for Sales Order (SO-008411, SO-code, numbers, phrases)
+  let salesOrder = clean(
+    text.match(/(?:Sales\s*Order\s*#?|S\.O\.\s*#?|SO\s*#?)\s*[:,\t]*\s*([^\r\n]+)/i)?.[1]
+  );
+  if (salesOrder) {
+    salesOrder = sanitizeMetaValue(salesOrder);
+  }
+
+  if (!salesOrder || isKnownLabel(salesOrder)) {
     salesOrder = extractLabelValue(text, [
       "Sales Order #:", "Sales Order #", "Sales Order:", "Sales Order",
       "S.O. #:", "S.O. #", "SO #:", "SO #"
     ]);
   }
 
-  // Direct regex extraction for Customer Reference (e.g., Q-00235, Q-12345, PO-12345)
-  let customerReference = clean(
-    text.match(/Customer\s*Reference\s*:?\s*([A-Za-z0-9_-]+)/i)?.[1] ||
-    text.match(/Customer\s*Ref\.?\s*:?\s*([A-Za-z0-9_-]+)/i)?.[1] ||
-    text.match(/Cust\.?\s*Ref\.?\s*:?\s*([A-Za-z0-9_-]+)/i)?.[1] ||
-    text.match(/\bQ-\d{3,}\b/i)?.[0]
-  );
-  if (!customerReference || isKnownLabel(customerReference) || /^erence/i.test(customerReference)) {
-    customerReference = extractLabelValue(text, [
-      "Customer Reference:", "Customer Reference", "Customer Ref:", "Customer Ref",
-      "Cust. Ref:", "Cust Ref", "Purchase Order:", "Purchase Order #:", "PO #:", "PO #"
-    ]);
+  if (!salesOrder) {
+    const soMatch = text.match(/\bSO-?\d{3,}[A-Za-z0-9_-]*\b/i)?.[0];
+    if (soMatch) salesOrder = clean(soMatch);
   }
 
   const currency = clean(text.match(/\bCurrency:\s*([A-Z]{3})\b/i)?.[1]) || "EGP";
@@ -428,4 +470,4 @@ async function parseWarehouseInvoice(filePath, originalName = "") {
   return { ...parseWorkbook(filePath, originalName), warnings: [], parser: "canex-warehouse-excel-v1" };
 }
 
-module.exports = { parseWarehouseInvoice };
+module.exports = { parseWarehouseInvoice, extractMetadata };
