@@ -59,7 +59,31 @@ const KNOWN_LABELS = [
   "bars",
   "quantity",
   "unit price",
-  "amount"
+  "amount",
+  "delivery term",
+  "delivery terms",
+  "payment term",
+  "payment terms",
+  "inquiry date",
+  "buyer",
+  "seller"
+];
+
+// Values that should NEVER be captured as metadata field values (delivery terms, payment terms, etc.)
+const DISCARD_VALUES = [
+  /^ex\s*work(s)?$/i,
+  /^fob$/i,
+  /^cif$/i,
+  /^cfr$/i,
+  /^ddp$/i,
+  /^dap$/i,
+  /^fca$/i,
+  /^exw$/i,
+  /^cash\s*on\s*delivery$/i,
+  /^cod$/i,
+  /^net\s*\d+$/i,
+  /^prepaid$/i,
+  /^(buyer|seller)$/i,
 ];
 
 function isKnownLabel(str) {
@@ -76,15 +100,15 @@ function sanitizeMetaValue(val) {
   if (/^[:#]/.test(cleaned)) return "";
 
   // 1. Strip trailing label headers first if multiple fields exist on the same line (e.g. "Q-00235 Inquiry Date: 26 Feb")
-  const splitLabelsRegex = /(?:Inquiry Date|Payment Term|Commercial Invoice|Sales Order|Delivery Date|Invoice Date|Receipt Date|Buyer|Seller|Customer Reference|Customer Ref|Cust Ref|PO #|Purchase Order|Total Amount|Tax Amount|Invoice Amount|Currency|Description|Item Code|Customer Code)/i;
+  const splitLabelsRegex = /(?:Inquiry Date|Payment Term|Payment Terms|Delivery Term|Delivery Terms|Commercial Invoice|Sales Order|Delivery Date|Invoice Date|Receipt Date|Buyer|Seller|Customer Reference|Customer Ref|Cust Ref|PO #|Purchase Order|Total Amount|Tax Amount|Invoice Amount|Currency|Description|Item Code|Customer Code)/i;
   cleaned = cleaned.split(splitLabelsRegex)[0].trim();
   cleaned = cleaned.replace(/^[:,#\t\s,]+|[:,#\t\s,]+$/g, "").trim();
 
-  // 2. Handle leftover colon prefixes if any exist (e.g. "Ref: Q-00235")
+  // 2. Handle leftover colon prefixes if any exist (e.g. "Ref: Q-00235" or "Delivery Term: EX Work")
   if (cleaned.includes(":")) {
     const parts = cleaned.split(":");
     const prefix = clean(parts[0]).toLowerCase();
-    if (prefix.length <= 15 && (/erence|rence|reference|order|date|invoice|ref|cust|so|po/i.test(prefix) || KNOWN_LABELS.some(l => l.includes(prefix)))) {
+    if (prefix.length <= 20 && (/erence|rence|reference|order|date|invoice|ref|cust|so|po|deliver|payment|term|inquiry/i.test(prefix) || KNOWN_LABELS.some(l => l.includes(prefix)))) {
       cleaned = clean(parts.slice(1).join(":")).replace(/^[:,#\t\s,]+|[:,#\t\s,]+$/g, "").trim();
     }
   }
@@ -95,6 +119,11 @@ function sanitizeMetaValue(val) {
   // Explicit label fragments or single-word label matches to discard
   if (/^(erence|rence|reference|ref|order|invoice|date|customer)$/i.test(lower)) {
     return "";
+  }
+
+  // Discard known delivery/payment term values
+  for (const pattern of DISCARD_VALUES) {
+    if (pattern.test(cleaned)) return "";
   }
 
   for (const label of KNOWN_LABELS) {
