@@ -124,8 +124,8 @@ function sanitizeMetaValue(val) {
   // Discard known delivery/payment term values or dates
   if (/\b\d{1,2}\s+[A-Za-z]{3,}\s+\d{4}\b/i.test(cleaned)) return "";
 
-  // Discard addresses, locations, cities, building numbers, and company register lines
-  if (/\b(smart village|village|giza|cairo|alexandria|building|bldg|street|st\.|plot|governorate|district|floor|flr|avenue|ave|road|rd|po box|p\.o\.|postal|zip|industrial|cr no|tax id|buyer register|seller register|register details)\b/i.test(cleaned)) return "";
+  // Discard addresses, locations, cities, countries, building numbers, and company register lines
+  if (/\b(egypt|cairo|giza|alexandria|kenya|saudi|uae|germany|kuwait|qatar|jordan|lebanon|smart village|village|building|bldg|street|st\.|plot|governorate|district|floor|flr|avenue|ave|road|rd|po box|p\.o\.|postal|zip|industrial|cr no|tax id|buyer register|seller register|register details)\b/i.test(cleaned)) return "";
   if (/^\d+[a-z]?[\s,]/i.test(cleaned) && (cleaned.includes(",") || /giza|cairo|village|street|building/i.test(cleaned))) return "";
   if (/^\d{3}-\d{3}-\d{3}$/.test(cleaned) || /^\+?\d[\d\s-]{8,}$/.test(cleaned)) return "";
 
@@ -137,6 +137,15 @@ function sanitizeMetaValue(val) {
     if (lower === label || lower === `:${label}` || lower === `${label}:`) return "";
   }
   return cleaned;
+}
+
+function isValidInvoiceNumber(cand) {
+  if (!cand) return false;
+  const s = String(cand).trim().toLowerCase();
+  if (!s || isKnownLabel(s) || s.length > 40) return false;
+  if (/\b(egypt|cairo|giza|alexandria|kenya|saudi|uae|germany|schueco|canex|supplier|buyer|seller|smart village|building|street|governorate|district|industrial)\b/i.test(s)) return false;
+  if (!/\d/.test(s) && !/[-/]/.test(s)) return false;
+  return true;
 }
 
 function extractHeaderBlockPairs(text) {
@@ -232,12 +241,27 @@ function extractMetadata(text, fileName) {
   // 0. Check for 2-column stacked header block pairs
   const blockPairs = extractHeaderBlockPairs(text);
 
-  // 1. Extract Invoice Number (CNX3-XXXXXX pattern or label match)
-  const allInvoiceNumbers = text.match(/\bCNX3-\d{3,}\b/gi) || [];
-  let invoiceNumber = clean(blockPairs.invoiceNumber || allInvoiceNumbers[0] || "");
-  if (!invoiceNumber) {
-    invoiceNumber = extractLabelValue(text, ["Commercial Invoice #:", "Commercial Invoice #", "Invoice #:", "Invoice #", "Invoice No:"]);
-    if (invoiceNumber && (isKnownLabel(invoiceNumber) || invoiceNumber.length > 40)) invoiceNumber = "";
+  // 1. Extract Invoice Number (CNX pattern takes highest priority, then valid blockPairs/label values)
+  const cnxMatches = (text.match(/\bCNX[A-Za-z0-9_-]*-\d{3,}\b/gi) || text.match(/\bCNX\d*-\d{3,}\b/gi) || []).map(clean);
+  let invoiceNumber = "";
+  if (cnxMatches.length > 0) {
+    invoiceNumber = cnxMatches[0];
+  } else {
+    const cand = clean(blockPairs.invoiceNumber || extractLabelValue(text, [
+      "Commercial Invoice #:", "Commercial Invoice #", "Invoice #:", "Invoice #", "Invoice No:", "Commercial Invoice"
+    ]));
+    if (isValidInvoiceNumber(cand)) {
+      invoiceNumber = cand;
+    }
+  }
+
+  if (!isValidInvoiceNumber(invoiceNumber)) {
+    const backupMatch = text.match(/\b(CNX|INV)[A-Za-z0-9_-]{3,}\b/gi)?.[0];
+    if (backupMatch && isValidInvoiceNumber(backupMatch)) {
+      invoiceNumber = clean(backupMatch);
+    } else {
+      invoiceNumber = "";
+    }
   }
 
   // 2. Extract Sales Order (Canex Supplier SO)

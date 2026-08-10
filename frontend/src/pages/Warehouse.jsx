@@ -198,6 +198,8 @@ export default function Warehouse() {
   const [editingStockKey, setEditingStockKey] = useState(null)
   const [editingStockData, setEditingStockData] = useState({})
   const [savingStockEdit, setSavingStockEdit] = useState(false)
+  const [selectedStockKeys, setSelectedStockKeys] = useState([])
+  const [deletingBulk, setDeletingBulk] = useState(false)
 
   const handleStartStockEdit = (item) => {
     setEditingStockKey(item.itemKey)
@@ -356,6 +358,60 @@ export default function Warehouse() {
       console.error('[DeleteStockItem Error]:', err)
       toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل حذف الصنف' : 'Failed to delete item'))
       loadStock(selectedProjectId)
+    }
+  }
+
+  const handleToggleSelectAllStock = (items) => {
+    const currentKeys = items.map((i) => i.itemKey)
+    const isAllSelected = currentKeys.length > 0 && currentKeys.every((k) => selectedStockKeys.includes(k))
+    if (isAllSelected) {
+      setSelectedStockKeys((prev) => prev.filter((k) => !currentKeys.includes(k)))
+    } else {
+      setSelectedStockKeys((prev) => Array.from(new Set([...prev, ...currentKeys])))
+    }
+  }
+
+  const handleToggleSelectStockKey = (key) => {
+    setSelectedStockKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    )
+  }
+
+  const handleBulkDeleteStockItems = async () => {
+    if (!selectedProjectId || selectedStockKeys.length === 0) return
+    const count = selectedStockKeys.length
+    const confirmMsg = isAr
+      ? `هل أنت تأكد من حذف (${count}) أصناف المحددة من المخزن نهائياً؟`
+      : `Are you sure you want to delete (${count}) selected items from stock?`
+    if (!window.confirm(confirmMsg)) return
+
+    setDeletingBulk(true)
+    try {
+      console.log('[BulkDeleteStockItems] Deleting keys:', selectedStockKeys, 'project:', selectedProjectId)
+      
+      // Optimistic update
+      setStock((prev) => prev.filter((i) => !selectedStockKeys.includes(i.itemKey)))
+
+      const results = await Promise.allSettled(
+        selectedStockKeys.map((key) => deleteStockItem(selectedProjectId, key))
+      )
+
+      const successCount = results.filter((r) => r.status === 'fulfilled' && r.value && r.value.success !== false).length
+
+      toast.success(
+        isAr
+          ? `تم حذف ${successCount} من أصل ${count} أصناف من المخزن بنجاح`
+          : `Successfully deleted ${successCount} of ${count} items from stock`
+      )
+
+      setSelectedStockKeys([])
+      loadStock(selectedProjectId)
+    } catch (err) {
+      console.error('[BulkDeleteStockItems Error]:', err)
+      toast.error(isAr ? 'حدث خطأ أثناء الحذف المجمع' : 'Error performing bulk delete')
+      loadStock(selectedProjectId)
+    } finally {
+      setDeletingBulk(false)
     }
   }
 
@@ -1582,6 +1638,30 @@ export default function Warehouse() {
                 📊 {isAr ? 'تصدير Excel' : 'Export Excel'}
               </button>
 
+              {isAdmin && selectedStockKeys.length > 0 && (
+                <button
+                  className="btn"
+                  disabled={deletingBulk}
+                  onClick={handleBulkDeleteStockItems}
+                  style={{
+                    background: 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '0.55rem 1.2rem',
+                    borderRadius: '8px',
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(255, 71, 87, 0.4)',
+                  }}
+                  title={isAr ? `حذف ${selectedStockKeys.length} أصناف من المخزن نهائياً` : `Delete ${selectedStockKeys.length} selected items`}
+                >
+                  🗑️ {deletingBulk ? '...' : (isAr ? `حذف المحدد (${selectedStockKeys.length})` : `Delete Selected (${selectedStockKeys.length})`)}
+                </button>
+              )}
+
               <div style={{ position: 'relative' }}>
                 <button
                   className="btn"
@@ -1670,6 +1750,17 @@ export default function Warehouse() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
               <thead>
                 <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
+                  {isAdmin && (
+                    <th style={{ padding: '0.75rem 0.5rem', width: '40px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={filteredStock.length > 0 && filteredStock.every((i) => selectedStockKeys.includes(i.itemKey))}
+                        onChange={() => handleToggleSelectAllStock(filteredStock)}
+                        style={{ accentColor: '#ff4757', width: '16px', height: '16px', cursor: 'pointer' }}
+                        title={isAr ? 'تحديد الكل / إلغاء تحديد الكل' : 'Select All / Deselect All'}
+                      />
+                    </th>
+                  )}
                   {stockColumns.index && <th style={{ padding: '0.75rem 1rem', width: '45px' }}>#</th>}
                   {stockColumns.itemCode && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>}
                   {stockColumns.customerCode && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>}
@@ -1692,7 +1783,17 @@ export default function Warehouse() {
                     const isEditing = editingStockKey === item.itemKey
                     const itemVal = getItemValue(item)
                     return (
-                      <tr key={item.itemKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: isEditing ? 'rgba(0, 224, 161, 0.05)' : 'transparent' }}>
+                      <tr key={item.itemKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: selectedStockKeys.includes(item.itemKey) ? 'rgba(255, 71, 87, 0.1)' : isEditing ? 'rgba(0, 224, 161, 0.05)' : 'transparent' }}>
+                        {isAdmin && (
+                          <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedStockKeys.includes(item.itemKey)}
+                              onChange={() => handleToggleSelectStockKey(item.itemKey)}
+                              style={{ accentColor: '#ff4757', width: '16px', height: '16px', cursor: 'pointer' }}
+                            />
+                          </td>
+                        )}
                         {stockColumns.index && <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600 }}>{idx + 1}</td>}
                         {stockColumns.itemCode && (
                           <td style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>
