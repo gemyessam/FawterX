@@ -606,7 +606,9 @@ export default function Warehouse() {
     const batch = batchInvoices.find((b) => b.id === batchId)
     if (!batch) return
 
-    const validLines = batch.reviewLines.filter((l) => !l.ignored && !l.isService && Number(l.quantityBar) > 0)
+    const validLines = (batch.reviewLines || []).filter(
+      (l) => !l.ignored && !l.isService && Number(l.quantityBar || l.quantity || l.qtyBar || l.bars || 0) > 0
+    )
     if (validLines.length === 0) {
       toast.error(isAr ? 'لا توجد بنود مخزنية صالحة للحفظ' : 'No valid stock lines to save')
       return
@@ -671,7 +673,9 @@ export default function Warehouse() {
         prev.map((item) => (item.id === inv.id ? { ...item, status: 'saving', errorMessage: null } : item))
       )
 
-      const validLines = inv.reviewLines.filter((l) => !l.ignored && !l.isService && Number(l.quantityBar) > 0)
+      const validLines = (inv.reviewLines || []).filter(
+        (l) => !l.ignored && !l.isService && Number(l.quantityBar || l.quantity || l.qtyBar || l.bars || 0) > 0
+      )
       if (validLines.length === 0) {
         setBatchInvoices((prev) =>
           prev.map((item) =>
@@ -695,6 +699,15 @@ export default function Warehouse() {
               item.id === inv.id ? { ...item, status: 'saved', isDuplicate: res.isDuplicate } : item
             )
           )
+        } else {
+          errorCount++
+          setBatchInvoices((prev) =>
+            prev.map((item) =>
+              item.id === inv.id
+                ? { ...item, status: 'error', errorMessage: res.message || (isAr ? 'فشل الحفظ' : 'Failed to save') }
+                : item
+            )
+          )
         }
       } catch (err) {
         errorCount++
@@ -706,7 +719,7 @@ export default function Warehouse() {
     }
 
     setSavingBatch(false)
-    loadStock(selectedProjectId)
+    await loadStock(selectedProjectId)
 
     if (errorCount === 0) {
       toast.success(
@@ -721,8 +734,8 @@ export default function Warehouse() {
     } else {
       toast.warning(
         isAr
-          ? `تم إتمام ${successCount} فاتورة، وحدثت أخطاء في ${errorCount} فاتورة. يرجى المراجعة.`
-          : `Processed ${successCount} invoice(s), ${errorCount} failed. Please review errors.`
+          ? `تم إتمام ${successCount} فاتورة (منها ${duplicateCount} مكررة)، وحدثت أخطاء في ${errorCount} فاتورة. يرجى المراجعة.`
+          : `Processed ${successCount} invoice(s) (${duplicateCount} duplicate), ${errorCount} failed. Please review errors.`
       )
     }
   }

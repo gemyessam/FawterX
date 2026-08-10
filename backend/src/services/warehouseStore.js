@@ -448,7 +448,7 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
 
   // Check if an invoice with the same invoiceNumber and movementType already exists
   const targetInvNo = String(invoiceMeta.invoiceNumber || "").trim();
-  if (targetInvNo && targetInvNo !== "-" && targetInvNo !== "—") {
+  if (targetInvNo && targetInvNo !== "-" && targetInvNo !== "—" && !targetInvNo.startsWith("INV-")) {
     try {
       const existingSnap = await projectRef
         .collection("invoices")
@@ -476,8 +476,11 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
 
         if (hasUpdates) {
           invUpdates.updatedAt = new Date().toISOString();
-          const dupBatch = db.batch();
+          let dupBatch = db.batch();
+          let dupOps = 0;
+
           dupBatch.update(existingDoc.ref, invUpdates);
+          dupOps++;
 
           const mvtsSnap = await projectRef
             .collection("movements")
@@ -490,12 +493,20 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
           if (invUpdates.supplier) mvtUpdates.supplier = invUpdates.supplier;
 
           if (Object.keys(mvtUpdates).length > 0) {
-            mvtsSnap.docs.forEach((mDoc) => {
+            for (const mDoc of mvtsSnap.docs) {
               dupBatch.update(mDoc.ref, mvtUpdates);
-            });
+              dupOps++;
+              if (dupOps >= 400) {
+                await dupBatch.commit();
+                dupBatch = db.batch();
+                dupOps = 0;
+              }
+            }
           }
 
-          await dupBatch.commit();
+          if (dupOps > 0) {
+            await dupBatch.commit();
+          }
         }
 
         return {
@@ -548,8 +559,17 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
   const invRef = await projectRef.collection("invoices").add(invoiceDoc);
   const invoiceId = invRef.id;
 
-  const batch = db.batch();
+  let batch = db.batch();
+  let opCount = 0;
   const createdMovements = [];
+
+  const commitBatchIfNeeded = async (force = false) => {
+    if (opCount >= 400 || (force && opCount > 0)) {
+      await batch.commit();
+      batch = db.batch();
+      opCount = 0;
+    }
+  };
 
   // 2. Loop through lines
   for (const line of lines) {
@@ -563,7 +583,7 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
 
     const itemKey = line.itemKey || generateItemKey(supplier, itemCode, finish, lengthMm);
 
-    const qtyBar = Number(line.quantityBar || line.quantity || 0);
+    const qtyBar = Number(line.quantityBar || line.quantity || line.qtyBar || line.bars || 0);
     const qtyLm = Number(line.quantityLm || (qtyBar * lengthMm) / 1000);
     const qtyKg = Number(line.quantityKg || line.weightKg || 0);
     const unitPrice = Number(line.unitPrice || 0);
@@ -604,6 +624,7 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
     };
     batch.set(mvtRef, movementData);
     createdMovements.push({ id: mvtRef.id, ...movementData });
+    opCount++;
 
     // Update Item Master
     const itemRef = projectRef.collection("items").doc(itemKey);
@@ -629,6 +650,7 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
       },
       { merge: true }
     );
+    opCount++;
 
     // Update Stock Snapshot
     const stockRef = projectRef.collection("stock").doc(itemKey);
@@ -659,9 +681,12 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
       },
       { merge: true }
     );
+    opCount++;
+
+    await commitBatchIfNeeded(false);
   }
 
-  await batch.commit();
+  await commitBatchIfNeeded(true);
 
   await logWarehouseAudit(projectId, {
     action: "PROCESS_INVOICE",
