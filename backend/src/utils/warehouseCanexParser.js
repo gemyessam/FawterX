@@ -66,7 +66,7 @@ function isKnownLabel(str) {
   if (!str) return true;
   const s = String(str).trim().toLowerCase().replace(/^[:,#\t\s]+|[:,#\t\s]+$/g, "");
   if (!s) return true;
-  return KNOWN_LABELS.some(label => s === label || s.includes(label) || label.includes(s));
+  return KNOWN_LABELS.some(label => s === label || label.startsWith(s + " ") || s.startsWith(label + " "));
 }
 
 function sanitizeMetaValue(val) {
@@ -74,10 +74,28 @@ function sanitizeMetaValue(val) {
   let cleaned = clean(val).replace(/^[:,#\t\s]+|[:,#\t\s]+$/g, "").trim();
   if (!cleaned) return "";
   if (/^[:#]/.test(cleaned)) return "";
-  if (/commercial invoice|delivery date|sales order|customer reference|tax amount|total amount/i.test(cleaned)) {
+
+  // Handle cases where label remnants or colons exist (e.g., "erence: Q-00235" or "Ref: Q-00235")
+  if (cleaned.includes(":")) {
+    const parts = cleaned.split(":");
+    const prefix = clean(parts[0]).toLowerCase();
+    if (prefix.length <= 15 && (/erence|rence|reference|order|date|invoice|ref|cust|so|po/i.test(prefix) || KNOWN_LABELS.some(l => l.includes(prefix)))) {
+      cleaned = clean(parts.slice(1).join(":")).replace(/^[:,#\t\s]+|[:,#\t\s]+$/g, "").trim();
+    }
+  }
+
+  // Strip trailing label headers if text contains multiple fields on same line (e.g., "Q-00235 Inquiry Date:")
+  cleaned = cleaned.split(/(?:Inquiry Date|Payment Term|Commercial Invoice|Sales Order|Delivery Date|Buyer|Seller|Customer Reference|Customer Ref|Cust Ref|PO #|Purchase Order)/i)[0].trim();
+  cleaned = cleaned.replace(/^[:,#\t\s]+|[:,#\t\s]+$/g, "").trim();
+
+  if (!cleaned) return "";
+  const lower = cleaned.toLowerCase();
+
+  // Explicit label fragments to discard
+  if (/^(erence|rence|reference|ref|order|invoice|date|customer)$/i.test(lower)) {
     return "";
   }
-  const lower = cleaned.toLowerCase();
+
   for (const label of KNOWN_LABELS) {
     if (lower === label || lower === `:${label}` || lower === `${label}:`) return "";
   }
@@ -87,16 +105,19 @@ function sanitizeMetaValue(val) {
 function extractLabelValue(text, labelVariants) {
   for (const label of labelVariants) {
     const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regexSameLine = new RegExp(`${escapedLabel}\\s*:?\\s*([^\\r\\n]+)`, 'i');
+    const endBoundary = /\w$/.test(label) ? '\\b' : '';
+    const regexSameLine = new RegExp(`(?:\\b)${escapedLabel}${endBoundary}\\s*:?\\s*([^\\r\\n]+)`, 'i');
     const matchSame = text.match(regexSameLine);
     if (matchSame) {
       const cand = sanitizeMetaValue(matchSame[1]);
       if (cand) return cand;
     }
 
-    const idx = text.toLowerCase().indexOf(label.toLowerCase());
-    if (idx !== -1) {
-      const afterText = text.slice(idx + label.length);
+    const regexIdx = new RegExp(`(?:\\b)${escapedLabel}${endBoundary}`, 'i');
+    const matchIdx = text.match(regexIdx);
+    if (matchIdx) {
+      const idx = matchIdx.index;
+      const afterText = text.slice(idx + matchIdx[0].length);
       const afterLines = afterText.split(/\r?\n/).map(clean).filter(Boolean);
       for (const line of afterLines.slice(0, 3)) {
         const cand = sanitizeMetaValue(line);
@@ -118,15 +139,31 @@ function extractMetadata(text, fileName) {
   const invoiceDateStr = text.match(/Commercial Invoice Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || allDates[0] || "";
   const deliveryDateStr = text.match(/Delivery Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || (allDates.length >= 3 ? allDates[2] : allDates[allDates.length - 1]) || "";
 
-  const salesOrder = extractLabelValue(text, [
-    "Sales Order #:", "Sales Order #", "Sales Order:", "Sales Order",
-    "S.O. #:", "S.O. #", "SO #:", "SO #"
-  ]);
+  // Direct regex extraction for Sales Order (e.g., SO-008411, SO-12345)
+  let salesOrder = clean(
+    text.match(/Sales\s*Order\s*#?\s*:?\s*([A-Za-z0-9_-]+)/i)?.[1] ||
+    text.match(/\bSO-\d{3,}\b/i)?.[0]
+  );
+  if (!salesOrder || isKnownLabel(salesOrder) || /^erence/i.test(salesOrder)) {
+    salesOrder = extractLabelValue(text, [
+      "Sales Order #:", "Sales Order #", "Sales Order:", "Sales Order",
+      "S.O. #:", "S.O. #", "SO #:", "SO #"
+    ]);
+  }
 
-  const customerReference = extractLabelValue(text, [
-    "Customer Reference:", "Customer Reference", "Customer Ref:", "Customer Ref",
-    "Cust. Ref:", "Cust Ref", "Purchase Order:", "Purchase Order #:", "PO #:", "PO #"
-  ]);
+  // Direct regex extraction for Customer Reference (e.g., Q-00235, Q-12345, PO-12345)
+  let customerReference = clean(
+    text.match(/Customer\s*Reference\s*:?\s*([A-Za-z0-9_-]+)/i)?.[1] ||
+    text.match(/Customer\s*Ref\.?\s*:?\s*([A-Za-z0-9_-]+)/i)?.[1] ||
+    text.match(/Cust\.?\s*Ref\.?\s*:?\s*([A-Za-z0-9_-]+)/i)?.[1] ||
+    text.match(/\bQ-\d{3,}\b/i)?.[0]
+  );
+  if (!customerReference || isKnownLabel(customerReference) || /^erence/i.test(customerReference)) {
+    customerReference = extractLabelValue(text, [
+      "Customer Reference:", "Customer Reference", "Customer Ref:", "Customer Ref",
+      "Cust. Ref:", "Cust Ref", "Purchase Order:", "Purchase Order #:", "PO #:", "PO #"
+    ]);
+  }
 
   const currency = clean(text.match(/\bCurrency:\s*([A-Z]{3})\b/i)?.[1]) || "EGP";
   const invoiceAmount = parseNum(text.match(/Invoice Amount\s+([\d,]+\.\d{2})/i)?.[1]);
