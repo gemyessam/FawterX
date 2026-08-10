@@ -1642,6 +1642,8 @@ export default function Warehouse() {
                         <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'التاريخ والوقت' : 'Date & Time'}</th>
                         <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'نوع الحركة' : 'Type'}</th>
                         <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'رقم الفاتورة' : 'Invoice #'}</th>
+                        <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'أمر البيع (SO)' : 'Sales Order #'}</th>
+                        <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'مرجع العميل' : 'Customer Ref'}</th>
                         <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'المورد / الجهة' : 'Supplier / Dest'}</th>
                         <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأعواد (BAR)' : 'Bars'}</th>
                         <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأمتار (LM)' : 'Meters'}</th>
@@ -1669,6 +1671,12 @@ export default function Warehouse() {
                               <span className="badge" style={{ background: 'rgba(100, 181, 246, 0.15)', color: '#64b5f6', border: '1px solid rgba(100, 181, 246, 0.3)' }}>
                                 {m.invoiceNumber || m.invoiceId || '—'}
                               </span>
+                            </td>
+                            <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>
+                              {m.salesOrder || '—'}
+                            </td>
+                            <td style={{ padding: '0.75rem 1rem', color: '#ffb74d' }}>
+                              {m.customerReference || '—'}
                             </td>
                             <td style={{ padding: '0.75rem 1rem', color: '#fff' }}>{m.supplier || 'Canex'}</td>
                             <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: isOut ? '#ff4757' : '#00e0a1' }}>
