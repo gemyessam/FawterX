@@ -184,62 +184,110 @@ function extractLabelValue(text, labelVariants) {
 }
 
 function extractMetadata(text, fileName) {
+  // ============================================================
+  // STRATEGY: "Extract all patterns first, then assign by format"
+  // pdf-parse does NOT preserve column layout. So instead of
+  // looking for "Customer Reference:" and grabbing the next token,
+  // we scan the ENTIRE text for recognizable value patterns and
+  // classify each by what it looks like.
+  // ============================================================
+
+  // --- Step 1: Extract ALL recognizable tokens from the text ---
+
+  // Invoice numbers: CNX3-XXXXXX (always invoice number)
+  const allInvoiceNumbers = text.match(/\bCNX3-\d{3,}\b/gi) || [];
+
+  // Sales Order codes: SO-XXXXXX (always sales order)
+  const allSOCodes = text.match(/\bSO-\d{3,}\b/gi) || [];
+
+  // Q-codes: Q-XXXXX (always customer reference)
+  const allQCodes = text.match(/\bQ-?\d{3,}[A-Za-z0-9_-]*\b/gi) || [];
+
+  // PO-codes: PO-XXXXX (customer reference / purchase order)
+  const allPOCodes = text.match(/\bPO-?\d{3,}[A-Za-z0-9_-]*\b/gi) || [];
+
+  // Dates: "11 Jul 2026" or "26 Feb 2026"
   const allDates = text.match(/\b\d{1,2}\s+[A-Za-z]{3,}\s+\d{4}\b/g) || [];
-  let invoiceNumber =
-    clean(text.match(/\bCNX3-\d{3,}\b/i)?.[0]) ||
-    extractLabelValue(text, ["Commercial Invoice #:", "Commercial Invoice #", "Invoice #:", "Invoice #", "Invoice No:"]);
-  if (invoiceNumber && (isKnownLabel(invoiceNumber) || invoiceNumber.length > 40)) invoiceNumber = "";
 
-  const invoiceDateStr = text.match(/Commercial Invoice Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || allDates[0] || "";
-  const deliveryDateStr = text.match(/Delivery Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || (allDates.length >= 3 ? allDates[2] : allDates[allDates.length - 1]) || "";
+  // Currency codes
+  const currencyMatch = text.match(/\b(EGP|USD|EUR|GBP|SAR|AED|KWD)\b/i);
 
-  // 1. Direct match for Customer Reference (supports Q-code, SO-code, Arabic/English words, phrases, numbers)
-  let customerReference = clean(
-    text.match(/(?:Customer\s*Reference|Customer\s*Ref\.?|Cust\.?\s*Ref\.?|Client\s*Ref\.?|Purchase\s*Order|PO\s*#?)\s*[:,\t]*\s*([^\r\n]+)/i)?.[1]
-  );
-  if (customerReference) {
-    customerReference = sanitizeMetaValue(customerReference);
+  // Amounts: Invoice Amount, Tax Amount, Total Amount
+  const invoiceAmount = parseNum(text.match(/Invoice Amount\s+([\d,]+\.?\d*)/i)?.[1]);
+  const taxAmount = parseNum(text.match(/Tax Amount\s+([\d,]+\.?\d*)/i)?.[1]);
+  const totalAmount = parseNum(text.match(/Total Amount\s+([\d,]+\.?\d*)/i)?.[1]);
+
+  // --- Step 2: Assign each token to its correct field ---
+
+  // Invoice Number: First CNX3 code found, or label-based fallback
+  let invoiceNumber = clean(allInvoiceNumbers[0] || "");
+  if (!invoiceNumber) {
+    invoiceNumber = extractLabelValue(text, ["Commercial Invoice #:", "Commercial Invoice #", "Invoice #:", "Invoice #", "Invoice No:"]);
+    if (invoiceNumber && (isKnownLabel(invoiceNumber) || invoiceNumber.length > 40)) invoiceNumber = "";
   }
 
-  // Fallback 1: extractLabelValue with label variants
-  if (!customerReference || isKnownLabel(customerReference)) {
-    customerReference = extractLabelValue(text, [
+  // Sales Order: First SO-code found (NOT from label proximity, but from the pattern itself)
+  let salesOrder = clean(allSOCodes[0] || "");
+  if (!salesOrder) {
+    // Fallback: try label-based extraction, but ONLY accept if result looks like a real SO value
+    const soCandidate = extractLabelValue(text, [
+      "Sales Order #:", "Sales Order #", "Sales Order:", "Sales Order",
+      "S.O. #:", "S.O. #", "SO #:", "SO #"
+    ]);
+    if (soCandidate && !allInvoiceNumbers.includes(soCandidate) && !allQCodes.includes(soCandidate)) {
+      salesOrder = soCandidate;
+    }
+  }
+
+  // Customer Reference: First Q-code or PO-code found
+  let customerReference = clean(allQCodes[0] || allPOCodes[0] || "");
+  if (!customerReference) {
+    // Fallback: try label-based extraction, but REJECT if the result is an invoice number or SO code
+    const refCandidate = extractLabelValue(text, [
       "Customer Reference:", "Customer Reference", "Customer Ref:", "Customer Ref",
       "Cust. Ref:", "Cust Ref", "Client Ref:", "Client Ref",
       "Purchase Order:", "Purchase Order #:", "PO #:", "PO #"
     ]);
+    if (refCandidate
+      && !allInvoiceNumbers.includes(refCandidate)
+      && !allSOCodes.includes(refCandidate)
+      && !/^CNX\d?-/i.test(refCandidate)
+    ) {
+      customerReference = refCandidate;
+    }
   }
 
-  // Fallback 2: Standalone Q-code pattern if still uncaptured
-  if (!customerReference) {
-    const qMatch = text.match(/\bQ-?\d{3,}[A-Za-z0-9_-]*\b/i)?.[0];
-    if (qMatch) customerReference = clean(qMatch);
+  // Dates: Use contextual label matching first, then fall back to position
+  const invoiceDateStr = text.match(/Commercial Invoice Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || allDates[0] || "";
+  const deliveryDateStr = text.match(/Delivery Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || (allDates.length >= 3 ? allDates[2] : allDates[allDates.length - 1]) || "";
+
+  // Currency
+  const currency = clean(currencyMatch?.[1]?.toUpperCase()) || "EGP";
+
+  // --- Step 3: Cross-validation (prevent same value in multiple fields) ---
+  if (customerReference && customerReference === salesOrder) {
+    // If the same code ended up in both, clear customerReference (SO takes priority for SO-codes)
+    if (/^SO-/i.test(customerReference)) {
+      customerReference = "";
+    }
+  }
+  if (customerReference && customerReference === invoiceNumber) {
+    customerReference = "";
+  }
+  if (salesOrder && salesOrder === invoiceNumber) {
+    salesOrder = "";
   }
 
-  // 2. Direct match for Sales Order (SO-008411, SO-code, numbers, phrases)
-  let salesOrder = clean(
-    text.match(/(?:Sales\s*Order\s*#?|S\.O\.\s*#?|SO\s*#?)\s*[:,\t]*\s*([^\r\n]+)/i)?.[1]
-  );
-  if (salesOrder) {
-    salesOrder = sanitizeMetaValue(salesOrder);
-  }
-
-  if (!salesOrder || isKnownLabel(salesOrder)) {
-    salesOrder = extractLabelValue(text, [
-      "Sales Order #:", "Sales Order #", "Sales Order:", "Sales Order",
-      "S.O. #:", "S.O. #", "SO #:", "SO #"
-    ]);
-  }
-
-  if (!salesOrder) {
-    const soMatch = text.match(/\bSO-?\d{3,}[A-Za-z0-9_-]*\b/i)?.[0];
-    if (soMatch) salesOrder = clean(soMatch);
-  }
-
-  const currency = clean(text.match(/\bCurrency:\s*([A-Z]{3})\b/i)?.[1]) || "EGP";
-  const invoiceAmount = parseNum(text.match(/Invoice Amount\s+([\d,]+\.\d{2})/i)?.[1]);
-  const taxAmount = parseNum(text.match(/Tax Amount\s+([\d,]+\.\d{2})/i)?.[1]);
-  const totalAmount = parseNum(text.match(/Total Amount\s+([\d,]+\.\d{2})/i)?.[1]);
+  // --- Step 4: Debug log (helps diagnose future issues) ---
+  console.log("[CanexParser] Raw tokens extracted:", {
+    invoiceNumbers: allInvoiceNumbers,
+    soCodes: allSOCodes,
+    qCodes: allQCodes,
+    poCodes: allPOCodes,
+    dates: allDates,
+    currency,
+    assigned: { invoiceNumber, salesOrder, customerReference }
+  });
 
   return {
     invoiceNumber: invoiceNumber || `INV-${Date.now().toString().slice(-6)}`,
