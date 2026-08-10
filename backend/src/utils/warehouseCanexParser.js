@@ -37,29 +37,96 @@ function parseCanexDate(value) {
   return text;
 }
 
-function extractLabel(text, label) {
-  const idx = text.toLowerCase().indexOf(label.toLowerCase());
-  if (idx === -1) return "";
-  const after = text.slice(idx + label.length).split(/\r?\n/).map(clean).filter(Boolean);
-  return after[0] || "";
+const KNOWN_LABELS = [
+  "commercial invoice",
+  "invoice #",
+  "invoice date",
+  "delivery date",
+  "receipt date",
+  "sales order",
+  "customer reference",
+  "customer ref",
+  "purchase order",
+  "po #",
+  "cust ref",
+  "currency",
+  "invoice amount",
+  "tax amount",
+  "total amount",
+  "description",
+  "item code",
+  "customer code",
+  "bars",
+  "quantity",
+  "unit price",
+  "amount"
+];
+
+function isKnownLabel(str) {
+  if (!str) return true;
+  const s = String(str).trim().toLowerCase().replace(/^[:,#\t\s]+|[:,#\t\s]+$/g, "");
+  if (!s) return true;
+  return KNOWN_LABELS.some(label => s === label || s.includes(label) || label.includes(s));
+}
+
+function sanitizeMetaValue(val) {
+  if (!val) return "";
+  let cleaned = clean(val).replace(/^[:,#\t\s]+|[:,#\t\s]+$/g, "").trim();
+  if (!cleaned) return "";
+  if (/^[:#]/.test(cleaned)) return "";
+  if (/commercial invoice|delivery date|sales order|customer reference|tax amount|total amount/i.test(cleaned)) {
+    return "";
+  }
+  const lower = cleaned.toLowerCase();
+  for (const label of KNOWN_LABELS) {
+    if (lower === label || lower === `:${label}` || lower === `${label}:`) return "";
+  }
+  return cleaned;
+}
+
+function extractLabelValue(text, labelVariants) {
+  for (const label of labelVariants) {
+    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regexSameLine = new RegExp(`${escapedLabel}\\s*:?\\s*([^\\r\\n]+)`, 'i');
+    const matchSame = text.match(regexSameLine);
+    if (matchSame) {
+      const cand = sanitizeMetaValue(matchSame[1]);
+      if (cand) return cand;
+    }
+
+    const idx = text.toLowerCase().indexOf(label.toLowerCase());
+    if (idx !== -1) {
+      const afterText = text.slice(idx + label.length);
+      const afterLines = afterText.split(/\r?\n/).map(clean).filter(Boolean);
+      for (const line of afterLines.slice(0, 3)) {
+        const cand = sanitizeMetaValue(line);
+        if (cand) return cand;
+        if (isKnownLabel(line) || /^[:#]/.test(line) || line.endsWith(":")) break;
+      }
+    }
+  }
+  return "";
 }
 
 function extractMetadata(text, fileName) {
   const allDates = text.match(/\b\d{1,2}\s+[A-Za-z]{3,}\s+\d{4}\b/g) || [];
-  const invoiceNumber = clean(text.match(/\bCNX3-\d{3,}\b/i)?.[0]) ||
-    extractLabel(text, "Commercial Invoice #:") ||
-    clean(text.match(/Commercial Invoice #:\s*([A-Z0-9$-]+)/i)?.[1]);
-  
+  let invoiceNumber =
+    clean(text.match(/\bCNX3-\d{3,}\b/i)?.[0]) ||
+    extractLabelValue(text, ["Commercial Invoice #:", "Commercial Invoice #", "Invoice #:", "Invoice #", "Invoice No:"]);
+  if (invoiceNumber && (isKnownLabel(invoiceNumber) || invoiceNumber.length > 40)) invoiceNumber = "";
+
   const invoiceDateStr = text.match(/Commercial Invoice Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || allDates[0] || "";
   const deliveryDateStr = text.match(/Delivery Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || (allDates.length >= 3 ? allDates[2] : allDates[allDates.length - 1]) || "";
 
-  const salesOrder =
-    extractLabel(text, "Sales Order #:") ||
-    clean(text.match(/Sales\s*Order\s*#?\s*:?\s*([A-Z0-9_-]+)/i)?.[1]);
+  const salesOrder = extractLabelValue(text, [
+    "Sales Order #:", "Sales Order #", "Sales Order:", "Sales Order",
+    "S.O. #:", "S.O. #", "SO #:", "SO #"
+  ]);
 
-  const customerReference =
-    extractLabel(text, "Customer Reference:") ||
-    clean(text.match(/Customer\s*Reference\s*#?\s*:?\s*([A-Z0-9_-]+)/i)?.[1]);
+  const customerReference = extractLabelValue(text, [
+    "Customer Reference:", "Customer Reference", "Customer Ref:", "Customer Ref",
+    "Cust. Ref:", "Cust Ref", "Purchase Order:", "Purchase Order #:", "PO #:", "PO #"
+  ]);
 
   const currency = clean(text.match(/\bCurrency:\s*([A-Z]{3})\b/i)?.[1]) || "EGP";
   const invoiceAmount = parseNum(text.match(/Invoice Amount\s+([\d,]+\.\d{2})/i)?.[1]);
@@ -227,8 +294,26 @@ function rowValue(row, names) {
 function parseWorkbook(filePath, fileName) {
   const workbook = XLSX.readFile(filePath);
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+  let sheetText = "";
+  try {
+    if (XLSX.utils.sheet_to_txt) {
+      sheetText = XLSX.utils.sheet_to_txt(sheet);
+    }
+    if (!sheetText && XLSX.utils.sheet_to_csv) {
+      sheetText = XLSX.utils.sheet_to_csv(sheet);
+    }
+  } catch (e) {
+    sheetText = "";
+  }
+
+  let metadata = extractMetadata(sheetText, fileName);
+  if (!metadata.invoiceNumber || metadata.invoiceNumber.startsWith("INV-")) {
+    const fnameNoExt = path.basename(fileName, path.extname(fileName));
+    if (/CNX/i.test(fnameNoExt)) metadata.invoiceNumber = fnameNoExt;
+  }
+
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-  const metadata = { invoiceNumber: "", invoiceDate: "", receiptDate: "", supplier: "Canex", currency: "EGP", fileName };
   const lines = rows
     .map((row, idx) => {
       const description = clean(rowValue(row, ["description"]));
