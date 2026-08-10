@@ -19,6 +19,10 @@ const {
   deleteStockItem,
   updateInvoiceMetadata,
   getWarehouseAuditLogs,
+  createProjectRestorePoint,
+  listProjectRestorePoints,
+  restoreProjectToPoint,
+  deleteProjectRestorePoint,
 } = require("../services/warehouseStore");
 
 const router = express.Router();
@@ -333,4 +337,79 @@ router.patch("/projects/:projectId/invoices/:invoiceId", requireWarehouse, async
   }
 });
 
+/**
+ * GET /api/warehouse/projects/:projectId/restore-points
+ * Fetch all restore points for a project
+ */
+router.get("/projects/:projectId/restore-points", requireWarehouse, async (req, res) => {
+  try {
+    const points = await listProjectRestorePoints(req.params.projectId);
+    return res.json({ success: true, points });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/warehouse/projects/:projectId/restore-points
+ * Create a new restore point (snapshot) for a project
+ */
+router.post("/projects/:projectId/restore-points", requireWarehouse, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    const userName = req.user.name || req.user.displayName || req.user.email;
+    const result = await createProjectRestorePoint(
+      req.params.projectId,
+      { name, description },
+      req.user.uid,
+      req.user.email,
+      userName
+    );
+    return res.json({ success: true, point: result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/warehouse/projects/:projectId/restore-points/:pointId/restore
+ * Restore project stock to a specific restore point (Admin or authorized warehouse user)
+ */
+router.post("/projects/:projectId/restore-points/:pointId/restore", requireWarehouse, async (req, res) => {
+  try {
+    const userName = req.user.name || req.user.displayName || req.user.email;
+    const result = await restoreProjectToPoint(
+      req.params.projectId,
+      req.params.pointId,
+      req.user.uid,
+      req.user.email,
+      userName
+    );
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * DELETE /api/warehouse/projects/:projectId/restore-points/:pointId
+ * Delete a restore point
+ */
+router.delete("/projects/:projectId/restore-points/:pointId", requireWarehouse, async (req, res) => {
+  try {
+    const userName = req.user.name || req.user.displayName || req.user.email;
+    const result = await deleteProjectRestorePoint(
+      req.params.projectId,
+      req.params.pointId,
+      req.user.uid,
+      req.user.email,
+      userName
+    );
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 module.exports = router;
+

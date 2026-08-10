@@ -18,6 +18,10 @@ import {
   getItemMovementsHistory,
   updateWarehouseInvoiceMetadata,
   getWarehouseAuditLogs,
+  getProjectRestorePoints,
+  createProjectRestorePoint,
+  restoreProjectToPoint,
+  deleteProjectRestorePoint,
 } from '../services/warehouseApi'
 
 export default function Warehouse() {
@@ -138,6 +142,14 @@ export default function Warehouse() {
   const [loadingAuditLogs, setLoadingAuditLogs] = useState(false)
   const [auditSearchQuery, setAuditSearchQuery] = useState('')
 
+  // Restore Points State
+  const [restorePoints, setRestorePoints] = useState([])
+  const [loadingRestorePoints, setLoadingRestorePoints] = useState(false)
+  const [newPointName, setNewPointName] = useState('')
+  const [newPointDesc, setNewPointDesc] = useState('')
+  const [creatingRestorePoint, setCreatingRestorePoint] = useState(false)
+  const [restoringPointId, setRestoringPointId] = useState(null)
+
   // Stock Item Admin Management State
   const [editingStockKey, setEditingStockKey] = useState(null)
   const [editingStockData, setEditingStockData] = useState({})
@@ -213,6 +225,82 @@ export default function Warehouse() {
       loadAuditLogs(selectedProjectId)
     }
   }, [activeTab, isAdmin, selectedProjectId])
+
+  useEffect(() => {
+    if (activeTab === 'restore_points' && selectedProjectId) {
+      loadRestorePoints(selectedProjectId)
+    }
+  }, [activeTab, selectedProjectId])
+
+  async function loadRestorePoints(projectId) {
+    setLoadingRestorePoints(true)
+    try {
+      const res = await getProjectRestorePoints(projectId)
+      if (res.success && res.points) {
+        setRestorePoints(res.points)
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل تحميل نقاط الحفظ' : 'Failed to load restore points'))
+    } finally {
+      setLoadingRestorePoints(false)
+    }
+  }
+
+  async function handleCreateRestorePoint(e) {
+    e.preventDefault()
+    if (!selectedProjectId) return
+    setCreatingRestorePoint(true)
+    try {
+      const res = await createProjectRestorePoint(selectedProjectId, {
+        name: newPointName,
+        description: newPointDesc,
+      })
+      if (res.success) {
+        toast.success(isAr ? 'تم إنشاء نقطة الحفظ بنجاح!' : 'Restore point created successfully!')
+        setNewPointName('')
+        setNewPointDesc('')
+        loadRestorePoints(selectedProjectId)
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل إنشاء نقطة الحفظ' : 'Failed to create restore point'))
+    } finally {
+      setCreatingRestorePoint(false)
+    }
+  }
+
+  async function handleRestoreToPoint(point) {
+    if (!selectedProjectId || !point) return
+    const confirmMsg = isAr
+      ? `⚠️ تحذير مهم جداً!\n\nهل أنت تأكد من استعادة أرصدة المخزن لنقطة الحفظ ("${point.name}")؟\n\nسيتم استبدال رصيد المخزن الحالي بهذا Snapshot وتوثيق العملية في سجل التدقيق.`
+      : `⚠️ Important Warning!\n\nAre you sure you want to restore the stock balance to point ("${point.name}")?\n\nCurrent inventory will be overwritten with this snapshot.`
+
+    if (!window.confirm(confirmMsg)) return
+
+    setRestoringPointId(point.id)
+    try {
+      const res = await restoreProjectToPoint(selectedProjectId, point.id)
+      if (res.success) {
+        toast.success(isAr ? `تمت استعادة نقطة الحفظ (${point.name}) بنجاح!` : `Restored to point (${point.name}) successfully!`)
+        loadStock(selectedProjectId)
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل استعادة نقطة الحفظ' : 'Failed to restore point'))
+    } finally {
+      setRestoringPointId(null)
+    }
+  }
+
+  async function handleDeleteRestorePoint(point) {
+    if (!selectedProjectId || !point) return
+    if (!window.confirm(isAr ? `هل تريد حذف نقطة الحفظ (${point.name})؟` : `Delete restore point (${point.name})?`)) return
+    try {
+      await deleteProjectRestorePoint(selectedProjectId, point.id)
+      toast.success(isAr ? 'تم حذف نقطة الحفظ' : 'Restore point deleted')
+      loadRestorePoints(selectedProjectId)
+    } catch (err) {
+      toast.error(isAr ? 'فشل حذف نقطة الحفظ' : 'Failed to delete restore point')
+    }
+  }
 
   async function loadAuditLogs(projectId) {
     setLoadingAuditLogs(true)
@@ -1283,6 +1371,12 @@ export default function Warehouse() {
           onClick={() => setActiveTab('projects')}
         >
           📁 {isAr ? 'إدارة المشاريع' : 'Projects Manager'}
+        </button>
+        <button
+          className={`btn ${activeTab === 'restore_points' ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => setActiveTab('restore_points')}
+        >
+          💾 {isAr ? 'نقاط الحفظ والنسخ الاحتياطية' : 'Restore Points & Snapshots'}
         </button>
       </div>
 
@@ -2919,6 +3013,156 @@ export default function Warehouse() {
               {creatingProject ? <span className="spinner"></span> : isAr ? '➕ إنشاء المشروع' : 'Create Project'}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* ─── TAB 5: Restore Points & Snapshots ─── */}
+      {activeTab === 'restore_points' && (
+        <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Header & Create Point Form */}
+          <div className="card glassmorphism" style={{ padding: '1.5rem' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  💾 {isAr ? 'نقاط الحفظ والنسخ الاحتياطية للمشروع' : 'Project Stock Restore Points & Snapshots'}
+                </h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.2rem' }}>
+                  {isAr
+                    ? `تسمح لك نقاط الحفظ بحفظ حالة أرصدة مخزن (${selectedProject?.name || ''}) والرجوع إليها في أي وقت دون التأثير على المخازن الأخرى.`
+                    : `Restore points capture the inventory snapshot for (${selectedProject?.name || ''}) allowing seamless rollback.`}
+                </p>
+              </div>
+
+              <button
+                className="btn btn-secondary"
+                onClick={() => loadRestorePoints(selectedProjectId)}
+                disabled={loadingRestorePoints}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                🔄 {isAr ? 'تحديث القائمة' : 'Refresh'}
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateRestorePoint} style={{ background: 'rgba(255,255,255,0.03)', padding: '1.25rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', color: '#00e0a1' }}>
+                ➕ {isAr ? 'إنشاء نقطة حفظ جديدة الآن (Save New Restore Point)' : 'Save New Restore Point'}
+              </h4>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: 600 }}>
+                    {isAr ? 'اسم نقطة الحفظ (مثال: قبل خصم طلبية المشروع):' : 'Restore Point Name:'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder={isAr ? 'مثال: رصيد بداية شهر أغسطس 2026' : 'e.g. Pre-Invoice Deduction Snapshot'}
+                    value={newPointName}
+                    onChange={(e) => setNewPointName(e.target.value)}
+                    style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: '#fff' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: 600 }}>
+                    {isAr ? 'ملاحظات / وصف نقطة الحفظ (اختياري):' : 'Notes / Description (Optional):'}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={isAr ? 'ملاحظات توضيحية لسبب أخذ نقطة الحفظ' : 'Optional notes regarding snapshot reason'}
+                    value={newPointDesc}
+                    onChange={(e) => setNewPointDesc(e.target.value)}
+                    style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: '#fff' }}
+                  />
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary" disabled={creatingRestorePoint}>
+                {creatingRestorePoint ? <span className="spinner"></span> : isAr ? '💾 حفظ نقطة جديدة الآن' : 'Save Snapshot Now'}
+              </button>
+            </form>
+          </div>
+
+          {/* Saved Restore Points List */}
+          <div className="card glassmorphism" style={{ padding: '1.5rem' }}>
+            <h4 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              📋 {isAr ? 'نقاط الحفظ المسجلة لهذا المخزن' : 'Saved Restore Points for This Warehouse'}
+              <span style={{ fontSize: '0.85rem', fontWeight: 400, color: 'var(--text-muted)' }}>({restorePoints.length})</span>
+            </h4>
+
+            {loadingRestorePoints ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <span className="spinner"></span> {isAr ? 'جاري تحميل نقاط الحفظ...' : 'Loading restore points...'}
+              </div>
+            ) : restorePoints.length === 0 ? (
+              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.02)', borderRadius: '12px' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>💾</div>
+                <p>{isAr ? 'لا توجد نقاط حفظ مسجلة حتى الآن لهذا المشروع.' : 'No restore points saved yet for this project.'}</p>
+                <p style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>
+                  {isAr ? 'قم بإنشاء أول نقطة حفظ بالأعلى لحماية وحفظ حالة مخزنك.' : 'Create your first restore point above to secure your inventory state.'}
+                </p>
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <table className="stock-table">
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'center', width: '50px' }}>#</th>
+                      <th>{isAr ? 'اسم نقطة الحفظ والملاحظات' : 'Point Name & Notes'}</th>
+                      <th style={{ textAlign: 'center' }}>{isAr ? 'التاريخ والمنشئ' : 'Date & Creator'}</th>
+                      <th style={{ textAlign: 'center' }}>{isAr ? 'عدد الأصناف (SKU)' : 'Total SKUs'}</th>
+                      <th style={{ textAlign: 'center' }}>{isAr ? 'إجمالي الأعواد (BAR)' : 'Total Bars'}</th>
+                      <th style={{ textAlign: 'center' }}>{isAr ? 'الأمتار (LM)' : 'Total Meters'}</th>
+                      <th style={{ textAlign: 'center' }}>{isAr ? 'الوزن (KG)' : 'Total Weight'}</th>
+                      <th style={{ textAlign: 'center', width: '180px' }}>{isAr ? 'الإجراءات' : 'Actions'}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {restorePoints.map((pt, idx) => (
+                      <tr key={pt.id}>
+                        <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)' }}>{idx + 1}</td>
+                        <td>
+                          <div style={{ fontWeight: 700, color: '#ffffff', fontSize: '0.95rem' }}>{pt.name}</div>
+                          {pt.description && (
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>{pt.description}</div>
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'center', fontSize: '0.82rem' }}>
+                          <div>{pt.createdAt ? new Date(pt.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US') : '—'}</div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{pt.createdByName || pt.createdByEmail || pt.createdBy}</div>
+                        </td>
+                        <td style={{ textAlign: 'center', fontWeight: 700, color: '#00e0a1' }}>{pt.totalItems ?? 0}</td>
+                        <td style={{ textAlign: 'center', fontWeight: 700, color: '#FFD700' }}>{(pt.totalQuantityBar ?? 0).toLocaleString()}</td>
+                        <td style={{ textAlign: 'center', fontSize: '0.85rem' }}>{(pt.totalQuantityLm ?? 0).toLocaleString()} m</td>
+                        <td style={{ textAlign: 'center', fontSize: '0.85rem' }}>{(pt.totalQuantityKg ?? 0).toLocaleString()} kg</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
+                            <button
+                              className="btn btn-secondary"
+                              onClick={() => handleRestoreToPoint(pt)}
+                              disabled={restoringPointId === pt.id}
+                              style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem', background: '#e65100', borderColor: '#ff9800', color: '#fff' }}
+                              title={isAr ? 'استعادة أرصدة المخزن لهذه النقطة' : 'Restore stock to this point'}
+                            >
+                              {restoringPointId === pt.id ? <span className="spinner"></span> : isAr ? '⏪ استعادة' : 'Restore'}
+                            </button>
+                            <button
+                              className="btn btn-ghost"
+                              onClick={() => handleDeleteRestorePoint(pt)}
+                              style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem', color: '#ff4d4f' }}
+                              title={isAr ? 'حذف نقطة الحفظ' : 'Delete point'}
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

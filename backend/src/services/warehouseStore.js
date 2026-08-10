@@ -259,20 +259,6 @@ async function getProjectStock(projectId) {
 
   await fetchStockFromProj(projectId);
 
-  // Fallback: If stock is empty or target is default_canex, scan all project collections in Firestore
-  if (stockMap.size === 0 || projectId === "default_canex") {
-    try {
-      const allProjSnap = await db.collection("warehouseProjects").get();
-      for (const pDoc of allProjSnap.docs) {
-        if (pDoc.id !== projectId) {
-          await fetchStockFromProj(pDoc.id);
-        }
-      }
-    } catch (err) {
-      console.warn("Error scanning all warehouseProjects for stock:", err.message);
-    }
-  }
-
   // Enrich stock items with invoice numbers from movements history if missing or incomplete
   const itemInvoicesMap = new Map(); // key/code -> Set of invoice numbers
   const itemLatestInvoiceMap = new Map(); // key/code -> { invoiceNumber, createdAt }
@@ -308,18 +294,6 @@ async function getProjectStock(projectId) {
   };
 
   await fetchMovementsForEnrichment(projectId);
-  if (projectId === "default_canex") {
-    try {
-      const allProjSnap = await db.collection("warehouseProjects").get();
-      for (const pDoc of allProjSnap.docs) {
-        if (pDoc.id !== projectId) {
-          await fetchMovementsForEnrichment(pDoc.id);
-        }
-      }
-    } catch (err) {
-      console.warn("Error scanning all warehouseProjects movements for enrichment:", err.message);
-    }
-  }
 
   // Attach enriched invoice numbers and metadata to stock items
   const finalStock = Array.from(stockMap.values()).map((item) => {
@@ -740,15 +714,7 @@ async function getProjectInvoices(projectId) {
 
   await fetchInvoicesFromProj(projectId);
 
-  if (invoiceMap.size === 0 || projectId === "default_canex") {
-    try {
-      const allProjSnap = await db.collection("warehouseProjects").get();
-      const otherProjects = allProjSnap.docs.filter((pDoc) => pDoc.id !== projectId);
-      await Promise.all(otherProjects.map((pDoc) => fetchInvoicesFromProj(pDoc.id)));
-    } catch (err) {
-      console.warn("Error scanning all warehouseProjects for invoices:", err.message);
-    }
-  }
+  // Return invoices scoped strictly to current project
 
   const result = Array.from(invoiceMap.values());
   result.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
@@ -783,15 +749,7 @@ async function getProjectMovements(projectId, invoiceId) {
 
   await fetchMovementsFromProj(projectId);
 
-  if (mvtMap.size === 0 || projectId === "default_canex") {
-    try {
-      const allProjSnap = await db.collection("warehouseProjects").get();
-      const otherProjects = allProjSnap.docs.filter((pDoc) => pDoc.id !== projectId);
-      await Promise.all(otherProjects.map((pDoc) => fetchMovementsFromProj(pDoc.id)));
-    } catch (err) {
-      console.warn("Error scanning all warehouseProjects for movements:", err.message);
-    }
-  }
+  // Return movements scoped strictly to current project
 
   return Array.from(mvtMap.values());
 }
@@ -927,15 +885,7 @@ async function getItemMovementsHistory(projectId, itemKey, itemCode) {
 
   await fetchItemMovementsFromProj(projectId);
 
-  if (mvtMap.size === 0 || projectId === "default_canex") {
-    try {
-      const allProjSnap = await db.collection("warehouseProjects").get();
-      const otherProjects = allProjSnap.docs.filter((pDoc) => pDoc.id !== projectId);
-      await Promise.all(otherProjects.map((pDoc) => fetchItemMovementsFromProj(pDoc.id)));
-    } catch (err) {
-      console.warn("Error scanning all warehouseProjects for movements:", err.message);
-    }
-  }
+  // Return item movements scoped strictly to current project
 
   const movements = Array.from(mvtMap.values());
 
@@ -1024,6 +974,217 @@ async function updateInvoiceMetadata(projectId, invoiceId, { salesOrder, custome
   return { invoiceId, ...payload };
 }
 
+/**
+ * Create a new Restore Point (Snapshot) for a project
+ */
+async function createProjectRestorePoint(projectId, { name, description }, userUid, userEmail, userName) {
+  const db = getDb();
+  if (!db) throw new Error("Firestore is unavailable.");
+
+  const stockSnap = await db
+    .collection("warehouseProjects")
+    .doc(projectId)
+    .collection("stock")
+    .get();
+
+  const stockItems = [];
+  let totalQuantityBar = 0;
+  let totalQuantityLm = 0;
+  let totalQuantityKg = 0;
+
+  stockSnap.docs.forEach((doc) => {
+    const data = doc.data() || {};
+    const item = { itemKey: doc.id, ...data };
+    stockItems.push(item);
+    totalQuantityBar += Number(data.quantityBar || 0);
+    totalQuantityLm += Number(data.quantityLm || 0);
+    totalQuantityKg += Number(data.quantityKg || 0);
+  });
+
+  const pointName = String(name || "").trim() || `نقطة حفظ تلقائية - ${new Date().toLocaleDateString("ar-EG")}`;
+  const pointDesc = String(description || "").trim();
+
+  const restorePointData = {
+    name: pointName,
+    description: pointDesc,
+    totalItems: stockItems.length,
+    totalQuantityBar,
+    totalQuantityLm: Number(totalQuantityLm.toFixed(2)),
+    totalQuantityKg: Number(totalQuantityKg.toFixed(2)),
+    createdBy: userUid || "admin",
+    createdByEmail: userEmail || "",
+    createdByName: userName || "",
+    createdAt: new Date().toISOString(),
+    stockSnapshot: stockItems,
+  };
+
+  const pointRef = await db
+    .collection("warehouseProjects")
+    .doc(projectId)
+    .collection("restorePoints")
+    .add(restorePointData);
+
+  await logWarehouseAudit(projectId, {
+    action: "CREATE_RESTORE_POINT",
+    userUid,
+    userEmail,
+    userName,
+    details: {
+      pointId: pointRef.id,
+      name: pointName,
+      description: pointDesc,
+      totalItems: stockItems.length,
+      totalQuantityBar,
+    },
+  });
+
+  const { stockSnapshot, ...summaryData } = restorePointData;
+  return { id: pointRef.id, ...summaryData };
+}
+
+/**
+ * List all Restore Points for a project
+ */
+async function listProjectRestorePoints(projectId) {
+  const db = getDb();
+  if (!db) return [];
+
+  const snap = await db
+    .collection("warehouseProjects")
+    .doc(projectId)
+    .collection("restorePoints")
+    .orderBy("createdAt", "desc")
+    .get();
+
+  return snap.docs.map((doc) => {
+    const data = doc.data() || {};
+    const { stockSnapshot, ...summary } = data;
+    return { id: doc.id, ...summary };
+  });
+}
+
+/**
+ * Restore a project to a specific Restore Point
+ */
+async function restoreProjectToPoint(projectId, pointId, userUid, userEmail, userName) {
+  const db = getDb();
+  if (!db) throw new Error("Firestore is unavailable.");
+
+  const pointRef = db
+    .collection("warehouseProjects")
+    .doc(projectId)
+    .collection("restorePoints")
+    .doc(pointId);
+
+  const pointDoc = await pointRef.get();
+  if (!pointDoc.exists) throw new Error("Restore point not found.");
+
+  const pointData = pointDoc.data() || {};
+  const stockSnapshot = Array.isArray(pointData.stockSnapshot) ? pointData.stockSnapshot : [];
+
+  const currentStockSnap = await db
+    .collection("warehouseProjects")
+    .doc(projectId)
+    .collection("stock")
+    .get();
+
+  // Delete existing stock items in batches
+  const deleteBatches = [];
+  let currentBatch = db.batch();
+  let count = 0;
+
+  for (const doc of currentStockSnap.docs) {
+    currentBatch.delete(doc.ref);
+    count++;
+    if (count % 400 === 0) {
+      deleteBatches.push(currentBatch.commit());
+      currentBatch = db.batch();
+    }
+  }
+  if (count % 400 !== 0 || count === 0) {
+    deleteBatches.push(currentBatch.commit());
+  }
+  await Promise.all(deleteBatches);
+
+  // Write snapshot stock items in batches
+  const setBatches = [];
+  let setBatch = db.batch();
+  let setCount = 0;
+
+  for (const item of stockSnapshot) {
+    const itemKey = item.itemKey;
+    if (!itemKey) continue;
+    const itemRef = db
+      .collection("warehouseProjects")
+      .doc(projectId)
+      .collection("stock")
+      .doc(itemKey);
+
+    const { itemKey: _, ...itemData } = item;
+    setBatch.set(itemRef, { itemKey, ...itemData });
+    setCount++;
+    if (setCount % 400 === 0) {
+      setBatches.push(setBatch.commit());
+      setBatch = db.batch();
+    }
+  }
+  if (setCount % 400 !== 0 || setCount === 0) {
+    setBatches.push(setBatch.commit());
+  }
+  await Promise.all(setBatches);
+
+  await logWarehouseAudit(projectId, {
+    action: "RESTORE_PROJECT_POINT",
+    userUid,
+    userEmail,
+    userName,
+    details: {
+      pointId,
+      pointName: pointData.name || "",
+      restoredItemsCount: stockSnapshot.length,
+    },
+  });
+
+  return {
+    success: true,
+    pointId,
+    pointName: pointData.name,
+    restoredItemsCount: stockSnapshot.length,
+  };
+}
+
+/**
+ * Delete a Restore Point
+ */
+async function deleteProjectRestorePoint(projectId, pointId, userUid, userEmail, userName) {
+  const db = getDb();
+  if (!db) throw new Error("Firestore is unavailable.");
+
+  const pointRef = db
+    .collection("warehouseProjects")
+    .doc(projectId)
+    .collection("restorePoints")
+    .doc(pointId);
+
+  const pointDoc = await pointRef.get();
+  const existingName = pointDoc.exists ? pointDoc.data().name : "";
+
+  await pointRef.delete();
+
+  await logWarehouseAudit(projectId, {
+    action: "DELETE_RESTORE_POINT",
+    userUid,
+    userEmail,
+    userName,
+    details: {
+      pointId,
+      pointName: existingName,
+    },
+  });
+
+  return { success: true, pointId };
+}
+
 module.exports = {
   getUserWarehouseAccess,
   listWarehouseUsers,
@@ -1040,4 +1201,9 @@ module.exports = {
   updateInvoiceMetadata,
   logWarehouseAudit,
   getWarehouseAuditLogs,
+  createProjectRestorePoint,
+  listProjectRestorePoints,
+  restoreProjectToPoint,
+  deleteProjectRestorePoint,
 };
+

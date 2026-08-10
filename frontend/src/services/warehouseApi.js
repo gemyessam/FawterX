@@ -116,3 +116,28 @@ export async function getWarehouseAuditLogs(projectId) {
   return data
 }
 
+/** Get list of restore points for a project */
+export async function getProjectRestorePoints(projectId) {
+  const { data } = await api.get(`/warehouse/projects/${projectId}/restore-points`)
+  return data
+}
+
+/** Create a new restore point (snapshot) for a project */
+export async function createProjectRestorePoint(projectId, payload) {
+  const { data } = await api.post(`/warehouse/projects/${projectId}/restore-points`, payload)
+  return data
+}
+
+/** Restore project stock to a specific restore point */
+export async function restoreProjectToPoint(projectId, pointId) {
+  const { data } = await api.post(`/warehouse/projects/${projectId}/restore-points/${pointId}/restore`)
+  return data
+}
+
+/** Delete a restore point */
+export async function deleteProjectRestorePoint(projectId, pointId) {
+  const { data } = await api.delete(`/warehouse/projects/${projectId}/restore-points/${pointId}`)
+  return data
+}
+
+
