@@ -163,6 +163,41 @@ async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehous
 }
 
 /**
+ * Helper to resolve project ID (handles legacy 'default_canex' mapping to real CANEX doc ID e.g. BJFieT4FRQeqGFcmMhvZ)
+ */
+async function resolveProjectId(db, projectId) {
+  if (!db || !projectId) return projectId;
+
+  if (projectId === "default_canex") {
+    try {
+      const defaultStockSnap = await db
+        .collection("warehouseProjects")
+        .doc("default_canex")
+        .collection("stock")
+        .limit(1)
+        .get();
+
+      if (!defaultStockSnap.empty) {
+        return "default_canex";
+      }
+
+      const canexSnap = await db
+        .collection("warehouseProjects")
+        .where("code", "==", "CANEX")
+        .limit(1)
+        .get();
+
+      if (!canexSnap.empty) {
+        return canexSnap.docs[0].id;
+      }
+    } catch (e) {
+      console.warn("Error resolving projectId for default_canex:", e.message);
+    }
+  }
+  return projectId;
+}
+
+/**
  * List warehouse projects (creates default Canex Stock if empty)
  */
 async function listProjects() {
@@ -179,24 +214,29 @@ async function listProjects() {
     status: "active",
   };
 
-  // Ensure default_canex exists
+  // Ensure default_canex exists if no CANEX project exists
   let hasDefault = projects.some((p) => p.id === "default_canex" || p.code === "CANEX");
   if (!hasDefault) {
-    await db.collection("warehouseProjects").doc("default_canex").set({
-      ...defaultProjectData,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }, { merge: true });
+    await db.collection("warehouseProjects").doc("default_canex").set(
+      {
+        ...defaultProjectData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
     projects.unshift({ id: "default_canex", ...defaultProjectData });
   }
 
-  // Deduplicate and ensure default_canex project is present with id "default_canex"
+  // Deduplicate while PRESERVING actual doc.id
   const projectMap = new Map();
   projects.forEach((p) => {
-    const isCanex = p.id === "default_canex" || p.code === "CANEX";
-    const id = isCanex ? "default_canex" : p.id;
-    if (!projectMap.has(id)) {
-      projectMap.set(id, { ...p, id, name: isCanex ? "Canex Stock" : (p.name || id) });
+    if (!projectMap.has(p.id)) {
+      projectMap.set(p.id, {
+        ...p,
+        id: p.id,
+        name: p.name || (p.code === "CANEX" ? "Canex Stock" : p.id),
+      });
     }
   });
 
@@ -230,6 +270,7 @@ async function createProject({ name, code, description }, actorUid) {
 async function getProjectStock(projectId) {
   const db = getDb();
   if (!db) return [];
+  projectId = await resolveProjectId(db, projectId);
 
   const stockMap = new Map();
 
@@ -345,6 +386,7 @@ function generateItemKey(supplier, itemCode, finish, lengthMm) {
 async function logWarehouseAudit(projectId, { action, userUid, userEmail, userName, details, itemKey, invoiceId }) {
   const db = getDb();
   if (!db) return;
+  projectId = await resolveProjectId(db, projectId);
 
   try {
     const auditRef = db.collection("warehouseProjects").doc(projectId).collection("auditLogs").doc();
@@ -372,6 +414,7 @@ async function logWarehouseAudit(projectId, { action, userUid, userEmail, userNa
 async function getWarehouseAuditLogs(projectId, limit = 150) {
   const db = getDb();
   if (!db) return [];
+  projectId = await resolveProjectId(db, projectId);
 
   try {
     const snap = await db
@@ -395,6 +438,7 @@ async function getWarehouseAuditLogs(projectId, limit = 150) {
 async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
+  projectId = await resolveProjectId(db, projectId);
 
   const projectRef = db.collection("warehouseProjects").doc(projectId);
 
@@ -652,6 +696,7 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
 async function getProjectInvoices(projectId) {
   const db = getDb();
   if (!db) return [];
+  projectId = await resolveProjectId(db, projectId);
 
   const invoiceMap = new Map();
 
@@ -727,6 +772,7 @@ async function getProjectInvoices(projectId) {
 async function getProjectMovements(projectId, invoiceId) {
   const db = getDb();
   if (!db) return [];
+  projectId = await resolveProjectId(db, projectId);
 
   const mvtMap = new Map();
 
@@ -760,6 +806,7 @@ async function getProjectMovements(projectId, invoiceId) {
 async function updateStockItem(projectId, itemKey, updateData, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
+  projectId = await resolveProjectId(db, projectId);
 
   const stockRef = db.collection("warehouseProjects").doc(projectId).collection("stock").doc(itemKey);
   const doc = await stockRef.get();
@@ -823,6 +870,7 @@ async function updateStockItem(projectId, itemKey, updateData, userUid, userEmai
 async function deleteStockItem(projectId, itemKey, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
+  projectId = await resolveProjectId(db, projectId);
 
   const stockRef = db.collection("warehouseProjects").doc(projectId).collection("stock").doc(itemKey);
   const doc = await stockRef.get();
@@ -852,6 +900,7 @@ async function deleteStockItem(projectId, itemKey, userUid, userEmail, userName)
 async function getItemMovementsHistory(projectId, itemKey, itemCode) {
   const db = getDb();
   if (!db) return [];
+  projectId = await resolveProjectId(db, projectId);
 
   const mvtMap = new Map();
 
@@ -925,6 +974,7 @@ async function getItemMovementsHistory(projectId, itemKey, itemCode) {
 async function updateInvoiceMetadata(projectId, invoiceId, { salesOrder, customerReference }, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
+  projectId = await resolveProjectId(db, projectId);
 
   const invoiceRef = db.collection("warehouseProjects").doc(projectId).collection("invoices").doc(invoiceId);
   const invDoc = await invoiceRef.get();
@@ -980,6 +1030,7 @@ async function updateInvoiceMetadata(projectId, invoiceId, { salesOrder, custome
 async function createProjectRestorePoint(projectId, { name, description }, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
+  projectId = await resolveProjectId(db, projectId);
 
   const stockSnap = await db
     .collection("warehouseProjects")
@@ -1048,6 +1099,7 @@ async function createProjectRestorePoint(projectId, { name, description }, userU
 async function listProjectRestorePoints(projectId) {
   const db = getDb();
   if (!db) return [];
+  projectId = await resolveProjectId(db, projectId);
 
   const snap = await db
     .collection("warehouseProjects")
@@ -1069,6 +1121,7 @@ async function listProjectRestorePoints(projectId) {
 async function restoreProjectToPoint(projectId, pointId, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
+  projectId = await resolveProjectId(db, projectId);
 
   const pointRef = db
     .collection("warehouseProjects")
@@ -1159,6 +1212,7 @@ async function restoreProjectToPoint(projectId, pointId, userUid, userEmail, use
 async function deleteProjectRestorePoint(projectId, pointId, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
+  projectId = await resolveProjectId(db, projectId);
 
   const pointRef = db
     .collection("warehouseProjects")
