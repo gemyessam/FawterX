@@ -1413,12 +1413,76 @@ async function deleteProjectRestorePoint(projectId, pointId, userUid, userEmail,
   return { success: true, pointId };
 }
 
+/**
+ * Delete a warehouse project and its subcollections (Admin only)
+ */
+async function deleteProject(projectId, actorUid) {
+  const db = getDb();
+  if (!db) throw new Error("Firestore is unavailable.");
+
+  const resolvedId = await resolveProjectId(db, projectId);
+
+  const projRef = db.collection("warehouseProjects").doc(resolvedId);
+  const projSnap = await projRef.get();
+
+  if (!projSnap.exists) {
+    throw new Error("Project not found");
+  }
+
+  const projData = projSnap.data() || {};
+
+  const allProjectsSnap = await db.collection("warehouseProjects").get();
+  if (allProjectsSnap.docs.length <= 1) {
+    throw new Error("لا يمكن حذف المشروع الوحيد المتبقي في النظام.");
+  }
+
+  const deleteCollection = async (collectionRef, batchSize = 100) => {
+    const query = collectionRef.limit(batchSize);
+    return new Promise((resolve, reject) => {
+      deleteQueryBatch(db, query, resolve, reject);
+    });
+  };
+
+  const deleteQueryBatch = (dbInstance, query, resolve, reject) => {
+    query.get()
+      .then((snapshot) => {
+        if (snapshot.size === 0) return 0;
+        const batch = dbInstance.batch();
+        snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+        return batch.commit().then(() => snapshot.size);
+      })
+      .then((numDeleted) => {
+        if (numDeleted === 0) {
+          resolve();
+          return;
+        }
+        process.nextTick(() => deleteQueryBatch(dbInstance, query, resolve, reject));
+      })
+      .catch(reject);
+  };
+
+  try {
+    await deleteCollection(projRef.collection("stock"));
+    await deleteCollection(projRef.collection("invoices"));
+    await deleteCollection(projRef.collection("movements"));
+    await deleteCollection(projRef.collection("restorePoints"));
+    await deleteCollection(projRef.collection("auditLogs"));
+  } catch (err) {
+    console.warn("Warning deleting project subcollections:", err);
+  }
+
+  await projRef.delete();
+
+  return { success: true, message: `تم حذف المشروع ${projData.name || resolvedId} بنجاح` };
+}
+
 module.exports = {
   getUserWarehouseAccess,
   listWarehouseUsers,
   updateWarehouseUserAccess,
   listProjects,
   createProject,
+  deleteProject,
   getProjectStock,
   processInboundInvoice,
   getProjectInvoices,

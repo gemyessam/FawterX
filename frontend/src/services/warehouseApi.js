@@ -50,6 +50,12 @@ export async function createWarehouseProject(payload) {
   return data
 }
 
+/** Delete a warehouse project (Admin only) */
+export async function deleteWarehouseProject(projectId) {
+  const { data } = await api.delete(`/warehouse/projects/${projectId}`)
+  return data
+}
+
 /** Get stock snapshot for a project */
 export async function getProjectStock(projectId) {
   const { data } = await api.get(`/warehouse/projects/${projectId}/stock`)

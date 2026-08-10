@@ -10,6 +10,7 @@ const {
   updateWarehouseUserAccess,
   listProjects,
   createProject,
+  deleteProject,
   getProjectStock,
   processInboundInvoice,
   getProjectInvoices,
@@ -162,6 +163,20 @@ router.post("/projects", requireWarehouse, async (req, res) => {
     return res.json({ success: true, project });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * DELETE /api/warehouse/projects/:projectId
+ * Delete a warehouse project (Admin only)
+ */
+router.delete("/projects/:projectId", requireAdmin, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const result = await deleteProject(projectId, req.user.uid);
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(400).json({ success: false, message: error.message });
   }
 });
 

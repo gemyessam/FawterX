@@ -6,6 +6,7 @@ import ExcelJS from 'exceljs'
 import {
   getWarehouseProjects,
   createWarehouseProject,
+  deleteWarehouseProject,
   getProjectStock,
   parseWarehouseInvoice,
   processWarehouseInvoice,
@@ -228,6 +229,78 @@ export default function Warehouse() {
       toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل تحديث بيانات الصنف' : 'Failed to update item'))
     } finally {
       setSavingStockEdit(false)
+    }
+  }
+
+  const [deletingProjectId, setDeletingProjectId] = useState(null)
+
+  async function handleCreateProject(e) {
+    e.preventDefault()
+    if (!newProjectName.trim()) return
+    setCreatingProject(true)
+    try {
+      const res = await createWarehouseProject({
+        name: newProjectName,
+        code: newProjectCode,
+        description: newProjectDesc,
+      })
+      if (res.success) {
+        toast.success(isAr ? 'تم إنشاء مشروع المخزن بنجاح!' : 'Warehouse project created successfully!')
+        setNewProjectName('')
+        setNewProjectCode('')
+        setNewProjectDesc('')
+        await loadProjects()
+        if (res.project?.id) {
+          setSelectedProjectId(res.project.id)
+        }
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل إنشاء المشروع' : 'Failed to create project'))
+    } finally {
+      setCreatingProject(false)
+    }
+  }
+
+  async function handleDeleteProject(proj) {
+    if (!isAdmin) {
+      toast.error(isAr ? 'صلاحية الأدمن مطلوبة لحذف المشاريع' : 'Admin role required to delete projects')
+      return
+    }
+    if (!proj || !proj.id) return
+
+    if (projects.length <= 1) {
+      toast.error(isAr ? 'لا يمكن حذف المشروع الوحيد المتبقي في النظام' : 'Cannot delete the only remaining project')
+      return
+    }
+
+    const confirmMsg = isAr
+      ? `⚠️ تحذير خطير جداً!\n\nهل أنت تأكد من رغبتك في حذف مشروع المخزن بالكامل ("${proj.name || proj.id}")؟\n\nسيتم حذف جميع الأرصدة، الفواتير، وحركات التوريد الصادرة/الواردة ونقاط الحفظ التابعة لهذا المشروع نهائياً ولا يمكن استعادتها!`
+      : `⚠️ Critical Warning!\n\nAre you sure you want to PERMANENTLY DELETE project ("${proj.name || proj.id}")?\n\nAll inventory stock, invoices, movements, audit logs, and restore points for this project will be permanently erased!`
+
+    if (!window.confirm(confirmMsg)) return
+
+    setDeletingProjectId(proj.id)
+    try {
+      const res = await deleteWarehouseProject(proj.id)
+      if (res.success) {
+        toast.success(res.message || (isAr ? `تم حذف المشروع ${proj.name} بنجاح` : `Project ${proj.name} deleted successfully`))
+
+        const updatedProjects = projects.filter((p) => p.id !== proj.id)
+        setProjects(updatedProjects)
+
+        if (selectedProjectId === proj.id) {
+          const nextId = updatedProjects[0]?.id || ''
+          setSelectedProjectId(nextId)
+          try {
+            localStorage.setItem('fawterx_selected_project_id', nextId)
+          } catch (e) {}
+        }
+        loadProjects()
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل حذف المشروع' : 'Failed to delete project'))
+    } finally {
+      setDeletingProjectId(null)
     }
   }
 
@@ -3192,52 +3265,152 @@ export default function Warehouse() {
         </div>
       )}
 
-      {/* ─── TAB 4: Project Settings ─── */}
+      {/* ─── TAB 4: Project Settings & Management ─── */}
       {activeTab === 'projects' && (
-        <div className="card fade-in" style={{ padding: '1.5rem', maxWidth: '600px' }}>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-            📁 {isAr ? 'إضافة مشروع مخزن جديد' : 'Create New Warehouse Project'}
-          </h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-            {isAr ? 'مثل: Canex Stock, Schuco Project A, Export Project B' : 'e.g. Canex Stock, Schuco Project A'}
-          </p>
+        <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Projects Overview List */}
+          <div className="card glassmorphism" style={{ padding: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  📁 {isAr ? 'إدارة مشاريع المخازن' : 'Warehouse Projects Management'}
+                </h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.2rem' }}>
+                  {isAr
+                    ? 'عرض المشاريع الحالية وإدارتها أو حذف المشروع بالكامل مع كافة أصنافه وسجلاته (متاح للمديرين فقط)'
+                    : 'Manage existing warehouse projects or delete complete project data (Admin only)'}
+                </p>
+              </div>
+              <button className="btn btn-secondary" onClick={loadProjects} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                🔄 {isAr ? 'تحديث المشاريع' : 'Refresh Projects'}
+              </button>
+            </div>
 
-          <form onSubmit={handleCreateProject} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem' }}>{isAr ? 'اسم المشروع:' : 'Project Name:'}</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Schuco Villa Project A"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: '#fff' }}
-              />
+            <div className="table-responsive">
+              <table className="stock-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ textAlign: 'center', width: '50px' }}>#</th>
+                    <th>{isAr ? 'اسم المشروع' : 'Project Name'}</th>
+                    <th>{isAr ? 'الكود (Code)' : 'Code'}</th>
+                    <th>{isAr ? 'الوصف' : 'Description'}</th>
+                    <th style={{ textAlign: 'center' }}>{isAr ? 'الحالة والنشاط' : 'Status'}</th>
+                    <th style={{ textAlign: 'center', width: '160px' }}>{isAr ? 'التحكم والحذف' : 'Actions'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {projects.map((proj, idx) => {
+                    const isSelected = selectedProjectId === proj.id
+                    const isDeleting = deletingProjectId === proj.id
+                    return (
+                      <tr key={proj.id} style={{ background: isSelected ? 'rgba(0, 224, 161, 0.06)' : 'transparent', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)' }}>{idx + 1}</td>
+                        <td style={{ fontWeight: 700, color: '#ffffff' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span>{proj.name}</span>
+                            {isSelected && (
+                              <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.2)', color: '#00e0a1', border: '1px solid #00e0a1', fontSize: '0.75rem' }}>
+                                {isAr ? 'المحدد حالياً' : 'Active'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <span className="badge" style={{ background: 'rgba(138, 180, 255, 0.15)', color: '#8ab4ff' }}>
+                            {proj.code || 'MAIN'}
+                          </span>
+                        </td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{proj.description || '—'}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span className="badge" style={{ background: 'rgba(76, 217, 100, 0.15)', color: '#4cd964' }}>
+                            {isAr ? 'نشط' : 'Active'}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
+                            {!isSelected && (
+                              <button
+                                className="btn btn-secondary"
+                                onClick={() => setSelectedProjectId(proj.id)}
+                                style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }}
+                              >
+                                {isAr ? 'اختيار' : 'Select'}
+                              </button>
+                            )}
+                            {isAdmin && (
+                              <button
+                                className="btn"
+                                onClick={() => handleDeleteProject(proj)}
+                                disabled={isDeleting || projects.length <= 1}
+                                style={{
+                                  padding: '0.35rem 0.65rem',
+                                  fontSize: '0.8rem',
+                                  background: projects.length <= 1 ? 'rgba(255,255,255,0.05)' : 'rgba(255, 71, 87, 0.2)',
+                                  color: projects.length <= 1 ? 'var(--text-muted)' : '#ff4757',
+                                  border: projects.length <= 1 ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255, 71, 87, 0.4)',
+                                  cursor: projects.length <= 1 ? 'not-allowed' : 'pointer',
+                                }}
+                                title={projects.length <= 1 ? (isAr ? 'لا يمكن حذف المشروع الوحيد' : 'Cannot delete sole project') : (isAr ? 'حذف المشروع بالكامل' : 'Delete Project')}
+                              >
+                                {isDeleting ? <span className="spinner"></span> : isAr ? '🗑️ حذف المشروع' : '🗑️ Delete'}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem' }}>{isAr ? 'كود المشروع المختصر:' : 'Project Code:'}</label>
-              <input
-                type="text"
-                placeholder="e.g. SCHUCO_A"
-                value={newProjectCode}
-                onChange={(e) => setNewProjectCode(e.target.value)}
-                style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: '#fff' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem' }}>{isAr ? 'وصف المشروع:' : 'Description:'}</label>
-              <textarea
-                rows="3"
-                placeholder={isAr ? 'وصف اختياري للمشروع والمقع' : 'Optional project details'}
-                value={newProjectDesc}
-                onChange={(e) => setNewProjectDesc(e.target.value)}
-                style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: '#fff' }}
-              />
-            </div>
-            <button type="submit" className="btn btn-primary" disabled={creatingProject} style={{ alignSelf: 'flex-start' }}>
-              {creatingProject ? <span className="spinner"></span> : isAr ? '➕ إنشاء المشروع' : 'Create Project'}
-            </button>
-          </form>
+          </div>
+
+          {/* Create New Project Form */}
+          <div className="card glassmorphism" style={{ padding: '1.5rem', maxWidth: '650px' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem', color: '#00e0a1' }}>
+              ➕ {isAr ? 'إضافة مشروع مخزن جديد' : 'Create New Warehouse Project'}
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+              {isAr ? 'أدخل تفاصيل المشروع الجديد لبدء تسجيل أرصدة وفواتير منفصلة له' : 'Enter new project details to maintain segregated inventory stock'}
+            </p>
+
+            <form onSubmit={handleCreateProject} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', fontWeight: 600 }}>{isAr ? 'اسم المشروع:' : 'Project Name:'}</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Schuco Villa Project A"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: '#fff' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', fontWeight: 600 }}>{isAr ? 'كود المشروع المختصر:' : 'Project Code:'}</label>
+                <input
+                  type="text"
+                  placeholder="e.g. SCHUCO_A"
+                  value={newProjectCode}
+                  onChange={(e) => setNewProjectCode(e.target.value)}
+                  style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: '#fff' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem', fontWeight: 600 }}>{isAr ? 'وصف المشروع:' : 'Description:'}</label>
+                <textarea
+                  rows="3"
+                  placeholder={isAr ? 'وصف اختياري للمشروع والموقع' : 'Optional project details'}
+                  value={newProjectDesc}
+                  onChange={(e) => setNewProjectDesc(e.target.value)}
+                  style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: '#fff' }}
+                />
+              </div>
+              <button type="submit" className="btn btn-primary" disabled={creatingProject} style={{ alignSelf: 'flex-start' }}>
+                {creatingProject ? <span className="spinner"></span> : isAr ? '➕ إنشاء المشروع' : 'Create Project'}
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
