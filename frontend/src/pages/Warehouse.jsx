@@ -64,6 +64,53 @@ export default function Warehouse() {
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Stock Table Column Toggle State (Persisted in localStorage)
+  const DEFAULT_STOCK_COLUMNS = {
+    index: true,
+    itemCode: true,
+    customerCode: true,
+    description: true,
+    finish: true,
+    salesOrder: true,
+    customerRef: true,
+    lengthMm: true,
+    quantityBar: true,
+    quantityLm: true,
+    quantityKg: true,
+    lastUnitCost: true,
+    totalValue: true,
+    actions: true,
+  }
+
+  const [stockColumns, setStockColumns] = useState(() => {
+    try {
+      const saved = localStorage.getItem('fawterx_stock_columns')
+      if (saved) return { ...DEFAULT_STOCK_COLUMNS, ...JSON.parse(saved) }
+    } catch (e) {
+      console.warn('Failed to load column preferences:', e)
+    }
+    return DEFAULT_STOCK_COLUMNS
+  })
+
+  const [showColumnPicker, setShowColumnPicker] = useState(false)
+
+  const toggleStockColumn = (colKey) => {
+    setStockColumns((prev) => {
+      const updated = { ...prev, [colKey]: !prev[colKey] }
+      try {
+        localStorage.setItem('fawterx_stock_columns', JSON.stringify(updated))
+      } catch (e) {}
+      return updated
+    })
+  }
+
+  const resetStockColumns = () => {
+    setStockColumns(DEFAULT_STOCK_COLUMNS)
+    try {
+      localStorage.setItem('fawterx_stock_columns', JSON.stringify(DEFAULT_STOCK_COLUMNS))
+    } catch (e) {}
+  }
+
   // Access Control (Admin)
   const [warehouseUsers, setWarehouseUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(false)
@@ -371,14 +418,18 @@ export default function Warehouse() {
       const payloadMeta = { ...parsedMeta, movementType: movementType }
       const res = await processWarehouseInvoice(selectedProjectId, payloadMeta, validLines)
       if (res.success) {
-        const isOut = movementType === 'outbound'
-        const msgAr = isOut
-          ? `تم خصم البنود من المخزن بنجاح! (-${res.movementsCount} أصناف)`
-          : `تم إضافة البنود إلى المخزن بنجاح! (+${res.movementsCount} أصناف)`
-        const msgEn = isOut
-          ? `Stock deducted successfully! (-${res.movementsCount} items)`
-          : `Stock added successfully! (+${res.movementsCount} items)`
-        toast.success(isAr ? msgAr : msgEn)
+        if (res.isDuplicate) {
+          toast.info(res.message || (isAr ? 'تم تحديث بيانات الفاتورة المسجلة سابقاً بدون تكرار الكميات' : 'Updated duplicate invoice metadata without duplicating stock'))
+        } else {
+          const isOut = movementType === 'outbound'
+          const msgAr = isOut
+            ? `تم خصم البنود من المخزن بنجاح! (-${res.movementsCount} أصناف)`
+            : `تم إضافة البنود إلى المخزن بنجاح! (+${res.movementsCount} أصناف)`
+          const msgEn = isOut
+            ? `Stock deducted successfully! (-${res.movementsCount} items)`
+            : `Stock added successfully! (+${res.movementsCount} items)`
+          toast.success(isAr ? msgAr : msgEn)
+        }
         setReviewLines([])
         loadStock(selectedProjectId)
         setActiveTab('stock')
@@ -437,6 +488,8 @@ export default function Warehouse() {
         item.color,
         item.itemKey,
         item.lengthMm,
+        item.lastSalesOrder || item.salesOrder,
+        item.lastCustomerRef || item.customerReference,
         item.lastInvoiceNumber,
         invStr,
         item.supplier,
@@ -1050,6 +1103,88 @@ export default function Warehouse() {
               >
                 📊 {isAr ? 'تصدير Excel' : 'Export Excel'}
               </button>
+
+              <div style={{ position: 'relative' }}>
+                <button
+                  className="btn"
+                  onClick={() => setShowColumnPicker(!showColumnPicker)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    color: '#fff',
+                    border: '1px solid var(--border)',
+                    padding: '0.55rem 1.1rem',
+                    borderRadius: '8px',
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    cursor: 'pointer',
+                  }}
+                  title={isAr ? 'إظهار وإخفاء أعمدة جدول رصيد المخزن' : 'Show / Hide stock table columns'}
+                >
+                  ⚙️ {isAr ? 'تخصيص الأعمدة' : 'Columns'}
+                </button>
+
+                {showColumnPicker && (
+                  <div
+                    className="card fade-in"
+                    style={{
+                      position: 'absolute',
+                      top: '110%',
+                      left: isAr ? 0 : 'auto',
+                      right: isAr ? 'auto' : 0,
+                      zIndex: 900,
+                      width: '260px',
+                      background: '#161b33',
+                      border: '1px solid #00e0a1',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+                      padding: '1rem',
+                      borderRadius: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#00e0a1' }}>
+                        ⚙️ {isAr ? 'تحديد أعمدة الجدول' : 'Select Columns'}
+                      </span>
+                      <button
+                        onClick={resetStockColumns}
+                        style={{ background: 'transparent', border: 'none', color: '#8ab4ff', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        {isAr ? 'الافتراضي' : 'Reset'}
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '280px', overflowY: 'auto' }}>
+                      {[
+                        { key: 'index', label: isAr ? '#' : '#' },
+                        { key: 'itemCode', label: isAr ? 'كود الصنف' : 'Item Code' },
+                        { key: 'customerCode', label: isAr ? 'كود العميل' : 'Customer Code' },
+                        { key: 'description', label: isAr ? 'بيان الصنف' : 'Description' },
+                        { key: 'finish', label: isAr ? 'نوع الدهان/اللون' : 'Finish/Color' },
+                        { key: 'salesOrder', label: isAr ? 'أمر البيع (SO)' : 'Sales Order (SO)' },
+                        { key: 'customerRef', label: isAr ? 'مرجع العميل (Ref)' : 'Customer Ref' },
+                        { key: 'lengthMm', label: isAr ? 'الطول (mm)' : 'Length (mm)' },
+                        { key: 'quantityBar', label: isAr ? 'الأعواد (BAR)' : 'Bars' },
+                        { key: 'quantityLm', label: isAr ? 'الأمتار (LM)' : 'Meters' },
+                        { key: 'quantityKg', label: isAr ? 'الوزن (KG)' : 'Weight' },
+                        { key: 'lastUnitCost', label: isAr ? 'آخر سعر توريد' : 'Last Cost' },
+                        { key: 'totalValue', label: isAr ? 'إجمالي القيمة' : 'Total Value' },
+                        { key: 'actions', label: isAr ? 'السجل والتحكم' : 'Actions' },
+                      ].map((col) => (
+                        <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#e8eaf6', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!stockColumns[col.key]}
+                            onChange={() => toggleStockColumn(col.key)}
+                            style={{ accentColor: '#00e0a1', cursor: 'pointer' }}
+                          />
+                          {col.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1057,18 +1192,20 @@ export default function Warehouse() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
               <thead>
                 <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
-                  <th style={{ padding: '0.75rem 1rem', width: '45px' }}>#</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'نوع الدهان/اللون' : 'Finish/Color'}</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الطول (mm)' : 'Length (mm)'}</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأعواد (BAR)' : 'Bars (BAR)'}</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأمتار (LM)' : 'Meters (LM)'}</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الوزن (KG)' : 'Weight (KG)'}</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'آخر سعر توريد' : 'Last Cost'}</th>
-                  <th style={{ padding: '0.75rem 1rem', color: '#00e0a1' }}>{isAr ? 'إجمالي القيمة' : 'Total Value'}</th>
-                  <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>{isAr ? 'السجل والتحكم' : 'History & Actions'}</th>
+                  {stockColumns.index && <th style={{ padding: '0.75rem 1rem', width: '45px' }}>#</th>}
+                  {stockColumns.itemCode && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>}
+                  {stockColumns.customerCode && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>}
+                  {stockColumns.description && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>}
+                  {stockColumns.finish && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'نوع الدهان/اللون' : 'Finish/Color'}</th>}
+                  {stockColumns.salesOrder && <th style={{ padding: '0.75rem 1rem', color: '#00e0a1' }}>{isAr ? 'أمر البيع (SO)' : 'Sales Order #'}</th>}
+                  {stockColumns.customerRef && <th style={{ padding: '0.75rem 1rem', color: '#ffb74d' }}>{isAr ? 'مرجع العميل' : 'Customer Ref'}</th>}
+                  {stockColumns.lengthMm && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الطول (mm)' : 'Length (mm)'}</th>}
+                  {stockColumns.quantityBar && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأعواد (BAR)' : 'Bars (BAR)'}</th>}
+                  {stockColumns.quantityLm && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأمتار (LM)' : 'Meters (LM)'}</th>}
+                  {stockColumns.quantityKg && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الوزن (KG)' : 'Weight (KG)'}</th>}
+                  {stockColumns.lastUnitCost && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'آخر سعر توريد' : 'Last Cost'}</th>}
+                  {stockColumns.totalValue && <th style={{ padding: '0.75rem 1rem', color: '#00e0a1' }}>{isAr ? 'إجمالي القيمة' : 'Total Value'}</th>}
+                  {stockColumns.actions && <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>{isAr ? 'السجل والتحكم' : 'History & Actions'}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -1078,109 +1215,140 @@ export default function Warehouse() {
                     const itemVal = getItemValue(item)
                     return (
                       <tr key={item.itemKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: isEditing ? 'rgba(0, 224, 161, 0.05)' : 'transparent' }}>
-                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600 }}>{idx + 1}</td>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>
-                          <button
-                            onClick={() => handleViewItemHistory(item)}
-                            style={{ background: 'transparent', border: 'none', color: '#00e0a1', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: '0.9rem' }}
-                            title={isAr ? 'عرض سجل حركات هذا البند' : 'View item history'}
-                          >
-                            📜 {item.itemCode}
-                          </button>
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', color: '#8ab4ff', fontWeight: 600 }}>
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={editingStockData.customerCode}
-                              onChange={(e) => setEditingStockData({ ...editingStockData, customerCode: e.target.value })}
-                              style={{ width: '90px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
-                            />
-                          ) : (
-                            item.customerCode || '—'
-                          )}
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={editingStockData.description}
-                              onChange={(e) => setEditingStockData({ ...editingStockData, description: e.target.value })}
-                              style={{ width: '100%', minWidth: '220px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
-                            />
-                          ) : (
-                            item.description
-                          )}
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={editingStockData.finish}
-                              onChange={(e) => setEditingStockData({ ...editingStockData, finish: e.target.value })}
-                              style={{ width: '70px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
-                            />
-                          ) : (
-                            <span className="badge" style={{ background: 'rgba(255,215,0,0.1)', color: '#FFD700', border: '1px solid rgba(255,215,0,0.3)' }}>
-                              {item.finish || 'STD'}
+                        {stockColumns.index && <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600 }}>{idx + 1}</td>}
+                        {stockColumns.itemCode && (
+                          <td style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>
+                            <button
+                              onClick={() => handleViewItemHistory(item)}
+                              style={{ background: 'transparent', border: 'none', color: '#00e0a1', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: '0.9rem' }}
+                              title={isAr ? 'عرض سجل حركات هذا البند' : 'View item history'}
+                            >
+                              📜 {item.itemCode}
+                            </button>
+                          </td>
+                        )}
+                        {stockColumns.customerCode && (
+                          <td style={{ padding: '0.75rem 1rem', color: '#8ab4ff', fontWeight: 600 }}>
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editingStockData.customerCode}
+                                onChange={(e) => setEditingStockData({ ...editingStockData, customerCode: e.target.value })}
+                                style={{ width: '90px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                              />
+                            ) : (
+                              item.customerCode || '—'
+                            )}
+                          </td>
+                        )}
+                        {stockColumns.description && (
+                          <td style={{ padding: '0.75rem 1rem' }}>
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editingStockData.description}
+                                onChange={(e) => setEditingStockData({ ...editingStockData, description: e.target.value })}
+                                style={{ width: '100%', minWidth: '220px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                              />
+                            ) : (
+                              item.description
+                            )}
+                          </td>
+                        )}
+                        {stockColumns.finish && (
+                          <td style={{ padding: '0.75rem 1rem' }}>
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editingStockData.finish}
+                                onChange={(e) => setEditingStockData({ ...editingStockData, finish: e.target.value })}
+                                style={{ width: '70px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                              />
+                            ) : (
+                              <span className="badge" style={{ background: 'rgba(255,215,0,0.1)', color: '#FFD700', border: '1px solid rgba(255,215,0,0.3)' }}>
+                                {item.finish || 'STD'}
+                              </span>
+                            )}
+                          </td>
+                        )}
+                        {stockColumns.salesOrder && (
+                          <td style={{ padding: '0.75rem 1rem', color: '#00e0a1', fontWeight: 600 }}>
+                            {item.lastSalesOrder || item.salesOrder || '—'}
+                          </td>
+                        )}
+                        {stockColumns.customerRef && (
+                          <td style={{ padding: '0.75rem 1rem', color: '#ffb74d', fontWeight: 600 }}>
+                            {item.lastCustomerRef || item.customerReference || '—'}
+                          </td>
+                        )}
+                        {stockColumns.lengthMm && (
+                          <td style={{ padding: '0.75rem 1rem' }}>
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                value={editingStockData.lengthMm}
+                                onChange={(e) => setEditingStockData({ ...editingStockData, lengthMm: Number(e.target.value) })}
+                                style={{ width: '80px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                              />
+                            ) : (
+                              <span dir="ltr">{item.lengthMm} mm</span>
+                            )}
+                          </td>
+                        )}
+                        {stockColumns.quantityBar && (
+                          <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#ffffff' }}>
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                value={editingStockData.quantityBar}
+                                onChange={(e) => setEditingStockData({ ...editingStockData, quantityBar: Number(e.target.value) })}
+                                style={{ width: '90px', background: '#101223', color: '#00e0a1', fontWeight: 'bold', border: '1px solid #00e0a1', borderRadius: '4px', padding: '4px 6px' }}
+                              />
+                            ) : (
+                              item.quantityBar
+                            )}
+                          </td>
+                        )}
+                        {stockColumns.quantityLm && (
+                          <td style={{ padding: '0.75rem 1rem' }}>
+                            <span dir="ltr">
+                              {isEditing
+                                ? `${(((editingStockData.quantityBar || 0) * (editingStockData.lengthMm || 6000)) / 1000).toFixed(1)} m`
+                                : item.quantityLm ? `${item.quantityLm.toFixed(1)} m` : '—'}
                             </span>
-                          )}
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={editingStockData.lengthMm}
-                              onChange={(e) => setEditingStockData({ ...editingStockData, lengthMm: Number(e.target.value) })}
-                              style={{ width: '80px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
-                            />
-                          ) : (
-                            <span dir="ltr">{item.lengthMm} mm</span>
-                          )}
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#ffffff' }}>
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={editingStockData.quantityBar}
-                              onChange={(e) => setEditingStockData({ ...editingStockData, quantityBar: Number(e.target.value) })}
-                              style={{ width: '90px', background: '#101223', color: '#00e0a1', fontWeight: 'bold', border: '1px solid #00e0a1', borderRadius: '4px', padding: '4px 6px' }}
-                            />
-                          ) : (
-                            item.quantityBar
-                          )}
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <span dir="ltr">
-                            {isEditing
-                              ? `${(((editingStockData.quantityBar || 0) * (editingStockData.lengthMm || 6000)) / 1000).toFixed(1)} m`
-                              : item.quantityLm ? `${item.quantityLm.toFixed(1)} m` : '—'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={editingStockData.quantityKg}
-                              onChange={(e) => setEditingStockData({ ...editingStockData, quantityKg: Number(e.target.value) })}
-                              style={{ width: '80px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
-                            />
-                          ) : (
-                            <span dir="ltr">{item.quantityKg ? `${item.quantityKg.toFixed(1)} kg` : '—'}</span>
-                          )}
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', color: '#64b5f6' }}>
-                          <span dir="ltr">{item.lastUnitCost ? `${item.lastUnitCost} ${item.currency || 'EGP'}` : '—'}</span>
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', color: '#00e0a1', fontWeight: 700 }}>
-                          <span dir="ltr">
-                            {itemVal > 0
-                              ? `${itemVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP`
-                              : '—'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          </td>
+                        )}
+                        {stockColumns.quantityKg && (
+                          <td style={{ padding: '0.75rem 1rem' }}>
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={editingStockData.quantityKg}
+                                onChange={(e) => setEditingStockData({ ...editingStockData, quantityKg: Number(e.target.value) })}
+                                style={{ width: '80px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                              />
+                            ) : (
+                              <span dir="ltr">{item.quantityKg ? `${item.quantityKg.toFixed(1)} kg` : '—'}</span>
+                            )}
+                          </td>
+                        )}
+                        {stockColumns.lastUnitCost && (
+                          <td style={{ padding: '0.75rem 1rem', color: '#64b5f6' }}>
+                            <span dir="ltr">{item.lastUnitCost ? `${item.lastUnitCost} ${item.currency || 'EGP'}` : '—'}</span>
+                          </td>
+                        )}
+                        {stockColumns.totalValue && (
+                          <td style={{ padding: '0.75rem 1rem', color: '#00e0a1', fontWeight: 700 }}>
+                            <span dir="ltr">
+                              {itemVal > 0
+                                ? `${itemVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP`
+                                : '—'}
+                            </span>
+                          </td>
+                        )}
+                        {stockColumns.actions && (
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                           {isEditing ? (
                             <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
                               <button
@@ -1234,6 +1402,7 @@ export default function Warehouse() {
                             </div>
                           )}
                         </td>
+                      )}
                       </tr>
                     )
                   })

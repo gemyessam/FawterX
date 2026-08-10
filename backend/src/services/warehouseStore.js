@@ -293,7 +293,12 @@ async function getProjectStock(projectId) {
           const existingLatest = itemLatestInvoiceMap.get(k);
           const mvtDate = mData.createdAt || 0;
           if (!existingLatest || new Date(mvtDate) > new Date(existingLatest.createdAt || 0)) {
-            itemLatestInvoiceMap.set(k, { invoiceNumber: invNo, createdAt: mvtDate });
+            itemLatestInvoiceMap.set(k, {
+              invoiceNumber: invNo,
+              salesOrder: mData.salesOrder || "",
+              customerReference: mData.customerReference || "",
+              createdAt: mvtDate,
+            });
           }
         });
       });
@@ -316,7 +321,7 @@ async function getProjectStock(projectId) {
     }
   }
 
-  // Attach enriched invoice numbers to stock items
+  // Attach enriched invoice numbers and metadata to stock items
   const finalStock = Array.from(stockMap.values()).map((item) => {
     const keyInvoices = itemInvoicesMap.get(item.itemKey) || itemInvoicesMap.get(item.itemCode) || new Set();
     const existingInvoices = new Set(Array.isArray(item.invoiceNumbers) ? item.invoiceNumbers : []);
@@ -331,10 +336,17 @@ async function getProjectStock(projectId) {
       ? item.lastInvoiceNumber
       : (latestFromMvts ? latestFromMvts.invoiceNumber : (combinedInvoices[combinedInvoices.length - 1] || "—"));
 
+    const lastSalesOrder = item.lastSalesOrder || (latestFromMvts ? latestFromMvts.salesOrder : "") || "—";
+    const lastCustomerRef = item.lastCustomerRef || (latestFromMvts ? latestFromMvts.customerReference : "") || "—";
+
     return {
       ...item,
       invoiceNumbers: combinedInvoices,
       lastInvoiceNumber,
+      lastSalesOrder,
+      lastCustomerRef,
+      salesOrder: lastSalesOrder,
+      customerReference: lastCustomerRef,
     };
   });
 
@@ -365,6 +377,73 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
   const movementType = (invoiceMeta.movementType || "inbound").toLowerCase();
   const isOutbound = movementType === "outbound";
   const docType = isOutbound ? "sales_invoice" : "purchase_invoice";
+
+  // Check if an invoice with the same invoiceNumber and movementType already exists
+  const targetInvNo = String(invoiceMeta.invoiceNumber || "").trim();
+  if (targetInvNo && targetInvNo !== "-" && targetInvNo !== "—") {
+    try {
+      const existingSnap = await projectRef
+        .collection("invoices")
+        .where("invoiceNumber", "==", targetInvNo)
+        .where("movementType", "==", isOutbound ? "outbound" : "inbound")
+        .get();
+
+      if (!existingSnap.empty) {
+        const existingDoc = existingSnap.docs[0];
+        const existingData = existingDoc.data() || {};
+        const existingId = existingDoc.id;
+
+        const newSO = String(invoiceMeta.salesOrder || invoiceMeta.soNumber || "").trim();
+        const newRef = String(invoiceMeta.customerReference || invoiceMeta.customerRef || "").trim();
+        const newSupplier = String(invoiceMeta.supplier || "").trim();
+        const newInvDate = String(invoiceMeta.invoiceDate || "").trim();
+
+        const invUpdates = {};
+        if (newSO && newSO !== existingData.salesOrder) invUpdates.salesOrder = newSO;
+        if (newRef && newRef !== existingData.customerReference) invUpdates.customerReference = newRef;
+        if (newSupplier && newSupplier !== existingData.supplier && newSupplier !== "Canex") invUpdates.supplier = newSupplier;
+        if (newInvDate && newInvDate !== existingData.invoiceDate) invUpdates.invoiceDate = newInvDate;
+
+        const hasUpdates = Object.keys(invUpdates).length > 0;
+
+        if (hasUpdates) {
+          invUpdates.updatedAt = new Date().toISOString();
+          const dupBatch = db.batch();
+          dupBatch.update(existingDoc.ref, invUpdates);
+
+          const mvtsSnap = await projectRef
+            .collection("movements")
+            .where("invoiceId", "==", existingId)
+            .get();
+
+          const mvtUpdates = {};
+          if (invUpdates.salesOrder) mvtUpdates.salesOrder = invUpdates.salesOrder;
+          if (invUpdates.customerReference) mvtUpdates.customerReference = invUpdates.customerReference;
+          if (invUpdates.supplier) mvtUpdates.supplier = invUpdates.supplier;
+
+          if (Object.keys(mvtUpdates).length > 0) {
+            mvtsSnap.docs.forEach((mDoc) => {
+              dupBatch.update(mDoc.ref, mvtUpdates);
+            });
+          }
+
+          await dupBatch.commit();
+        }
+
+        return {
+          success: true,
+          isDuplicate: true,
+          updatedMetadata: hasUpdates,
+          invoiceId: existingId,
+          message: hasUpdates
+            ? `الفاتورة ${targetInvNo} مسجلة سابقاً. تم تحديث البيانات الناقصة (SO/Customer Ref) دون تكرار خصم أو إضافة الكميات.`
+            : `الفاتورة ${targetInvNo} مسجلة مسبقاً في السجل بنفس البيانات. لم يتم مضاعفة الكميات في المخزن.`,
+        };
+      }
+    } catch (err) {
+      console.warn("Error checking for duplicate invoice:", err.message);
+    }
+  }
 
   // 1. Save Invoice Document
   const validLinesCount = lines.filter((l) => !l.ignored && !l.isService).length;
