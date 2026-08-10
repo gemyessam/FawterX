@@ -28,9 +28,53 @@ export default function Warehouse() {
   const { lang, user, isAdmin } = useContext(AppContext)
   const isAr = lang === 'ar'
 
-  const [projects, setProjects] = useState([])
-  const [selectedProjectId, setSelectedProjectId] = useState('')
-  const [stock, setStock] = useState([])
+  const [projects, setProjects] = useState(() => {
+    try {
+      const saved = localStorage.getItem('fawterx_cached_projects')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch (e) {}
+    return []
+  })
+
+  const [selectedProjectId, setSelectedProjectId] = useState(() => {
+    try {
+      return localStorage.getItem('fawterx_selected_project_id') || ''
+    } catch (e) {
+      return ''
+    }
+  })
+
+  const [stock, setStock] = useState(() => {
+    try {
+      const savedProj = localStorage.getItem('fawterx_selected_project_id')
+      if (savedProj) {
+        const cachedStock = localStorage.getItem(`fawterx_stock_cache_${savedProj}`)
+        if (cachedStock) {
+          const parsed = JSON.parse(cachedStock)
+          if (Array.isArray(parsed)) return parsed
+        }
+      }
+    } catch (e) {}
+    return []
+  })
+
+  const handleSelectProject = (projectId) => {
+    setSelectedProjectId(projectId)
+    try {
+      localStorage.setItem('fawterx_selected_project_id', projectId)
+    } catch (e) {}
+    try {
+      const cachedStock = localStorage.getItem(`fawterx_stock_cache_${projectId}`)
+      if (cachedStock) {
+        setStock(JSON.parse(cachedStock))
+      } else {
+        setStock([])
+      }
+    } catch (e) {}
+  }
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('stock') // 'stock' | 'history' | 'upload' | 'users' | 'projects'
 
@@ -373,38 +417,66 @@ export default function Warehouse() {
   async function loadProjects() {
     setLoading(true)
     try {
-      const fetchPromise = getWarehouseProjects()
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Server response timeout')), 10000)
-      )
-
-      const res = await Promise.race([fetchPromise, timeoutPromise])
+      const res = await getWarehouseProjects()
       if (res && res.success && Array.isArray(res.projects) && res.projects.length > 0) {
         setProjects(res.projects)
-        setSelectedProjectId((prev) => prev || res.projects[0].id)
+        try {
+          localStorage.setItem('fawterx_cached_projects', JSON.stringify(res.projects))
+        } catch (e) {}
+
+        setSelectedProjectId((prev) => {
+          const saved = localStorage.getItem('fawterx_selected_project_id')
+          const candidate = prev || saved || ''
+          const exists = res.projects.some((p) => p.id === candidate)
+          const nextId = exists ? candidate : res.projects[0].id
+          try {
+            localStorage.setItem('fawterx_selected_project_id', nextId)
+          } catch (e) {}
+          return nextId
+        })
       } else {
-        const defaultProj = { id: 'default_canex', name: 'Canex Stock', code: 'CANEX', description: 'المخزن الرئيسي لقطاعات وإكسسوارات كانكس' }
-        setProjects([defaultProj])
-        setSelectedProjectId((prev) => prev || defaultProj.id)
+        if (projects.length === 0) {
+          const defaultProj = { id: 'default_canex', name: 'Canex Stock', code: 'CANEX', description: 'المخزن الرئيسي لقطاعات وإكسسوارات كانكس' }
+          setProjects([defaultProj])
+          setSelectedProjectId((prev) => {
+            const nextId = prev || defaultProj.id
+            try {
+              localStorage.setItem('fawterx_selected_project_id', nextId)
+            } catch (e) {}
+            return nextId
+          })
+        }
       }
     } catch (err) {
-      console.warn('Warehouse projects loading timeout/error:', err)
-      const defaultProj = { id: 'default_canex', name: 'Canex Stock', code: 'CANEX', description: 'المخزن الرئيسي لقطاعات وإكسسوارات كانكس' }
-      setProjects([defaultProj])
-      setSelectedProjectId((prev) => prev || defaultProj.id)
+      console.warn('Warehouse projects loading error:', err)
+      if (projects.length === 0) {
+        const defaultProj = { id: 'default_canex', name: 'Canex Stock', code: 'CANEX', description: 'المخزن الرئيسي لقطاعات وإكسسوارات كانكس' }
+        setProjects([defaultProj])
+        setSelectedProjectId((prev) => {
+          const nextId = prev || defaultProj.id
+          try {
+            localStorage.setItem('fawterx_selected_project_id', nextId)
+          } catch (e) {}
+          return nextId
+        })
+      }
     } finally {
       setLoading(false)
     }
   }
 
   async function loadStock(projectId) {
+    if (!projectId) return
     try {
       const res = await getProjectStock(projectId)
-      if (res.success && res.stock) {
+      if (res && res.success && Array.isArray(res.stock)) {
         setStock(res.stock)
+        try {
+          localStorage.setItem(`fawterx_stock_cache_${projectId}`, JSON.stringify(res.stock))
+        } catch (e) {}
       }
     } catch (err) {
-      toast.error(isAr ? 'فشل تحميل رصيد المخزن' : 'Failed to load stock data')
+      console.error('Failed to load stock data:', err)
     }
   }
 
@@ -813,8 +885,12 @@ export default function Warehouse() {
       })
       if (res.success && res.project) {
         toast.success(isAr ? 'تم إنشاء المشروع بنجاح' : 'Project created successfully')
-        setProjects((prev) => [...prev, res.project])
-        setSelectedProjectId(res.project.id)
+        const updatedProjects = [...projects, res.project]
+        setProjects(updatedProjects)
+        try {
+          localStorage.setItem('fawterx_cached_projects', JSON.stringify(updatedProjects))
+        } catch (e) {}
+        handleSelectProject(res.project.id)
         setNewProjectName('')
         setNewProjectCode('')
         setNewProjectDesc('')
@@ -1294,7 +1370,7 @@ export default function Warehouse() {
             </label>
             <select
               value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
+              onChange={(e) => handleSelectProject(e.target.value)}
               style={{
                 background: '#161b33',
                 color: '#00e0a1',
