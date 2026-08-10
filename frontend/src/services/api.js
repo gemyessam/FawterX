@@ -221,3 +221,19 @@ export async function updateAdminUser(uid, payload) {
   const { data } = await api.patch(`/admin/users/${uid}`, payload)
   return data
 }
+
+/** مزامنة تلقائية لبيانات المستخدم فور تسجيل الدخول */
+export async function syncUserData(user) {
+  if (!user) return null
+  try {
+    const { data } = await api.post('/eta/user-sync', {
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL
+    })
+    return data
+  } catch (error) {
+    console.warn('User sync failed silently:', error.message)
+    return null
+  }
+}

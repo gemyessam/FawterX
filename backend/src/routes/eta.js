@@ -6,6 +6,8 @@ const { validateETADocument } = require("../utils/etaValidator");
 const { saveDraft, getDraft, getAllDrafts, deleteDraft, recordOperation, getAllOperations } = require("../services/draftStore");
 const { canUserSubmit, recordSubmission, getUserUsage, saveUserSettings, getUserSettings } = require("../services/userStatsStore");
 const { listCustomers, saveCustomer, deleteCustomer } = require("../services/customerStore");
+const { isAdminEmail } = require("../services/adminAccess");
+const admin = require("../services/firebaseAdmin");
 const authMiddleware       = require("../middleware/auth");
 
 const router = express.Router();
@@ -507,6 +509,48 @@ router.get("/operations", async (req, res) => {
     return res.json({ success: true, count: operations.length, operations });
   } catch (error) {
     console.error("=== SERVER ERROR ===", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// POST /api/eta/user-sync
+// مزامنة تلقائية لبيانات المستخدم في Firestore فور تسجيل الدخول
+// ══════════════════════════════════════════════════════════════════
+router.post("/user-sync", async (req, res) => {
+  try {
+    const { email, displayName, photoURL } = req.body || {};
+    if (admin && admin.apps && admin.apps.length > 0 && req.user && req.user.uid) {
+      const db = admin.firestore();
+      const userRef = db.collection("users").doc(req.user.uid);
+      const userDoc = await userRef.get();
+      const existing = userDoc.exists ? userDoc.data() : {};
+
+      const userEmail = email || req.user.email || existing.email || "";
+      const userDisplayName = displayName || req.user.name || existing.displayName || existing.name || userEmail;
+
+      const payload = {
+        email: userEmail,
+        displayName: userDisplayName,
+        photoURL: photoURL || existing.photoURL || "",
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (!userDoc.exists) {
+        payload.createdAt = new Date().toISOString();
+        payload.role = isAdminEmail(userEmail) ? "admin" : "user";
+        payload.status = "active";
+        payload.isSubscribed = false;
+        payload.submissionsCount = 0;
+        payload.dailyCount = 0;
+        payload.quotaDaily = 10;
+      }
+
+      await userRef.set(payload, { merge: true });
+    }
+    return res.json({ success: true });
+  } catch (error) {
+    console.warn("User sync warning:", error.message);
     return res.status(500).json({ success: false, message: error.message });
   }
 });

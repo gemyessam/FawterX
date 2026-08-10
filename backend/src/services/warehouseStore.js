@@ -60,9 +60,41 @@ async function listWarehouseUsers() {
   const db = getDb();
   if (!db) return [];
 
-  const snapshot = await db.collection("users").get();
-  return snapshot.docs.map((doc) => {
-    const data = doc.data() || {};
+  const allUsersMap = {};
+
+  try {
+    const snapshot = await db.collection("users").get();
+    snapshot.docs.forEach((doc) => {
+      allUsersMap[doc.id] = doc.data() || {};
+    });
+  } catch (e) {
+    console.warn("Error fetching Firestore users for warehouse:", e.message);
+  }
+
+  try {
+    let pageToken = undefined;
+    do {
+      const page = await admin.auth().listUsers(1000, pageToken);
+      page.users.forEach((u) => {
+        if (!allUsersMap[u.uid]) {
+          allUsersMap[u.uid] = {
+            email: u.email || "",
+            displayName: u.displayName || u.email || u.uid,
+            role: isAdminEmail(u.email) ? "admin" : "user",
+          };
+        } else {
+          allUsersMap[u.uid].email = allUsersMap[u.uid].email || u.email || "";
+          allUsersMap[u.uid].displayName = allUsersMap[u.uid].displayName || u.displayName || u.email || "";
+        }
+      });
+      pageToken = page.pageToken;
+    } while (pageToken);
+  } catch (err) {
+    console.warn("Could not fetch auth users for warehouse:", err.message);
+  }
+
+  return Object.keys(allUsersMap).map((uid) => {
+    const data = allUsersMap[uid] || {};
     const access = data.access && typeof data.access === "object" ? data.access : data;
     const email = data.email || "";
 
@@ -74,9 +106,9 @@ async function listWarehouseUsers() {
     );
 
     return {
-      uid: doc.id,
+      uid: uid,
       email: email,
-      displayName: data.displayName || data.name || email || doc.id,
+      displayName: data.displayName || data.name || email || uid,
       role: access.role || data.role || "user",
       warehouseEnabled: isEnabled,
       warehouseRole: isAdmin ? "admin" : (data.warehouseRole || access.warehouseRole || (isEnabled ? "warehouse_operator" : "disabled")),
@@ -93,16 +125,36 @@ async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehous
 
   const userRef = db.collection("users").doc(targetUid);
   const userDoc = await userRef.get();
-  if (!userDoc.exists) throw new Error("Target user not found.");
+
+  let email = "";
+  let displayName = "";
+  if (userDoc.exists) {
+    const d = userDoc.data() || {};
+    email = d.email || "";
+    displayName = d.displayName || d.name || "";
+  }
+
+  if (!email || !displayName) {
+    try {
+      const authUser = await admin.auth().getUser(targetUid);
+      email = email || authUser.email || "";
+      displayName = displayName || authUser.displayName || email || targetUid;
+    } catch (e) {
+      console.warn(`Could not get Auth user for ${targetUid}:`, e.message);
+    }
+  }
 
   const enabled = Boolean(warehouseEnabled);
   const role = enabled ? (warehouseRole || "warehouse_operator") : "disabled";
 
   const updatePayload = {
+    email,
+    displayName,
     warehouseEnabled: enabled,
     warehouseRole: role,
     warehouseAccessUpdatedAt: new Date().toISOString(),
     warehouseAccessUpdatedBy: actorEmail || "admin",
+    updatedAt: new Date().toISOString(),
   };
 
   await userRef.set(updatePayload, { merge: true });

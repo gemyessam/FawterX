@@ -6,7 +6,7 @@ import Drafts from './pages/Drafts'
 import DraftDetails from './pages/DraftDetails'
 import AdminPanel from './pages/AdminPanel'
 import Warehouse from './pages/Warehouse'
-import { testETAAuth, getCompanySettings, saveCompanySettings } from './services/api'
+import { testETAAuth, getCompanySettings, saveCompanySettings, syncUserData } from './services/api'
 import { getWarehouseAccess } from './services/warehouseApi'
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase'
 
@@ -16,7 +16,7 @@ export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
-    logo: 'فاوتر إكس v2.22.6',
+    logo: 'فاوتر إكس v2.22.7',
     logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
@@ -47,7 +47,7 @@ const TRANSLATIONS = {
     statsTitle: 'إحصائيات الأداء'
   },
   en: {
-    logo: 'FawterX v2.22.6',
+    logo: 'FawterX v2.22.7',
     logoSub: 'ERP Alternative for ETA Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
@@ -438,6 +438,7 @@ export default function App() {
   useEffect(() => {    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser)
+        syncUserData(currentUser)
       } else {
         setUser(null)
       }
@@ -449,6 +450,7 @@ export default function App() {
   async function handleGoogleLogin() {
     try {
       const result = await signInWithPopup(auth, googleProvider)
+      await syncUserData(result.user)
       toast.success(lang === 'ar' ? `مرحباً بك ${result.user.displayName}` : `Welcome ${result.user.displayName}`)
     } catch (error) {
       console.error(error)

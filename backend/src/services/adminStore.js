@@ -36,49 +36,107 @@ function sanitizeUserSnapshot(doc) {
 async function listUsers() {
   const db = getDb();
   if (!db) return [];
-  const snapshot = await db.collection("users").get();
-  let usersList = snapshot.docs
-    .map(sanitizeUserSnapshot)
-    .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")))
-    .slice(0, 200);
+
+  const usersMap = {};
 
   try {
-    const authUsersMap = {};
+    const snapshot = await db.collection("users").get();
+    snapshot.docs.forEach((doc) => {
+      usersMap[doc.id] = sanitizeUserSnapshot(doc);
+    });
+  } catch (err) {
+    console.warn("Error fetching Firestore users:", err.message);
+  }
+
+  try {
     let pageToken = undefined;
     do {
       const page = await admin.auth().listUsers(1000, pageToken);
-      page.users.forEach(u => {
-        authUsersMap[u.uid] = { email: u.email, displayName: u.displayName };
+      page.users.forEach((u) => {
+        const existing = usersMap[u.uid];
+        if (!existing) {
+          const email = u.email || "";
+          const displayName = u.displayName || email || u.uid;
+          usersMap[u.uid] = {
+            uid: u.uid,
+            email,
+            displayName,
+            photoURL: u.photoURL || "",
+            submissionsCount: 0,
+            dailyCount: 0,
+            lastReset: null,
+            lastSubmission: null,
+            isSubscribed: false,
+            role: isAdminEmail(email) ? "admin" : "user",
+            status: "active",
+            quotaDaily: 10,
+            quotaMonthly: null,
+            expiresAt: null,
+            note: "",
+            updatedAt: u.metadata?.creationTime || new Date().toISOString(),
+          };
+          // Auto-persist to Firestore
+          db.collection("users").doc(u.uid).set(
+            {
+              email,
+              displayName,
+              photoURL: u.photoURL || "",
+              role: isAdminEmail(email) ? "admin" : "user",
+              status: "active",
+              createdAt: u.metadata?.creationTime || new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          ).catch((e) => console.warn(`Auto-sync user ${u.uid} error:`, e.message));
+        } else {
+          existing.email = existing.email || u.email || "";
+          existing.displayName = existing.displayName || u.displayName || u.email || "";
+          existing.photoURL = existing.photoURL || u.photoURL || "";
+        }
       });
       pageToken = page.pageToken;
     } while (pageToken);
-
-    usersList = usersList.map(u => {
-      const authUser = authUsersMap[u.uid];
-      return {
-        ...u,
-        email: u.email || (authUser && authUser.email) || "",
-        displayName: u.displayName || (authUser && authUser.displayName) || "",
-      };
-    });
   } catch (err) {
     console.warn("Could not fetch auth users in bulk:", err.message);
   }
 
-  return usersList;
+  return Object.values(usersMap).sort((a, b) =>
+    String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))
+  );
 }
 
 async function getUserById(uid) {
   const db = getDb();
   if (!db) return null;
   const doc = await db.collection("users").doc(uid).get();
-  if (!doc.exists) return null;
-  const user = sanitizeUserSnapshot(doc);
+  let user = doc.exists ? sanitizeUserSnapshot(doc) : null;
 
   try {
     const authUser = await admin.auth().getUser(uid);
-    user.email = user.email || authUser.email || "";
-    user.displayName = user.displayName || authUser.displayName || "";
+    if (!user) {
+      const email = authUser.email || "";
+      user = {
+        uid: authUser.uid,
+        email,
+        displayName: authUser.displayName || email || authUser.uid,
+        photoURL: authUser.photoURL || "",
+        submissionsCount: 0,
+        dailyCount: 0,
+        lastReset: null,
+        lastSubmission: null,
+        isSubscribed: false,
+        role: isAdminEmail(email) ? "admin" : "user",
+        status: "active",
+        quotaDaily: 10,
+        quotaMonthly: null,
+        expiresAt: null,
+        note: "",
+        updatedAt: authUser.metadata?.creationTime || new Date().toISOString(),
+      };
+    } else {
+      user.email = user.email || authUser.email || "";
+      user.displayName = user.displayName || authUser.displayName || "";
+    }
   } catch (err) {
     console.warn(`Could not fetch auth user ${uid}:`, err.message);
   }
