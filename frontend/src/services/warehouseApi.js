@@ -103,3 +103,9 @@ export async function getItemMovementsHistory(projectId, itemKey, itemCode) {
   })
   return data
 }
+
+/** Update invoice metadata (Sales Order # & Customer Reference) */
+export async function updateWarehouseInvoiceMetadata(projectId, invoiceId, payload) {
+  const { data } = await api.patch(`/warehouse/projects/${projectId}/invoices/${invoiceId}`, payload)
+  return data
+}

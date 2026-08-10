@@ -380,6 +380,8 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
 
   const invoiceDoc = {
     invoiceNumber: invoiceMeta.invoiceNumber || `INV-${Date.now()}`,
+    salesOrder: invoiceMeta.salesOrder || invoiceMeta.soNumber || "",
+    customerReference: invoiceMeta.customerReference || invoiceMeta.customerRef || "",
     invoiceDate: invoiceMeta.invoiceDate || "",
     receiptDate: invoiceMeta.receiptDate || invoiceMeta.deliveryDate || "",
     supplier: invoiceMeta.supplier || "Canex",
@@ -432,6 +434,8 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid) {
     const movementData = {
       invoiceId,
       invoiceNumber: invoiceDoc.invoiceNumber,
+      salesOrder: invoiceDoc.salesOrder,
+      customerReference: invoiceDoc.customerReference,
       movementType: isOutbound ? "outbound" : "inbound",
       itemKey,
       itemCode,
@@ -770,6 +774,44 @@ async function getItemMovementsHistory(projectId, itemKey, itemCode) {
   return movementsWithBalance.reverse();
 }
 
+/**
+ * Update invoice metadata (Sales Order & Customer Reference) and sync to movements
+ */
+async function updateInvoiceMetadata(projectId, invoiceId, { salesOrder, customerReference }) {
+  const db = getDb();
+  if (!db) throw new Error("Firestore is unavailable.");
+
+  const invoiceRef = db.collection("warehouseProjects").doc(projectId).collection("invoices").doc(invoiceId);
+  const invDoc = await invoiceRef.get();
+  if (!invDoc.exists) throw new Error("Invoice not found.");
+
+  const payload = {
+    salesOrder: String(salesOrder || "").trim(),
+    customerReference: String(customerReference || "").trim(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  await invoiceRef.set(payload, { merge: true });
+
+  // Batch update all associated movements
+  const movementsSnap = await db
+    .collection("warehouseProjects")
+    .doc(projectId)
+    .collection("movements")
+    .where("invoiceId", "==", invoiceId)
+    .get();
+
+  if (!movementsSnap.empty) {
+    const batch = db.batch();
+    movementsSnap.docs.forEach((doc) => {
+      batch.update(doc.ref, payload);
+    });
+    await batch.commit();
+  }
+
+  return { invoiceId, ...payload };
+}
+
 module.exports = {
   getUserWarehouseAccess,
   listWarehouseUsers,
@@ -783,4 +825,5 @@ module.exports = {
   getItemMovementsHistory,
   updateStockItem,
   deleteStockItem,
+  updateInvoiceMetadata,
 };

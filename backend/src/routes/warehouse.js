@@ -17,6 +17,7 @@ const {
   getItemMovementsHistory,
   updateStockItem,
   deleteStockItem,
+  updateInvoiceMetadata,
 } = require("../services/warehouseStore");
 
 const router = express.Router();
@@ -277,6 +278,23 @@ router.put("/projects/:projectId/stock/:itemKey", requireAdmin, async (req, res)
 router.delete("/projects/:projectId/stock/:itemKey", requireAdmin, async (req, res) => {
   try {
     const result = await deleteStockItem(req.params.projectId, req.params.itemKey);
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * PATCH /api/warehouse/projects/:projectId/invoices/:invoiceId
+ * Update invoice metadata (Sales Order & Customer Reference)
+ */
+router.patch("/projects/:projectId/invoices/:invoiceId", requireWarehouse, async (req, res) => {
+  try {
+    const { salesOrder, customerReference } = req.body;
+    const result = await updateInvoiceMetadata(req.params.projectId, req.params.invoiceId, {
+      salesOrder,
+      customerReference,
+    });
     return res.json({ success: true, ...result });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

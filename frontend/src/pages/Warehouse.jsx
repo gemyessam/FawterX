@@ -16,6 +16,7 @@ import {
   getWarehouseInvoices,
   getInvoiceMovements,
   getItemMovementsHistory,
+  updateWarehouseInvoiceMetadata,
 } from '../services/warehouseApi'
 
 export default function Warehouse() {
@@ -34,6 +35,12 @@ export default function Warehouse() {
   const [selectedInvoice, setSelectedInvoice] = useState(null)
   const [invoiceMovements, setInvoiceMovements] = useState([])
   const [loadingMovements, setLoadingMovements] = useState(false)
+
+  // Invoice Metadata Edit State
+  const [editingMetadata, setEditingMetadata] = useState(false)
+  const [editSalesOrder, setEditSalesOrder] = useState('')
+  const [editCustomerRef, setEditCustomerRef] = useState('')
+  const [savingMetadata, setSavingMetadata] = useState(false)
 
   // Item Movement History Modal State
   const [selectedStockItemHistory, setSelectedStockItemHistory] = useState(null)
@@ -158,6 +165,9 @@ export default function Warehouse() {
 
   async function handleViewInvoiceDetails(inv) {
     setSelectedInvoice(inv)
+    setEditSalesOrder(inv.salesOrder || '')
+    setEditCustomerRef(inv.customerReference || '')
+    setEditingMetadata(false)
     setLoadingMovements(true)
     try {
       const res = await getInvoiceMovements(selectedProjectId, inv.id)
@@ -168,6 +178,28 @@ export default function Warehouse() {
       toast.error(isAr ? 'فشل تحميل تفاصيل الحركة' : 'Failed to load movement details')
     } finally {
       setLoadingMovements(false)
+    }
+  }
+
+  async function handleSaveInvoiceMetadata() {
+    if (!selectedInvoice || !selectedProjectId) return
+    setSavingMetadata(true)
+    try {
+      const res = await updateWarehouseInvoiceMetadata(selectedProjectId, selectedInvoice.id, {
+        salesOrder: editSalesOrder,
+        customerReference: editCustomerRef,
+      })
+      if (res.success) {
+        toast.success(isAr ? 'تم تحديث بيانات الفاتورة بنجاح!' : 'Invoice metadata updated successfully!')
+        const updatedInv = { ...selectedInvoice, salesOrder: editSalesOrder, customerReference: editCustomerRef }
+        setSelectedInvoice(updatedInv)
+        setInvoices((prev) => prev.map((inv) => (inv.id === selectedInvoice.id ? updatedInv : inv)))
+        setEditingMetadata(false)
+      }
+    } catch (err) {
+      toast.error(isAr ? 'فشل تحديث بيانات الفاتورة' : 'Failed to update invoice metadata')
+    } finally {
+      setSavingMetadata(false)
     }
   }
 
@@ -278,6 +310,8 @@ export default function Warehouse() {
 
         setParsedMeta({
           invoiceNumber: res.metadata?.invoiceNumber || `INV-${Date.now().toString().slice(-6)}`,
+          salesOrder: res.metadata?.salesOrder || '',
+          customerReference: res.metadata?.customerReference || '',
           invoiceDate: res.metadata?.invoiceDate || '',
           receiptDate: res.metadata?.receiptDate || res.metadata?.deliveryDate || '',
           supplier: res.metadata?.supplier || 'Canex',
@@ -438,6 +472,8 @@ export default function Warehouse() {
 
       const fullInvText = [
         inv.invoiceNumber,
+        inv.salesOrder,
+        inv.customerReference,
         inv.supplier,
         inv.fileName,
         inv.movementType,
@@ -688,6 +724,8 @@ export default function Warehouse() {
       const columns = [
         { header: isAr ? 'م' : '#', key: 'idx', width: 6 },
         { header: isAr ? 'رقم الفاتورة' : 'Invoice No', key: 'invoiceNo', width: 22 },
+        { header: isAr ? 'أمر البيع (SO)' : 'Sales Order #', key: 'salesOrder', width: 20 },
+        { header: isAr ? 'مرجع العميل' : 'Customer Ref', key: 'customerReference', width: 22 },
         { header: isAr ? 'نوع الحركة' : 'Movement Type', key: 'movementType', width: 24 },
         { header: isAr ? 'المورد / الجهة' : 'Supplier', key: 'supplier', width: 18 },
         { header: isAr ? 'اسم الملف' : 'File Name', key: 'fileName', width: 32 },
@@ -739,6 +777,8 @@ export default function Warehouse() {
         const row = worksheet.addRow({
           idx: idx + 1,
           invoiceNo: inv.invoiceNumber || '—',
+          salesOrder: inv.salesOrder || '—',
+          customerReference: inv.customerReference || '—',
           movementType: inv.movementType === 'outbound' ? (isAr ? 'صرف (خصم من المخزن)' : 'Outbound') : (isAr ? 'توريد (إضافة للمخزن)' : 'Inbound'),
           supplier: inv.supplier || 'Canex',
           fileName: inv.fileName || 'منفذ يدوياً',
@@ -1276,6 +1316,8 @@ export default function Warehouse() {
                   <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
                     <th style={{ padding: '0.75rem 1rem', width: '45px' }}>#</th>
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'رقم الفاتورة' : 'Invoice No'}</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'أمر البيع (SO)' : 'Sales Order #'}</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'مرجع العميل' : 'Customer Ref'}</th>
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'نوع الحركة' : 'Movement'}</th>
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'المورد / الجهة' : 'Supplier'}</th>
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'اسم الملف المرفوع' : 'File Name'}</th>
@@ -1294,6 +1336,8 @@ export default function Warehouse() {
                       <tr key={inv.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                         <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600 }}>{idx + 1}</td>
                         <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#64b5f6' }}>{inv.invoiceNumber || '—'}</td>
+                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>{inv.salesOrder || '—'}</td>
+                        <td style={{ padding: '0.75rem 1rem', color: '#ffb74d' }}>{inv.customerReference || '—'}</td>
                         <td style={{ padding: '0.75rem 1rem' }}>
                           <span
                             className="badge"
@@ -1347,18 +1391,68 @@ export default function Warehouse() {
       {selectedInvoice && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
           <div className="card fade-in" style={{ width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', background: '#121629', border: '1px solid #00e0a1', padding: '1.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#00e0a1' }}>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#00e0a1', margin: 0 }}>
                   🧾 {isAr ? `تفاصيل الفاتورة: ${selectedInvoice.invoiceNumber}` : `Invoice Details: ${selectedInvoice.invoiceNumber}`}
                 </h3>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                  {isAr ? 'المورد:' : 'Supplier:'} {selectedInvoice.supplier || 'Canex'} | {isAr ? 'التاريخ:' : 'Date:'} {selectedInvoice.invoiceDate || '—'}
-                </span>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '0.4rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    {isAr ? 'المورد:' : 'Supplier:'} {selectedInvoice.supplier || 'Canex'} | {isAr ? 'التاريخ:' : 'Date:'} {selectedInvoice.invoiceDate || '—'}
+                  </span>
+                  <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.3)', fontSize: '0.8rem' }}>
+                    SO #: {selectedInvoice.salesOrder || '—'}
+                  </span>
+                  <span className="badge" style={{ background: 'rgba(255, 183, 77, 0.15)', color: '#ffb74d', border: '1px solid rgba(255, 183, 77, 0.3)', fontSize: '0.8rem' }}>
+                    Ref: {selectedInvoice.customerReference || '—'}
+                  </span>
+                  {isAdmin && (
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => setEditingMetadata(!editingMetadata)}
+                      style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', fontSize: '0.8rem', padding: '2px 8px' }}
+                    >
+                      ✏️ {editingMetadata ? (isAr ? 'إلغاء التعديل' : 'Cancel') : (isAr ? 'تعديل البيانات (SO / Customer Ref)' : 'Edit Metadata')}
+                    </button>
+                  )}
+                </div>
+
+                {editingMetadata && (
+                  <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem', background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: '#00e0a1', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>{isAr ? 'أمر البيع (Sales Order)' : 'Sales Order #'}</label>
+                      <input
+                        type="text"
+                        value={editSalesOrder}
+                        onChange={(e) => setEditSalesOrder(e.target.value)}
+                        placeholder="e.g. SO-100234"
+                        style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.6rem', borderRadius: '6px', fontSize: '0.85rem' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: '#ffb74d', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>{isAr ? 'مرجع العميل (Customer Ref)' : 'Customer Ref'}</label>
+                      <input
+                        type="text"
+                        value={editCustomerRef}
+                        onChange={(e) => setEditCustomerRef(e.target.value)}
+                        placeholder="e.g. CUST-REF-889"
+                        style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.6rem', borderRadius: '6px', fontSize: '0.85rem' }}
+                      />
+                    </div>
+                    <button
+                      className="btn btn-sm btn-primary"
+                      disabled={savingMetadata}
+                      onClick={handleSaveInvoiceMetadata}
+                      style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', fontWeight: 600 }}
+                    >
+                      {savingMetadata ? '...' : (isAr ? '💾 حفظ التعديل' : 'Save Metadata')}
+                    </button>
+                  </div>
+                )}
               </div>
               <button
                 className="btn btn-sm"
-                onClick={() => { setSelectedInvoice(null); setInvoiceMovements([]); }}
+                onClick={() => { setSelectedInvoice(null); setInvoiceMovements([]); setEditingMetadata(false); }}
                 style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '1.1rem', padding: '4px 10px' }}
               >
                 ✕
@@ -1718,6 +1812,8 @@ export default function Warehouse() {
               >
                 {[
                   { key: 'invoiceNumber', label: isAr ? 'رقم الفاتورة' : 'Invoice No.' },
+                  { key: 'salesOrder', label: isAr ? 'أمر البيع (Sales Order)' : 'Sales Order #' },
+                  { key: 'customerReference', label: isAr ? 'مرجع العميل' : 'Customer Ref' },
                   { key: 'invoiceDate', label: isAr ? 'تاريخ الفاتورة' : 'Invoice Date', type: 'date' },
                   { key: 'receiptDate', label: isAr ? 'تاريخ الاستلام' : 'Receipt Date', type: 'date' },
                   { key: 'supplier', label: isAr ? 'اسم المورد' : 'Supplier' },

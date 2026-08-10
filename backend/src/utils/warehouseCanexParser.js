@@ -55,7 +55,12 @@ function extractMetadata(text, fileName) {
 
   const salesOrder =
     extractLabel(text, "Sales Order #:") ||
-    clean(text.match(/Sales Order #:\s*([A-Z0-9-]+)/i)?.[1]);
+    clean(text.match(/Sales\s*Order\s*#?\s*:?\s*([A-Z0-9_-]+)/i)?.[1]);
+
+  const customerReference =
+    extractLabel(text, "Customer Reference:") ||
+    clean(text.match(/Customer\s*Reference\s*#?\s*:?\s*([A-Z0-9_-]+)/i)?.[1]);
+
   const currency = clean(text.match(/\bCurrency:\s*([A-Z]{3})\b/i)?.[1]) || "EGP";
   const invoiceAmount = parseNum(text.match(/Invoice Amount\s+([\d,]+\.\d{2})/i)?.[1]);
   const taxAmount = parseNum(text.match(/Tax Amount\s+([\d,]+\.\d{2})/i)?.[1]);
@@ -68,7 +73,8 @@ function extractMetadata(text, fileName) {
     deliveryDate: parseCanexDate(deliveryDateStr),
     supplier: "Canex",
     currency,
-    salesOrder,
+    salesOrder: salesOrder || "",
+    customerReference: customerReference || "",
     invoiceAmount,
     taxAmount,
     totalAmount,
