@@ -1288,7 +1288,12 @@ export default function Warehouse() {
         })
       })
 
-      // Add Grand Total Summary Row
+      const lastDataRow = 1 + filteredStock.length
+
+      // Enable Excel AutoFilter on all columns so filtering adjusts totals dynamically
+      worksheet.autoFilter = `A1:N${lastDataRow}`
+
+      // Add Grand Total Summary Row using Excel SUBTOTAL(9, ...) formula for dynamic filter calculation
       const totalBars = filteredStock.reduce((acc, i) => acc + Number(i.quantityBar || 0), 0)
       const totalLm = filteredStock.reduce((acc, i) => acc + Number(i.quantityLm || 0), 0)
       const totalKg = filteredStock.reduce((acc, i) => acc + Number(i.quantityKg || 0), 0)
@@ -1304,11 +1309,11 @@ export default function Warehouse() {
         salesOrder: '',
         customerRef: '',
         lengthMm: '',
-        quantityBar: totalBars,
-        quantityLm: totalLm,
-        quantityKg: totalKg > 0 ? totalKg : '-',
+        quantityBar: { formula: `SUBTOTAL(9,J2:J${lastDataRow})`, result: totalBars },
+        quantityLm: { formula: `SUBTOTAL(9,K2:K${lastDataRow})`, result: totalLm },
+        quantityKg: { formula: `SUBTOTAL(9,L2:L${lastDataRow})`, result: totalKg },
         lastUnitCost: '',
-        totalValue: grandTotalVal
+        totalValue: { formula: `SUBTOTAL(9,N2:N${lastDataRow})`, result: grandTotalVal }
       })
 
       summaryRow.height = 24
@@ -1327,9 +1332,10 @@ export default function Warehouse() {
           cell.alignment = { horizontal: 'center', vertical: 'middle' }
         } else if (colNumber === 5) {
           cell.alignment = { horizontal: 'left', vertical: 'middle' }
-        } else if (colNumber === 12 && cell.value === '-') {
-          cell.alignment = { horizontal: 'center', vertical: 'middle' }
-        } else if (colNumber === 10 || colNumber === 11 || colNumber === 12 || colNumber === 14) {
+        } else if (colNumber === 10) {
+          cell.alignment = { horizontal: 'right', vertical: 'middle' }
+          cell.numFmt = '#,##0'
+        } else if (colNumber === 11 || colNumber === 12 || colNumber === 14) {
           cell.alignment = { horizontal: 'right', vertical: 'middle' }
           cell.numFmt = '#,##0.00'
         } else {
@@ -1460,6 +1466,57 @@ export default function Warehouse() {
             }
           }
         })
+      })
+
+      const lastDataRow = 1 + filteredInvoices.length
+      worksheet.autoFilter = `A1:M${lastDataRow}`
+
+      const totalItemsCount = filteredInvoices.reduce((acc, i) => acc + Number(i.lineItemsCount || 0), 0)
+      const totalBars = filteredInvoices.reduce((acc, i) => acc + Number(i.totalQuantityBar || 0), 0)
+      const totalLm = filteredInvoices.reduce((acc, i) => acc + Number(i.totalQuantityLm || 0), 0)
+      const totalAmount = filteredInvoices.reduce((acc, i) => acc + Number(i.totalAmount || 0), 0)
+
+      const summaryRow = worksheet.addRow({
+        idx: '',
+        invoiceNo: isAr ? 'الإجمالي الكلي' : 'GRAND TOTAL',
+        salesOrder: '',
+        customerReference: '',
+        movementType: '',
+        supplier: '',
+        fileName: `${isAr ? 'عدد الفواتير:' : 'Total Invoices:'} ${filteredInvoices.length}`,
+        lineItemsCount: { formula: `SUBTOTAL(9,H2:H${lastDataRow})`, result: totalItemsCount },
+        totalQuantityBar: { formula: `SUBTOTAL(9,I2:I${lastDataRow})`, result: totalBars },
+        totalQuantityLm: { formula: `SUBTOTAL(9,J2:J${lastDataRow})`, result: totalLm },
+        totalAmount: { formula: `SUBTOTAL(9,K2:K${lastDataRow})`, result: totalAmount },
+        invoiceDate: '',
+        recordedAt: ''
+      })
+
+      summaryRow.height = 24
+      const summaryBorderStyle = {
+        top: { style: 'thin', color: { argb: 'FF595959' } },
+        bottom: { style: 'double', color: { argb: 'FF595959' } },
+        left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+        right: { style: 'thin', color: { argb: 'FFD9D9D9' } }
+      }
+
+      summaryRow.eachCell((cell, colNumber) => {
+        cell.border = summaryBorderStyle
+        cell.font = { name: 'Calibri', size: 10, bold: true }
+
+        if (colNumber === 2) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' }
+        } else if (colNumber === 7) {
+          cell.alignment = { horizontal: 'left', vertical: 'middle' }
+        } else if (colNumber === 8 || colNumber === 9) {
+          cell.alignment = { horizontal: 'right', vertical: 'middle' }
+          cell.numFmt = '#,##0'
+        } else if (colNumber === 10 || colNumber === 11) {
+          cell.alignment = { horizontal: 'right', vertical: 'middle' }
+          cell.numFmt = '#,##0.00'
+        } else {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' }
+        }
       })
 
       const buffer = await workbook.xlsx.writeBuffer()
