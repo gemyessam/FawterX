@@ -124,10 +124,10 @@ router.get("/users", requireAdmin, async (req, res) => {
  */
 router.post("/users/:uid", requireAdmin, async (req, res) => {
   try {
-    const { warehouseEnabled, warehouseRole } = req.body;
+    const { warehouseEnabled, warehouseRole, allowedProjects, canDelete, canEdit, canUpload } = req.body;
     const result = await updateWarehouseUserAccess(
       req.params.uid,
-      { warehouseEnabled, warehouseRole },
+      { warehouseEnabled, warehouseRole, allowedProjects, canDelete, canEdit, canUpload },
       req.user.email
     );
     return res.json({ success: true, access: result });

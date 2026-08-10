@@ -16,7 +16,7 @@ export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
-    logo: 'فاوتر إكس v2.25.1',
+    logo: 'فاوتر إكس v2.26.2',
     logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
@@ -47,7 +47,7 @@ const TRANSLATIONS = {
     statsTitle: 'إحصائيات الأداء'
   },
   en: {
-    logo: 'FawterX v2.25.1',
+    logo: 'FawterX v2.26.2',
     logoSub: 'ERP Alternative for ETA Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
@@ -219,7 +219,7 @@ function Layout({ children }) {
               <span>{t.logoSub}</span>
             </div>
             <span className="premium-badge">{t.badge}</span>
-            <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v2.25.1 (Warehouse Batch & Delete Fix)</span>
+            <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v2.26.2 (Warehouse Permissions & Dynamic Formula)</span>
           </div>
         </Link>
 

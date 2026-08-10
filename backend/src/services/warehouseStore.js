@@ -105,6 +105,11 @@ async function listWarehouseUsers() {
       (data.warehouseRole && data.warehouseRole !== "disabled")
     );
 
+    const allowedProjects = Array.isArray(data.allowedProjects) ? data.allowedProjects : (Array.isArray(access.allowedProjects) ? access.allowedProjects : ["*"]);
+    const canDelete = typeof data.canDelete === "boolean" ? data.canDelete : (typeof access.canDelete === "boolean" ? access.canDelete : (isAdmin || data.warehouseRole !== "warehouse_viewer"));
+    const canEdit = typeof data.canEdit === "boolean" ? data.canEdit : (typeof access.canEdit === "boolean" ? access.canEdit : (isAdmin || data.warehouseRole !== "warehouse_viewer"));
+    const canUpload = typeof data.canUpload === "boolean" ? data.canUpload : (typeof access.canUpload === "boolean" ? access.canUpload : (isAdmin || data.warehouseRole !== "warehouse_viewer"));
+
     return {
       uid: uid,
       email: email,
@@ -112,6 +117,10 @@ async function listWarehouseUsers() {
       role: access.role || data.role || "user",
       warehouseEnabled: isEnabled,
       warehouseRole: isAdmin ? "admin" : (data.warehouseRole || access.warehouseRole || (isEnabled ? "warehouse_operator" : "disabled")),
+      allowedProjects,
+      canDelete,
+      canEdit,
+      canUpload,
     };
   });
 }
@@ -119,7 +128,7 @@ async function listWarehouseUsers() {
 /**
  * Update user warehouse permission (Admin Action)
  */
-async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehouseRole }, actorEmail) {
+async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehouseRole, allowedProjects, canDelete, canEdit, canUpload }, actorEmail) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
 
@@ -146,12 +155,20 @@ async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehous
 
   const enabled = Boolean(warehouseEnabled);
   const role = enabled ? (warehouseRole || "warehouse_operator") : "disabled";
+  const formattedProjects = Array.isArray(allowedProjects) && allowedProjects.length > 0 ? allowedProjects : ["*"];
+  const boolDelete = typeof canDelete === "boolean" ? canDelete : true;
+  const boolEdit = typeof canEdit === "boolean" ? canEdit : true;
+  const boolUpload = typeof canUpload === "boolean" ? canUpload : true;
 
   const updatePayload = {
     email,
     displayName,
     warehouseEnabled: enabled,
     warehouseRole: role,
+    allowedProjects: formattedProjects,
+    canDelete: boolDelete,
+    canEdit: boolEdit,
+    canUpload: boolUpload,
     warehouseAccessUpdatedAt: new Date().toISOString(),
     warehouseAccessUpdatedBy: actorEmail || "admin",
     updatedAt: new Date().toISOString(),
@@ -159,7 +176,15 @@ async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehous
 
   await userRef.set(updatePayload, { merge: true });
 
-  return { uid: targetUid, warehouseEnabled: enabled, warehouseRole: role };
+  return {
+    uid: targetUid,
+    warehouseEnabled: enabled,
+    warehouseRole: role,
+    allowedProjects: formattedProjects,
+    canDelete: boolDelete,
+    canEdit: boolEdit,
+    canUpload: boolUpload
+  };
 }
 
 /**

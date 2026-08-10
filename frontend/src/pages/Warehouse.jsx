@@ -111,6 +111,56 @@ export default function Warehouse() {
     }
   }
 
+  // User Permissions Access State
+  const [usersList, setUsersList] = useState([])
+  const [loadingPermissionsList, setLoadingPermissionsList] = useState(false)
+  const [updatingUserUid, setUpdatingUserUid] = useState(null)
+
+  const loadWarehouseUsers = async () => {
+    if (!isAdmin) return
+    setLoadingPermissionsList(true)
+    try {
+      const data = await getWarehouseUsers()
+      if (data && data.success && Array.isArray(data.users)) {
+        setUsersList(data.users)
+      }
+    } catch (err) {
+      console.error('Error fetching warehouse users:', err)
+      toast.error(isAr ? 'فشل جلب قائمة المستخدمين والصلاحيات' : 'Failed to fetch users and permissions')
+    } finally {
+      setLoadingPermissionsList(false)
+    }
+  }
+
+  const handleSaveUserPermissions = async (userItem) => {
+    setUpdatingUserUid(userItem.uid)
+    try {
+      const payload = {
+        warehouseEnabled: userItem.warehouseEnabled,
+        warehouseRole: userItem.warehouseRole,
+        allowedProjects: userItem.allowedProjects || ['*'],
+        canDelete: userItem.canDelete ?? true,
+        canEdit: userItem.canEdit ?? true,
+        canUpload: userItem.canUpload ?? true,
+      }
+      const res = await updateWarehouseUserAccess(userItem.uid, payload)
+      if (res && res.success) {
+        toast.success(isAr ? `تم تحديث صلاحيات ${userItem.displayName || userItem.email} بنجاح` : `Updated access for ${userItem.displayName || userItem.email}`)
+        loadWarehouseUsers()
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل حفظ الصلاحيات' : 'Failed to save permissions'))
+    } finally {
+      setUpdatingUserUid(null)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'projects' && isAdmin) {
+      loadWarehouseUsers()
+    }
+  }, [activeTab, isAdmin])
+
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -3338,7 +3388,23 @@ export default function Warehouse() {
                     : 'Manage existing warehouse projects or delete complete project data (Admin only)'}
                 </p>
               </div>
-              <button className="btn btn-secondary" onClick={loadProjects} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <button
+                className="btn"
+                onClick={loadProjects}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#ffffff',
+                  borderRadius: '8px',
+                  padding: '0.45rem 0.85rem',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                }}
+              >
                 🔄 {isAr ? 'تحديث المشاريع' : 'Refresh Projects'}
               </button>
             </div>
@@ -3352,7 +3418,7 @@ export default function Warehouse() {
                     <th>{isAr ? 'الكود (Code)' : 'Code'}</th>
                     <th>{isAr ? 'الوصف' : 'Description'}</th>
                     <th style={{ textAlign: 'center' }}>{isAr ? 'الحالة والنشاط' : 'Status'}</th>
-                    <th style={{ textAlign: 'center', width: '160px' }}>{isAr ? 'التحكم والحذف' : 'Actions'}</th>
+                    <th style={{ textAlign: 'center', width: '180px' }}>{isAr ? 'التحكم والحذف' : 'Actions'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3384,12 +3450,12 @@ export default function Warehouse() {
                           </span>
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
+                          <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center', alignItems: 'center', flexWrap: 'nowrap' }}>
                             {!isSelected && (
                               <button
                                 className="btn btn-secondary"
                                 onClick={() => setSelectedProjectId(proj.id)}
-                                style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }}
+                                style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem', whiteSpace: 'nowrap', borderRadius: '6px' }}
                               >
                                 {isAr ? 'اختيار' : 'Select'}
                               </button>
@@ -3401,15 +3467,21 @@ export default function Warehouse() {
                                 disabled={isDeleting || projects.length <= 1}
                                 style={{
                                   padding: '0.35rem 0.65rem',
-                                  fontSize: '0.8rem',
-                                  background: projects.length <= 1 ? 'rgba(255,255,255,0.05)' : 'rgba(255, 71, 87, 0.2)',
+                                  fontSize: '0.78rem',
+                                  whiteSpace: 'nowrap',
+                                  borderRadius: '6px',
+                                  background: projects.length <= 1 ? 'rgba(255,255,255,0.04)' : 'rgba(255, 71, 87, 0.15)',
                                   color: projects.length <= 1 ? 'var(--text-muted)' : '#ff4757',
-                                  border: projects.length <= 1 ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255, 71, 87, 0.4)',
+                                  border: projects.length <= 1 ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255, 71, 87, 0.35)',
                                   cursor: projects.length <= 1 ? 'not-allowed' : 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem',
+                                  fontWeight: 600,
                                 }}
                                 title={projects.length <= 1 ? (isAr ? 'لا يمكن حذف المشروع الوحيد' : 'Cannot delete sole project') : (isAr ? 'حذف المشروع بالكامل' : 'Delete Project')}
                               >
-                                {isDeleting ? <span className="spinner"></span> : isAr ? '🗑️ حذف المشروع' : '🗑️ Delete'}
+                                {isDeleting ? <span className="spinner"></span> : isAr ? '🗑️ حذف' : '🗑️ Delete'}
                               </button>
                             )}
                           </div>
@@ -3421,6 +3493,263 @@ export default function Warehouse() {
               </table>
             </div>
           </div>
+
+          {/* ─── Warehouse Access & Permissions Management Section ─── */}
+          {isAdmin && (
+            <div className="card glassmorphism fade-in" style={{ padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    ⚙️ {isAr ? 'إدارة صلاحيات الوصول للمخزن' : 'Warehouse Access & Project Permissions'}
+                  </h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '0.2rem' }}>
+                    {isAr
+                      ? 'تحديد المستخدمين المصرح لهم بالدخول للمخزن، واختيار المشاريع المسموح بها وتخصيص صلاحيات التعديل والحذف والتوريد'
+                      : 'Control which users can access the warehouse, assign specific allowed projects, and grant fine-grained permissions'}
+                  </p>
+                </div>
+                <button
+                  className="btn"
+                  onClick={loadWarehouseUsers}
+                  disabled={loadingPermissionsList}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#ffffff',
+                    borderRadius: '8px',
+                    padding: '0.45rem 0.85rem',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                  }}
+                >
+                  {loadingPermissionsList ? <span className="spinner"></span> : '🔄 ' + (isAr ? 'تحديث الصلاحيات' : 'Refresh Permissions')}
+                </button>
+              </div>
+
+              {loadingPermissionsList ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <span className="spinner" style={{ width: '24px', height: '24px', marginBottom: '0.5rem' }}></span>
+                  <div>{isAr ? 'جاري تحميل قائمة المستخدمين والصلاحيات...' : 'Loading users & permissions...'}</div>
+                </div>
+              ) : usersList.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.2)', borderRadius: '10px' }}>
+                  {isAr ? 'لا يوجد مستخدمون مسجلون حالياً' : 'No users found.'}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {usersList.map((usr) => {
+                    const isUserAdmin = usr.role === 'admin' || usr.warehouseRole === 'admin'
+                    const isSaving = updatingUserUid === usr.uid
+
+                    return (
+                      <div
+                        key={usr.uid}
+                        style={{
+                          background: usr.warehouseEnabled ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.25)',
+                          border: usr.warehouseEnabled ? '1px solid rgba(0, 224, 161, 0.2)' : '1px solid rgba(255, 255, 255, 0.06)',
+                          borderRadius: '12px',
+                          padding: '1.25rem',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.75rem', marginBottom: '0.85rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'rgba(138, 180, 255, 0.15)', color: '#8ab4ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.1rem' }}>
+                              {(usr.displayName || usr.email || 'U').charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: '0.98rem', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                {usr.displayName || usr.email}
+                                {isUserAdmin && (
+                                  <span className="badge" style={{ background: 'rgba(255, 183, 77, 0.2)', color: '#ffb74d', border: '1px solid rgba(255, 183, 77, 0.4)', fontSize: '0.72rem' }}>
+                                    👑 {isAr ? 'مدير نظام' : 'System Admin'}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{usr.email}</div>
+                            </div>
+                          </div>
+
+                          {/* Main Toggle & Role */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, color: usr.warehouseEnabled ? '#00e0a1' : 'var(--text-muted)' }}>
+                              <input
+                                type="checkbox"
+                                checked={usr.warehouseEnabled}
+                                disabled={isUserAdmin}
+                                onChange={(e) => {
+                                  const val = e.target.checked
+                                  setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, warehouseEnabled: val } : u))
+                                }}
+                                style={{ width: '18px', height: '18px', accentColor: '#00e0a1', cursor: 'pointer' }}
+                              />
+                              {isAr ? 'السماح بالوصول للمخزن' : 'Enable Warehouse Access'}
+                            </label>
+
+                            <select
+                              value={usr.warehouseRole || 'warehouse_operator'}
+                              disabled={!usr.warehouseEnabled || isUserAdmin}
+                              onChange={(e) => {
+                                const val = e.target.value
+                                setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, warehouseRole: val } : u))
+                              }}
+                              style={{
+                                background: '#101223',
+                                color: '#ffffff',
+                                border: '1px solid var(--border)',
+                                borderRadius: '8px',
+                                padding: '0.4rem 0.75rem',
+                                fontSize: '0.82rem',
+                              }}
+                            >
+                              <option value="warehouse_operator">{isAr ? '👷 مشغّل مخزن (كامل العمليات)' : 'Warehouse Operator'}</option>
+                              <option value="warehouse_viewer">{isAr ? '👁️ مستعرض (قراءة فقط)' : 'Warehouse Viewer (Read Only)'}</option>
+                              <option value="admin">{isAr ? '👑 مدير مخزن (Admin)' : 'Warehouse Admin'}</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {usr.warehouseEnabled && (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', alignItems: 'start' }}>
+                            {/* Allowed Projects Selection */}
+                            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                              <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.6rem', color: '#8ab4ff', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                📂 {isAr ? 'المشاريع المسموح بالوصول إليها:' : 'Allowed Projects Scope:'}
+                              </div>
+
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: 'pointer', color: (usr.allowedProjects || []).includes('*') ? '#00e0a1' : '#fff' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={(usr.allowedProjects || ['*']).includes('*')}
+                                    onChange={(e) => {
+                                      const isChecked = e.target.checked
+                                      setUsersList(prev => prev.map(u => {
+                                        if (u.uid === usr.uid) {
+                                          return { ...u, allowedProjects: isChecked ? ['*'] : [] }
+                                        }
+                                        return u
+                                      }))
+                                    }}
+                                    style={{ accentColor: '#00e0a1' }}
+                                  />
+                                  <strong>🌐 {isAr ? 'جميع المشاريع (All Projects)' : 'All Projects'}</strong>
+                                </label>
+
+                                {!(usr.allowedProjects || ['*']).includes('*') && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginRight: '1rem', marginTop: '0.3rem' }}>
+                                    {projects.map((p) => {
+                                      const isProjChecked = (usr.allowedProjects || []).includes(p.id)
+                                      return (
+                                        <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', cursor: 'pointer' }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={isProjChecked}
+                                            onChange={(e) => {
+                                              const checked = e.target.checked
+                                              setUsersList(prev => prev.map(u => {
+                                                if (u.uid === usr.uid) {
+                                                  const current = (u.allowedProjects || []).filter(x => x !== '*')
+                                                  const updated = checked ? [...current, p.id] : current.filter(x => x !== p.id)
+                                                  return { ...u, allowedProjects: updated.length === 0 ? ['*'] : updated }
+                                                }
+                                                return u
+                                              }))
+                                            }}
+                                            style={{ accentColor: '#00e0a1' }}
+                                          />
+                                          {p.name} <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>({p.code || 'CODE'})</span>
+                                        </label>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Granular Action Rights */}
+                            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                              <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.6rem', color: '#ffb74d', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                🛡️ {isAr ? 'الأذونات والتحكم التفصيلي:' : 'Action Permissions & Restrictions:'}
+                              </div>
+
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={usr.canDelete ?? true}
+                                    disabled={isUserAdmin}
+                                    onChange={(e) => {
+                                      const val = e.target.checked
+                                      setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canDelete: val } : u))
+                                    }}
+                                    style={{ accentColor: '#ff4757' }}
+                                  />
+                                  <span>🗑️ {isAr ? 'صلاحية حذف الأصناف والفواتير (Can Delete)' : 'Can Delete Items & Invoices'}</span>
+                                </label>
+
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={usr.canEdit ?? true}
+                                    disabled={isUserAdmin}
+                                    onChange={(e) => {
+                                      const val = e.target.checked
+                                      setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canEdit: val } : u))
+                                    }}
+                                    style={{ accentColor: '#00e0a1' }}
+                                  />
+                                  <span>✏️ {isAr ? 'صلاحية تعديل الكميات والبيانات (Can Edit)' : 'Can Edit Quantities & Metadata'}</span>
+                                </label>
+
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={usr.canUpload ?? true}
+                                    disabled={isUserAdmin}
+                                    onChange={(e) => {
+                                      const val = e.target.checked
+                                      setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canUpload: val } : u))
+                                    }}
+                                    style={{ accentColor: '#8ab4ff' }}
+                                  />
+                                  <span>📥 {isAr ? 'صلاحية رفع واعتماد الفواتير (Can Upload/Process)' : 'Can Process Invoices'}</span>
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Save Action Bar */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                          <button
+                            className="btn btn-primary"
+                            onClick={() => handleSaveUserPermissions(usr)}
+                            disabled={isSaving}
+                            style={{
+                              padding: '0.4rem 1rem',
+                              fontSize: '0.82rem',
+                              fontWeight: 700,
+                              borderRadius: '8px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.4rem',
+                            }}
+                          >
+                            {isSaving ? <span className="spinner"></span> : '💾 ' + (isAr ? 'حفظ الصلاحيات' : 'Save Permissions')}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Create New Project Form */}
           <div className="card glassmorphism" style={{ padding: '1.5rem', maxWidth: '650px' }}>
