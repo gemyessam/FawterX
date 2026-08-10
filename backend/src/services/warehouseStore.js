@@ -525,7 +525,8 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
 
   // Check if an invoice with the same invoiceNumber and movementType already exists
   const targetInvNo = String(invoiceMeta.invoiceNumber || "").trim();
-  if (targetInvNo && targetInvNo !== "-" && targetInvNo !== "—" && !targetInvNo.startsWith("INV-")) {
+  const forceSave = Boolean(invoiceMeta.forceSave || invoiceMeta.allowDuplicate);
+  if (!forceSave && targetInvNo && targetInvNo !== "-" && targetInvNo !== "—" && !targetInvNo.startsWith("INV-")) {
     try {
       const existingSnap = await projectRef
         .collection("invoices")

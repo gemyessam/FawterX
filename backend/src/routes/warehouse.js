@@ -84,14 +84,24 @@ async function requireWarehouse(req, res, next) {
 /**
  * Middleware: Require Admin Only
  */
-function requireAdmin(req, res, next) {
-  if (!req.user || !req.user.isAdmin) {
-    return res.status(403).json({
-      success: false,
-      message: "Forbidden: Action restricted to Admin only.",
-    });
+async function requireAdmin(req, res, next) {
+  try {
+    if (req.user && req.user.isAdmin) {
+      req.warehouseRole = "admin";
+      return next();
+    }
+    const access = await getUserWarehouseAccess(req.user.uid, req.user.email);
+    if (!access.enabled || !access.isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: Action restricted to Admin only.",
+      });
+    }
+    req.warehouseRole = access.role;
+    next();
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
   }
-  next();
 }
 
 /**

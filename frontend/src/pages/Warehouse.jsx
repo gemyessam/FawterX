@@ -229,21 +229,7 @@ export default function Warehouse() {
     }
   }
 
-  const handleDeleteStockItem = async (item) => {
-    if (!selectedProjectId) return
-    const confirmMsg = isAr
-      ? `هل أنت تأكد من حذف الصنف (${item.itemCode}) نهائياً من أرصدة المخزن؟`
-      : `Are you sure you want to delete item (${item.itemCode}) from stock?`
-    if (!window.confirm(confirmMsg)) return
 
-    try {
-      await deleteStockItem(selectedProjectId, item.itemKey)
-      toast.success(isAr ? 'تم حذف الصنف من المخزن' : 'Item deleted from stock')
-      loadStock(selectedProjectId)
-    } catch (err) {
-      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل حذف الصنف' : 'Failed to delete item'))
-    }
-  }
 
   useEffect(() => {
     loadProjects()
@@ -338,11 +324,38 @@ export default function Warehouse() {
     if (!selectedProjectId || !point) return
     if (!window.confirm(isAr ? `هل تريد حذف نقطة الحفظ (${point.name})؟` : `Delete restore point (${point.name})?`)) return
     try {
+      setRestorePoints((prev) => prev.filter((p) => p.id !== point.id))
       await deleteProjectRestorePoint(selectedProjectId, point.id)
       toast.success(isAr ? 'تم حذف نقطة الحفظ' : 'Restore point deleted')
       loadRestorePoints(selectedProjectId)
     } catch (err) {
       toast.error(isAr ? 'فشل حذف نقطة الحفظ' : 'Failed to delete restore point')
+      loadRestorePoints(selectedProjectId)
+    }
+  }
+
+  async function handleDeleteStockItem(item) {
+    if (!selectedProjectId || !item) return
+    const confirmMsg = isAr
+      ? `هل أنت تأكد من حذف الصنف (${item.itemCode}) نهائياً من أرصدة المخزن؟`
+      : `Are you sure you want to delete item (${item.itemCode}) from stock?`
+    if (!window.confirm(confirmMsg)) return
+
+    try {
+      console.log('[DeleteStockItem] Deleting itemKey:', item.itemKey, 'project:', selectedProjectId)
+      setStock((prev) => prev.filter((i) => i.itemKey !== item.itemKey))
+
+      const res = await deleteStockItem(selectedProjectId, item.itemKey)
+      if (res && res.success !== false) {
+        toast.success(isAr ? 'تم حذف الصنف من المخزن بنجاح' : 'Item deleted from stock successfully')
+      } else {
+        toast.error(res?.message || (isAr ? 'فشل حذف الصنف' : 'Failed to delete item'))
+      }
+      loadStock(selectedProjectId)
+    } catch (err) {
+      console.error('[DeleteStockItem Error]:', err)
+      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل حذف الصنف' : 'Failed to delete item'))
+      loadStock(selectedProjectId)
     }
   }
 
@@ -669,7 +682,7 @@ export default function Warehouse() {
     )
   }
 
-  async function handleSaveSingleBatchInvoice(batchId) {
+  async function handleSaveSingleBatchInvoice(batchId, options = {}) {
     if (!selectedProjectId) {
       toast.error(isAr ? 'يرجى اختيار المشروع أولاً' : 'Please select a project first')
       return
@@ -691,7 +704,12 @@ export default function Warehouse() {
     )
 
     try {
-      const payloadMeta = { ...batch.parsedMeta, movementType: batch.movementType }
+      const payloadMeta = {
+        ...batch.parsedMeta,
+        movementType: batch.movementType,
+        forceSave: options.forceSave !== undefined ? options.forceSave : true,
+      }
+      console.log('[BatchSingleSave] Processing invoice:', payloadMeta.invoiceNumber, payloadMeta)
       const res = await processWarehouseInvoice(selectedProjectId, payloadMeta, validLines)
       if (res.success) {
         if (res.isDuplicate) {
@@ -713,6 +731,7 @@ export default function Warehouse() {
       }
     } catch (err) {
       const errMsg = err.response?.data?.message || err.message || (isAr ? 'فشل الحفظ' : 'Failed to save')
+      console.error('[BatchSingleSave Error]:', err)
       toast.error(errMsg)
       setBatchInvoices((prev) =>
         prev.map((item) => (item.id === batchId ? { ...item, status: 'error', errorMessage: errMsg } : item))
@@ -720,7 +739,7 @@ export default function Warehouse() {
     }
   }
 
-  async function handleSaveBatchInvoices() {
+  async function handleSaveBatchInvoices(options = {}) {
     if (!selectedProjectId) {
       toast.error(isAr ? 'يرجى اختيار المشروع أولاً' : 'Please select a project first')
       return
@@ -733,13 +752,17 @@ export default function Warehouse() {
     }
 
     setSavingBatch(true)
-    let successCount = 0
+    let newSavedCount = 0
     let duplicateCount = 0
     let errorCount = 0
+
+    const forceSave = options.forceSave !== undefined ? options.forceSave : true
 
     for (let i = 0; i < batchInvoices.length; i++) {
       const inv = batchInvoices[i]
       if (inv.status === 'saved') continue
+
+      console.log(`[BatchSave ${i + 1}/${batchInvoices.length}] Processing invoice:`, inv.parsedMeta?.invoiceNumber)
 
       setBatchInvoices((prev) =>
         prev.map((item) => (item.id === inv.id ? { ...item, status: 'saving', errorMessage: null } : item))
@@ -761,11 +784,15 @@ export default function Warehouse() {
       }
 
       try {
-        const payloadMeta = { ...inv.parsedMeta, movementType: inv.movementType }
+        const payloadMeta = { ...inv.parsedMeta, movementType: inv.movementType, forceSave }
         const res = await processWarehouseInvoice(selectedProjectId, payloadMeta, validLines)
+        console.log(`[BatchSave Response ${inv.parsedMeta?.invoiceNumber}]:`, res)
         if (res.success) {
-          if (res.isDuplicate) duplicateCount++
-          successCount++
+          if (res.isDuplicate) {
+            duplicateCount++
+          } else {
+            newSavedCount++
+          }
           setBatchInvoices((prev) =>
             prev.map((item) =>
               item.id === inv.id ? { ...item, status: 'saved', isDuplicate: res.isDuplicate } : item
@@ -783,6 +810,7 @@ export default function Warehouse() {
         }
       } catch (err) {
         errorCount++
+        console.error(`[BatchSave Error ${inv.parsedMeta?.invoiceNumber}]:`, err)
         const errMsg = err.response?.data?.message || err.message || (isAr ? 'فشل الحفظ' : 'Failed to save')
         setBatchInvoices((prev) =>
           prev.map((item) => (item.id === inv.id ? { ...item, status: 'error', errorMessage: errMsg } : item))
@@ -793,11 +821,12 @@ export default function Warehouse() {
     setSavingBatch(false)
     await loadStock(selectedProjectId)
 
+    const totalProcessed = newSavedCount + duplicateCount
     if (errorCount === 0) {
       toast.success(
         isAr
-          ? `✅ تم حفظ وإتمام جميع الفواتير (${successCount}) بنجاح!`
-          : `✅ Successfully processed all ${successCount} invoice(s)!`
+          ? `✅ تم إدخال وحفظ جميع الفواتير (${totalProcessed}) بنجاح في رصيد المخزن!`
+          : `✅ Successfully inserted all ${totalProcessed} invoice(s) into warehouse stock!`
       )
       setTimeout(() => {
         setBatchInvoices([])
@@ -806,8 +835,8 @@ export default function Warehouse() {
     } else {
       toast.warning(
         isAr
-          ? `تم إتمام ${successCount} فاتورة (منها ${duplicateCount} مكررة)، وحدثت أخطاء في ${errorCount} فاتورة. يرجى المراجعة.`
-          : `Processed ${successCount} invoice(s) (${duplicateCount} duplicate), ${errorCount} failed. Please review errors.`
+          ? `تم إدخال ${totalProcessed} فاتورة في المخزن، وحدثت أخطاء في ${errorCount} فاتورة. يرجى المراجعة.`
+          : `Processed ${totalProcessed} invoice(s), ${errorCount} failed. Please review errors.`
       )
     }
   }
