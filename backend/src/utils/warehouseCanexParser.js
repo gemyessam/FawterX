@@ -121,9 +121,13 @@ function sanitizeMetaValue(val) {
     return "";
   }
 
-  // Discard known delivery/payment term values
   // Discard known delivery/payment term values or dates
   if (/\b\d{1,2}\s+[A-Za-z]{3,}\s+\d{4}\b/i.test(cleaned)) return "";
+
+  // Discard addresses, locations, cities, building numbers, and company register lines
+  if (/\b(smart village|village|giza|cairo|alexandria|building|bldg|street|st\.|plot|governorate|district|floor|flr|avenue|ave|road|rd|po box|p\.o\.|postal|zip|industrial|cr no|tax id|buyer register|seller register|register details)\b/i.test(cleaned)) return "";
+  if (/^\d+[a-z]?[\s,]/i.test(cleaned) && (cleaned.includes(",") || /giza|cairo|village|street|building/i.test(cleaned))) return "";
+  if (/^\d{3}-\d{3}-\d{3}$/.test(cleaned) || /^\+?\d[\d\s-]{8,}$/.test(cleaned)) return "";
 
   for (const pattern of DISCARD_VALUES) {
     if (pattern.test(cleaned)) return "";
