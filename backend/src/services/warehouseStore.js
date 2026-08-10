@@ -300,9 +300,10 @@ async function getProjectStock(projectId) {
 
   await fetchStockFromProj(projectId);
 
-  // Enrich stock items with invoice numbers from movements history if missing or incomplete
+  // Self-Healing & Enrichment from Movements History
   const itemInvoicesMap = new Map(); // key/code -> Set of invoice numbers
   const itemLatestInvoiceMap = new Map(); // key/code -> { invoiceNumber, createdAt }
+  const mvtAggMap = new Map(); // key -> aggregated stock object calculated directly from movements
 
   const fetchMovementsForEnrichment = async (pid) => {
     try {
@@ -310,24 +311,68 @@ async function getProjectStock(projectId) {
       mvtsSnap.docs.forEach((mDoc) => {
         const mData = mDoc.data() || {};
         const invNo = mData.invoiceNumber;
-        if (!invNo || invNo === "-" || invNo === "—") return;
+        const itemCode = mData.itemCode || "";
+        const supplier = mData.supplier || "CANEX";
+        const finish = mData.finish || mData.color || "MF";
+        const lengthMm = Number(mData.lengthMm || 6000);
+        const itemKey = mData.itemKey || generateItemKey(supplier, itemCode, finish, lengthMm);
 
-        const keys = [mData.itemKey, mData.itemCode].filter(Boolean);
-        keys.forEach((k) => {
-          if (!itemInvoicesMap.has(k)) itemInvoicesMap.set(k, new Set());
-          itemInvoicesMap.get(k).add(invNo);
+        if (!itemKey) return;
 
-          const existingLatest = itemLatestInvoiceMap.get(k);
-          const mvtDate = mData.createdAt || 0;
-          if (!existingLatest || new Date(mvtDate) > new Date(existingLatest.createdAt || 0)) {
-            itemLatestInvoiceMap.set(k, {
-              invoiceNumber: invNo,
-              salesOrder: mData.salesOrder || "",
-              customerReference: mData.customerReference || "",
-              createdAt: mvtDate,
-            });
-          }
-        });
+        // Build invoice tracking maps
+        if (invNo && invNo !== "-" && invNo !== "—") {
+          const keys = [itemKey, itemCode].filter(Boolean);
+          keys.forEach((k) => {
+            if (!itemInvoicesMap.has(k)) itemInvoicesMap.set(k, new Set());
+            itemInvoicesMap.get(k).add(invNo);
+
+            const existingLatest = itemLatestInvoiceMap.get(k);
+            const mvtDate = mData.createdAt || 0;
+            if (!existingLatest || new Date(mvtDate) > new Date(existingLatest.createdAt || 0)) {
+              itemLatestInvoiceMap.set(k, {
+                invoiceNumber: invNo,
+                salesOrder: mData.salesOrder || "",
+                customerReference: mData.customerReference || "",
+                createdAt: mvtDate,
+              });
+            }
+          });
+        }
+
+        // Build stock aggregation map from movements for self-healing
+        if (!mvtAggMap.has(itemKey)) {
+          mvtAggMap.set(itemKey, {
+            itemKey,
+            itemCode: itemCode || "CODE",
+            customerCode: mData.customerCode || "",
+            description: mData.description || "",
+            finish,
+            color: mData.color || finish,
+            lengthMm,
+            unit: mData.unit || "BAR",
+            quantityBar: 0,
+            quantityLm: 0,
+            quantityKg: 0,
+            lastUnitCost: Number(mData.unitPrice || 0),
+            lastBarCost: Number(mData.barPrice || 0),
+            priceUnit: mData.priceUnit || "M",
+            currency: mData.currency || "EGP",
+            lastInvoiceNumber: invNo || "—",
+            lastSalesOrder: mData.salesOrder || "",
+            lastCustomerRef: mData.customerReference || "",
+            updatedAt: mData.createdAt || new Date().toISOString(),
+          });
+        }
+
+        const aggItem = mvtAggMap.get(itemKey);
+        const isOutbound = mData.movementType === "outbound";
+        const qBar = Number(mData.quantityBar || 0);
+        const qLm = Number(mData.quantityLm || 0);
+        const qKg = Number(mData.quantityKg || 0);
+
+        aggItem.quantityBar += isOutbound ? -qBar : qBar;
+        aggItem.quantityLm += isOutbound ? -qLm : qLm;
+        aggItem.quantityKg += isOutbound ? -qKg : qKg;
       });
     } catch (e) {
       console.warn(`Error fetching movements for enrichment in ${pid}:`, e.message);
@@ -335,6 +380,38 @@ async function getProjectStock(projectId) {
   };
 
   await fetchMovementsForEnrichment(projectId);
+
+  // Self-Healing Step: Reconcile missing stock items from movements into stockMap & write back to Firestore
+  let repairBatch = db.batch();
+  let repairOps = 0;
+
+  for (const [key, aggItem] of mvtAggMap.entries()) {
+    if (!stockMap.has(key)) {
+      const invoicesSet = itemInvoicesMap.get(key) || new Set();
+      const newStockDoc = {
+        ...aggItem,
+        invoiceNumbers: Array.from(invoicesSet),
+      };
+      stockMap.set(key, newStockDoc);
+
+      try {
+        const stockDocRef = db.collection("warehouseProjects").doc(projectId).collection("stock").doc(key);
+        repairBatch.set(stockDocRef, newStockDoc, { merge: true });
+        repairOps++;
+      } catch (e) {
+        console.warn(`Error queuing stock repair for ${key}:`, e.message);
+      }
+    }
+  }
+
+  if (repairOps > 0) {
+    try {
+      await repairBatch.commit();
+      console.log(`[Self-Healing] Repaired and synced ${repairOps} stock items for project ${projectId}`);
+    } catch (e) {
+      console.warn(`[Self-Healing] Failed to commit stock repair batch for ${projectId}:`, e.message);
+    }
+  }
 
   // Attach enriched invoice numbers and metadata to stock items
   const finalStock = Array.from(stockMap.values()).map((item) => {
