@@ -300,6 +300,15 @@ async function getProjectStock(projectId) {
 
   await fetchStockFromProj(projectId);
 
+  // Fetch deleted stock keys to prevent self-healing from resurrecting deleted stock items
+  const deletedKeys = new Set();
+  try {
+    const deletedSnap = await db.collection("warehouseProjects").doc(projectId).collection("deletedStock").get();
+    deletedSnap.docs.forEach((dDoc) => deletedKeys.add(dDoc.id));
+  } catch (dErr) {
+    console.warn(`Error fetching deletedStock for ${projectId}:`, dErr.message);
+  }
+
   // Self-Healing & Enrichment from Movements History
   const itemInvoicesMap = new Map(); // key/code -> Set of invoice numbers
   const itemLatestInvoiceMap = new Map(); // key/code -> { invoiceNumber, createdAt }
@@ -386,6 +395,10 @@ async function getProjectStock(projectId) {
   let repairOps = 0;
 
   for (const [key, aggItem] of mvtAggMap.entries()) {
+    if (deletedKeys.has(key)) {
+      // Do not self-heal items that have been explicitly deleted by admin
+      continue;
+    }
     if (!stockMap.has(key)) {
       const invoicesSet = itemInvoicesMap.get(key) || new Set();
       const newStockDoc = {
@@ -414,7 +427,9 @@ async function getProjectStock(projectId) {
   }
 
   // Attach enriched invoice numbers and metadata to stock items
-  const finalStock = Array.from(stockMap.values()).map((item) => {
+  const finalStock = Array.from(stockMap.values())
+    .filter((item) => !deletedKeys.has(item.itemKey))
+    .map((item) => {
     const keyInvoices = itemInvoicesMap.get(item.itemKey) || itemInvoicesMap.get(item.itemCode) || new Set();
     const existingInvoices = new Set(Array.isArray(item.invoiceNumbers) ? item.invoiceNumbers : []);
     if (item.lastInvoiceNumber && item.lastInvoiceNumber !== "—" && item.lastInvoiceNumber !== "-") {
@@ -730,6 +745,13 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
     );
     opCount++;
 
+    // If item was previously marked deleted, remove from deletedStock to resurrect with new invoice payload
+    try {
+      const deletedRef = projectRef.collection("deletedStock").doc(itemKey);
+      batch.delete(deletedRef);
+      opCount++;
+    } catch (dErr) {}
+
     // Update Stock Snapshot
     const stockRef = projectRef.collection("stock").doc(itemKey);
     batch.set(
@@ -979,8 +1001,57 @@ async function deleteStockItem(projectId, itemKey, userUid, userEmail, userName)
   const doc = await stockRef.get();
   const existing = doc.exists ? doc.data() : {};
 
+  // 1. Delete stock document from Firestore
   await stockRef.delete();
 
+  // 2. Persist deleted status in deletedStock collection to block self-healing restoration
+  try {
+    await db
+      .collection("warehouseProjects")
+      .doc(projectId)
+      .collection("deletedStock")
+      .doc(itemKey)
+      .set({
+        itemKey,
+        deletedAt: new Date().toISOString(),
+        deletedBy: userUid || "admin",
+        itemCode: existing.itemCode || "",
+      });
+  } catch (delErr) {
+    console.warn(`[DeleteStockItem] Error writing deletedStock entry for ${itemKey}:`, delErr.message);
+  }
+
+  // 3. Delete all associated movements for this itemKey so they don't corrupt balance aggregates
+  try {
+    const mvtsSnap = await db
+      .collection("warehouseProjects")
+      .doc(projectId)
+      .collection("movements")
+      .where("itemKey", "==", itemKey)
+      .get();
+
+    if (!mvtsSnap.empty) {
+      let batch = db.batch();
+      let ops = 0;
+      for (const mDoc of mvtsSnap.docs) {
+        batch.delete(mDoc.ref);
+        ops++;
+        if (ops >= 400) {
+          await batch.commit();
+          batch = db.batch();
+          ops = 0;
+        }
+      }
+      if (ops > 0) {
+        await batch.commit();
+      }
+      console.log(`[DeleteStockItem] Deleted ${mvtsSnap.size} movement records for itemKey ${itemKey}`);
+    }
+  } catch (mvtErr) {
+    console.warn(`[DeleteStockItem] Error cleaning up movements for ${itemKey}:`, mvtErr.message);
+  }
+
+  // 4. Log Audit Trail
   await logWarehouseAudit(projectId, {
     action: "DELETE_STOCK_ITEM",
     userUid,
