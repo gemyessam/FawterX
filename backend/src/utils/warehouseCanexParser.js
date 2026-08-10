@@ -122,6 +122,9 @@ function sanitizeMetaValue(val) {
   }
 
   // Discard known delivery/payment term values
+  // Discard known delivery/payment term values or dates
+  if (/\b\d{1,2}\s+[A-Za-z]{3,}\s+\d{4}\b/i.test(cleaned)) return "";
+
   for (const pattern of DISCARD_VALUES) {
     if (pattern.test(cleaned)) return "";
   }
@@ -130,6 +133,55 @@ function sanitizeMetaValue(val) {
     if (lower === label || lower === `:${label}` || lower === `${label}:`) return "";
   }
   return cleaned;
+}
+
+function extractHeaderBlockPairs(text) {
+  const pairs = {};
+  const lines = text.split(/\r?\n/).map(clean).filter(Boolean);
+
+  const keyPatterns = [
+    { key: "invoiceNumber", regex: /Commercial\s*Invoice\s*#/i },
+    { key: "invoiceDate", regex: /Commercial\s*Invoice\s*Date/i },
+    { key: "salesOrder", regex: /Sales\s*Order\s*#/i },
+    { key: "customerReference", regex: /Customer\s*Reference/i },
+    { key: "inquiryDate", regex: /Inquiry\s*Date/i }
+  ];
+
+  // A key line is purely a label if it does NOT contain a value after the label/colon
+  const isPureLabelLine = (line, regex) => {
+    const match = line.match(regex);
+    if (!match) return false;
+    const after = line.slice(match.index + match[0].length).replace(/^[:\s,#]+/, "").trim();
+    return after.length === 0;
+  };
+
+  // Find line indices of each key that is a PURE label (no inline value)
+  const foundKeys = [];
+  keyPatterns.forEach(kp => {
+    const idx = lines.findIndex(l => isPureLabelLine(l, kp.regex));
+    if (idx !== -1) foundKeys.push({ key: kp.key, lineIdx: idx });
+  });
+
+  // Sort found keys by line index
+  foundKeys.sort((a, b) => a.lineIdx - b.lineIdx);
+
+  // If we found at least 3 pure label keys consecutively stacked
+  if (foundKeys.length >= 3) {
+    const lastKeyLineIdx = foundKeys[foundKeys.length - 1].lineIdx;
+    const valueStartIdx = lastKeyLineIdx + 1;
+
+    foundKeys.forEach((fk, offset) => {
+      const valLine = lines[valueStartIdx + offset];
+      if (valLine) {
+        const sanitized = sanitizeMetaValue(valLine);
+        if (sanitized && !keyPatterns.some(kp => kp.regex.test(valLine))) {
+          pairs[fk.key] = sanitized;
+        }
+      }
+    });
+  }
+
+  return pairs;
 }
 
 function extractLabelValue(text, labelVariants) {
@@ -157,25 +209,6 @@ function extractLabelValue(text, labelVariants) {
           // Direct next line is a value!
           const cand = sanitizeMetaValue(afterLines[0]);
           if (cand) return cand;
-        } else {
-          // Grouped labels block followed by values block (typical in 2-column pdf-parse output)
-          let labelCount = 0;
-          let i = 0;
-          while (i < afterLines.length && (isKnownLabel(afterLines[i]) || afterLines[i].endsWith(":") || /^[:#]/.test(afterLines[i]))) {
-            labelCount++;
-            i++;
-          }
-          // Corresponding value in column-block layout
-          const targetValueIdx = i + labelCount;
-          if (targetValueIdx < afterLines.length) {
-            const cand = sanitizeMetaValue(afterLines[targetValueIdx]);
-            if (cand) return cand;
-          }
-          // Fallback: check first available non-label line
-          for (let j = i; j < Math.min(afterLines.length, i + 5); j++) {
-            const cand = sanitizeMetaValue(afterLines[j]);
-            if (cand) return cand;
-          }
         }
       }
     }
@@ -185,108 +218,105 @@ function extractLabelValue(text, labelVariants) {
 
 function extractMetadata(text, fileName) {
   // ============================================================
-  // STRATEGY: "Extract all patterns first, then assign by format"
-  // pdf-parse does NOT preserve column layout. So instead of
-  // looking for "Customer Reference:" and grabbing the next token,
-  // we scan the ENTIRE text for recognizable value patterns and
-  // classify each by what it looks like.
+  // CANEX METADATA PARSER (v2.24.6)
+  // - Invoice Number: CNX3-XXXXXX
+  // - Sales Order #: Canex Supplier SO (high-range SO-008XXX / SO-007XXX)
+  // - Customer Reference: Customer/Schueco Ref (Q-codes, SP-codes,
+  //   lower SO-codes like SO-00180, stock/sample names, Arabic phrases)
   // ============================================================
 
-  // --- Step 1: Extract ALL recognizable tokens from the text ---
+  // 0. Check for 2-column stacked header block pairs
+  const blockPairs = extractHeaderBlockPairs(text);
 
-  // Invoice numbers: CNX3-XXXXXX (always invoice number)
+  // 1. Extract Invoice Number (CNX3-XXXXXX pattern or label match)
   const allInvoiceNumbers = text.match(/\bCNX3-\d{3,}\b/gi) || [];
-
-  // Sales Order codes: SO-XXXXXX (always sales order)
-  const allSOCodes = text.match(/\bSO-\d{3,}\b/gi) || [];
-
-  // Q-codes: Q-XXXXX (always customer reference)
-  const allQCodes = text.match(/\bQ-?\d{3,}[A-Za-z0-9_-]*\b/gi) || [];
-
-  // PO-codes: PO-XXXXX (customer reference / purchase order)
-  const allPOCodes = text.match(/\bPO-?\d{3,}[A-Za-z0-9_-]*\b/gi) || [];
-
-  // Dates: "11 Jul 2026" or "26 Feb 2026"
-  const allDates = text.match(/\b\d{1,2}\s+[A-Za-z]{3,}\s+\d{4}\b/g) || [];
-
-  // Currency codes
-  const currencyMatch = text.match(/\b(EGP|USD|EUR|GBP|SAR|AED|KWD)\b/i);
-
-  // Amounts: Invoice Amount, Tax Amount, Total Amount
-  const invoiceAmount = parseNum(text.match(/Invoice Amount\s+([\d,]+\.?\d*)/i)?.[1]);
-  const taxAmount = parseNum(text.match(/Tax Amount\s+([\d,]+\.?\d*)/i)?.[1]);
-  const totalAmount = parseNum(text.match(/Total Amount\s+([\d,]+\.?\d*)/i)?.[1]);
-
-  // --- Step 2: Assign each token to its correct field ---
-
-  // Invoice Number: First CNX3 code found, or label-based fallback
-  let invoiceNumber = clean(allInvoiceNumbers[0] || "");
+  let invoiceNumber = clean(blockPairs.invoiceNumber || allInvoiceNumbers[0] || "");
   if (!invoiceNumber) {
     invoiceNumber = extractLabelValue(text, ["Commercial Invoice #:", "Commercial Invoice #", "Invoice #:", "Invoice #", "Invoice No:"]);
     if (invoiceNumber && (isKnownLabel(invoiceNumber) || invoiceNumber.length > 40)) invoiceNumber = "";
   }
 
-  // Sales Order: First SO-code found (NOT from label proximity, but from the pattern itself)
-  let salesOrder = clean(allSOCodes[0] || "");
-  if (!salesOrder) {
-    // Fallback: try label-based extraction, but ONLY accept if result looks like a real SO value
-    const soCandidate = extractLabelValue(text, [
-      "Sales Order #:", "Sales Order #", "Sales Order:", "Sales Order",
-      "S.O. #:", "S.O. #", "SO #:", "SO #"
-    ]);
-    if (soCandidate && !allInvoiceNumbers.includes(soCandidate) && !allQCodes.includes(soCandidate)) {
-      salesOrder = soCandidate;
+  // 2. Extract Sales Order (Canex Supplier SO)
+  const allSOCodes = (text.match(/\bSO-\d{3,}\b/gi) || []).map(clean);
+  let directSO = blockPairs.salesOrder || extractLabelValue(text, [
+    "Sales Order #:", "Sales Order #", "Sales Order:", "Sales Order",
+    "S.O. #:", "S.O. #", "SO #:", "SO #"
+  ]);
+
+  let salesOrder = "";
+  if (directSO && /^SO-/i.test(directSO)) {
+    salesOrder = directSO;
+  } else {
+    // Canex SO numbers are in the higher range (SO-008XXX, SO-007XXX, or >= 1000)
+    salesOrder = allSOCodes.find(code => {
+      const num = parseInt(code.replace(/\D/g, ""), 10);
+      return num >= 1000;
+    }) || allSOCodes[0] || "";
+  }
+
+  // 3. Extract Customer Reference
+  // Priority A: Stacked block pair or direct label value
+  let customerReference = blockPairs.customerReference || extractLabelValue(text, [
+    "Customer Reference:", "Customer Reference", "Customer Ref:", "Customer Ref",
+    "Cust. Ref:", "Cust Ref", "Client Ref:", "Client Ref",
+    "Purchase Order:", "Purchase Order #:", "PO #:", "PO #"
+  ]);
+
+  // Priority B: Standalone Q-codes (e.g. Q-00235)
+  if (!customerReference || isKnownLabel(customerReference)) {
+    const qMatch = text.match(/\bQ-?\d{3,}[A-Za-z0-9_-]*\b/i)?.[0];
+    if (qMatch) {
+      customerReference = clean(qMatch);
+    } else {
+      // Priority C: Standalone SP-codes (e.g. SP-00120)
+      const spMatch = text.match(/\bSP-?\d{3,}[A-Za-z0-9_-]*\b/i)?.[0];
+      if (spMatch) {
+        customerReference = clean(spMatch);
+      } else {
+        // Priority D: Customer SO code (lower range like SO-00180) that is different from salesOrder
+        const customerSOCode = allSOCodes.find(code => code.toUpperCase() !== salesOrder.toUpperCase());
+        if (customerSOCode) {
+          customerReference = customerSOCode;
+        } else {
+          // Priority E: Known Stock / Sample names
+          const stockMatch = text.match(/\b(Schueco Egypt Samples|Schueco Egypt Stock|Warehouse|Samples|Stock)\b/i)?.[0];
+          if (stockMatch) {
+            customerReference = clean(stockMatch);
+          }
+        }
+      }
     }
   }
 
-  // Customer Reference: First Q-code or PO-code found
-  let customerReference = clean(allQCodes[0] || allPOCodes[0] || "");
-  if (!customerReference) {
-    // Fallback: try label-based extraction, but REJECT if the result is an invoice number or SO code
-    const refCandidate = extractLabelValue(text, [
-      "Customer Reference:", "Customer Reference", "Customer Ref:", "Customer Ref",
-      "Cust. Ref:", "Cust Ref", "Client Ref:", "Client Ref",
-      "Purchase Order:", "Purchase Order #:", "PO #:", "PO #"
-    ]);
-    if (refCandidate
-      && !allInvoiceNumbers.includes(refCandidate)
-      && !allSOCodes.includes(refCandidate)
-      && !/^CNX\d?-/i.test(refCandidate)
-    ) {
-      customerReference = refCandidate;
+  // 4. Strict Sanitization & Exclusion Filters for Customer Reference
+  if (customerReference) {
+    customerReference = sanitizeMetaValue(customerReference);
+    // Block any invoice number leak (e.g. CNX3-..., CNX$-...)
+    if (/^CNX[\$30-9]?-/i.test(customerReference) || customerReference.toLowerCase() === invoiceNumber.toLowerCase()) {
+      customerReference = "";
     }
-  }
-
-  // Dates: Use contextual label matching first, then fall back to position
-  const invoiceDateStr = text.match(/Commercial Invoice Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || allDates[0] || "";
-  const deliveryDateStr = text.match(/Delivery Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || (allDates.length >= 3 ? allDates[2] : allDates[allDates.length - 1]) || "";
-
-  // Currency
-  const currency = clean(currencyMatch?.[1]?.toUpperCase()) || "EGP";
-
-  // --- Step 3: Cross-validation (prevent same value in multiple fields) ---
-  if (customerReference && customerReference === salesOrder) {
-    // If the same code ended up in both, clear customerReference (SO takes priority for SO-codes)
-    if (/^SO-/i.test(customerReference)) {
+    // Block duplicate of salesOrder
+    if (salesOrder && customerReference.toUpperCase() === salesOrder.toUpperCase()) {
       customerReference = "";
     }
   }
-  if (customerReference && customerReference === invoiceNumber) {
-    customerReference = "";
-  }
-  if (salesOrder && salesOrder === invoiceNumber) {
-    salesOrder = "";
-  }
 
-  // --- Step 4: Debug log (helps diagnose future issues) ---
-  console.log("[CanexParser] Raw tokens extracted:", {
-    invoiceNumbers: allInvoiceNumbers,
-    soCodes: allSOCodes,
-    qCodes: allQCodes,
-    poCodes: allPOCodes,
-    dates: allDates,
-    currency,
-    assigned: { invoiceNumber, salesOrder, customerReference }
+  // 5. Dates & Financial Totals
+  const allDates = text.match(/\b\d{1,2}\s+[A-Za-z]{3,}\s+\d{4}\b/g) || [];
+  const invoiceDateStr = blockPairs.invoiceDate || text.match(/Commercial Invoice Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || allDates[0] || "";
+  const deliveryDateStr = text.match(/Delivery Date:[\s\S]*?(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)?.[1] || (allDates.length >= 3 ? allDates[2] : allDates[allDates.length - 1]) || "";
+
+  const currencyMatch = text.match(/\b(EGP|USD|EUR|GBP|SAR|AED|KWD)\b/i);
+  const currency = clean(currencyMatch?.[1]?.toUpperCase()) || "EGP";
+
+  const invoiceAmount = parseNum(text.match(/Invoice Amount\s+([\d,]+\.?\d*)/i)?.[1]);
+  const taxAmount = parseNum(text.match(/Tax Amount\s+([\d,]+\.?\d*)/i)?.[1]);
+  const totalAmount = parseNum(text.match(/Total Amount\s+([\d,]+\.?\d*)/i)?.[1]);
+
+  console.log("[CanexParser] Final Extracted:", {
+    invoiceNumber,
+    salesOrder,
+    customerReference
   });
 
   return {
