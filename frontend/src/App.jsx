@@ -6,6 +6,7 @@ import Drafts from './pages/Drafts'
 import DraftDetails from './pages/DraftDetails'
 import AdminPanel from './pages/AdminPanel'
 import Warehouse from './pages/Warehouse'
+import ReleaseNotesModal from './components/ReleaseNotesModal'
 import { testETAAuth, getCompanySettings, saveCompanySettings, syncUserData } from './services/api'
 import { getWarehouseAccess } from './services/warehouseApi'
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase'
@@ -16,7 +17,7 @@ export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
-    logo: 'فاوتر إكس v2.26.3',
+    logo: 'فاوتر إكس v2.26.4',
     logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
@@ -47,30 +48,30 @@ const TRANSLATIONS = {
     statsTitle: 'إحصائيات الأداء'
   },
   en: {
-    logo: 'FawterX v2.26.3',
+    logo: 'FawterX v2.26.4',
     logoSub: 'ERP Alternative for ETA Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
     navCreate: 'Excel Auto',
     navDrafts: 'Saved Recovery',
-    navSettings: 'Company Setup',
+    navSettings: 'Tax Settings',
     navWarehouse: 'Warehouse',
     navAdmin: 'Admin Panel',
-    logout: 'Log Out',
-    footer: 'FawterX ETA Invoicing Automation Platform · Egyptian Tax Authority Servers',
-    loginTitle: 'Sign In to FawterX',
-    loginSubtitle: 'Lightweight automation platform for Egyptian ETA Invoices via Google only',
+    logout: 'Logout',
+    footer: 'FawterX Automation Platform · Egyptian Tax Authority Server Compliant',
+    loginTitle: 'Sign in to FawterX Portal',
+    loginSubtitle: 'Official lightweight platform for ETA compliance with 1-click Google auth',
     googleBtn: 'Continue with Google',
-    settingsTitle: 'ETA Gateway Configuration',
-    settingsSubtitle: 'Configure and encrypt your connection keys locally per secure user session',
-    clientId: 'ETA Client ID',
+    settingsTitle: 'Egyptian Tax Authority (ETA) Credentials',
+    settingsSubtitle: 'Store your encrypted portal secrets locally for direct secure API submissions',
+    clientId: 'Client ID',
     secret1: 'Client Secret 1',
     secret2: 'Client Secret 2',
     actCode: 'Taxpayer Activity Code',
     testConn: 'Test Direct Connection',
-    saveConn: 'Save & Update Credentials',
-    etaConnected: '✅ ETA Connected Successfully',
-    etaFailed: '❌ Invalid Credentials',
+    saveConn: 'Save & Encrypt Keys',
+    etaConnected: '✅ ETA Authorization Connected',
+    etaFailed: '❌ Authorization Failed: Check Keys',
     welcomeHeader: 'Smart Digital ETA Invoicing Automation ⚡',
     welcomeSub: 'The lightest and fastest way to transform raw Excel sheets into officially compliant, digitally signed invoices directly sent to the Egyptian Tax Authority portal with 100% compliance score.',
     welcomeCTA: 'Start Processing Invoices',
@@ -88,6 +89,7 @@ function Layout({ children }) {
   };
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [showUserDropdown, setShowUserDropdown] = useState(false)
+  const [showReleaseNotesModal, setShowReleaseNotesModal] = useState(false)
 
   // Settings State
   const [settings, setSettings] = useState({
@@ -103,7 +105,6 @@ function Layout({ children }) {
   // Load settings immediately from local storage for fast UI, then sync with Firestore
   useEffect(() => {
     if (!user) {
-      // Clear settings state when logged out
       setSettings({
         clientId: '',
         clientSecret1: '',
@@ -113,13 +114,11 @@ function Layout({ children }) {
       return
     }
 
-    // 1. Instantly load from local storage to prevent error banner flash
     const saved = localStorage.getItem('companySettings')
     if (saved) {
       try { setSettings(JSON.parse(saved)) } catch (e) {}
     }
 
-    // 2. Fetch from Firestore (primary source of truth) in the background
     getCompanySettings()
       .then((res) => {
         let finalSettings = null;
@@ -131,7 +130,6 @@ function Layout({ children }) {
           try { finalSettings = JSON.parse(saved); } catch (e) {}
         }
 
-        // 3. Silent background verification check
         if (finalSettings && finalSettings.clientId && finalSettings.clientSecret1 && finalSettings.clientSecret2) {
           testETAAuth(finalSettings)
             .then(() => {
@@ -149,7 +147,6 @@ function Layout({ children }) {
       .catch(() => {})
   }, [user])
 
-  // Click outside to close the user profile dropdown cleanly
   useEffect(() => {
     if (!showUserDropdown) return;
     const closeDropdown = (e) => {
@@ -163,7 +160,7 @@ function Layout({ children }) {
 
   const updateSetting = (key, value) => {
     setSettings(prev => ({ ...prev, [key]: value, isVerified: false }))
-    setConnStatus(null) // Reset connection test status immediately on editing input
+    setConnStatus(null)
   }
 
   async function handleTestConnection() {
@@ -204,7 +201,6 @@ function Layout({ children }) {
     }
   }
 
-
   return (
     <div className={`app-wrapper ${lang === 'en' ? 'ltr-layout' : ''}`}>
       {/* ─── Modern Premium Header ─── */}
@@ -219,7 +215,38 @@ function Layout({ children }) {
               <span>{t.logoSub}</span>
             </div>
             <span className="premium-badge">{t.badge}</span>
-            <span className="premium-badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', marginLeft: '0.5rem', padding: '0.2rem 0.5rem' }}>v2.26.3 (Super Admin Lockout Fix)</span>
+
+            {/* Permanent Green Slogan Badge & Changelog Trigger */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setShowReleaseNotesModal(true)
+              }}
+              style={{
+                background: 'rgba(0, 224, 161, 0.08)',
+                color: '#00e0a1',
+                border: '1px solid rgba(0, 224, 161, 0.25)',
+                borderRadius: '20px',
+                padding: '0.2rem 0.65rem',
+                fontSize: '0.76rem',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                marginLeft: '0.5rem',
+                boxShadow: '0 0 12px rgba(0, 224, 161, 0.12)'
+              }}
+              title={lang === 'ar' ? 'اضغط لعرض سجل التحديثات والإصدارات' : 'Click to view version release history'}
+            >
+              <span>⚡ {lang === 'ar' ? 'منصة أتمتة الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Platform'}</span>
+              <span style={{ background: 'rgba(0, 224, 161, 0.2)', color: '#00e0a1', padding: '0.1rem 0.4rem', borderRadius: '10px', fontSize: '0.7rem', fontWeight: 800 }}>
+                v2.26.4 ✨
+              </span>
+            </button>
           </div>
         </Link>
 
@@ -403,6 +430,13 @@ function Layout({ children }) {
           </div>
         </div>
       )}
+
+      {/* Release Notes Modal */}
+      <ReleaseNotesModal
+        isOpen={showReleaseNotesModal}
+        onClose={() => setShowReleaseNotesModal(false)}
+        lang={lang}
+      />
     </div>
   )
 }
@@ -435,7 +469,8 @@ export default function App() {
     }
   }, [user, isAdmin])
 
-  useEffect(() => {    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser)
         syncUserData(currentUser)
@@ -482,7 +517,6 @@ export default function App() {
       <BrowserRouter>
         <Toaster position="bottom-center" toastOptions={{ style: { background: '#101223', color: '#e8eaf6', border: '1px solid #202442', borderRadius: '12px' } }} />
         
-        {/* Render Auth Screen if not logged in */}
         {!user ? (
           <div className={`auth-full-screen ${lang === 'en' ? 'ltr-layout' : ''}`}>
             <div className="auth-brand-side">
