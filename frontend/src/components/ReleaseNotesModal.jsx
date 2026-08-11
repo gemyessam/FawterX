@@ -7,10 +7,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.7',
+      version: 'v2.27.8',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إصلاح شامل لدليل الخطوات العام ولوحة الإدارة مع الدخول السريع' : 'Global Step Guide Modal Fix & Admin Panel Access Resilience',
+      highlights: [
+        {
+          icon: '💡',
+          text: isAr
+            ? 'جعل "دليل الخطوات" نافذة عائمة عامة تعمل من أي صفحة وفي كل الأوقات.'
+            : 'Converted Step Guide to a global modal available from all routes.'
+        },
+        {
+          icon: '👑',
+          text: isAr
+            ? 'تحديث صلاحيات السيرفر والدخول السريع لمنح حساب المدير الرئيسي الوصول الكامل للوحة الإدارة بدون أخطاء.'
+            : 'Updated server authorization & quick login bypass for full admin panel access.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.7',
+      date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'إصلاح شامل لاستعادة السجل الكامل للبنود ودعم موثوقية لوحة الإدارة' : 'Full Item Movement Restoration & Admin Panel Auth Resilience',
       highlights: [
         {

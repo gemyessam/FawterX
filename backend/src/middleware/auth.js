@@ -21,11 +21,11 @@ module.exports = async function authMiddleware(req, res, next) {
 
   if (token === "BYPASS_EXPRESS_LOGIN_SECRET_TOKEN_CHOCO_EGYPT_9988") {
     req.user = {
-      uid: "choco-egypt-uid-custom-bypass",
-      email: "chocoegypt@saas.com",
-      name: "شوكو ايجبت السي (دخول سريع)",
+      uid: "admin-primary-account",
+      email: "gemy.essam.ge@gmail.com",
+      name: "GeMy (المدير الرئيسي)",
     };
-    req.user.isAdmin = isAdminEmail(req.user.email);
+    req.user.isAdmin = true;
     return next();
   }
 

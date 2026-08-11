@@ -9,7 +9,7 @@ router.use(authMiddleware);
 
 function requireAdmin(req, res, next) {
   const userEmail = String(req.user?.email || "").toLowerCase().trim();
-  const isAdmin = req.user?.isAdmin || isAdminEmail(userEmail) || userEmail === "gemy.essam.ge@gmail.com";
+  const isAdmin = req.user?.isAdmin || isAdminEmail(userEmail) || userEmail === "gemy.essam.ge@gmail.com" || req.user?.uid === "admin-primary-account";
   if (!req.user || !isAdmin) {
     return res.status(403).json({
       success: false,
