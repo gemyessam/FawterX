@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { verifyAuthSecurityCode } from '../services/api'
 
 export default function Security2FAModal({ isOpen, userEmail, challengeDemoCode, onVerifySuccess, lang = 'ar' }) {
   const isAr = lang === 'ar'
@@ -19,18 +20,7 @@ export default function Security2FAModal({ isOpen, userEmail, challengeDemoCode,
     setErrorMsg('')
 
     try {
-      // Import API helper or use fetch
-      const token = localStorage.getItem('fawterx_id_token') || ''
-      const res = await fetch('/api/auth-security/verify-2fa', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ code: code.trim() })
-      })
-
-      const data = await res.json()
+      const data = await verifyAuthSecurityCode(code.trim())
       if (data.success) {
         onVerifySuccess()
       } else {

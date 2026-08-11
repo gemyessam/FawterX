@@ -2,10 +2,45 @@ const admin = require("./firebaseAdmin");
 const { isAdminEmail } = require("./adminAccess");
 
 function getDb() {
-  if (admin && admin.apps && admin.apps.length > 0) {
-    return admin.firestore();
+  try {
+    if (admin && admin.apps && admin.apps.length > 0) {
+      return admin.firestore();
+    }
+  } catch (err) {
+    console.warn("Firestore is not available for admin store:", err.message);
   }
   return null;
+}
+
+function createFallbackAdminUser() {
+  return {
+    uid: "admin-primary-account",
+    email: "gemy.essam.ge@gmail.com",
+    displayName: "FawterX Admin",
+    photoURL: "",
+    submissionsCount: 0,
+    dailyCount: 0,
+    lastReset: null,
+    lastSubmission: null,
+    isSubscribed: true,
+    role: "admin",
+    status: "active",
+    quotaDaily: 9999,
+    quotaMonthly: 99999,
+    expiresAt: null,
+    note: "Primary platform administrator account",
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function ensurePrimaryAdmin(usersMap) {
+  const adminEmail = "gemy.essam.ge@gmail.com";
+  const hasAdminInMap = Object.values(usersMap).some(
+    (u) => String(u.email || "").toLowerCase() === adminEmail
+  );
+  if (!hasAdminInMap) {
+    usersMap["admin-primary-account"] = createFallbackAdminUser();
+  }
 }
 
 function sanitizeUserSnapshot(doc) {
@@ -35,17 +70,19 @@ function sanitizeUserSnapshot(doc) {
 
 async function listUsers() {
   const db = getDb();
-  if (!db) return [];
-
   const usersMap = {};
 
-  try {
-    const snapshot = await db.collection("users").get();
-    snapshot.docs.forEach((doc) => {
-      usersMap[doc.id] = sanitizeUserSnapshot(doc);
-    });
-  } catch (err) {
-    console.warn("Error fetching Firestore users:", err.message);
+  if (db) {
+    try {
+      const snapshot = await db.collection("users").get();
+      snapshot.docs.forEach((doc) => {
+        usersMap[doc.id] = sanitizeUserSnapshot(doc);
+      });
+    } catch (err) {
+      console.warn("Error fetching Firestore users:", err.message);
+    }
+  } else {
+    console.warn("Firestore is not available; admin users will be loaded from Auth/fallback only.");
   }
 
   try {
@@ -54,9 +91,10 @@ async function listUsers() {
       const page = await admin.auth().listUsers(1000, pageToken);
       page.users.forEach((u) => {
         const existing = usersMap[u.uid];
+        const email = u.email || "";
+        const displayName = u.displayName || email || u.uid;
+
         if (!existing) {
-          const email = u.email || "";
-          const displayName = u.displayName || email || u.uid;
           usersMap[u.uid] = {
             uid: u.uid,
             email,
@@ -75,22 +113,24 @@ async function listUsers() {
             note: "",
             updatedAt: u.metadata?.creationTime || new Date().toISOString(),
           };
-          // Auto-persist to Firestore
-          db.collection("users").doc(u.uid).set(
-            {
-              email,
-              displayName,
-              photoURL: u.photoURL || "",
-              role: isAdminEmail(email) ? "admin" : "user",
-              status: "active",
-              createdAt: u.metadata?.creationTime || new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            },
-            { merge: true }
-          ).catch((e) => console.warn(`Auto-sync user ${u.uid} error:`, e.message));
+
+          if (db) {
+            db.collection("users").doc(u.uid).set(
+              {
+                email,
+                displayName,
+                photoURL: u.photoURL || "",
+                role: isAdminEmail(email) ? "admin" : "user",
+                status: "active",
+                createdAt: u.metadata?.creationTime || new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+              { merge: true }
+            ).catch((e) => console.warn(`Auto-sync user ${u.uid} error:`, e.message));
+          }
         } else {
-          existing.email = existing.email || u.email || "";
-          existing.displayName = existing.displayName || u.displayName || u.email || "";
+          existing.email = existing.email || email;
+          existing.displayName = existing.displayName || displayName;
           existing.photoURL = existing.photoURL || u.photoURL || "";
         }
       });
@@ -100,28 +140,7 @@ async function listUsers() {
     console.warn("Could not fetch auth users in bulk:", err.message);
   }
 
-  const adminEmail = "gemy.essam.ge@gmail.com";
-  const hasAdminInMap = Object.values(usersMap).some(u => String(u.email || "").toLowerCase() === adminEmail);
-  if (!hasAdminInMap) {
-    usersMap["admin-primary-account"] = {
-      uid: "admin-primary-account",
-      email: adminEmail,
-      displayName: "GeMy (المدير الرئيسي)",
-      photoURL: "",
-      submissionsCount: 0,
-      dailyCount: 0,
-      lastReset: null,
-      lastSubmission: null,
-      isSubscribed: true,
-      role: "admin",
-      status: "active",
-      quotaDaily: 9999,
-      quotaMonthly: 99999,
-      expiresAt: null,
-      note: "الحساب الإداري الرئيسي للمنصة",
-      updatedAt: new Date().toISOString(),
-    };
-  }
+  ensurePrimaryAdmin(usersMap);
 
   return Object.values(usersMap).sort((a, b) =>
     String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))
@@ -130,14 +149,21 @@ async function listUsers() {
 
 async function getUserById(uid) {
   const db = getDb();
-  if (!db) return null;
-  const doc = await db.collection("users").doc(uid).get();
-  let user = doc.exists ? sanitizeUserSnapshot(doc) : null;
+  let user = null;
+
+  if (db) {
+    try {
+      const doc = await db.collection("users").doc(uid).get();
+      user = doc.exists ? sanitizeUserSnapshot(doc) : null;
+    } catch (err) {
+      console.warn(`Could not fetch Firestore user ${uid}:`, err.message);
+    }
+  }
 
   try {
     const authUser = await admin.auth().getUser(uid);
+    const email = authUser.email || "";
     if (!user) {
-      const email = authUser.email || "";
       user = {
         uid: authUser.uid,
         email,
@@ -157,11 +183,16 @@ async function getUserById(uid) {
         updatedAt: authUser.metadata?.creationTime || new Date().toISOString(),
       };
     } else {
-      user.email = user.email || authUser.email || "";
-      user.displayName = user.displayName || authUser.displayName || "";
+      user.email = user.email || email;
+      user.displayName = user.displayName || authUser.displayName || email || "";
+      user.photoURL = user.photoURL || authUser.photoURL || "";
     }
   } catch (err) {
     console.warn(`Could not fetch auth user ${uid}:`, err.message);
+  }
+
+  if (!user && uid === "admin-primary-account") {
+    user = createFallbackAdminUser();
   }
 
   return user;
@@ -231,14 +262,12 @@ async function updateUserAccess(uid, payload = {}, actorEmail = "") {
 }
 
 async function getAdminStats() {
-  const db = getDb();
-  if (!db) return { totalUsers: 0, subscribedUsers: 0, suspendedUsers: 0, adminUsers: 0 };
   const users = await listUsers();
   return {
     totalUsers: users.length,
-    subscribedUsers: users.filter(u => u.isSubscribed).length,
-    suspendedUsers: users.filter(u => u.status === "suspended" || u.status === "blocked").length,
-    adminUsers: users.filter(u => isAdminEmail(u.email) || u.role === "admin").length,
+    subscribedUsers: users.filter((u) => u.isSubscribed).length,
+    suspendedUsers: users.filter((u) => u.status === "suspended" || u.status === "blocked").length,
+    adminUsers: users.filter((u) => isAdminEmail(u.email) || u.role === "admin").length,
   };
 }
 

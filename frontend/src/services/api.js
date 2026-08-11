@@ -1,26 +1,38 @@
 import axios from 'axios'
 import { auth } from '../firebase'
 
+export const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? '/api'
+  : 'https://fawterx-api.onrender.com/api'
+
 const api = axios.create({
-  baseURL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? '/api'
-    : 'https://fawterx-api.onrender.com/api'
+  baseURL: API_BASE_URL
 })
+
+async function getCurrentAuthToken() {
+  const useQuickLogin = localStorage.getItem('useQuickLogin') === 'true'
+  if (useQuickLogin) {
+    return 'BYPASS_EXPRESS_LOGIN_SECRET_TOKEN_CHOCO_EGYPT_9988'
+  }
+
+  const user = auth.currentUser
+  if (user) {
+    const token = await user.getIdToken()
+    localStorage.setItem('fawterx_id_token', token)
+    return token
+  }
+
+  return localStorage.getItem('fawterx_id_token') || ''
+}
 
 
 
 // Add request interceptor to dynamically inject Firebase ID Token and ETA company credentials
 api.interceptors.request.use(async (config) => {
   try {
-    const useQuickLogin = localStorage.getItem('useQuickLogin') === 'true'
-    if (useQuickLogin) {
-      config.headers['Authorization'] = 'Bearer BYPASS_EXPRESS_LOGIN_SECRET_TOKEN_CHOCO_EGYPT_9988'
-    } else {
-      const user = auth.currentUser
-      if (user) {
-        const token = await user.getIdToken()
-        config.headers['Authorization'] = `Bearer ${token}`
-      }
+    const token = await getCurrentAuthToken()
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`
     }
 
     // For test authentication requests, strictly bypass localStorage injection to test EXACT typed keys
@@ -236,4 +248,14 @@ export async function syncUserData(user) {
     console.warn('User sync failed silently:', error.message)
     return null
   }
+}
+
+export async function getAuthSecurityStatus() {
+  const { data } = await api.get('/auth-security/device-status')
+  return data
+}
+
+export async function verifyAuthSecurityCode(code) {
+  const { data } = await api.post('/auth-security/verify-2fa', { code })
+  return data
 }
