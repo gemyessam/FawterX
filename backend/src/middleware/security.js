@@ -47,7 +47,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Device-Fingerprint", "X-Requested-With"]
+  allowedHeaders: ["Content-Type", "Authorization", "X-Device-Fingerprint", "X-Requested-With", "X-ETA-Client-Id", "X-ETA-Client-Secret"]
 };
 
 module.exports = {

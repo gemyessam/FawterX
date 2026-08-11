@@ -31,8 +31,6 @@ async function getCurrentAuthToken() {
   return ''
 }
 
-
-
 // Add request interceptor to dynamically inject Firebase ID Token and ETA company credentials
 api.interceptors.request.use(async (config) => {
   try {
@@ -46,8 +44,19 @@ api.interceptors.request.use(async (config) => {
       return config
     }
 
+    // Skip ETA credential injection for non-ETA routes (admin, warehouse, auth-security, excel)
+    // These routes don't need ETA secrets and extra custom headers can trigger CORS preflight issues
+    if (config.url && (
+      config.url.includes('/admin') ||
+      config.url.includes('/warehouse') ||
+      config.url.includes('/auth-security') ||
+      config.url.includes('/excel')
+    )) {
+      return config
+    }
+
     const settings = JSON.parse(localStorage.getItem('companySettings') || '{}')
-    
+
     // Case-insensitive header value extraction to prevent Axios case normalization from bypassing checks
     const getHeader = (name) => {
       if (!config.headers) return null
