@@ -7,10 +7,25 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.0',
+      version: 'v2.27.1',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'تحديث المصطلحات: استبدال جميع مسميات (أتمتة) بمسمى (رفع الفواتير)' : 'Terminology Refinement: Replacing Automation with Upload Wording',
+      highlights: [
+        {
+          icon: '✨',
+          text: isAr
+            ? 'تعديل جميع العناوين والنصوص بالواجهة واستبدال كلمة "أتمتة" بكلمة "رفع الفواتير" لتقديم تجربة استخدام أوضح ومباشرة.'
+            : 'Replaced all "Automation" terminology in UI titles and text with direct "Invoice Upload" wording for clearer user experience.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.1',
+      date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'التحصين الأمني الشامل، تفعيل 2FA للأجهزة الجديدة، وعزل خصوصية المسودات' : 'Enterprise Security Hardening, New Device 2FA & Privacy Isolation',
       highlights: [
         {
@@ -116,7 +131,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
         {
           icon: '🛡️',
           text: isAr
-            ? 'سلوجان الأتمتة الموحد: اعتماد شارة السلوجان الموحدة للمنصة لضمان السرية والاحترافية.'
+            ? 'سلوجان الرفع الموحد: اعتماد شارة السلوجان الموحدة للمنصة لضمان السرية والاحترافية.'
             : 'Unified Automation Slogan: Implemented permanent slogan badge for brand consistency and privacy.'
         }
       ]
@@ -332,7 +347,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
           <div style={{ fontSize: '1.6rem' }}>⚡</div>
           <div>
             <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#00e0a1' }}>
-              {isAr ? 'منصة أتمتة الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Automation Platform'}
+              {isAr ? 'منصة رفع الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Automation Platform'}
             </div>
             <div style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.7)', marginTop: '0.15rem' }}>
               {isAr
@@ -447,7 +462,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
           }}
         >
           <span style={{ fontSize: '0.78rem', color: 'var(--text-muted, #8ab4ff)' }}>
-            {isAr ? 'نظام فاوتر إكس المعتمد للأتمتة الضريبية' : 'FawterX Certified Automation System'}
+            {isAr ? 'نظام فاوتر إكس المعتمد للرفع الضريبية' : 'FawterX Certified Automation System'}
           </span>
           <button
             onClick={onClose}

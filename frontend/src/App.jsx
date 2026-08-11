@@ -18,19 +18,19 @@ export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
-    logo: 'فاوتر إكس v2.27.0',
+    logo: 'فاوتر إكس v2.27.1',
     logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
-    navCreate: 'أتمتة إكسيل',
+    navCreate: 'رفع ملفات إكسيل',
     navDrafts: 'المسودات الموقوفة',
     navSettings: 'إعدادات الشركة',
     navWarehouse: 'المخزون',
     navAdmin: 'لوحة الأدمن',
     logout: 'خروج',
-    footer: 'منصة فاوتر إكس لأتمتة الفواتير الإلكترونية المعتمدة · خوادم مصلحة الضرائب المصرية',
+    footer: 'منصة فاوتر إكس لرفع الفواتير الإلكترونية المعتمدة · خوادم مصلحة الضرائب المصرية',
     loginTitle: 'تسجيل الدخول إلى FawterX',
-    loginSubtitle: 'المنصة الخفيفة المعتمدة لأتمتة فواتير الضرائب المصرية بجوجل فقط',
+    loginSubtitle: 'المنصة الخفيفة المعتمدة لرفع فواتير الضرائب المصرية بجوجل فقط',
     googleBtn: 'المتابعة باستخدام Google',
     settingsTitle: 'إعدادات ربط شركة الضرائب (ETA)',
     settingsSubtitle: 'أدخل مفاتيح الربط لتشفيرها وحفظها محلياً لكل مستخدم للاتصال المباشر',
@@ -42,14 +42,14 @@ const TRANSLATIONS = {
     saveConn: 'حفظ المفاتيح والتحديث',
     etaConnected: '✅ متصل بـ ETA بنجاح',
     etaFailed: '❌ بيانات الربط غير صالحة',
-    welcomeHeader: 'التحول الرقمي لأتمتة الفواتير الإلكترونية بذكاء ⚡',
+    welcomeHeader: 'التحول الرقمي لرفع الفواتير الإلكترونية بذكاء ⚡',
     welcomeSub: 'أبسط وأسرع منصة ذكية لتحويل ملفات Excel المعقدة إلى فواتير معتمدة رسمياً ومرفوعة تلقائياً لمنظومة مصلحة الضرائب المصرية بمعدل امتثال 100%.',
     welcomeCTA: 'ابدأ تحويل الفواتير الآن',
     recentSubmissions: 'آخر التقديمات',
     statsTitle: 'إحصائيات الأداء'
   },
   en: {
-    logo: 'FawterX v2.27.0',
+    logo: 'FawterX v2.27.1',
     logoSub: 'ERP Alternative for ETA Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
@@ -243,9 +243,9 @@ function Layout({ children }) {
               }}
               title={lang === 'ar' ? 'اضغط لعرض سجل التحديثات والإصدارات' : 'Click to view version release history'}
             >
-              <span>⚡ {lang === 'ar' ? 'منصة أتمتة الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Platform'}</span>
+              <span>⚡ {lang === 'ar' ? 'منصة رفع الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Platform'}</span>
               <span style={{ background: 'rgba(0, 224, 161, 0.2)', color: '#00e0a1', padding: '0.1rem 0.4rem', borderRadius: '10px', fontSize: '0.7rem', fontWeight: 800 }}>
-                v2.27.0 ✨
+                v2.27.1 ✨
               </span>
             </button>
           </div>

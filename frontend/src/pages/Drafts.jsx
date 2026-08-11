@@ -47,7 +47,7 @@ export default function Drafts() {
           </p>
         </div>
         <Link to="/" className="btn btn-accent">
-          ➕ {lang === 'ar' ? 'أتمتة ملف إكسيل جديد' : 'New Excel Sheet'}
+          ➕ {lang === 'ar' ? 'رفع ملف إكسيل جديد' : 'New Excel Sheet'}
         </Link>
       </div>
 

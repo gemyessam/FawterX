@@ -1099,7 +1099,7 @@ export default function Home() {
           {/* Hero Welcome Banner */}
           <div className="dashboard-hero-card">
             <div className="hero-card-content">
-              <h1>{lang === 'ar' ? 'أتمتة الفواتير الإلكترونية بذكاء لـ FawterX ⚡' : 'Smart ETA Invoicing Automation for FawterX ⚡'}</h1>
+              <h1>{lang === 'ar' ? 'رفع الفواتير الإلكترونية بذكاء لـ FawterX ⚡' : 'Smart ETA Invoicing Automation for FawterX ⚡'}</h1>
               <p>{t.welcomeSub}</p>
               
               {/* Usage Warning Banner */}
@@ -1302,7 +1302,7 @@ export default function Home() {
           {/* STEP 1: UPLOAD FILE */}
           {step === 1 && parseMode !== 'batch' && (
             <div className="card fade-in">
-              <h2 className="card-title">📂 {lang === 'ar' ? 'أتمتة الفواتير والمعاملات الذكية' : 'Intelligent Document Automation'}</h2>
+              <h2 className="card-title">📂 {lang === 'ar' ? 'رفع الفواتير والمعاملات الذكية' : 'Intelligent Document Automation'}</h2>
               <p className="card-sub">{lang === 'ar' ? 'ارفع فواتيرك ومعاملاتك مباشرة ليتم تحليلها والتحقق من امتثالها فورياً مصلحة الضرائب' : 'Upload transaction spreadsheets or raw PDF invoices to parse and validate them instantly'}</p>
 
               {/* Premium Top Template Download Banner */}
