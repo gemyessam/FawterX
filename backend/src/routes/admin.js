@@ -7,6 +7,21 @@ const router = express.Router();
 router.use(express.json());
 router.use(authMiddleware);
 
+// Diagnostic endpoint: returns what the backend sees from the browser token
+// Placed BEFORE requireAdmin so it works even if admin check fails
+router.get("/whoami", (req, res) => {
+  const userEmail = String(req.user?.email || "").toLowerCase().trim();
+  return res.json({
+    success: true,
+    user: {
+      uid: req.user?.uid || "",
+      email: userEmail,
+      isAdmin: Boolean(req.user?.isAdmin || isAdminEmail(userEmail) || req.user?.uid === "admin-primary-account"),
+    },
+    expectedAdminEmail: "gemy.essam.ge@gmail.com",
+  });
+});
+
 function requireAdmin(req, res, next) {
   const userEmail = String(req.user?.email || "").toLowerCase().trim();
   const isAdmin = req.user?.isAdmin || isAdminEmail(userEmail) || userEmail === "gemy.essam.ge@gmail.com" || req.user?.uid === "admin-primary-account";

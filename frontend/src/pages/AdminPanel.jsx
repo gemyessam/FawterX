@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useContext } from 'react'
 import toast from 'react-hot-toast'
 import { AppContext } from '../App'
-import { getAdminStats, getAdminUsers, updateAdminUser } from '../services/api'
+import { getAdminStats, getAdminUsers, updateAdminUser, getAdminWhoami } from '../services/api'
 
 const ADMIN_EMAIL = 'gemy.essam.ge@gmail.com'
 
@@ -118,6 +118,7 @@ export default function AdminPanel() {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(null)
   const [form, setForm] = useState(emptyForm)
+  const [loadError, setLoadError] = useState(null)
 
   const isAdmin = (user?.email || '').toLowerCase() === ADMIN_EMAIL
   const selectedQuotaDaily = selected?.quotaDaily ?? 10
@@ -134,14 +135,23 @@ export default function AdminPanel() {
 
   async function loadData() {
     setLoading(true)
+    setLoadError(null)
     try {
       const statsRes = await getAdminStats().catch(err => {
         console.warn('Stats fetch error:', err)
-        return null
+        return {
+          success: false,
+          _httpStatus: err.response?.status,
+          _message: err.response?.data?.message || err.message,
+        }
       })
       const usersRes = await getAdminUsers().catch(err => {
         console.warn('Users fetch error:', err)
-        return null
+        return {
+          success: false,
+          _httpStatus: err.response?.status,
+          _message: err.response?.data?.message || err.message,
+        }
       })
 
       if (statsRes?.success && statsRes.stats) {
@@ -151,6 +161,23 @@ export default function AdminPanel() {
         setUsers(usersRes.users)
       }
       if (!statsRes?.success && !usersRes?.success) {
+        // Both failed — call whoami to diagnose the actual auth state
+        let whoami = null
+        try {
+          whoami = await getAdminWhoami()
+        } catch (err) {
+          whoami = {
+            success: false,
+            _httpStatus: err.response?.status,
+            _message: err.response?.data?.message || err.message,
+          }
+        }
+
+        setLoadError({
+          stats: { status: statsRes._httpStatus, message: statsRes._message },
+          users: { status: usersRes._httpStatus, message: usersRes._message },
+          whoami,
+        })
         toast.error(t.loadingError)
       }
     } catch (error) {
@@ -249,6 +276,35 @@ export default function AdminPanel() {
           </div>
         ))}
       </div>
+
+      {/* Diagnostic error card — shown only when data load fails */}
+      {loadError && (
+        <div className="card fade-in" style={{
+          background: 'rgba(255, 77, 79, 0.06)',
+          border: '1px solid rgba(255, 77, 79, 0.25)',
+          borderRadius: '12px',
+          padding: '1.25rem 1.5rem',
+          marginBottom: '1.5rem',
+        }}>
+          <h3 style={{ color: '#ff4d4f', margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 800 }}>
+            ⚠️ Admin Panel Load Diagnostic
+          </h3>
+          <div style={{ display: 'grid', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)', direction: 'ltr', textAlign: 'left' }}>
+            <div><strong>Stats API:</strong> {loadError.stats?.status ? `HTTP ${loadError.stats.status}` : 'No response'} — {loadError.stats?.message || 'unknown'}</div>
+            <div><strong>Users API:</strong> {loadError.users?.status ? `HTTP ${loadError.users.status}` : 'No response'} — {loadError.users?.message || 'unknown'}</div>
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
+              <strong>Whoami:</strong>{' '}
+              {loadError.whoami?.success
+                ? <>Email: <code style={{ color: '#00e0a1' }}>{loadError.whoami.user?.email}</code> | isAdmin: <code style={{ color: loadError.whoami.user?.isAdmin ? '#00e0a1' : '#ff4d4f' }}>{String(loadError.whoami.user?.isAdmin)}</code> | Expected: <code>{loadError.whoami.expectedAdminEmail}</code></>
+                : <span style={{ color: '#ff4d4f' }}>HTTP {loadError.whoami?._httpStatus || '?'} — {loadError.whoami?._message || 'Token is missing or invalid. Try logging out and back in.'}</span>
+              }
+            </div>
+          </div>
+          <button className="btn btn-ghost" onClick={() => { localStorage.removeItem('fawterx_id_token'); window.location.reload() }} style={{ marginTop: '0.75rem', fontSize: '0.8rem' }}>
+            🔄 Clear token & reload
+          </button>
+        </div>
+      )}
 
       <div className="admin-workspace">
         <div className="card admin-left-panel">

@@ -15,14 +15,20 @@ async function getCurrentAuthToken() {
     return 'BYPASS_EXPRESS_LOGIN_SECRET_TOKEN_CHOCO_EGYPT_9988'
   }
 
+  // Wait for Firebase Auth to fully initialize before checking currentUser
+  if (typeof auth.authStateReady === 'function') {
+    await auth.authStateReady()
+  }
+
   const user = auth.currentUser
   if (user) {
-    const token = await user.getIdToken()
+    // Force refresh to avoid stale/expired tokens after security changes
+    const token = await user.getIdToken(true)
     localStorage.setItem('fawterx_id_token', token)
     return token
   }
 
-  return localStorage.getItem('fawterx_id_token') || ''
+  return ''
 }
 
 
@@ -68,6 +74,17 @@ api.interceptors.request.use(async (config) => {
 }, (error) => {
   return Promise.reject(error)
 })
+
+// Clear stale tokens on 401 to force fresh re-auth on next request
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('fawterx_id_token')
+    }
+    return Promise.reject(error)
+  }
+)
 
 /** رفع ملف Excel وجلب الـ headers والـ preview */
 export async function uploadExcel(file, mode = 'template') {
@@ -257,5 +274,11 @@ export async function getAuthSecurityStatus() {
 
 export async function verifyAuthSecurityCode(code) {
   const { data } = await api.post('/auth-security/verify-2fa', { code })
+  return data
+}
+
+/** Admin diagnostic: who does the backend think I am? */
+export async function getAdminWhoami() {
+  const { data } = await api.get('/admin/whoami')
   return data
 }
