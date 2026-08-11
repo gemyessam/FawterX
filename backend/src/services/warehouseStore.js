@@ -1335,56 +1335,89 @@ async function restoreProjectToPoint(projectId, pointId, userUid, userEmail, use
   const pointData = pointDoc.data() || {};
   const stockSnapshot = Array.isArray(pointData.stockSnapshot) ? pointData.stockSnapshot : [];
 
+  // 1. Clear deletedStock records so restored items are not blocked from appearing
+  try {
+    const deletedStockSnap = await db
+      .collection("warehouseProjects")
+      .doc(projectId)
+      .collection("deletedStock")
+      .get();
+
+    if (!deletedStockSnap.empty) {
+      let delBatch = db.batch();
+      let delCount = 0;
+      const delBatches = [];
+      deletedStockSnap.docs.forEach((doc) => {
+        delBatch.delete(doc.ref);
+        delCount++;
+        if (delCount % 400 === 0) {
+          delBatches.push(delBatch.commit());
+          delBatch = db.batch();
+        }
+      });
+      if (delCount % 400 !== 0) {
+        delBatches.push(delBatch.commit());
+      }
+      await Promise.all(delBatches);
+    }
+  } catch (dErr) {
+    console.warn(`[RestoreToPoint] Error clearing deletedStock for ${projectId}:`, dErr.message);
+  }
+
+  // 2. Delete current stock items in batches
   const currentStockSnap = await db
     .collection("warehouseProjects")
     .doc(projectId)
     .collection("stock")
     .get();
 
-  // Delete existing stock items in batches
-  const deleteBatches = [];
-  let currentBatch = db.batch();
-  let count = 0;
+  if (!currentStockSnap.empty) {
+    const deleteBatches = [];
+    let currentBatch = db.batch();
+    let count = 0;
 
-  for (const doc of currentStockSnap.docs) {
-    currentBatch.delete(doc.ref);
-    count++;
-    if (count % 400 === 0) {
+    for (const doc of currentStockSnap.docs) {
+      currentBatch.delete(doc.ref);
+      count++;
+      if (count % 400 === 0) {
+        deleteBatches.push(currentBatch.commit());
+        currentBatch = db.batch();
+      }
+    }
+    if (count % 400 !== 0) {
       deleteBatches.push(currentBatch.commit());
-      currentBatch = db.batch();
     }
+    await Promise.all(deleteBatches);
   }
-  if (count % 400 !== 0 || count === 0) {
-    deleteBatches.push(currentBatch.commit());
-  }
-  await Promise.all(deleteBatches);
 
-  // Write snapshot stock items in batches
-  const setBatches = [];
-  let setBatch = db.batch();
-  let setCount = 0;
+  // 3. Write snapshot stock items in batches
+  if (stockSnapshot.length > 0) {
+    const setBatches = [];
+    let setBatch = db.batch();
+    let setCount = 0;
 
-  for (const item of stockSnapshot) {
-    const itemKey = item.itemKey;
-    if (!itemKey) continue;
-    const itemRef = db
-      .collection("warehouseProjects")
-      .doc(projectId)
-      .collection("stock")
-      .doc(itemKey);
+    for (const item of stockSnapshot) {
+      const itemKey = item.itemKey;
+      if (!itemKey) continue;
+      const itemRef = db
+        .collection("warehouseProjects")
+        .doc(projectId)
+        .collection("stock")
+        .doc(itemKey);
 
-    const { itemKey: _, ...itemData } = item;
-    setBatch.set(itemRef, { itemKey, ...itemData });
-    setCount++;
-    if (setCount % 400 === 0) {
+      const { itemKey: _, ...itemData } = item;
+      setBatch.set(itemRef, { itemKey, ...itemData });
+      setCount++;
+      if (setCount % 400 === 0) {
+        setBatches.push(setBatch.commit());
+        setBatch = db.batch();
+      }
+    }
+    if (setCount % 400 !== 0) {
       setBatches.push(setBatch.commit());
-      setBatch = db.batch();
     }
+    await Promise.all(setBatches);
   }
-  if (setCount % 400 !== 0 || setCount === 0) {
-    setBatches.push(setBatch.commit());
-  }
-  await Promise.all(setBatches);
 
   await logWarehouseAudit(projectId, {
     action: "RESTORE_PROJECT_POINT",

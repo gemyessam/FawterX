@@ -7,10 +7,25 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.5',
+      version: 'v2.27.6',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إصلاح دقيق لاستعادة نقاط الحفظ: تنظيف سجل المحذوفات واسترجاع الأصناف المحذوفة بنجاح' : 'Warehouse Restore Fix: Cleared Deleted Items Registry & Guaranteed Full Stock Snapshot Recovery',
+      highlights: [
+        {
+          icon: '✨',
+          text: isAr
+            ? 'إصلاح آلية استعادة نقاط الحفظ للمشروع في المخزن وتفريغ سجل الأصناف المحذوفة لضمان عودة كافة البنود المحذوفة فوراً عند الاستعادة.'
+            : 'Fixed project restore point mechanism by clearing deletedStock registry, ensuring all previously deleted inventory items are fully restored.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.5',
+      date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'إصلاح لوحة التحكم الإدارية: حل خليل استدعاء الدالة واستعادة جلب البيانات كاملة' : 'Admin Panel Fix: Resolved Middleware Reference Error & Restored Full Data Loading',
       highlights: [
         {
