@@ -1,5 +1,6 @@
 const express = require("express");
 const authMiddleware = require("../middleware/auth");
+const { isAdminEmail } = require("../services/adminAccess");
 const { listUsers, getUserById, updateUserAccess, getAdminStats } = require("../services/adminStore");
 
 const router = express.Router();

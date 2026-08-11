@@ -7,10 +7,25 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.4',
+      version: 'v2.27.5',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إصلاح لوحة التحكم الإدارية: حل خليل استدعاء الدالة واستعادة جلب البيانات كاملة' : 'Admin Panel Fix: Resolved Middleware Reference Error & Restored Full Data Loading',
+      highlights: [
+        {
+          icon: '✨',
+          text: isAr
+            ? 'إصلاح استدعاء دالة التحقق من البريد الإلكتروني للآدمن في مسارات الإدارة بالنظام الخلفي، واستعادة تحميل المستخدمين والإحصائيات بنسبة 100%.'
+            : 'Fixed admin access check reference error in backend routes and completely restored Admin Panel user list and metrics data fetching.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.4',
+      date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'تحسين إدارة صلاحيات المخزن: ترتيب الأولوية، البحث السريع، والواجهة المدمجة' : 'Warehouse Access Control UI: Smart Search, Accordion View & Priority Sorting',
       highlights: [
         {
