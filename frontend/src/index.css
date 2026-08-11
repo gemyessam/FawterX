@@ -272,7 +272,7 @@ body {
   box-shadow: var(--shadow);
   border-radius: var(--radius);
   padding: 1.25rem;
-  min-width: 220px;
+  min-width: 270px;
   display: none;
   z-index: 1000;
   text-align: right;
@@ -1367,4 +1367,87 @@ body {
   .admin-hero-card {
     padding: 1.35rem 1.2rem;
   }
+}
+
+
+/* ─── Master GM Glowing Avatar & Shimmering Badge System ─── */
+@keyframes masterGoldenPulse {
+  0% {
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.4), inset 0 0 6px rgba(255, 215, 0, 0.2);
+    border-color: #ffd700;
+  }
+  50% {
+    box-shadow: 0 0 22px rgba(255, 215, 0, 0.85), inset 0 0 12px rgba(255, 215, 0, 0.4);
+    border-color: #fff066;
+  }
+  100% {
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.4), inset 0 0 6px rgba(255, 215, 0, 0.2);
+    border-color: #ffd700;
+  }
+}
+
+@keyframes crownFloat {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(6deg);
+  }
+}
+
+@keyframes goldShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.master-gm-widget {
+  border: 1px solid rgba(255, 215, 0, 0.5) !important;
+  padding: 3px 10px 3px 4px !important;
+  border-radius: 30px !important;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.12) 0%, rgba(212, 172, 13, 0.04) 100%) !important;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.25) !important;
+  transition: all 0.3s ease !important;
+}
+
+.master-gm-widget:hover {
+  box-shadow: 0 0 25px rgba(255, 215, 0, 0.5) !important;
+  transform: translateY(-1px);
+}
+
+.master-gm-avatar {
+  border: 2px solid #ffd700 !important;
+  animation: masterGoldenPulse 3s infinite ease-in-out !important;
+}
+
+.master-crown-icon {
+  position: absolute;
+  top: -12px;
+  right: -6px;
+  font-size: 0.95rem;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.8));
+  z-index: 10;
+  animation: crownFloat 2.5s infinite ease-in-out;
+}
+
+.master-gm-badge {
+  background: linear-gradient(120deg, #ffd700 0%, #fff066 30%, #f5b041 60%, #ffd700 100%);
+  background-size: 200% auto;
+  color: #120d03;
+  padding: 0.22rem 0.65rem;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 3px 12px rgba(255, 215, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  animation: goldShimmer 3s linear infinite;
+  white-space: nowrap;
 }

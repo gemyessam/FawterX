@@ -9,5 +9,7 @@ backend/node_modules/
 frontend/dist/
 firebase-service-account.json
 backend/firebase-service-account.json
-PROJECT_ARCHITECTURE_GUIDE.*
-format_rtl.py
+PROJECT_ARCHITECTURE_GUIDE*
+format_rtl*
+
+

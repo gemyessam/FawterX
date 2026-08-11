@@ -17,7 +17,7 @@ export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
-    logo: 'فاوتر إكس v2.26.4',
+    logo: 'فاوتر إكس v2.26.5',
     logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
@@ -48,7 +48,7 @@ const TRANSLATIONS = {
     statsTitle: 'إحصائيات الأداء'
   },
   en: {
-    logo: 'FawterX v2.26.4',
+    logo: 'FawterX v2.26.5',
     logoSub: 'ERP Alternative for ETA Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
@@ -244,7 +244,7 @@ function Layout({ children }) {
             >
               <span>⚡ {lang === 'ar' ? 'منصة أتمتة الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Platform'}</span>
               <span style={{ background: 'rgba(0, 224, 161, 0.2)', color: '#00e0a1', padding: '0.1rem 0.4rem', borderRadius: '10px', fontSize: '0.7rem', fontWeight: 800 }}>
-                v2.26.4 ✨
+                v2.26.5 ✨
               </span>
             </button>
           </div>
@@ -278,61 +278,38 @@ function Layout({ children }) {
             const isMaster = user.email === 'gemy.essam.ge@gmail.com';
             return (
               <div 
-                className="user-profile-widget" 
+                className={`user-profile-widget ${isMaster ? 'master-gm-widget' : ''}`}
                 onClick={() => setShowUserDropdown(!showUserDropdown)}
-                style={isMaster ? { 
-                  border: '1px solid rgba(255, 215, 0, 0.3)', 
-                  padding: '2px 8px 2px 2px', 
-                  borderRadius: '24px', 
-                  background: 'rgba(255, 215, 0, 0.05)',
-                  boxShadow: '0 0 10px rgba(255, 215, 0, 0.1)'
-                } : {}}
               >
                 <div 
-                  className="user-avatar" 
+                  className={`user-avatar ${isMaster ? 'master-gm-avatar' : ''}`}
                   style={{ 
                     backgroundImage: user.photoURL ? `url(${user.photoURL})` : 'none', 
                     backgroundSize: 'cover',
-                    position: 'relative',
-                    border: isMaster ? '2px solid #FFD700' : 'none',
-                    boxShadow: isMaster ? '0 0 8px rgba(255, 215, 0, 0.5)' : 'none'
+                    position: 'relative'
                   }}
                 >
                   {!user.photoURL && (user.displayName?.slice(0, 2).toUpperCase() || 'US')}
                   {isMaster && (
-                    <span style={{
-                      position: 'absolute',
-                      top: '-11px',
-                      right: '-6px',
-                      fontSize: '0.85rem',
-                      filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.6))',
-                      zIndex: 5
-                    }}>
+                    <span className="master-crown-icon">
                       👑
                     </span>
                   )}
                 </div>
                 <div className={`user-info-dropdown ${showUserDropdown ? 'show-dropdown' : ''}`}>
-                  <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: lang === 'ar' ? 'row-reverse' : 'row' }}>
-                    {user.displayName || 'SaaS User'}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                    <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#ffffff', whiteSpace: 'nowrap' }}>
+                      {user.displayName || 'SaaS User'}
+                    </h4>
                     {isMaster && (
-                      <span style={{ 
-                        background: 'linear-gradient(135deg, #FFE066, #F5B041)', 
-                        color: '#120d03', 
-                        padding: '0.15rem 0.5rem', 
-                        borderRadius: '20px', 
-                        fontSize: '0.65rem', 
-                        fontWeight: 900,
-                        border: '1px solid #FFD700',
-                        boxShadow: '0 2px 6px rgba(255, 215, 0, 0.3)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
-                      }}>
-                        Master GM 👑
+                      <span className="master-gm-badge">
+                        MASTER GM 👑
                       </span>
                     )}
-                  </h4>
-                  <p>{user.email}</p>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'rgba(255, 215, 0, 0.85)', marginBottom: '0.85rem' }}>
+                    {user.email}
+                  </p>
                   <button className="btn-logout" onClick={(e) => { e.stopPropagation(); handleLogout(); }}>{t.logout} 🚪</button>
                 </div>
               </div>

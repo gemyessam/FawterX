@@ -7,10 +7,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.26.4',
+      version: 'v2.26.5',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
-      badgeColor: '#00e0a1',
+      badgeColor: '#ffd700',
+      title: isAr ? 'ترقية تصميم الماستر أدمن بأيقونات ورموز وشعارات متحركة فاخرة' : 'Ultra-Premium Master GM Animated Badge & Glowing Avatar System',
+      highlights: [
+        {
+          icon: '👑',
+          text: isAr
+            ? 'شارات Master GM الذهبية المتحركة: إضافة تأثير التوهج والبريق الذهبي (Shimmer Effect) مع تحريك عابر للضوء في القائمة العلوية وشعار الحساب المؤسس.'
+            : 'Shimmering Metallic Gold Badge: Animated gold gradient shimmer with light-sweep keyframes and glowing halo effect for Master GM founder profile.'
+        },
+        {
+          icon: '✨',
+          text: isAr
+            ? 'تحريك الأيقونة والهالة التفاعلية: تحريك التاج (Crown Float Animation) مع هالة ضوئية ذهبية متناغمة حول صورة المؤسس الرئيسية.'
+            : 'Floating Crown & Halo Pulse: Micro-animations featuring floating crown physics and breathing gold halo around founder avatar.'
+        }
+      ]
+    },
+    {
+      version: 'v2.26.5',
+      date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'تفعيل النافذة المنبثقة التفاعلية لسجل التحديثات والإصدارات' : 'Interactive Release Notes Modal & Platform Version Transparency',
       highlights: [
         {
