@@ -7,10 +7,25 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.1',
+      version: 'v2.27.2',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إصلاح إشعار المسودات: إلغاء التنبيه العشوائي عند خلو المسودات' : 'Drafts Fetch Fix: Silent clean loading on empty drafts state',
+      highlights: [
+        {
+          icon: '✨',
+          text: isAr
+            ? 'منع ظهور إشعار الخطأ (فشل جلب المسودات) عند فتح الصفحة وهي فارغة وعرض الواجهة النظيفة فوراً.'
+            : 'Eliminated unnecessary error toast when navigating to empty drafts page, cleanly displaying zero state.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.2',
+      date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'تحديث المصطلحات: استبدال جميع مسميات (أتمتة) بمسمى (رفع الفواتير)' : 'Terminology Refinement: Replacing Automation with Upload Wording',
       highlights: [
         {

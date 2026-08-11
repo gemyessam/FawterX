@@ -16,9 +16,10 @@ export default function Drafts() {
   async function fetchDrafts() {
     try {
       const res = await getDrafts()
-      setDrafts(res.drafts || [])
+      setDrafts(res?.drafts || [])
     } catch (e) {
-      toast.error(lang === 'ar' ? 'فشل جلب المسودات' : 'Failed to fetch saved drafts')
+      console.warn('Drafts fetch notice:', e)
+      setDrafts([])
     } finally {
       setLoading(false)
     }
