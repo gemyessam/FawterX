@@ -153,12 +153,14 @@ async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehous
     }
   }
 
-  const enabled = Boolean(warehouseEnabled);
-  const role = enabled ? (warehouseRole || "warehouse_operator") : "disabled";
-  const formattedProjects = Array.isArray(allowedProjects) && allowedProjects.length > 0 ? allowedProjects : ["*"];
-  const boolDelete = typeof canDelete === "boolean" ? canDelete : true;
-  const boolEdit = typeof canEdit === "boolean" ? canEdit : true;
-  const boolUpload = typeof canUpload === "boolean" ? canUpload : true;
+  const isSuperAdminTarget = isAdminEmail(email);
+
+  const enabled = isSuperAdminTarget ? true : Boolean(warehouseEnabled);
+  const role = isSuperAdminTarget ? "admin" : (enabled ? (warehouseRole || "warehouse_operator") : "disabled");
+  const formattedProjects = isSuperAdminTarget ? ["*"] : (Array.isArray(allowedProjects) && allowedProjects.length > 0 ? allowedProjects : ["*"]);
+  const boolDelete = isSuperAdminTarget ? true : (typeof canDelete === "boolean" ? canDelete : true);
+  const boolEdit = isSuperAdminTarget ? true : (typeof canEdit === "boolean" ? canEdit : true);
+  const boolUpload = isSuperAdminTarget ? true : (typeof canUpload === "boolean" ? canUpload : true);
 
   const updatePayload = {
     email,

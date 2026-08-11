@@ -3542,6 +3542,8 @@ export default function Warehouse() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {usersList.map((usr) => {
+                    const SUPER_ADMIN_EMAIL = 'gemy.essam.ge@gmail.com'
+                    const isFounderSuperAdmin = (usr.email || '').trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()
                     const isUserAdmin = usr.role === 'admin' || usr.warehouseRole === 'admin'
                     const isSaving = updatingUserUid === usr.uid
 
@@ -3550,7 +3552,9 @@ export default function Warehouse() {
                         key={usr.uid}
                         style={{
                           background: usr.warehouseEnabled ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.25)',
-                          border: usr.warehouseEnabled ? '1px solid rgba(0, 224, 161, 0.2)' : '1px solid rgba(255, 255, 255, 0.06)',
+                          border: isFounderSuperAdmin
+                            ? '1px solid rgba(255, 71, 87, 0.4)'
+                            : usr.warehouseEnabled ? '1px solid rgba(0, 224, 161, 0.2)' : '1px solid rgba(255, 255, 255, 0.06)',
                           borderRadius: '12px',
                           padding: '1.25rem',
                           transition: 'all 0.2s ease',
@@ -3558,17 +3562,21 @@ export default function Warehouse() {
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.75rem', marginBottom: '0.85rem' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'rgba(138, 180, 255, 0.15)', color: '#8ab4ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.1rem' }}>
+                            <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: isFounderSuperAdmin ? 'rgba(255, 71, 87, 0.2)' : 'rgba(138, 180, 255, 0.15)', color: isFounderSuperAdmin ? '#ff4757' : '#8ab4ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.1rem' }}>
                               {(usr.displayName || usr.email || 'U').charAt(0).toUpperCase()}
                             </div>
                             <div>
                               <div style={{ fontWeight: 700, fontSize: '0.98rem', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 {usr.displayName || usr.email}
-                                {isUserAdmin && (
-                                  <span className="badge" style={{ background: 'rgba(255, 183, 77, 0.2)', color: '#ffb74d', border: '1px solid rgba(255, 183, 77, 0.4)', fontSize: '0.72rem' }}>
-                                    👑 {isAr ? 'مدير نظام' : 'System Admin'}
+                                {isFounderSuperAdmin ? (
+                                  <span className="badge" style={{ background: 'rgba(255, 71, 87, 0.2)', color: '#ff4757', border: '1px solid rgba(255, 71, 87, 0.4)', fontSize: '0.75rem', fontWeight: 800 }}>
+                                    ⚡ {isAr ? 'العملاق المؤسس (Super Admin)' : 'Founding Owner (Super Admin)'}
                                   </span>
-                                )}
+                                ) : isUserAdmin ? (
+                                  <span className="badge" style={{ background: 'rgba(255, 183, 77, 0.2)', color: '#ffb74d', border: '1px solid rgba(255, 183, 77, 0.4)', fontSize: '0.72rem' }}>
+                                    👑 {isAr ? 'مدير مخزن' : 'Warehouse Admin'}
+                                  </span>
+                                ) : null}
                               </div>
                               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{usr.email}</div>
                             </div>
@@ -3576,26 +3584,34 @@ export default function Warehouse() {
 
                           {/* Main Toggle & Role */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, color: usr.warehouseEnabled ? '#00e0a1' : 'var(--text-muted)' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer', fontSize: '0.88rem', fontWeight: 600, color: usr.warehouseEnabled ? '#00e0a1' : 'var(--text-muted)' }}>
                               <input
                                 type="checkbox"
                                 checked={usr.warehouseEnabled}
-                                disabled={isUserAdmin}
+                                disabled={isFounderSuperAdmin}
                                 onChange={(e) => {
                                   const val = e.target.checked
                                   setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, warehouseEnabled: val } : u))
                                 }}
-                                style={{ width: '18px', height: '18px', accentColor: '#00e0a1', cursor: 'pointer' }}
+                                style={{ width: '18px', height: '18px', accentColor: '#00e0a1', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}
                               />
                               {isAr ? 'السماح بالوصول للمخزن' : 'Enable Warehouse Access'}
                             </label>
 
                             <select
                               value={usr.warehouseRole || 'warehouse_operator'}
-                              disabled={!usr.warehouseEnabled || isUserAdmin}
+                              disabled={!usr.warehouseEnabled || isFounderSuperAdmin}
                               onChange={(e) => {
                                 const val = e.target.value
-                                setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, warehouseRole: val } : u))
+                                setUsersList(prev => prev.map(u => {
+                                  if (u.uid === usr.uid) {
+                                    if (val === 'admin') {
+                                      return { ...u, warehouseRole: val, canDelete: true, canEdit: true, canUpload: true, allowedProjects: ['*'] }
+                                    }
+                                    return { ...u, warehouseRole: val }
+                                  }
+                                  return u
+                                }))
                               }}
                               style={{
                                 background: '#101223',
@@ -3604,6 +3620,8 @@ export default function Warehouse() {
                                 borderRadius: '8px',
                                 padding: '0.4rem 0.75rem',
                                 fontSize: '0.82rem',
+                                opacity: (!usr.warehouseEnabled || isFounderSuperAdmin) ? 0.7 : 1,
+                                cursor: (!usr.warehouseEnabled || isFounderSuperAdmin) ? 'not-allowed' : 'pointer',
                               }}
                             >
                               <option value="warehouse_operator">{isAr ? '👷 مشغّل مخزن (كامل العمليات)' : 'Warehouse Operator'}</option>
@@ -3622,10 +3640,11 @@ export default function Warehouse() {
                               </div>
 
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: 'pointer', color: (usr.allowedProjects || []).includes('*') ? '#00e0a1' : '#fff' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer', color: (usr.allowedProjects || []).includes('*') ? '#00e0a1' : '#fff' }}>
                                   <input
                                     type="checkbox"
                                     checked={(usr.allowedProjects || ['*']).includes('*')}
+                                    disabled={isFounderSuperAdmin}
                                     onChange={(e) => {
                                       const isChecked = e.target.checked
                                       setUsersList(prev => prev.map(u => {
@@ -3645,10 +3664,11 @@ export default function Warehouse() {
                                     {projects.map((p) => {
                                       const isProjChecked = (usr.allowedProjects || []).includes(p.id)
                                       return (
-                                        <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', cursor: 'pointer' }}>
+                                        <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}>
                                           <input
                                             type="checkbox"
                                             checked={isProjChecked}
+                                            disabled={isFounderSuperAdmin}
                                             onChange={(e) => {
                                               const checked = e.target.checked
                                               setUsersList(prev => prev.map(u => {
@@ -3678,11 +3698,11 @@ export default function Warehouse() {
                               </div>
 
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: 'pointer' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}>
                                   <input
                                     type="checkbox"
                                     checked={usr.canDelete ?? true}
-                                    disabled={isUserAdmin}
+                                    disabled={isFounderSuperAdmin}
                                     onChange={(e) => {
                                       const val = e.target.checked
                                       setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canDelete: val } : u))
@@ -3692,11 +3712,11 @@ export default function Warehouse() {
                                   <span>🗑️ {isAr ? 'صلاحية حذف الأصناف والفواتير (Can Delete)' : 'Can Delete Items & Invoices'}</span>
                                 </label>
 
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: 'pointer' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}>
                                   <input
                                     type="checkbox"
                                     checked={usr.canEdit ?? true}
-                                    disabled={isUserAdmin}
+                                    disabled={isFounderSuperAdmin}
                                     onChange={(e) => {
                                       const val = e.target.checked
                                       setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canEdit: val } : u))
@@ -3706,11 +3726,11 @@ export default function Warehouse() {
                                   <span>✏️ {isAr ? 'صلاحية تعديل الكميات والبيانات (Can Edit)' : 'Can Edit Quantities & Metadata'}</span>
                                 </label>
 
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: 'pointer' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}>
                                   <input
                                     type="checkbox"
                                     checked={usr.canUpload ?? true}
-                                    disabled={isUserAdmin}
+                                    disabled={isFounderSuperAdmin}
                                     onChange={(e) => {
                                       const val = e.target.checked
                                       setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canUpload: val } : u))
@@ -3729,7 +3749,7 @@ export default function Warehouse() {
                           <button
                             className="btn btn-primary"
                             onClick={() => handleSaveUserPermissions(usr)}
-                            disabled={isSaving}
+                            disabled={isSaving || isFounderSuperAdmin}
                             style={{
                               padding: '0.4rem 1rem',
                               fontSize: '0.82rem',
@@ -3738,6 +3758,8 @@ export default function Warehouse() {
                               display: 'flex',
                               alignItems: 'center',
                               gap: '0.4rem',
+                              opacity: isFounderSuperAdmin ? 0.6 : 1,
+                              cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer',
                             }}
                           >
                             {isSaving ? <span className="spinner"></span> : '💾 ' + (isAr ? 'حفظ الصلاحيات' : 'Save Permissions')}
