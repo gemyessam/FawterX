@@ -7,10 +7,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.6',
+      version: 'v2.27.7',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إصلاح شامل لاستعادة السجل الكامل للبنود ودعم موثوقية لوحة الإدارة' : 'Full Item Movement Restoration & Admin Panel Auth Resilience',
+      highlights: [
+        {
+          icon: '📜',
+          text: isAr
+            ? 'حفظ واستعادة سجل حركات التتبع تفصيلياً مع نقاط الحفظ، وتوفير حركة افتراضية تلقائية للبنود المستعادة ضماناً لعدم ضياع السجل.'
+            : 'Preserved full movement history in restore points, providing automatic synthetic initial movements for restored stock items.'
+        },
+        {
+          icon: '🔐',
+          text: isAr
+            ? 'إضافة فك تشفير JWT احتياطي في برمجيات التحقق لضمان فتح لوحة الإدارة بدون أخطاء.'
+            : 'Added JWT payload decode fallback in auth middleware guaranteeing instant access to the Admin Panel.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.6',
+      date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'إصلاح دقيق لاستعادة نقاط الحفظ: تنظيف سجل المحذوفات واسترجاع الأصناف المحذوفة بنجاح' : 'Warehouse Restore Fix: Cleared Deleted Items Registry & Guaranteed Full Stock Snapshot Recovery',
       highlights: [
         {

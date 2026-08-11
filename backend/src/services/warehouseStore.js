@@ -1047,7 +1047,7 @@ async function deleteStockItem(projectId, itemKey, userUid, userEmail, userName)
     console.warn(`[DeleteStockItem] Error writing deletedStock entry for ${itemKey}:`, delErr.message);
   }
 
-  // 3. Delete all associated movements for this itemKey so they don't corrupt balance aggregates
+  // 3. Mark movements as isDeleted for this itemKey so history is preserved if restored later
   try {
     const mvtsSnap = await db
       .collection("warehouseProjects")
@@ -1060,7 +1060,7 @@ async function deleteStockItem(projectId, itemKey, userUid, userEmail, userName)
       let batch = db.batch();
       let ops = 0;
       for (const mDoc of mvtsSnap.docs) {
-        batch.delete(mDoc.ref);
+        batch.update(mDoc.ref, { isDeleted: true });
         ops++;
         if (ops >= 400) {
           await batch.commit();
@@ -1071,10 +1071,10 @@ async function deleteStockItem(projectId, itemKey, userUid, userEmail, userName)
       if (ops > 0) {
         await batch.commit();
       }
-      console.log(`[DeleteStockItem] Deleted ${mvtsSnap.size} movement records for itemKey ${itemKey}`);
+      console.log(`[DeleteStockItem] Soft-deleted ${mvtsSnap.size} movement records for itemKey ${itemKey}`);
     }
   } catch (mvtErr) {
-    console.warn(`[DeleteStockItem] Error cleaning up movements for ${itemKey}:`, mvtErr.message);
+    console.warn(`[DeleteStockItem] Error soft-deleting movements for ${itemKey}:`, mvtErr.message);
   }
 
   // 4. Log Audit Trail
@@ -1136,7 +1136,41 @@ async function getItemMovementsHistory(projectId, itemKey, itemCode) {
 
   // Return item movements scoped strictly to current project
 
-  const movements = Array.from(mvtMap.values());
+  let movements = Array.from(mvtMap.values()).filter((m) => !m.isDeleted);
+
+  // Synthetic initial movement fallback if movements history is empty but stock item exists with balance > 0
+  if (movements.length === 0) {
+    try {
+      const stockDoc = await db.collection("warehouseProjects").doc(projectId).collection("stock").doc(itemKey).get();
+      if (stockDoc.exists) {
+        const sData = stockDoc.data() || {};
+        const qBar = Number(sData.quantityBar || 0);
+        if (qBar > 0) {
+          const synthMvt = {
+            id: `initial-snapshot-${itemKey}`,
+            movementType: "inbound",
+            invoiceNumber: sData.lastInvoiceNumber || "رصيد دفتري/أصل المخزون",
+            salesOrder: sData.lastSalesOrder || sData.salesOrder || "—",
+            customerReference: sData.lastCustomerRef || sData.customerReference || "—",
+            description: sData.description || "رصيد المخزون المسجل والمستعاد بنجاح",
+            finish: sData.finish || "STD",
+            lengthMm: Number(sData.lengthMm || 6000),
+            quantityBar: qBar,
+            quantityLm: Number(sData.quantityLm || (qBar * (sData.lengthMm || 6000)) / 1000),
+            quantityKg: Number(sData.quantityKg || 0),
+            unitPrice: Number(sData.lastUnitCost || 0),
+            createdAt: sData.updatedAt || new Date().toISOString(),
+            runningBar: qBar,
+            runningLm: Number(sData.quantityLm || (qBar * (sData.lengthMm || 6000)) / 1000),
+            isInitialSnapshot: true,
+          };
+          return [synthMvt];
+        }
+      }
+    } catch (sErr) {
+      console.warn(`[getItemMovementsHistory] Error creating fallback movement for ${itemKey}:`, sErr.message);
+    }
+  }
 
   // Sort chronologically ascending to calculate running stock balance
   movements.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
@@ -1252,6 +1286,19 @@ async function createProjectRestorePoint(projectId, { name, description }, userU
     totalQuantityKg += Number(data.quantityKg || 0);
   });
 
+  // Snapshot movements history as well
+  let movementsSnapshot = [];
+  try {
+    const mvtsSnap = await db
+      .collection("warehouseProjects")
+      .doc(projectId)
+      .collection("movements")
+      .get();
+    movementsSnapshot = mvtsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  } catch (mErr) {
+    console.warn(`[CreateRestorePoint] Warning capturing movements for ${projectId}:`, mErr.message);
+  }
+
   const pointName = String(name || "").trim() || `نقطة حفظ تلقائية - ${new Date().toLocaleDateString("ar-EG")}`;
   const pointDesc = String(description || "").trim();
 
@@ -1267,6 +1314,7 @@ async function createProjectRestorePoint(projectId, { name, description }, userU
     createdByName: userName || "",
     createdAt: new Date().toISOString(),
     stockSnapshot: stockItems,
+    movementsSnapshot,
   };
 
   const pointRef = await db
@@ -1417,6 +1465,62 @@ async function restoreProjectToPoint(projectId, pointId, userUid, userEmail, use
       setBatches.push(setBatch.commit());
     }
     await Promise.all(setBatches);
+  }
+
+  // 4. Restore movementsSnapshot if present in pointData
+  const movementsSnapshot = Array.isArray(pointData.movementsSnapshot) ? pointData.movementsSnapshot : [];
+  if (movementsSnapshot.length > 0) {
+    try {
+      const currentMvtsSnap = await db
+        .collection("warehouseProjects")
+        .doc(projectId)
+        .collection("movements")
+        .get();
+
+      if (!currentMvtsSnap.empty) {
+        let mvtDelBatch = db.batch();
+        let mvtDelCount = 0;
+        const mvtDelBatches = [];
+        for (const mDoc of currentMvtsSnap.docs) {
+          mvtDelBatch.delete(mDoc.ref);
+          mvtDelCount++;
+          if (mvtDelCount % 400 === 0) {
+            mvtDelBatches.push(mvtDelBatch.commit());
+            mvtDelBatch = db.batch();
+          }
+        }
+        if (mvtDelCount % 400 !== 0) {
+          mvtDelBatches.push(mvtDelBatch.commit());
+        }
+        await Promise.all(mvtDelBatches);
+      }
+
+      let mvtSetBatch = db.batch();
+      let mvtSetCount = 0;
+      const mvtSetBatches = [];
+      for (const mvt of movementsSnapshot) {
+        const { id: mvtId, ...mvtData } = mvt;
+        const targetDocId = mvtId || db.collection("warehouseProjects").doc(projectId).collection("movements").doc().id;
+        const mvtRef = db
+          .collection("warehouseProjects")
+          .doc(projectId)
+          .collection("movements")
+          .doc(targetDocId);
+
+        mvtSetBatch.set(mvtRef, { ...mvtData, isDeleted: false });
+        mvtSetCount++;
+        if (mvtSetCount % 400 === 0) {
+          mvtSetBatches.push(mvtSetBatch.commit());
+          mvtSetBatch = db.batch();
+        }
+      }
+      if (mvtSetCount % 400 !== 0) {
+        mvtSetBatches.push(mvtSetBatch.commit());
+      }
+      await Promise.all(mvtSetBatches);
+    } catch (mvtRestoreErr) {
+      console.warn(`[RestoreToPoint] Error restoring movements for ${projectId}:`, mvtRestoreErr.message);
+    }
   }
 
   await logWarehouseAudit(projectId, {
