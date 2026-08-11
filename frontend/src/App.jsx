@@ -7,6 +7,7 @@ import DraftDetails from './pages/DraftDetails'
 import AdminPanel from './pages/AdminPanel'
 import Warehouse from './pages/Warehouse'
 import ReleaseNotesModal from './components/ReleaseNotesModal'
+import Security2FAModal from './components/Security2FAModal'
 import { testETAAuth, getCompanySettings, saveCompanySettings, syncUserData } from './services/api'
 import { getWarehouseAccess } from './services/warehouseApi'
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase'
@@ -17,7 +18,7 @@ export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
-    logo: 'فاوتر إكس v2.26.6',
+    logo: 'فاوتر إكس v2.27.0',
     logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
@@ -48,7 +49,7 @@ const TRANSLATIONS = {
     statsTitle: 'إحصائيات الأداء'
   },
   en: {
-    logo: 'FawterX v2.26.6',
+    logo: 'FawterX v2.27.0',
     logoSub: 'ERP Alternative for ETA Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
@@ -244,7 +245,7 @@ function Layout({ children }) {
             >
               <span>⚡ {lang === 'ar' ? 'منصة أتمتة الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Platform'}</span>
               <span style={{ background: 'rgba(0, 224, 161, 0.2)', color: '#00e0a1', padding: '0.1rem 0.4rem', borderRadius: '10px', fontSize: '0.7rem', fontWeight: 800 }}>
-                v2.26.6 ✨
+                v2.27.0 ✨
               </span>
             </button>
           </div>
@@ -425,12 +426,33 @@ export default function App() {
   const [loadingAuth, setLoadingAuth] = useState(true)
   const [resetTrigger, setResetTrigger] = useState(0)
   const triggerReset = () => setResetTrigger(prev => prev + 1)
+  const [show2FAModal, setShow2FAModal] = useState(false)
+  const [challengeDemoCode, setChallengeDemoCode] = useState('')
   const [showTutorialModal, setShowTutorialModal] = useState(() => {
     return !localStorage.getItem('fawterx_tutorial_seen')
   })
 
   const t = TRANSLATIONS[lang]
   const isAdmin = (user?.email || '').toLowerCase() === 'gemy.essam.ge@gmail.com'
+
+  useEffect(() => {
+    if (user) {
+      const token = localStorage.getItem('fawterx_id_token') || ''
+      fetch('/api/auth-security/device-status', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.isNewDevice) {
+            setShow2FAModal(true)
+            setChallengeDemoCode(data.challengeCodeDemo || '')
+          }
+        })
+        .catch(err => console.warn('Device status check error:', err))
+    } else {
+      setShow2FAModal(false)
+    }
+  }, [user])
 
   useEffect(() => {
     if (user) {
@@ -492,6 +514,16 @@ export default function App() {
   return (
     <AppContext.Provider value={{ lang, setLang, t, user, isAdmin, hasWarehouseAccess, handleLogout, resetTrigger, triggerReset, showTutorialModal, setShowTutorialModal }}>
       <BrowserRouter>
+        <Security2FAModal
+          isOpen={show2FAModal}
+          userEmail={user?.email || ''}
+          challengeDemoCode={challengeDemoCode}
+          onVerifySuccess={() => {
+            setShow2FAModal(false)
+            toast.success(lang === 'ar' ? 'تم توثيق الجهاز الجديد بنجاح! 🛡️' : 'New device trusted successfully! 🛡️')
+          }}
+          lang={lang}
+        />
         <Toaster position="bottom-center" toastOptions={{ style: { background: '#101223', color: '#e8eaf6', border: '1px solid #202442', borderRadius: '12px' } }} />
         
         {!user ? (

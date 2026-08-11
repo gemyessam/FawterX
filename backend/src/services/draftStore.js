@@ -26,57 +26,63 @@ function generateDraftId() {
 /**
  * يحفظ draft جديد للمستخدم في Firestore
  */
-async function saveDraft(userId, document, validationResult) {
+/**
+ * يحفظ مسودة استرجاع (Recovery Draft) للمستخدم بأدنى بيانات ممكنة لحماية الخصوصية:
+ * 1. رقم الفاتورة (internalID)
+ * 2. المبلغ الإجمالي (totalAmount)
+ * 3. حالة الرفع/الامتثال (status: uploaded | valid | invalid)
+ * 4. تفاصيل الخطأ في حال عدم الامتثال/الفشل (errorMessage)
+ * 5. تاريخ الإنشاء (createdAt)
+ * (يتم استبعاد طرود السطور والتفاصيل الحساسة الأخرى تماماً لحماية الخصوصية)
+ */
+async function saveDraft(userId, document, validationResult, uploadStatus = null, customError = null) {
   const db = getDb();
   const draftId = generateDraftId();
-  const now     = new Date().toISOString();
+  const now = new Date().toISOString();
 
   let internalID = "";
-  let issuerName = "";
-  let receiverName = "";
   let totalAmount = 0;
-  let linesCount = 0;
 
   if (Array.isArray(document)) {
-    internalID = document.map(d => d.internalID).filter(Boolean).join(", ");
-    issuerName = document[0]?.issuer?.name || "";
-    receiverName = document.map(d => d.receiver?.name).filter(Boolean).join(", ");
-    totalAmount = document.reduce((acc, d) => acc + (d.totalAmount || 0), 0);
-    linesCount = document.reduce((acc, d) => acc + (d.invoiceLines?.length || 0), 0);
-  } else {
-    internalID = document.internalID || "";
-    issuerName = document.issuer?.name || "";
-    receiverName = document.receiver?.name || "";
-    totalAmount = document.totalAmount || 0;
-    linesCount = document.invoiceLines?.length || 0;
+    internalID = document.map(d => d.internalID || d.invoiceNumber).filter(Boolean).join(", ");
+    totalAmount = document.reduce((acc, d) => acc + (Number(d.totalAmount || d.total || 0)), 0);
+  } else if (document) {
+    internalID = document.internalID || document.invoiceNumber || "";
+    totalAmount = Number(document.totalAmount || document.total || 0);
   }
 
+  let errorMessage = "";
+  if (customError) {
+    errorMessage = typeof customError === "string" ? customError : (customError.message || JSON.stringify(customError));
+  } else if (validationResult && !validationResult.valid && Array.isArray(validationResult.errors)) {
+    errorMessage = validationResult.errors.map(e => e.message || e).join(" | ").slice(0, 300);
+  }
+
+  const isUploaded = uploadStatus === "uploaded" || uploadStatus === true;
+  const status = isUploaded ? "uploaded" : (validationResult?.valid !== false ? "valid" : "invalid");
+
+  // Minimal Privacy Data Storage
   const draft = {
     draftId,
     userId,
-    createdAt:        now,
-    updatedAt:        now,
-    status:           validationResult.valid ? "valid" : "invalid",
-    internalID,
-    issuerName,
-    receiverName,
-    totalAmount,
-    linesCount,
-    validationResult,
-    document,
+    internalID: internalID || "N/A",
+    totalAmount: Number(totalAmount || 0),
+    status,
+    errorMessage: errorMessage || null,
+    createdAt: now,
+    updatedAt: now,
   };
 
-  if (db) {
+  if (db && userId) {
     try {
       await db.collection("users").doc(userId).collection("drafts").doc(draftId).set(draft);
-      console.log(`[DraftStore] ✅ Draft saved to Firestore: ${draftId} for User: ${userId}`);
+      console.log(`[DraftStore] ✅ Minimal privacy draft saved for user ${userId}: ${draftId} [${status}]`);
       return draft;
     } catch (e) {
       console.warn("[DraftStore] Firestore write error:", e.message);
     }
   }
 
-  console.warn("[DraftStore] ⚠️ Firestore unavailable — draft not persisted");
   return draft;
 }
 
@@ -114,13 +120,10 @@ async function getAllDrafts(userId) {
         return {
           draftId:      d.draftId,
           createdAt:    d.createdAt,
-          status:       d.status,
-          internalID:   d.internalID,
-          issuerName:   d.issuerName,
-          receiverName: d.receiverName,
-          totalAmount:  d.totalAmount,
-          linesCount:   d.linesCount,
-          errorsCount:  d.validationResult?.errors?.length || 0,
+          status:       d.status || (d.uploaded ? "uploaded" : "invalid"),
+          internalID:   d.internalID || "N/A",
+          totalAmount:  Number(d.totalAmount || 0),
+          errorMessage: d.errorMessage || (d.validationResult?.errors?.[0]?.message) || null,
         };
       });
     } catch (e) {

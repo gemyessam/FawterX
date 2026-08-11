@@ -65,7 +65,7 @@ export default function Drafts() {
               <tr>
                 <th>{lang === 'ar' ? 'رقم المسودة' : 'Draft ID'}</th>
                 <th>{lang === 'ar' ? 'رقم الفاتورة' : 'Internal ID'}</th>
-                <th>{lang === 'ar' ? 'حالة الامتثال' : 'Compliance'}</th>
+                <th>{lang === 'ar' ? 'حالة الامتثال / الرفع' : 'Status'}</th>
                 <th>{lang === 'ar' ? 'المبلغ الإجمالي' : 'Total Amount'}</th>
                 <th>{lang === 'ar' ? 'تاريخ التعديل' : 'Last Modified'}</th>
                 <th>{lang === 'ar' ? 'إجراءات' : 'Actions'}</th>
@@ -74,12 +74,20 @@ export default function Drafts() {
             <tbody>
               {drafts.map(d => (
                 <tr key={d.draftId}>
-                  <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{d.draftId}</td>
+                  <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{d.draftId}</td>
                   <td style={{ fontWeight: 700 }}>{d.internalID || 'N/A'}</td>
                   <td>
-                    {d.status === 'valid' 
-                      ? <span className="badge badge-valid">✓ {lang === 'ar' ? 'مطابق' : 'Compliant'}</span>
-                      : <span className="badge badge-invalid">✕ {lang === 'ar' ? 'به أخطاء' : 'Errors'}</span>}
+                    {d.status === 'uploaded' ? (
+                      <span className="badge badge-valid" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid #00e0a1' }}>
+                        ✓ {lang === 'ar' ? 'تم الرفع للبوابة' : 'Uploaded'}
+                      </span>
+                    ) : d.status === 'valid' ? (
+                      <span className="badge badge-valid">✓ {lang === 'ar' ? 'مطابق' : 'Compliant'}</span>
+                    ) : (
+                      <span className="badge badge-invalid" title={d.errorMessage || ''}>
+                        ✕ {lang === 'ar' ? (d.errorMessage ? `غير مرفوع: ${d.errorMessage}` : 'به أخطاء') : (d.errorMessage || 'Failed')}
+                      </span>
+                    )}
                   </td>
                   <td style={{ color: 'var(--accent)', fontWeight: 700 }}>
                     {Number(d.totalAmount || 0).toLocaleString()} EGP
@@ -89,9 +97,6 @@ export default function Drafts() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <Link to={`/drafts/${d.draftId}`} className="btn btn-sm btn-ghost">
-                        {lang === 'ar' ? 'استعراض' : 'Open'}
-                      </Link>
                       <button className="btn btn-sm btn-danger" onClick={() => handleDelete(d.draftId)}>
                         {lang === 'ar' ? 'حذف' : 'Delete'}
                       </button>

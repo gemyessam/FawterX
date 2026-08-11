@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.26.6',
+      version: 'v2.27.0',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'التحصين الأمني الشامل، تفعيل 2FA للأجهزة الجديدة، وعزل خصوصية المسودات' : 'Enterprise Security Hardening, New Device 2FA & Privacy Isolation',
+      highlights: [
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'تفعيل التوثيق الثنائي (2FA Device Verification): التحقق التلقائي من بصمة الجهاز عند تسجيل الدخول وإلزام تأكيد رمز الأمان المكون من 6 أرقام للأجهزة الجديدة.'
+            : 'New Device 2FA Security: Automatic device fingerprint verification prompting a 6-digit 2FA security code challenge on new device logins.'
+        },
+        {
+          icon: '🔒',
+          text: isAr
+            ? 'خصوصية المسودات المطلقة (Recovery Drafts Privacy Isolation): عزل مسودات كل حساب تماماً وتطبيق سياسة البيانات الدنيا (رقم الفاتورة + المبلغ + الحالة + تفاصيل الخطأ فقط).'
+            : 'Minimal Privacy Draft Retention: Strict per-user Firestore isolation storing only essential metadata (Invoice ID, Amount, Status, and Error message if failed).'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'تأمين الباك إند (Helmet & Rate Limiting): تفعيل هيدرز التشفير الحصينة وحماية السيرفر من هجمات الإغراق (DDoS & Brute Force) وتحديد نطاق CORS.'
+            : 'Backend Fortification: Enforced Helmet HTTP security headers, CORS origin lockdown, and strict API rate limiting.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.0',
+      date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'إصلاح جذر الحذف الدائم لمشاريع المخازن ومنع إعادة إنشائها' : 'Permanent Warehouse Project Deletion Fix & Auto-Resurrection Elimination',
       highlights: [
         {

@@ -8,12 +8,17 @@ const invoiceRoutes = require("./src/routes/invoice");
 const etaRoutes = require("./src/routes/eta");
 const adminRoutes = require("./src/routes/admin");
 const warehouseRoutes = require("./src/routes/warehouse");
+const authSecurityRoutes = require("./src/routes/authSecurity");
+
+const { helmetMiddleware, apiLimiter, corsOptions } = require("./src/middleware/security");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors());
+// Security & Rate Limiting Middleware
+app.use(helmetMiddleware);
+app.use(cors(corsOptions));
+app.use("/api/", apiLimiter);
 app.use(express.json({ limit: "50mb" }));
 app.use(morgan("dev")); // Logging requests
 
@@ -28,6 +33,7 @@ app.use("/api/invoice", invoiceRoutes);
 app.use("/api/eta", etaRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/warehouse", warehouseRoutes);
+app.use("/api/auth-security", authSecurityRoutes);
 
 // Error Handling Middleware
 app.use((err, req, res, next) => {
