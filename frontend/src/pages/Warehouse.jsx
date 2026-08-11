@@ -335,7 +335,7 @@ export default function Warehouse() {
       if (res.success) {
         toast.success(res.message || (isAr ? `تم حذف المشروع ${proj.name} بنجاح` : `Project ${proj.name} deleted successfully`))
 
-        const updatedProjects = projects.filter((p) => p.id !== proj.id)
+        const updatedProjects = projects.filter((p) => p.id !== proj.id && p.code !== proj.code)
         setProjects(updatedProjects)
 
         if (selectedProjectId === proj.id) {

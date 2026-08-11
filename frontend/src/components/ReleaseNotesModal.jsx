@@ -7,10 +7,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.26.5',
+      version: 'v2.26.6',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
-      badgeColor: '#ffd700',
+      badgeColor: '#00e0a1',
+      title: isAr ? 'إصلاح جذر الحذف الدائم لمشاريع المخازن ومنع إعادة إنشائها' : 'Permanent Warehouse Project Deletion Fix & Auto-Resurrection Elimination',
+      highlights: [
+        {
+          icon: '🗑️',
+          text: isAr
+            ? 'منع التخريب التلقائي (Auto-Resurrection Fix): إلغاء خوارزمية إعادة إنشاء المشروع الافتراضي تلقائياً عند وجود مشاريع أخرى بالم مخزن، وتصفية كافة السجلات المكررة فورياً.'
+            : 'Eliminated Auto-Resurrection Logic: Prevented backend from force-recreating default stock projects when other projects exist, ensuring permanent Firestore deletion.'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'مزامنة الحالة المباشرة بالواجهة: تحديث تصفية المشاريع في واجهة المستخدم (ID & Code filtering) لضمان عدم ظهور المشروع المحذوف فور الضغط على تأكيد الحذف.'
+            : 'Instant UI State Sync: Filter deleted projects by ID and Code in real-time, eliminating ghost items upon deletion confirmation.'
+        }
+      ]
+    },
+    {
+      version: 'v2.26.6',
+      date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'ترقية تصميم الماستر أدمن بأيقونات ورموز وشعارات متحركة فاخرة' : 'Ultra-Premium Master GM Animated Badge & Glowing Avatar System',
       highlights: [
         {

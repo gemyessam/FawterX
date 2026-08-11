@@ -241,9 +241,8 @@ async function listProjects() {
     status: "active",
   };
 
-  // Ensure default_canex exists if no CANEX project exists
-  let hasDefault = projects.some((p) => p.id === "default_canex" || p.code === "CANEX");
-  if (!hasDefault) {
+  // Ensure default project exists ONLY if system has 0 projects in total
+  if (projects.length === 0) {
     await db.collection("warehouseProjects").doc("default_canex").set(
       {
         ...defaultProjectData,
@@ -252,7 +251,7 @@ async function listProjects() {
       },
       { merge: true }
     );
-    projects.unshift({ id: "default_canex", ...defaultProjectData });
+    projects.push({ id: "default_canex", ...defaultProjectData });
   }
 
   // Deduplicate while PRESERVING actual doc.id
@@ -1499,6 +1498,21 @@ async function deleteProject(projectId, actorUid) {
   }
 
   await projRef.delete();
+
+  // Also clean up any legacy or duplicate document matching default_canex ID or code
+  if (projectId === "default_canex" || resolvedId === "default_canex") {
+    try {
+      await db.collection("warehouseProjects").doc("default_canex").delete();
+    } catch (e) {}
+  }
+  if (projData.code) {
+    try {
+      const codeDups = await db.collection("warehouseProjects").where("code", "==", projData.code).get();
+      for (const dDoc of codeDups.docs) {
+        await dDoc.ref.delete();
+      }
+    } catch (e) {}
+  }
 
   return { success: true, message: `تم حذف المشروع ${projData.name || resolvedId} بنجاح` };
 }
