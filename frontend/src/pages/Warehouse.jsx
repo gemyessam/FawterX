@@ -115,6 +115,38 @@ export default function Warehouse() {
   const [usersList, setUsersList] = useState([])
   const [loadingPermissionsList, setLoadingPermissionsList] = useState(false)
   const [updatingUserUid, setUpdatingUserUid] = useState(null)
+  const [permissionsSearchQuery, setPermissionsSearchQuery] = useState('')
+  const [expandedUserUid, setExpandedUserUid] = useState(null)
+
+  const sortedAndFilteredWarehouseUsers = useMemo(() => {
+    const SUPER_ADMIN_EMAIL = 'gemy.essam.ge@gmail.com'
+    const q = (permissionsSearchQuery || '').trim().toLowerCase()
+    
+    let list = usersList
+    if (q) {
+      list = list.filter((usr) =>
+        (usr.displayName || '').toLowerCase().includes(q) ||
+        (usr.email || '').toLowerCase().includes(q) ||
+        (usr.uid || '').toLowerCase().includes(q)
+      )
+    }
+
+    return [...list].sort((a, b) => {
+      const aIsSuper = (a.email || '').trim().toLowerCase() === SUPER_ADMIN_EMAIL
+      const bIsSuper = (b.email || '').trim().toLowerCase() === SUPER_ADMIN_EMAIL
+      if (aIsSuper && !bIsSuper) return -1
+      if (!aIsSuper && bIsSuper) return 1
+
+      const aHasAccess = Boolean(a.warehouseEnabled || a.warehouseRole === 'admin' || a.role === 'admin')
+      const bHasAccess = Boolean(b.warehouseEnabled || b.warehouseRole === 'admin' || b.role === 'admin')
+      if (aHasAccess && !bHasAccess) return -1
+      if (!aHasAccess && bHasAccess) return 1
+
+      const aName = (a.displayName || a.email || '').toLowerCase()
+      const bName = (b.displayName || b.email || '').toLowerCase()
+      return aName.localeCompare(bName)
+    })
+  }, [usersList, permissionsSearchQuery])
 
   const loadWarehouseUsers = async () => {
     if (!isAdmin) return
@@ -3508,26 +3540,48 @@ export default function Warehouse() {
                       : 'Control which users can access the warehouse, assign specific allowed projects, and grant fine-grained permissions'}
                   </p>
                 </div>
-                <button
-                  className="btn"
-                  onClick={loadWarehouseUsers}
-                  disabled={loadingPermissionsList}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.06)',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    color: '#ffffff',
-                    borderRadius: '8px',
-                    padding: '0.45rem 0.85rem',
-                    fontSize: '0.82rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                  }}
-                >
-                  {loadingPermissionsList ? <span className="spinner"></span> : '🔄 ' + (isAr ? 'تحديث الصلاحيات' : 'Refresh Permissions')}
-                </button>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  {/* Search Input Box */}
+                  <div style={{ minWidth: '240px' }}>
+                    <input
+                      type="text"
+                      placeholder={isAr ? '🔍 بحث بالإيميل أو الاسم...' : '🔍 Search user by email or name...'}
+                      value={permissionsSearchQuery}
+                      onChange={(e) => setPermissionsSearchQuery(e.target.value)}
+                      style={{
+                        width: '100%',
+                        background: '#101223',
+                        color: '#ffffff',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        padding: '0.45rem 0.85rem',
+                        fontSize: '0.82rem',
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    className="btn"
+                    onClick={loadWarehouseUsers}
+                    disabled={loadingPermissionsList}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.06)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      color: '#ffffff',
+                      borderRadius: '8px',
+                      padding: '0.45rem 0.85rem',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                    }}
+                  >
+                    {loadingPermissionsList ? <span className="spinner"></span> : '🔄 ' + (isAr ? 'تحديث الصلاحيات' : 'Refresh Permissions')}
+                  </button>
+                </div>
               </div>
 
               {loadingPermissionsList ? (
@@ -3535,56 +3589,92 @@ export default function Warehouse() {
                   <span className="spinner" style={{ width: '24px', height: '24px', marginBottom: '0.5rem' }}></span>
                   <div>{isAr ? 'جاري تحميل قائمة المستخدمين والصلاحيات...' : 'Loading users & permissions...'}</div>
                 </div>
-              ) : usersList.length === 0 ? (
+              ) : sortedAndFilteredWarehouseUsers.length === 0 ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.2)', borderRadius: '10px' }}>
-                  {isAr ? 'لا يوجد مستخدمون مسجلون حالياً' : 'No users found.'}
+                  {isAr ? 'لا يوجد مستخدمون مطابقون للبحث' : 'No matching users found.'}
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {usersList.map((usr) => {
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                  {sortedAndFilteredWarehouseUsers.map((usr) => {
                     const SUPER_ADMIN_EMAIL = 'gemy.essam.ge@gmail.com'
                     const isFounderSuperAdmin = (usr.email || '').trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()
                     const isUserAdmin = usr.role === 'admin' || usr.warehouseRole === 'admin'
                     const isSaving = updatingUserUid === usr.uid
+                    const isExpanded = expandedUserUid === usr.uid
 
                     return (
                       <div
                         key={usr.uid}
                         style={{
-                          background: usr.warehouseEnabled ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.25)',
-                          border: isFounderSuperAdmin
+                          background: isFounderSuperAdmin
+                            ? 'rgba(255, 71, 87, 0.05)'
+                            : usr.warehouseEnabled ? 'rgba(0, 224, 161, 0.03)' : 'rgba(0, 0, 0, 0.25)',
+                          border: isExpanded
+                            ? '1px solid var(--accent)'
+                            : isFounderSuperAdmin
                             ? '1px solid rgba(255, 71, 87, 0.4)'
                             : usr.warehouseEnabled ? '1px solid rgba(0, 224, 161, 0.2)' : '1px solid rgba(255, 255, 255, 0.06)',
                           borderRadius: '12px',
-                          padding: '1.25rem',
+                          overflow: 'hidden',
                           transition: 'all 0.2s ease',
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.75rem', marginBottom: '0.85rem' }}>
+                        {/* Compact Header Bar */}
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '0.85rem 1.1rem',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                          }}
+                          onClick={() => setExpandedUserUid(isExpanded ? null : usr.uid)}
+                        >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: isFounderSuperAdmin ? 'rgba(255, 71, 87, 0.2)' : 'rgba(138, 180, 255, 0.15)', color: isFounderSuperAdmin ? '#ff4757' : '#8ab4ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.1rem' }}>
+                            <div style={{
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '50%',
+                              background: isFounderSuperAdmin ? 'rgba(255, 71, 87, 0.2)' : usr.warehouseEnabled ? 'rgba(0, 224, 161, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+                              color: isFounderSuperAdmin ? '#ff4757' : usr.warehouseEnabled ? '#00e0a1' : 'var(--text-muted)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justify: 'center',
+                              fontWeight: 800,
+                              fontSize: '1rem'
+                            }}>
                               {(usr.displayName || usr.email || 'U').charAt(0).toUpperCase()}
                             </div>
+
                             <div>
-                              <div style={{ fontWeight: 700, fontSize: '0.98rem', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                {usr.displayName || usr.email}
+                              <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                <span>{usr.displayName || usr.email}</span>
                                 {isFounderSuperAdmin ? (
-                                  <span className="badge" style={{ background: 'rgba(255, 71, 87, 0.2)', color: '#ff4757', border: '1px solid rgba(255, 71, 87, 0.4)', fontSize: '0.75rem', fontWeight: 800 }}>
-                                    ⚡ {isAr ? 'العملاق المؤسس (Super Admin)' : 'Founding Owner (Super Admin)'}
+                                  <span className="badge" style={{ background: 'rgba(255, 71, 87, 0.2)', color: '#ff4757', border: '1px solid rgba(255, 71, 87, 0.4)', fontSize: '0.72rem', fontWeight: 800 }}>
+                                    ⚡ {isAr ? 'العملاق المؤسس (Super Admin)' : 'Super Admin'}
                                   </span>
                                 ) : isUserAdmin ? (
                                   <span className="badge" style={{ background: 'rgba(255, 183, 77, 0.2)', color: '#ffb74d', border: '1px solid rgba(255, 183, 77, 0.4)', fontSize: '0.72rem' }}>
                                     👑 {isAr ? 'مدير مخزن' : 'Warehouse Admin'}
                                   </span>
-                                ) : null}
+                                ) : usr.warehouseEnabled ? (
+                                  <span className="badge badge-valid" style={{ fontSize: '0.72rem' }}>
+                                    ✅ {isAr ? 'مُصرّح له' : 'Access Granted'}
+                                  </span>
+                                ) : (
+                                  <span className="badge" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                                    🚫 {isAr ? 'معطّل' : 'Disabled'}
+                                  </span>
+                                )}
                               </div>
-                              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{usr.email}</div>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{usr.email}</div>
                             </div>
                           </div>
 
-                          {/* Main Toggle & Role */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer', fontSize: '0.88rem', fontWeight: 600, color: usr.warehouseEnabled ? '#00e0a1' : 'var(--text-muted)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }} onClick={(e) => e.stopPropagation()}>
+                            {/* Fast Access Checkbox */}
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer', fontSize: '0.82rem', fontWeight: 600, color: usr.warehouseEnabled ? '#00e0a1' : 'var(--text-muted)' }}>
                               <input
                                 type="checkbox"
                                 checked={usr.warehouseEnabled}
@@ -3593,178 +3683,212 @@ export default function Warehouse() {
                                   const val = e.target.checked
                                   setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, warehouseEnabled: val } : u))
                                 }}
-                                style={{ width: '18px', height: '18px', accentColor: '#00e0a1', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}
+                                style={{ width: '16px', height: '16px', accentColor: '#00e0a1', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}
                               />
-                              {isAr ? 'السماح بالوصول للمخزن' : 'Enable Warehouse Access'}
+                              <span style={{ display: 'inline-block' }}>{isAr ? 'السماح بالوصول' : 'Allow Access'}</span>
                             </label>
 
-                            <select
-                              value={usr.warehouseRole || 'warehouse_operator'}
-                              disabled={!usr.warehouseEnabled || isFounderSuperAdmin}
-                              onChange={(e) => {
-                                const val = e.target.value
-                                setUsersList(prev => prev.map(u => {
-                                  if (u.uid === usr.uid) {
-                                    if (val === 'admin') {
-                                      return { ...u, warehouseRole: val, canDelete: true, canEdit: true, canUpload: true, allowedProjects: ['*'] }
-                                    }
-                                    return { ...u, warehouseRole: val }
-                                  }
-                                  return u
-                                }))
-                              }}
+                            {/* Expand Permissions Toggle Button */}
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setExpandedUserUid(isExpanded ? null : usr.uid)}
                               style={{
-                                background: '#101223',
-                                color: '#ffffff',
-                                border: '1px solid var(--border)',
-                                borderRadius: '8px',
-                                padding: '0.4rem 0.75rem',
-                                fontSize: '0.82rem',
-                                opacity: (!usr.warehouseEnabled || isFounderSuperAdmin) ? 0.7 : 1,
-                                cursor: (!usr.warehouseEnabled || isFounderSuperAdmin) ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                                fontSize: '0.78rem',
+                                padding: '0.35rem 0.65rem',
+                                background: isExpanded ? 'rgba(0, 224, 161, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                                color: isExpanded ? '#00e0a1' : '#ffffff',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                borderRadius: '6px',
                               }}
                             >
-                              <option value="warehouse_operator">{isAr ? '👷 مشغّل مخزن (كامل العمليات)' : 'Warehouse Operator'}</option>
-                              <option value="warehouse_viewer">{isAr ? '👁️ مستعرض (قراءة فقط)' : 'Warehouse Viewer (Read Only)'}</option>
-                              <option value="admin">{isAr ? '👑 مدير مخزن (Admin)' : 'Warehouse Admin'}</option>
-                            </select>
+                              <span>⚙️ {isAr ? 'الصلاحيات' : 'Permissions'}</span>
+                              <span style={{ fontSize: '0.7rem' }}>{isExpanded ? '▲' : '▼'}</span>
+                            </button>
                           </div>
                         </div>
 
-                        {usr.warehouseEnabled && (
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', alignItems: 'start' }}>
-                            {/* Allowed Projects Selection */}
-                            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                              <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.6rem', color: '#8ab4ff', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                📂 {isAr ? 'المشاريع المسموح بالوصول إليها:' : 'Allowed Projects Scope:'}
-                              </div>
-
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer', color: (usr.allowedProjects || []).includes('*') ? '#00e0a1' : '#fff' }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={(usr.allowedProjects || ['*']).includes('*')}
-                                    disabled={isFounderSuperAdmin}
-                                    onChange={(e) => {
-                                      const isChecked = e.target.checked
-                                      setUsersList(prev => prev.map(u => {
-                                        if (u.uid === usr.uid) {
-                                          return { ...u, allowedProjects: isChecked ? ['*'] : [] }
+                        {/* Collapsible Permissions Detail Panel */}
+                        {isExpanded && (
+                          <div style={{
+                            padding: '1.1rem 1.25rem',
+                            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                            background: 'rgba(0, 0, 0, 0.2)',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>{isAr ? 'دور المستخدم في المخزن:' : 'Warehouse Role:'}</span>
+                                <select
+                                  value={usr.warehouseRole || 'warehouse_operator'}
+                                  disabled={!usr.warehouseEnabled || isFounderSuperAdmin}
+                                  onChange={(e) => {
+                                    const val = e.target.value
+                                    setUsersList(prev => prev.map(u => {
+                                      if (u.uid === usr.uid) {
+                                        if (val === 'admin') {
+                                          return { ...u, warehouseRole: val, canDelete: true, canEdit: true, canUpload: true, allowedProjects: ['*'] }
                                         }
-                                        return u
-                                      }))
-                                    }}
-                                    style={{ accentColor: '#00e0a1' }}
-                                  />
-                                  <strong>🌐 {isAr ? 'جميع المشاريع (All Projects)' : 'All Projects'}</strong>
-                                </label>
-
-                                {!(usr.allowedProjects || ['*']).includes('*') && (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginRight: '1rem', marginTop: '0.3rem' }}>
-                                    {projects.map((p) => {
-                                      const isProjChecked = (usr.allowedProjects || []).includes(p.id)
-                                      return (
-                                        <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}>
-                                          <input
-                                            type="checkbox"
-                                            checked={isProjChecked}
-                                            disabled={isFounderSuperAdmin}
-                                            onChange={(e) => {
-                                              const checked = e.target.checked
-                                              setUsersList(prev => prev.map(u => {
-                                                if (u.uid === usr.uid) {
-                                                  const current = (u.allowedProjects || []).filter(x => x !== '*')
-                                                  const updated = checked ? [...current, p.id] : current.filter(x => x !== p.id)
-                                                  return { ...u, allowedProjects: updated.length === 0 ? ['*'] : updated }
-                                                }
-                                                return u
-                                              }))
-                                            }}
-                                            style={{ accentColor: '#00e0a1' }}
-                                          />
-                                          {p.name} <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>({p.code || 'CODE'})</span>
-                                        </label>
-                                      )
-                                    })}
-                                  </div>
-                                )}
+                                        return { ...u, warehouseRole: val }
+                                      }
+                                      return u
+                                    }))
+                                  }}
+                                  style={{
+                                    background: '#101223',
+                                    color: '#ffffff',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '8px',
+                                    padding: '0.35rem 0.65rem',
+                                    fontSize: '0.82rem',
+                                    opacity: (!usr.warehouseEnabled || isFounderSuperAdmin) ? 0.7 : 1,
+                                    cursor: (!usr.warehouseEnabled || isFounderSuperAdmin) ? 'not-allowed' : 'pointer',
+                                  }}
+                                >
+                                  <option value="warehouse_operator">{isAr ? '👷 مشغّل مخزن (كامل العمليات)' : 'Warehouse Operator'}</option>
+                                  <option value="warehouse_viewer">{isAr ? '👁️ مستعرض (قراءة فقط)' : 'Warehouse Viewer (Read Only)'}</option>
+                                  <option value="admin">{isAr ? '👑 مدير مخزن (Admin)' : 'Warehouse Admin'}</option>
+                                </select>
                               </div>
                             </div>
 
-                            {/* Granular Action Rights */}
-                            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                              <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.6rem', color: '#ffb74d', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                🛡️ {isAr ? 'الأذونات والتحكم التفصيلي:' : 'Action Permissions & Restrictions:'}
+                            {usr.warehouseEnabled && (
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem', alignItems: 'start' }}>
+                                {/* Allowed Projects Selection */}
+                                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                  <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.6rem', color: '#8ab4ff', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    📂 {isAr ? 'المشاريع المسموح بالوصول إليها:' : 'Allowed Projects Scope:'}
+                                  </div>
+
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer', color: (usr.allowedProjects || []).includes('*') ? '#00e0a1' : '#fff' }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={(usr.allowedProjects || ['*']).includes('*')}
+                                        disabled={isFounderSuperAdmin}
+                                        onChange={(e) => {
+                                          const isChecked = e.target.checked
+                                          setUsersList(prev => prev.map(u => {
+                                            if (u.uid === usr.uid) {
+                                              return { ...u, allowedProjects: isChecked ? ['*'] : [] }
+                                            }
+                                            return u
+                                          }))
+                                        }}
+                                        style={{ accentColor: '#00e0a1' }}
+                                      />
+                                      <strong>🌐 {isAr ? 'جميع المشاريع (All Projects)' : 'All Projects'}</strong>
+                                    </label>
+
+                                    {!(usr.allowedProjects || ['*']).includes('*') && (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginRight: '1rem', marginTop: '0.3rem' }}>
+                                        {projects.map((p) => {
+                                          const isProjChecked = (usr.allowedProjects || []).includes(p.id)
+                                          return (
+                                            <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}>
+                                              <input
+                                                type="checkbox"
+                                                checked={isProjChecked}
+                                                disabled={isFounderSuperAdmin}
+                                                onChange={(e) => {
+                                                  const checked = e.target.checked
+                                                  setUsersList(prev => prev.map(u => {
+                                                    if (u.uid === usr.uid) {
+                                                      const current = (u.allowedProjects || []).filter(x => x !== '*')
+                                                      const updated = checked ? [...current, p.id] : current.filter(x => x !== p.id)
+                                                      return { ...u, allowedProjects: updated.length === 0 ? ['*'] : updated }
+                                                    }
+                                                    return u
+                                                  }))
+                                                }}
+                                                style={{ accentColor: '#00e0a1' }}
+                                              />
+                                              {p.name} <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>({p.code || 'CODE'})</span>
+                                            </label>
+                                          )
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Granular Action Rights */}
+                                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                  <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.6rem', color: '#ffb74d', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    🛡️ {isAr ? 'الأذونات والتحكم التفصيلي:' : 'Action Permissions & Restrictions:'}
+                                  </div>
+
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={usr.canDelete ?? true}
+                                        disabled={isFounderSuperAdmin}
+                                        onChange={(e) => {
+                                          const val = e.target.checked
+                                          setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canDelete: val } : u))
+                                        }}
+                                        style={{ accentColor: '#ff4757' }}
+                                      />
+                                      <span>🗑️ {isAr ? 'صلاحية حذف الأصناف والفواتير (Can Delete)' : 'Can Delete Items & Invoices'}</span>
+                                    </label>
+
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={usr.canEdit ?? true}
+                                        disabled={isFounderSuperAdmin}
+                                        onChange={(e) => {
+                                          const val = e.target.checked
+                                          setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canEdit: val } : u))
+                                        }}
+                                        style={{ accentColor: '#00e0a1' }}
+                                      />
+                                      <span>✏️ {isAr ? 'صلاحية تعديل الكميات والبيانات (Can Edit)' : 'Can Edit Quantities & Metadata'}</span>
+                                    </label>
+
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={usr.canUpload ?? true}
+                                        disabled={isFounderSuperAdmin}
+                                        onChange={(e) => {
+                                          const val = e.target.checked
+                                          setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canUpload: val } : u))
+                                        }}
+                                        style={{ accentColor: '#8ab4ff' }}
+                                      />
+                                      <span>📥 {isAr ? 'صلاحية رفع واعتماد الفواتير (Can Upload/Process)' : 'Can Process Invoices'}</span>
+                                    </label>
+                                  </div>
+                                </div>
                               </div>
+                            )}
 
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={usr.canDelete ?? true}
-                                    disabled={isFounderSuperAdmin}
-                                    onChange={(e) => {
-                                      const val = e.target.checked
-                                      setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canDelete: val } : u))
-                                    }}
-                                    style={{ accentColor: '#ff4757' }}
-                                  />
-                                  <span>🗑️ {isAr ? 'صلاحية حذف الأصناف والفواتير (Can Delete)' : 'Can Delete Items & Invoices'}</span>
-                                </label>
-
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={usr.canEdit ?? true}
-                                    disabled={isFounderSuperAdmin}
-                                    onChange={(e) => {
-                                      const val = e.target.checked
-                                      setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canEdit: val } : u))
-                                    }}
-                                    style={{ accentColor: '#00e0a1' }}
-                                  />
-                                  <span>✏️ {isAr ? 'صلاحية تعديل الكميات والبيانات (Can Edit)' : 'Can Edit Quantities & Metadata'}</span>
-                                </label>
-
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={usr.canUpload ?? true}
-                                    disabled={isFounderSuperAdmin}
-                                    onChange={(e) => {
-                                      const val = e.target.checked
-                                      setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canUpload: val } : u))
-                                    }}
-                                    style={{ accentColor: '#8ab4ff' }}
-                                  />
-                                  <span>📥 {isAr ? 'صلاحية رفع واعتماد الفواتير (Can Upload/Process)' : 'Can Process Invoices'}</span>
-                                </label>
-                              </div>
+                            {/* Save Action Bar */}
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                              <button
+                                className="btn btn-primary"
+                                onClick={() => handleSaveUserPermissions(usr)}
+                                disabled={isSaving || isFounderSuperAdmin}
+                                style={{
+                                  padding: '0.4rem 1rem',
+                                  fontSize: '0.82rem',
+                                  fontWeight: 700,
+                                  borderRadius: '8px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.4rem',
+                                  opacity: isFounderSuperAdmin ? 0.6 : 1,
+                                  cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer',
+                                }}
+                              >
+                                {isSaving ? <span className="spinner"></span> : '💾 ' + (isAr ? 'حفظ الصلاحيات' : 'Save Permissions')}
+                              </button>
                             </div>
                           </div>
                         )}
-
-                        {/* Save Action Bar */}
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                          <button
-                            className="btn btn-primary"
-                            onClick={() => handleSaveUserPermissions(usr)}
-                            disabled={isSaving || isFounderSuperAdmin}
-                            style={{
-                              padding: '0.4rem 1rem',
-                              fontSize: '0.82rem',
-                              fontWeight: 700,
-                              borderRadius: '8px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.4rem',
-                              opacity: isFounderSuperAdmin ? 0.6 : 1,
-                              cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer',
-                            }}
-                          >
-                            {isSaving ? <span className="spinner"></span> : '💾 ' + (isAr ? 'حفظ الصلاحيات' : 'Save Permissions')}
-                          </button>
-                        </div>
                       </div>
                     )
                   })}

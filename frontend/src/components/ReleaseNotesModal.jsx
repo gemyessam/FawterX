@@ -7,10 +7,25 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.3',
+      version: 'v2.27.4',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'تحسين إدارة صلاحيات المخزن: ترتيب الأولوية، البحث السريع، والواجهة المدمجة' : 'Warehouse Access Control UI: Smart Search, Accordion View & Priority Sorting',
+      highlights: [
+        {
+          icon: '✨',
+          text: isAr
+            ? 'ترتيب ظهور الإيميلات بأولوية Super Admin ثم المستخدمين المُمكّنين، وإضافة شريط بحث سريع وتقليص القائمة بتصميم آكورديون مدمج.'
+            : 'Prioritized Super Admin and enabled users, added fast live email search, and converted items into a compact collapsible accordion UI.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.3',
+      date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'إصلاح لوحة الأدمن: ضمان تصريحات الإدارة المحمية وجلب المستخدمين بدون أخطاء' : 'Admin Panel Fix: Fortified Admin Authorization & Resilient Data Fetching',
       highlights: [
         {
