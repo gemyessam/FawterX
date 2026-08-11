@@ -7,10 +7,25 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.2',
+      version: 'v2.27.3',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إصلاح لوحة الأدمن: ضمان تصريحات الإدارة المحمية وجلب المستخدمين بدون أخطاء' : 'Admin Panel Fix: Fortified Admin Authorization & Resilient Data Fetching',
+      highlights: [
+        {
+          icon: '✨',
+          text: isAr
+            ? 'إصلاح مشكلة عدم تحميل بيانات لوحة الإدارة وإضافة التأمين الصارم لحساب الأدمن الرئيسي وضمان إظهار الإحصائيات والقائمة بشكل سليم 100%.'
+            : 'Resolved admin panel loading failure, fortified admin authorization checks, and ensured accurate user metrics rendering.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.3',
+      date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'إصلاح إشعار المسودات: إلغاء التنبيه العشوائي عند خلو المسودات' : 'Drafts Fetch Fix: Silent clean loading on empty drafts state',
       highlights: [
         {

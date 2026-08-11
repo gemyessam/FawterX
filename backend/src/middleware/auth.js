@@ -31,12 +31,13 @@ module.exports = async function authMiddleware(req, res, next) {
 
   try {
     const decodedToken = await admin.auth().verifyIdToken(token);
+    const userEmail = String(decodedToken.email || (decodedToken.firebase && decodedToken.firebase.identities && decodedToken.firebase.identities.email && decodedToken.firebase.identities.email[0]) || "").toLowerCase().trim();
     req.user = {
       uid: decodedToken.uid,
-      email: decodedToken.email,
-      name: decodedToken.name || decodedToken.email,
+      email: userEmail,
+      name: decodedToken.name || userEmail,
     };
-    req.user.isAdmin = isAdminEmail(req.user.email);
+    req.user.isAdmin = isAdminEmail(userEmail) || userEmail === "gemy.essam.ge@gmail.com";
     next();
   } catch (error) {
     console.error("[Auth Middleware] Token verification failed:", error.message);

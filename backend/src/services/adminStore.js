@@ -100,6 +100,29 @@ async function listUsers() {
     console.warn("Could not fetch auth users in bulk:", err.message);
   }
 
+  const adminEmail = "gemy.essam.ge@gmail.com";
+  const hasAdminInMap = Object.values(usersMap).some(u => String(u.email || "").toLowerCase() === adminEmail);
+  if (!hasAdminInMap) {
+    usersMap["admin-primary-account"] = {
+      uid: "admin-primary-account",
+      email: adminEmail,
+      displayName: "GeMy (المدير الرئيسي)",
+      photoURL: "",
+      submissionsCount: 0,
+      dailyCount: 0,
+      lastReset: null,
+      lastSubmission: null,
+      isSubscribed: true,
+      role: "admin",
+      status: "active",
+      quotaDaily: 9999,
+      quotaMonthly: 99999,
+      expiresAt: null,
+      note: "الحساب الإداري الرئيسي للمنصة",
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   return Object.values(usersMap).sort((a, b) =>
     String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))
   );

@@ -135,11 +135,26 @@ export default function AdminPanel() {
   async function loadData() {
     setLoading(true)
     try {
-      const [statsRes, usersRes] = await Promise.all([getAdminStats(), getAdminUsers()])
-      if (statsRes?.success && statsRes.stats) setStats(statsRes.stats)
-      if (usersRes?.success && usersRes.users) setUsers(usersRes.users)
+      const statsRes = await getAdminStats().catch(err => {
+        console.warn('Stats fetch error:', err)
+        return null
+      })
+      const usersRes = await getAdminUsers().catch(err => {
+        console.warn('Users fetch error:', err)
+        return null
+      })
+
+      if (statsRes?.success && statsRes.stats) {
+        setStats(statsRes.stats)
+      }
+      if (usersRes?.success && usersRes.users) {
+        setUsers(usersRes.users)
+      }
+      if (!statsRes?.success && !usersRes?.success) {
+        toast.error(t.loadingError)
+      }
     } catch (error) {
-      toast.error(t.loadingError)
+      console.error(error)
     } finally {
       setLoading(false)
     }
