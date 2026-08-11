@@ -1,4 +1,4 @@
-<div dir="rtl">
+<div align="right" dir="rtl" style="text-align: right; direction: rtl;">
 
 # 📘 الدليل المعماري والهندسي الشامل لمنصة FawterX (v2.26.4)
 
@@ -6,9 +6,9 @@
 
 ---
 
-## 🎯 1. التحدي والحل التقني (The Problem & Solution)
+<h2 align="right">🎯 1. التحدي والحل التقني (The Problem & Solution)</h2>
 
-### ❌ المشكلة قبل FawterX:
+<h3 align="right">❌ المشكلة قبل FawterX:</h3>
 مصلحة الضرائب المصرية (**ETA - Egyptian Tax Authority**) تفرض على الشركات تقديم كافة الفواتير بصيغة رقمية مجهزة بشروط صارمة:
 - تكويد موحد (EGS / GS1).
 - حسابات الضرائب والخصوم بدقة تصل لـ 4 أرقام عشرية.
@@ -17,7 +17,7 @@
 
 عندما تصدر شركة (مثل **Schüco** أو **Canex**) فواتيرها عبر ملفات **Excel / Commercial Invoices** ضخمة تحتوي على مئات البنود، كانت عملية الإدخال اليدوي تسحب أياماً وتتسبب في خطأ بشري يرفضه البورتال.
 
-### ✅ الحل في FawterX:
+<h3 align="right">✅ الحل في FawterX:</h3>
 منصة **SaaS ذكية** تعمل كبديل خفيف لنظم الـ ERP:
 1. رفع ملف الإكسيل مباشرة كما هو بدون الحاجة لإعادة الترتيب مرتين.
 2. تحليل ذكي مع تصفية تلقائية لصفوف الإجماليات (Summary Footers) لعدم تكرار البنود.
@@ -26,24 +26,67 @@
 
 ---
 
-## 🛠️ 2. التقنيات المستخدمة ولماذا تم اختيارها (Tech Stack & Rationale)
+<h2 align="right">🛠️ 2. التقنيات المستخدمة ولماذا تم اختيارها (Tech Stack & Rationale)</h2>
 
-| التقنية | الدور في المشروع | سبب الاختيار والتفوق التقني |
-| :--- | :--- | :--- |
-| **React 18 + Vite** | الواجهة الأمامية (Frontend) | سرعة بناء واستجابة فائقة (HMR)، وإدارة حالة الكود بسلاسة دون ثقل الفريموركات التقليدية. |
-| **Vanilla CSS + Glassmorphism** | التصميم والتنسيق (Styling) | إعطاء المنصة مظهر هجين وفاخر جداً (Dark Mode + Neon Badges) يبهر العميل دون الاعتماد على Tailwind. |
-| **Node.js + Express** | الخادم الخلفي (Backend) | خفيف، سريع جداً في معالجة طلبات الـ I/O والتحليل المباشر لملفات الإكسيل وتحويل البيانات لـ JSON. |
-| **XLSX (SheetJS)** | قراءة ملفات Excel | مكتبة عالية الكفاءة مكنتنا من استخراج الجداول وحسابات البنود من شيتات الإكسيل بسرعة الخاطف. |
-| **Firebase Auth & Firestore** | التوثيق وقواعد البيانات | توثيق سريع بـ Google Sign-In وإدارة بيانات فائقة السرعة بدون الحاجة لإدارة سيرفرات SQL معقدة. |
-| **C# (.NET) / CAdES-BES** | برنامج التوقيع (FawterX Signer) | التواصل المباشر مع تعريفات الـ Windows Cryptographic Service Provider (CSP) لاستخراج شهادة الـ USB Token وتوقيع الفواتير. |
-| **Firebase Hosting** | استضافة الواجهة الأمامية | استضافة مجانية، سريعة، ومحمية بـ CDN عالمي للفلايرز والـ Frontend. |
-| **Render** | استضافة Node.js Backend | تشغيل السيرفر الخلفي 24/7 مع دعم التحديث التلقائي فور الـ `git push`. |
+<table align="right" dir="rtl" style="width: 100%; text-align: right;">
+  <thead>
+    <tr>
+      <th align="right">التقنية</th>
+      <th align="right">الدور في المشروع</th>
+      <th align="right">سبب الاختيار والتفوق التقني</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="right"><b>React 18 + Vite</b></td>
+      <td align="right">الواجهة الأمامية (Frontend)</td>
+      <td align="right">سرعة بناء واستجابة فائقة (HMR)، وإدارة حالة الكود بسلاسة دون ثقل الفريموركات التقليدية.</td>
+    </tr>
+    <tr>
+      <td align="right"><b>Vanilla CSS + Glassmorphism</b></td>
+      <td align="right">التصميم والتنسيق (Styling)</td>
+      <td align="right">إعطاء المنصة مظهر هجين وفاخر جداً (Dark Mode + Neon Badges) يبهر العميل دون الاعتماد على Tailwind.</td>
+    </tr>
+    <tr>
+      <td align="right"><b>Node.js + Express</b></td>
+      <td align="right">الخادم الخلفي (Backend)</td>
+      <td align="right">خفيف، سريع جداً في معالجة طلبات الـ I/O والتحليل المباشر لملفات الإكسيل وتحويل البيانات لـ JSON.</td>
+    </tr>
+    <tr>
+      <td align="right"><b>XLSX (SheetJS)</b></td>
+      <td align="right">قراءة ملفات Excel</td>
+      <td align="right">مكتبة عالية الكفاءة مكنتنا من استخراج الجداول وحسابات البنود من شيتات الإكسيل بسرعة الخاطف.</td>
+    </tr>
+    <tr>
+      <td align="right"><b>Firebase Auth & Firestore</b></td>
+      <td align="right">التوثيق وقواعد البيانات</td>
+      <td align="right">توثيق سريع بـ Google Sign-In وإدارة بيانات فائقة السرعة بدون الحاجة لإدارة سيرفرات SQL معقدة.</td>
+    </tr>
+    <tr>
+      <td align="right"><b>C# (.NET) / CAdES-BES</b></td>
+      <td align="right">برنامج التوقيع (FawterX Signer)</td>
+      <td align="right">التواصل المباشر مع تعريفات الـ Windows Cryptographic Service Provider (CSP) لاستخراج شهادة الـ USB Token وتوقيع الفواتير.</td>
+    </tr>
+    <tr>
+      <td align="right"><b>Firebase Hosting</b></td>
+      <td align="right">استضافة الواجهة الأمامية</td>
+      <td align="right">استضافة مجانية، سريعة، ومحمية بـ CDN عالمي للفلايرز والـ Frontend.</td>
+    </tr>
+    <tr>
+      <td align="right"><b>Render</b></td>
+      <td align="right">استضافة Node.js Backend</td>
+      <td align="right">تشغيل السيرفر الخلفي 24/7 مع دعم التحديث التلقائي فور الـ <code>git push</code>.</td>
+    </tr>
+  </tbody>
+</table>
+
+<br/><br/>
 
 ---
 
-## 🏗️ 3. الأجزاء الرئيسية للكود وكيف تعمل (Core Code Structure)
+<h2 align="right">🏗️ 3. الأجزاء الرئيسية للكود وكيف تعمل (Core Code Structure)</h2>
 
-### أ. الواجهة الأمامية (Frontend Architecture)
+<h3 align="right">أ. الواجهة الأمامية (Frontend Architecture)</h3>
 
 1. **`App.jsx`**:
    - يحتوي على الـ **Routing** المترجم بيئياً بالكامل.
@@ -61,7 +104,7 @@
 
 ---
 
-### ب. الخادم الخلفي (Backend Architecture)
+<h3 align="right">ب. الخادم الخلفي (Backend Architecture)</h3>
 
 1. **`smartParser.js` & `excelParser.js`**:
    - **القلب النابض للمحلل:** يقرأ ملف الإكسيل، يحدد الهيدر (رقم الفاتورة، تاريخ التوريد، اسم العميل، الـ PO/SO Ref)، ثم يمر على الصفوف واستخراج البنود.
@@ -80,7 +123,7 @@
 
 ---
 
-### ج. محرك التوقيع الإلكتروني (FawterX Signer - C#)
+<h3 align="right">ج. محرك التوقيع الإلكتروني (FawterX Signer - C#)</h3>
 
 - **الملف:** `signer.cs`
 - **وظيفته:** نظراً لأن المتصفحات (Chrome/Edge) لا تستطيع الوصول المباشر للـ USB Token الموصول بجهاز الكومبيوتر لأسباب أمنية، قمنا ببناء تطبيق خفيف بلغة **C#** يعمل كـ Local Bridge على الجهاز.
@@ -92,7 +135,7 @@
 
 ---
 
-## 🔒 4. نظام الحماية وحصانة المؤسس (Founding Super Admin Immunity)
+<h2 align="right">🔒 4. نظام الحماية وحصانة المؤسس (Founding Super Admin Immunity)</h2>
 
 لحماية نظامك وتأمين مكانتك كـ **المؤسس والعملاق الأكبر للمنصة**:
 - تم تثبيت الإيميل `gemy.essam.ge@gmail.com` في ملفات السيرفر (`warehouseStore.js`) والـ Frontend (`Warehouse.jsx`).
@@ -101,7 +144,7 @@
 
 ---
 
-## 🔄 5. دورة العمل النشر والتحديث الأوتوماتيكي (Deployment Rules)
+<h2 align="right">🔄 5. دورة العمل النشر والتحديث الأوتوماتيكي (Deployment Rules)</h2>
 
 بناءً على القاعدة القياسية المعتمدة للنظام:
 1. عند التعديل في الكود يتم ترفيع رقم الإصدار في `package.json` و `App.jsx`.
