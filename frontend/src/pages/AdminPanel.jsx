@@ -454,7 +454,15 @@ export default function AdminPanel() {
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', wordBreak: 'break-word', marginTop: '0.25rem' }}>{u.email || u.uid}</div>
                         <div style={{ color: 'var(--text-dim)', fontSize: '0.72rem', marginTop: '0.2rem', wordBreak: 'break-all' }}>{u.uid}</div>
                       </td>
-                      <td><span className="badge badge-valid" style={{ textTransform: 'uppercase' }}>{u.role || 'user'}</span></td>
+                      <td>
+                        {(u.email && u.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) || u.role === 'admin' ? (
+                          <span className="badge" style={{ background: 'linear-gradient(135deg, #ffd700 0%, #ff8c00 100%)', color: '#000', fontWeight: '900', boxShadow: '0 0 10px rgba(255, 215, 0, 0.5)', border: 'none', padding: '0.35rem 0.75rem', borderRadius: '999px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                            👑 KING / ADMIN
+                          </span>
+                        ) : (
+                          <span className="badge badge-valid" style={{ textTransform: 'uppercase' }}>{u.role || 'user'}</span>
+                        )}
+                      </td>
                       <td><span className="badge" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }}>{u.status || 'active'}</span></td>
                       <td>{quota}</td>
                       <td>{used}</td>

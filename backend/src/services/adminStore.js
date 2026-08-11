@@ -46,20 +46,22 @@ function ensurePrimaryAdmin(usersMap) {
 function sanitizeUserSnapshot(doc) {
   const data = doc.data() || {};
   const access = data.access && typeof data.access === "object" ? data.access : data;
+  const email = data.email || "";
+  const isSuperAdmin = isAdminEmail(email) || email.toLowerCase() === "gemy.essam.ge@gmail.com";
   return {
     uid: doc.id,
-    email: data.email || "",
+    email,
     displayName: data.displayName || data.name || "",
     photoURL: data.photoURL || "",
     submissionsCount: data.submissionsCount || 0,
     dailyCount: data.dailyCount || 0,
     lastReset: data.lastReset || null,
     lastSubmission: data.lastSubmission || null,
-    isSubscribed: Boolean(access.isSubscribed || data.isSubscribed),
-    role: String(access.role || data.role || "user").toLowerCase(),
+    isSubscribed: Boolean(isSuperAdmin || access.isSubscribed || data.isSubscribed),
+    role: isSuperAdmin ? "admin" : String(access.role || data.role || "user").toLowerCase(),
     status: String(access.status || data.status || "active").toLowerCase(),
-    quotaDaily: Number(access.quotaDaily ?? access.dailyLimit ?? data.quotaDaily ?? data.dailyLimit ?? 10),
-    quotaMonthly: access.quotaMonthly ?? data.quotaMonthly ?? null,
+    quotaDaily: isSuperAdmin ? 99999 : Number(access.quotaDaily ?? access.dailyLimit ?? data.quotaDaily ?? data.dailyLimit ?? 10),
+    quotaMonthly: isSuperAdmin ? 999999 : (access.quotaMonthly ?? data.quotaMonthly ?? null),
     expiresAt: access.expiresAt || data.expiresAt || null,
     note: access.note || data.note || "",
     updatedAt: data.updatedAt || null,
