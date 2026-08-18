@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.14',
+      version: 'v2.27.15',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'تطبيق التحقق بخطوتين عبر Google Authenticator (TOTP) بدون سيرفرات بريد' : 'Google Authenticator (TOTP) 2FA Implementation',
+      highlights: [
+        {
+          icon: '📱',
+          text: isAr
+            ? 'تطبيق المصادقة الثنائية القياسية عبر تطبيق Google Authenticator برمز QR ممسوح عبر الهاتف ومفتاح احتياطي.'
+            : 'Enforced RFC 6238 TOTP 2FA via Google Authenticator with QR scan and manual secret fallback.'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'عمل النظام ذاتياً وفورياً بدون أي اعتماد على سيرفرات البريد الإلكتروني أو تأخر رسائل الـ OTP.'
+            : 'Zero email/SMTP dependencies with instant offline code verification changing every 30 seconds.'
+        },
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'نافذة زمنية مرنة وتوثيق تلقائي للأجهزة المعتمدة بعد تأكيد الرمز الأول بنجاح.'
+            : 'Clock drift tolerance window with automatic device trust registration upon initial verification.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.14',
+      date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'تأمين التحقق بخطوتين عبر البريد الإلكتروني (2FA Email OTP Security)' : 'Secure 2FA Email OTP Verification System',
       highlights: [
         {
@@ -450,7 +477,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.27.14 {isAr ? 'النسخة الحالية' : 'Active'}
+              v2.27.15 {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}

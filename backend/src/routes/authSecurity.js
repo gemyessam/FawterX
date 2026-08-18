@@ -2,7 +2,7 @@ const express = require("express");
 const authMiddleware = require("../middleware/auth");
 const { getDeviceFingerprint, checkDeviceTrust } = require("../middleware/deviceAuth");
 const admin = require("../services/firebaseAdmin");
-const { send2FAEmail } = require("../services/emailService");
+const { generateTotpSetup, verifyTotpToken } = require("../services/totpService");
 
 const router = express.Router();
 router.use(express.json());
@@ -18,20 +18,9 @@ function getDb() {
   return null;
 }
 
-function maskEmail(email) {
-  if (!email || typeof email !== "string" || !email.includes("@")) return email || "";
-  const [user, domain] = email.split("@");
-  if (user.length <= 2) {
-    return `${user.charAt(0)}*@${domain}`;
-  }
-  const stars = "*".repeat(Math.min(user.length - 2, 4));
-  return `${user.charAt(0)}${stars}${user.slice(-1)}@${domain}`;
-}
-
 /**
  * GET /api/auth-security/device-status
- * Checks if current device is trusted or requires 2FA verification.
- * Automatically triggers an OTP email when a new device is detected.
+ * Checks if current device is trusted or requires TOTP (Google Authenticator) 2FA
  */
 router.get("/device-status", async (req, res) => {
   try {
@@ -39,121 +28,59 @@ router.get("/device-status", async (req, res) => {
     const deviceFp = req.deviceFingerprint || getDeviceFingerprint(req);
     const userEmail = req.user.email || "";
 
-    if (isNewDevice) {
-      const db = getDb();
-      if (db) {
-        const challengeRef = db.collection("users").doc(req.user.uid).collection("securityChallenges").doc(deviceFp);
-        const snap = await challengeRef.get();
-        const now = Date.now();
-
-        let shouldSendEmail = false;
-        let challengeCode = "";
-
-        if (snap.exists) {
-          const data = snap.data();
-          const expiresAt = new Date(data.expiresAt).getTime();
-          if (now < expiresAt) {
-            challengeCode = data.code;
-          }
-        }
-
-        if (!challengeCode) {
-          // Generate fresh 6-digit cryptographic PIN code
-          challengeCode = Math.floor(100000 + Math.random() * 900000).toString();
-          await challengeRef.set({
-            code: challengeCode,
-            deviceFingerprint: deviceFp,
-            createdAt: new Date().toISOString(),
-            lastSentAt: new Date().toISOString(),
-            expiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
-            attempts: 0,
-          });
-          shouldSendEmail = true;
-        }
-
-        if (shouldSendEmail && userEmail) {
-          send2FAEmail({
-            toEmail: userEmail,
-            code: challengeCode,
-            deviceDetails: {
-              userAgent: req.headers["user-agent"] || "متصفح الويب",
-              ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "",
-            },
-          }).catch((e) => console.error("[2FA Email Error]:", e.message));
-        }
-      }
+    if (!isNewDevice) {
+      return res.json({
+        success: true,
+        userEmail,
+        isNewDevice: false,
+        deviceFingerprint: deviceFp,
+      });
     }
+
+    const db = getDb();
+    if (!db) {
+      return res.json({
+        success: true,
+        userEmail,
+        isNewDevice: false,
+        deviceFingerprint: deviceFp,
+      });
+    }
+
+    const userDocRef = db.collection("users").doc(req.user.uid);
+    const userSnap = await userDocRef.get();
+    const userData = userSnap.exists ? userSnap.data() : {};
+
+    // Check if user already has an active TOTP secret configured
+    if (userData.totpEnabled && userData.totpSecret) {
+      return res.json({
+        success: true,
+        userEmail,
+        isNewDevice: true,
+        needsTotpSetup: false,
+        deviceFingerprint: deviceFp,
+      });
+    }
+
+    // User does not have TOTP setup yet -> generate new QR code & secret
+    const setup = await generateTotpSetup(userEmail);
+    await userDocRef.set(
+      {
+        pendingTotpSecret: setup.secret,
+        email: userEmail,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
 
     return res.json({
       success: true,
       userEmail,
-      emailMasked: maskEmail(userEmail),
-      isNewDevice,
+      isNewDevice: true,
+      needsTotpSetup: true,
+      qrCode: setup.qrCodeDataUrl,
+      secretText: setup.secret,
       deviceFingerprint: deviceFp,
-    });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-/**
- * POST /api/auth-security/resend-code
- * Resends the 6-digit security OTP to the user's email (Rate-limited with 60s cooldown)
- */
-router.post("/resend-code", async (req, res) => {
-  try {
-    const deviceFp = req.deviceFingerprint || getDeviceFingerprint(req);
-    const userEmail = req.user.email || "";
-    const db = getDb();
-
-    if (!db) {
-      return res.status(500).json({ success: false, message: "قاعدة البيانات غير متاحة." });
-    }
-
-    const challengeRef = db.collection("users").doc(req.user.uid).collection("securityChallenges").doc(deviceFp);
-    const snap = await challengeRef.get();
-    const now = Date.now();
-
-    if (snap.exists) {
-      const data = snap.data();
-      const lastSentAt = data.lastSentAt ? new Date(data.lastSentAt).getTime() : 0;
-      const cooldownMs = 60 * 1000;
-
-      if (now - lastSentAt < cooldownMs) {
-        const remainingSec = Math.ceil((cooldownMs - (now - lastSentAt)) / 1000);
-        return res.status(429).json({
-          success: false,
-          message: `يرجى الانتظار ${remainingSec} ثانية قبل إعادة طلب رمز أمان جديد.`,
-          retryAfterSec: remainingSec,
-        });
-      }
-    }
-
-    // Generate new 6-digit code
-    const challengeCode = Math.floor(100000 + Math.random() * 900000).toString();
-    await challengeRef.set({
-      code: challengeCode,
-      deviceFingerprint: deviceFp,
-      createdAt: new Date().toISOString(),
-      lastSentAt: new Date().toISOString(),
-      expiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
-      attempts: 0,
-    });
-
-    if (userEmail) {
-      await send2FAEmail({
-        toEmail: userEmail,
-        code: challengeCode,
-        deviceDetails: {
-          userAgent: req.headers["user-agent"] || "متصفح الويب",
-          ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "",
-        },
-      });
-    }
-
-    return res.json({
-      success: true,
-      message: "تم إرسال رمز التحقق الجديد إلى بريدك الإلكتروني بنجاح.",
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -162,13 +89,13 @@ router.post("/resend-code", async (req, res) => {
 
 /**
  * POST /api/auth-security/verify-2fa
- * Verifies the 6-digit security code and marks the device as trusted
+ * Verifies the 6-digit TOTP code from Google Authenticator and registers the device
  */
 router.post("/verify-2fa", async (req, res) => {
   try {
     const { code } = req.body;
-    if (!code || code.trim().length !== 6) {
-      return res.status(400).json({ success: false, message: "رمز التحقق يجب أن يتكون من 6 أرقام." });
+    if (!code || code.toString().trim().length !== 6) {
+      return res.status(400).json({ success: false, message: "رمز المصادقة يجب أن يتكون من 6 أرقام." });
     }
 
     const deviceFp = req.deviceFingerprint || getDeviceFingerprint(req);
@@ -177,57 +104,64 @@ router.post("/verify-2fa", async (req, res) => {
       return res.status(500).json({ success: false, message: "قاعدة البيانات غير متاحة." });
     }
 
-    const challengeRef = db.collection("users").doc(req.user.uid).collection("securityChallenges").doc(deviceFp);
-    const snap = await challengeRef.get();
-
-    if (!snap.exists) {
-      return res.status(400).json({ success: false, message: "طلب التحقق غير صالح أو انتهت صلاحيته. يُرجى إعادة طلب رمز جديد." });
+    const userDocRef = db.collection("users").doc(req.user.uid);
+    const userSnap = await userDocRef.get();
+    if (!userSnap.exists) {
+      return res.status(400).json({ success: false, message: "حساب المستخدم غير موجود." });
     }
 
-    const challengeData = snap.data();
-    const now = Date.now();
-    const expiresAt = challengeData.expiresAt ? new Date(challengeData.expiresAt).getTime() : 0;
+    const userData = userSnap.data();
+    const activeSecret = (userData.totpEnabled && userData.totpSecret) || userData.pendingTotpSecret;
 
-    if (now > expiresAt) {
-      await challengeRef.delete();
-      return res.status(400).json({ success: false, message: "انتهت صلاحية رمز التحقق. يرجى طلب رمز أمان جديد." });
-    }
-
-    const currentAttempts = (challengeData.attempts || 0) + 1;
-    if (currentAttempts > 5) {
-      await challengeRef.delete();
+    if (!activeSecret) {
       return res.status(400).json({
         success: false,
-        message: "تم تجاوز الحد الأقصى للمحاولات الخاطئة. تم إلغاء الرمز لأسباب أمنية، يرجى طلب رمز جديد.",
+        message: "لم يتم العثور على مفتاح مصادقة للحساب. يرجى إعادة تحميل الصفحة.",
       });
     }
 
-    if (challengeData.code !== code.trim()) {
-      await challengeRef.update({ attempts: currentAttempts });
-      const remaining = 5 - currentAttempts;
+    const isValid = verifyTotpToken(code, activeSecret);
+
+    if (!isValid) {
       return res.status(400).json({
         success: false,
-        message: `رمز التحقق غير صحيح! يتبقى لديك ${remaining} ${remaining === 1 ? "محاولة" : "محاولات"}.`,
+        message: "رمز المصادقة غير صحيح! تأكد من كتابة الرمز الحالي الظاهر في تطبيق Google Authenticator.",
       });
     }
 
-    // Code matches! Register device as trusted
-    const devicesRef = db.collection("users").doc(req.user.uid).collection("devices");
-    await devicesRef.doc(deviceFp).set({
-      fingerprint: deviceFp,
-      userAgent: req.headers["user-agent"] || "Trusted Browser",
-      trustedAt: new Date().toISOString(),
-      verifiedVia2FA: true,
-    });
+    // Code is valid! Save secret permanently & mark TOTP enabled
+    const batch = db.batch();
+    batch.set(
+      userDocRef,
+      {
+        totpSecret: activeSecret,
+        totpEnabled: true,
+        pendingTotpSecret: admin.firestore.FieldValue.delete(),
+        totpActivatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
 
-    // Delete challenge immediately upon success
-    await challengeRef.delete();
+    // Register device as trusted
+    const deviceRef = db.collection("users").doc(req.user.uid).collection("devices").doc(deviceFp);
+    batch.set(
+      deviceRef,
+      {
+        fingerprint: deviceFp,
+        userAgent: req.headers["user-agent"] || "Trusted Device",
+        trustedAt: new Date().toISOString(),
+        verifiedViaTOTP: true,
+      },
+      { merge: true }
+    );
 
-    console.log(`[Security 2FA] ✅ Device (FP: ${deviceFp}) successfully authorized via OTP for ${req.user.email}`);
+    await batch.commit();
+
+    console.log(`[Security TOTP] ✅ Device (FP: ${deviceFp}) successfully authorized via Google Authenticator for ${req.user.email}`);
 
     return res.json({
       success: true,
-      message: "تم التحقق وتأمين الجهاز الجديد بنجاح!",
+      message: "تم التحقق وتوثيق الجهاز بنجاح! 🛡️",
       deviceFingerprint: deviceFp,
     });
   } catch (error) {
