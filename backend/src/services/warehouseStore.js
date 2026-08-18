@@ -128,17 +128,44 @@ async function listWarehouseUsers() {
     const access = data.access && typeof data.access === "object" ? data.access : data;
     const email = data.email || "";
 
-    const isAdmin = isAdminEmail(email) || String(access.role || data.role || "").toLowerCase() === "admin";
-    const isEnabled = isAdmin || Boolean(
-      data.warehouseEnabled ??
-      access.warehouseEnabled ??
-      (data.warehouseRole && data.warehouseRole !== "disabled")
-    );
+    const isSuperAdmin = isAdminEmail(email);
 
-    const allowedProjects = Array.isArray(data.allowedProjects) ? data.allowedProjects : (Array.isArray(access.allowedProjects) ? access.allowedProjects : ["*"]);
-    const canDelete = typeof data.canDelete === "boolean" ? data.canDelete : (typeof access.canDelete === "boolean" ? access.canDelete : (isAdmin || data.warehouseRole !== "warehouse_viewer"));
-    const canEdit = typeof data.canEdit === "boolean" ? data.canEdit : (typeof access.canEdit === "boolean" ? access.canEdit : (isAdmin || data.warehouseRole !== "warehouse_viewer"));
-    const canUpload = typeof data.canUpload === "boolean" ? data.canUpload : (typeof access.canUpload === "boolean" ? access.canUpload : (isAdmin || data.warehouseRole !== "warehouse_viewer"));
+    let isEnabled = false;
+    if (isSuperAdmin) {
+      isEnabled = true;
+    } else if (
+      data.warehouseEnabled === false ||
+      access.warehouseEnabled === false ||
+      data.warehouseRole === "disabled" ||
+      access.warehouseRole === "disabled"
+    ) {
+      isEnabled = false;
+    } else {
+      isEnabled = Boolean(
+        data.warehouseEnabled ??
+        access.warehouseEnabled ??
+        (data.warehouseRole && data.warehouseRole !== "disabled") ??
+        (access.warehouseRole && access.warehouseRole !== "disabled")
+      );
+    }
+
+    const warehouseRole = isSuperAdmin
+      ? "admin"
+      : (isEnabled ? (data.warehouseRole || access.warehouseRole || "warehouse_operator") : "disabled");
+
+    const allowedProjects = Array.isArray(data.allowedProjects)
+      ? data.allowedProjects
+      : (Array.isArray(access.allowedProjects) ? access.allowedProjects : ["*"]);
+
+    const canDelete = isSuperAdmin
+      ? true
+      : (typeof data.canDelete === "boolean" ? data.canDelete : (typeof access.canDelete === "boolean" ? access.canDelete : (warehouseRole !== "warehouse_viewer")));
+    const canEdit = isSuperAdmin
+      ? true
+      : (typeof data.canEdit === "boolean" ? data.canEdit : (typeof access.canEdit === "boolean" ? access.canEdit : (warehouseRole !== "warehouse_viewer")));
+    const canUpload = isSuperAdmin
+      ? true
+      : (typeof data.canUpload === "boolean" ? data.canUpload : (typeof access.canUpload === "boolean" ? access.canUpload : (warehouseRole !== "warehouse_viewer")));
 
     return {
       uid: uid,
@@ -146,7 +173,7 @@ async function listWarehouseUsers() {
       displayName: data.displayName || data.name || email || uid,
       role: access.role || data.role || "user",
       warehouseEnabled: isEnabled,
-      warehouseRole: isAdmin ? "admin" : (data.warehouseRole || access.warehouseRole || (isEnabled ? "warehouse_operator" : "disabled")),
+      warehouseRole,
       allowedProjects,
       canDelete,
       canEdit,

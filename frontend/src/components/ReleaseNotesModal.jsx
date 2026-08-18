@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.17',
+      version: 'v2.27.18',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إغلاق شامل لجميع الثغرات الأمنية المشابهة وإحكام صلاحيات التوكن والمشاريع' : 'Comprehensive Security Hardening & Cryptographic Token Verification',
+      highlights: [
+        {
+          icon: '🔒',
+          text: isAr
+            ? 'إلزام الخادم بالتحقق المشفر الحصري من Firebase ID Token وإلغاء أي فك تشفير غير موثق.'
+            : 'Enforced strict cryptographic verification for all Firebase ID Tokens, removing insecure fallback decoding.'
+        },
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'تطبيق جدار حماية للمشاريع (Project ACL) يمنع الوصول لأي مشروع غير مخصص للمستخدم.'
+            : 'Enforced project-level access control lists (ACL) preventing unauthorized cross-project data access.'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'إحكام الصلاحيات التفصيلية لعمليات الرفع والتعديل والحذف واستعادة النسخ الاحتياطية.'
+            : 'Enforced granular RBAC for all warehouse mutations, file uploads, and restore point operations.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.17',
+      date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'إصلاح وحزم حظر صلاحيات المخزن فورياً مع الحفظ التلقائي الصارم' : 'Instant Warehouse Access Revocation & Auto-Save Enforcement',
       highlights: [
         {
@@ -525,7 +552,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.27.17 {isAr ? 'النسخة الحالية' : 'Active'}
+              v2.27.18 {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}

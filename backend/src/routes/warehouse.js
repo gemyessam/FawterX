@@ -64,7 +64,7 @@ router.get("/access", async (req, res) => {
 });
 
 /**
- * Middleware: Require Warehouse Permission
+ * Middleware: Require Warehouse Permission & Project ACL
  */
 async function requireWarehouse(req, res, next) {
   try {
@@ -76,6 +76,21 @@ async function requireWarehouse(req, res, next) {
       });
     }
     req.warehouseRole = access.role;
+    req.warehouseAccess = access;
+
+    // Check project permission if projectId is specified in the route
+    if (req.params.projectId && !access.isAdmin) {
+      const allowedProjects = Array.isArray(access.allowedProjects) ? access.allowedProjects : ["*"];
+      const requestedProj = String(req.params.projectId);
+      const isAllowed = allowedProjects.includes("*") || allowedProjects.includes(requestedProj) || (requestedProj === "default_canex" && allowedProjects.includes("default_canex"));
+      if (!isAllowed) {
+        return res.status(403).json({
+          success: false,
+          message: "Forbidden: You do not have permission to access this warehouse project.",
+        });
+      }
+    }
+
     next();
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -99,6 +114,7 @@ async function requireAdmin(req, res, next) {
       });
     }
     req.warehouseRole = access.role;
+    req.warehouseAccess = access;
     next();
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -138,11 +154,18 @@ router.post("/users/:uid", requireAdmin, async (req, res) => {
 
 /**
  * GET /api/warehouse/projects
- * List warehouse projects
+ * List warehouse projects (filtered by user ACL)
  */
 router.get("/projects", requireWarehouse, async (req, res) => {
   try {
-    const projects = await listProjects();
+    let projects = await listProjects();
+    const access = req.warehouseAccess || {};
+    if (!access.isAdmin) {
+      const allowed = Array.isArray(access.allowedProjects) ? access.allowedProjects : ["*"];
+      if (!allowed.includes("*")) {
+        projects = projects.filter(p => allowed.includes(p.id) || (p.code === "CANEX" && allowed.includes("default_canex")));
+      }
+    }
     return res.json({ success: true, projects });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -151,9 +174,9 @@ router.get("/projects", requireWarehouse, async (req, res) => {
 
 /**
  * POST /api/warehouse/projects
- * Create a new warehouse project
+ * Create a new warehouse project (Admin Only)
  */
-router.post("/projects", requireWarehouse, async (req, res) => {
+router.post("/projects", requireAdmin, async (req, res) => {
   try {
     const { name, code, description } = req.body;
     if (!name || !name.trim()) {
@@ -199,6 +222,9 @@ router.get("/projects/:projectId/stock", requireWarehouse, async (req, res) => {
  */
 router.post("/invoices/parse", requireWarehouse, upload.single("file"), async (req, res) => {
   try {
+    if (req.warehouseAccess?.canUpload === false || req.warehouseRole === "warehouse_viewer") {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have upload permissions in warehouse." });
+    }
     if (!req.file) {
       return res.status(400).json({ success: false, message: "No invoice file was uploaded." });
     }
@@ -226,6 +252,9 @@ router.post("/invoices/parse", requireWarehouse, upload.single("file"), async (r
  */
 router.post("/projects/:projectId/invoices/process", requireWarehouse, async (req, res) => {
   try {
+    if (req.warehouseAccess?.canUpload === false || req.warehouseRole === "warehouse_viewer") {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have upload/process permissions." });
+    }
     const { invoiceMeta, lines } = req.body;
     if (!lines || !Array.isArray(lines) || lines.length === 0) {
       return res.status(400).json({ success: false, message: "At least one valid line is required." });
@@ -346,6 +375,9 @@ router.delete("/projects/:projectId/stock/:itemKey", requireAdmin, async (req, r
  */
 router.patch("/projects/:projectId/invoices/:invoiceId", requireWarehouse, async (req, res) => {
   try {
+    if (req.warehouseAccess?.canEdit === false || req.warehouseRole === "warehouse_viewer") {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have edit permissions in warehouse." });
+    }
     const { salesOrder, customerReference } = req.body;
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await updateInvoiceMetadata(
@@ -381,6 +413,9 @@ router.get("/projects/:projectId/restore-points", requireWarehouse, async (req, 
  */
 router.post("/projects/:projectId/restore-points", requireWarehouse, async (req, res) => {
   try {
+    if (req.warehouseAccess?.canEdit === false || req.warehouseRole === "warehouse_viewer") {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have permission to create restore points." });
+    }
     const { name, description } = req.body;
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await createProjectRestorePoint(
@@ -402,6 +437,9 @@ router.post("/projects/:projectId/restore-points", requireWarehouse, async (req,
  */
 router.post("/projects/:projectId/restore-points/:pointId/restore", requireWarehouse, async (req, res) => {
   try {
+    if (req.warehouseAccess?.canEdit === false || req.warehouseRole === "warehouse_viewer") {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have permission to restore project state." });
+    }
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await restoreProjectToPoint(
       req.params.projectId,
@@ -422,6 +460,9 @@ router.post("/projects/:projectId/restore-points/:pointId/restore", requireWareh
  */
 router.delete("/projects/:projectId/restore-points/:pointId", requireWarehouse, async (req, res) => {
   try {
+    if (req.warehouseAccess?.canDelete === false || req.warehouseRole === "warehouse_viewer") {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have delete permissions in warehouse." });
+    }
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await deleteProjectRestorePoint(
       req.params.projectId,
