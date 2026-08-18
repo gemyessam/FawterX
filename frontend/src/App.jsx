@@ -19,7 +19,7 @@ export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
-    logo: 'فاوتر إكس v2.27.19',
+    logo: 'فاوتر إكس v2.27.20',
     logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
@@ -50,7 +50,7 @@ const TRANSLATIONS = {
     statsTitle: 'إحصائيات الأداء'
   },
   en: {
-    logo: 'FawterX v2.27.19',
+    logo: 'FawterX v2.27.20',
     logoSub: 'ERP Alternative for ETA Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
@@ -246,7 +246,7 @@ function Layout({ children }) {
             >
               <span>⚡ {lang === 'ar' ? 'منصة رفع الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Platform'}</span>
               <span style={{ background: 'rgba(0, 224, 161, 0.2)', color: '#00e0a1', padding: '0.1rem 0.4rem', borderRadius: '10px', fontSize: '0.7rem', fontWeight: 800 }}>
-                v2.27.19 ✨
+                v2.27.20 ✨
               </span>
             </button>
           </div>

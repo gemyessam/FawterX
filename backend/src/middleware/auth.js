@@ -46,18 +46,8 @@ module.exports = async function authMiddleware(req, res, next) {
 
   const token = authHeader.split(" ")[1];
 
-  if (token === "BYPASS_EXPRESS_LOGIN_SECRET_TOKEN_CHOCO_EGYPT_9988") {
-    req.user = {
-      uid: "admin-primary-account",
-      email: "gemy.essam.ge@gmail.com",
-      name: "GeMy (المدير الرئيسي)",
-    };
-    req.user.isAdmin = true;
-    return next();
-  }
-
   try {
-    const decodedToken = await admin.auth().verifyIdToken(token);
+    const decodedToken = await admin.auth().verifyIdToken(token, true);
     const userEmail = String(decodedToken.email || (decodedToken.firebase && decodedToken.firebase.identities && decodedToken.firebase.identities.email && decodedToken.firebase.identities.email[0]) || "").toLowerCase().trim();
     const isSuperAdmin = isAdminEmail(userEmail) || userEmail === "gemy.essam.ge@gmail.com";
 

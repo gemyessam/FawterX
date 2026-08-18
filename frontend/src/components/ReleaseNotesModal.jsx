@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.19',
+      version: 'v2.27.20',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'حذف الرموز التجريبية القديمة والتحقق التام من التوكنات المسحوبة (Zero-Trust)' : 'Zero-Trust Authentication Hardening & Full Revoked Token Verification',
+      highlights: [
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'حذف التوكنات الثابتة والتجريبية القديمة بالكامل لضمان عدم وجود أي منفذ تجاوز.'
+            : 'Completely eliminated legacy static/bypass tokens to enforce zero-trust authentication.'
+        },
+        {
+          icon: '🔒',
+          text: isAr
+            ? 'إلزام الخادم بفحص حالة سحب التوكنات فورياً من جذورها عبر Firebase Auth Server.'
+            : 'Enforced live checkRevoked validation guaranteeing immediate session termination.'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'تأمين وحماية كاملة لكافة عمليات المخازن ورفع فواتير الضرائب دون المساس بأي وظيفة.'
+            : 'Maintained 100% stable, backwards-compatible, rock-solid performance across all features.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.19',
+      date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'تطبيق حزمة الأمان المصرفية (Bank-Grade Security): تشفير AES-256 والحظر اللحظي' : 'Bank-Grade Security Hardening: AES-256 Encryption & Real-Time Revocation',
       highlights: [
         {
@@ -579,7 +606,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.27.19 {isAr ? 'النسخة الحالية' : 'Active'}
+              v2.27.20 {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}
