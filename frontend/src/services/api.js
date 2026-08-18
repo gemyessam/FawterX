@@ -286,6 +286,11 @@ export async function verifyAuthSecurityCode(code) {
   return data
 }
 
+export async function resendAuthSecurityCode() {
+  const { data } = await api.post('/auth-security/resend-code')
+  return data
+}
+
 /** Admin diagnostic: who does the backend think I am? */
 export async function getAdminWhoami() {
   const { data } = await api.get('/admin/whoami')

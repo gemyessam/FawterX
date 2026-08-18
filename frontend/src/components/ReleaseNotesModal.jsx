@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.8',
-      date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
+      version: 'v2.27.14',
+      date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'تأمين التحقق بخطوتين عبر البريد الإلكتروني (2FA Email OTP Security)' : 'Secure 2FA Email OTP Verification System',
+      highlights: [
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'تطبيق نظام التحقق الأمني الاحترافي بإرسال رمز الـ OTP المكون من 6 أرقام إلى البريد الإلكتروني المعتمد فقط بدلاً من عرضه في الواجهة.'
+            : 'Enforced real secure 2FA by delivering 6-digit OTP codes directly to registered email.'
+        },
+        {
+          icon: '🔒',
+          text: isAr
+            ? 'حذف وإخفاء الرمز الأمني نهائياً من الـ API وواجهة المستخدم لمنع أي تسريب أمني.'
+            : 'Completely eliminated security PIN leaks from backend API responses and UI modals.'
+        },
+        {
+          icon: '⏱️',
+          text: isAr
+            ? 'إضافة زر إعادة إرسال الرمز مع مؤقت زمني (60 ثانية) وحماية متقدمة ضد هجمات التخمين.'
+            : 'Added resend OTP button with 60s cooldown timer and brute-force attempt limits.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.8',
+      date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'إصلاح شامل لدليل الخطوات العام ولوحة الإدارة مع الدخول السريع' : 'Global Step Guide Modal Fix & Admin Panel Access Resilience',
       highlights: [
         {
@@ -423,7 +450,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.26.4 {isAr ? 'النسخة الحالية' : 'Active'}
+              v2.27.14 {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}

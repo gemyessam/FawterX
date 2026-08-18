@@ -19,7 +19,7 @@ export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
-    logo: 'فاوتر إكس v2.27.13',
+    logo: 'فاوتر إكس v2.27.14',
     logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
@@ -50,7 +50,7 @@ const TRANSLATIONS = {
     statsTitle: 'إحصائيات الأداء'
   },
   en: {
-    logo: 'FawterX v2.27.13',
+    logo: 'FawterX v2.27.14',
     logoSub: 'ERP Alternative for ETA Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
@@ -246,7 +246,7 @@ function Layout({ children }) {
             >
               <span>⚡ {lang === 'ar' ? 'منصة رفع الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Platform'}</span>
               <span style={{ background: 'rgba(0, 224, 161, 0.2)', color: '#00e0a1', padding: '0.1rem 0.4rem', borderRadius: '10px', fontSize: '0.7rem', fontWeight: 800 }}>
-                v2.27.11 ✨
+                v2.27.14 ✨
               </span>
             </button>
           </div>
@@ -435,7 +435,7 @@ export default function App() {
   const [resetTrigger, setResetTrigger] = useState(0)
   const triggerReset = () => setResetTrigger(prev => prev + 1)
   const [show2FAModal, setShow2FAModal] = useState(false)
-  const [challengeDemoCode, setChallengeDemoCode] = useState('')
+  const [emailMasked, setEmailMasked] = useState('')
   const [showTutorialModal, setShowTutorialModal] = useState(() => {
     return !localStorage.getItem('fawterx_tutorial_seen')
   })
@@ -449,7 +449,7 @@ export default function App() {
         .then(data => {
           if (data.success && data.isNewDevice) {
             setShow2FAModal(true)
-            setChallengeDemoCode(data.challengeCodeDemo || '')
+            setEmailMasked(data.emailMasked || '')
           }
         })
         .catch(err => console.warn('Device status check error:', err))
@@ -528,7 +528,8 @@ export default function App() {
         <Security2FAModal
           isOpen={show2FAModal}
           userEmail={user?.email || ''}
-          challengeDemoCode={challengeDemoCode}
+          emailMasked={emailMasked}
+          onLogout={handleLogout}
           onVerifySuccess={() => {
             setShow2FAModal(false)
             toast.success(lang === 'ar' ? 'تم توثيق الجهاز الجديد بنجاح! 🛡️' : 'New device trusted successfully! 🛡️')
