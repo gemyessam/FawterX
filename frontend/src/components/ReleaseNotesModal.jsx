@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.20',
+      version: 'v2.27.21',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'استعادة ترقيم فواتير شوكو القياسي بالبادئة 202303xxx تلقائياً' : 'Restored Standard Schuco Invoice Number Formatting with 202303xxx Prefix',
+      highlights: [
+        {
+          icon: '🔢',
+          text: isAr
+            ? 'تطبيق قاعدة الترقيم الدقيقة لفواتير شوكو باستخراج آخر 3 أرقام ودمجها مع 202303xxx.'
+            : 'Enforced standard Schuco invoice number normalization taking the last 3 digits prefixed with 202303.'
+        },
+        {
+          icon: '📄',
+          text: isAr
+            ? 'تحويل الأرقام مثل 000000679 و 679 تلقائياً إلى 202303679 في شاشات المراجعة والرفع.'
+            : 'Automatically converted raw invoice numbers (e.g. 000000679) into 202303679 across all batch screens.'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'تحديث اختبارات المطابقة البرمجية لضمان عدم حدوث أي تراجع في معالجة الفواتير.'
+            : 'Updated test suites to ensure 100% precision in invoice ID extraction.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.20',
+      date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'حذف الرموز التجريبية القديمة والتحقق التام من التوكنات المسحوبة (Zero-Trust)' : 'Zero-Trust Authentication Hardening & Full Revoked Token Verification',
       highlights: [
         {
@@ -606,7 +633,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.27.20 {isAr ? 'النسخة الحالية' : 'Active'}
+              v2.27.21 {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}

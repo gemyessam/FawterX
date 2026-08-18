@@ -102,7 +102,9 @@ function cleanVat(value) {
 function normalizeSchucoInvoiceNumber(value) {
   const digits = String(value || "").replace(/\D/g, "");
   if (!digits) return "";
-  if (digits.length >= 6) return digits;
+  if (digits.startsWith("202303") && digits.length >= 9) {
+    return digits;
+  }
   const last3 = digits.slice(-3).padStart(3, "0");
   return `202303${last3}`;
 }
@@ -1182,9 +1184,10 @@ function parseSchucoInvoice(text) {
   
   if (metadata.issuerVat === SCHUCO_VAT) {
     metadata.issuer = "Schüco EGYPT LLC";
-    if (metadata.internalID) {
-      metadata.internalID = normalizeSchucoInvoiceNumber(metadata.internalID);
-    }
+  }
+
+  if (metadata.internalID) {
+    metadata.internalID = normalizeSchucoInvoiceNumber(metadata.internalID);
   }
 
   const salesInvoiceIdx = rawLines.findIndex(line => /sales invoice/i.test(line));
@@ -1203,7 +1206,11 @@ function parseSchucoInvoice(text) {
     metadata.receiverType = 'F';
   }
 
-  if (!metadata.internalID) metadata.internalID = `INV-${Date.now().toString().slice(-8)}`;
+  if (!metadata.internalID) {
+    metadata.internalID = `INV-${Date.now().toString().slice(-8)}`;
+  } else {
+    metadata.internalID = normalizeSchucoInvoiceNumber(metadata.internalID);
+  }
 
   // ── Hierarchical Item Block Segmenter ───────────────────────
   // A block starts at "Pos. + Item No." like: "1 \t 9655090" or "9655090 \t 1" or "1 9655090"

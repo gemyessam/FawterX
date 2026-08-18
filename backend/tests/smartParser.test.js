@@ -50,7 +50,7 @@ describe('parseSchucoInvoice - Hierarchical Document Understanding Tests', () =>
     const { metadata, invoiceLines } = result;
 
     // Verify Metadata
-    expect(metadata.internalID).toBe('000000612');
+    expect(metadata.internalID).toBe('202303612');
     expect(metadata.receiverVat).toBe('650535960');
     expect(metadata.issuerVat).toBe('708820883');
 
