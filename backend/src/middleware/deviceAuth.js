@@ -56,19 +56,12 @@ async function checkDeviceTrust(req, res, next) {
       return next();
     }
 
-    // Check if current device fingerprint is trusted
-    const deviceDoc = snapshot.docs.find((d) => d.id === deviceFp || d.data().fingerprint === deviceFp);
-
-    if (!deviceDoc) {
-      req.isNewDevice = true;
-      console.warn(`[Security Alert] ⚠️ New device login detected for ${req.user.email} (FP: ${deviceFp})`);
-    } else {
-      req.isNewDevice = false;
-    }
-
+    // 2FA temporarily disabled: all devices are trusted
+    req.isNewDevice = false;
     next();
   } catch (err) {
     console.error("[DeviceAuth Middleware Error]:", err.message);
+    req.isNewDevice = false;
     next();
   }
 }

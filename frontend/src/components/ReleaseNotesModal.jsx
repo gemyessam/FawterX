@@ -7,10 +7,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.15',
+      version: 'v2.27.16',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إيقاف خاصية التحقق بخطوتين (2FA) مؤقتاً لتسهيل وتسريع تسجيل الدخول' : 'Temporarily Paused 2FA for Direct Login Access',
+      highlights: [
+        {
+          icon: '🔓',
+          text: isAr
+            ? 'تعطيل نوافذ حظر الأجهزة الجديدة وإيقاف طلب رموز التحقق مؤقتاً لتسريع الوصول للمنصة.'
+            : 'Temporarily disabled new device verification prompts for direct, uninterrupted sign in.'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'تسجيل الدخول المباشر والسريع لجميع الحسابات بدون أي شاشات توقف.'
+            : 'Immediate access to dashboard upon Google sign-in without security challenge modals.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.15',
+      date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'تطبيق التحقق بخطوتين عبر Google Authenticator (TOTP) بدون سيرفرات بريد' : 'Google Authenticator (TOTP) 2FA Implementation',
       highlights: [
         {
@@ -477,7 +498,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.27.15 {isAr ? 'النسخة الحالية' : 'Active'}
+              v2.27.16 {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}

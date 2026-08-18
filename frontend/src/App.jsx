@@ -19,7 +19,7 @@ export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
-    logo: 'فاوتر إكس v2.27.15',
+    logo: 'فاوتر إكس v2.27.16',
     logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
@@ -50,7 +50,7 @@ const TRANSLATIONS = {
     statsTitle: 'إحصائيات الأداء'
   },
   en: {
-    logo: 'FawterX v2.27.15',
+    logo: 'FawterX v2.27.16',
     logoSub: 'ERP Alternative for ETA Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
@@ -246,7 +246,7 @@ function Layout({ children }) {
             >
               <span>⚡ {lang === 'ar' ? 'منصة رفع الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Platform'}</span>
               <span style={{ background: 'rgba(0, 224, 161, 0.2)', color: '#00e0a1', padding: '0.1rem 0.4rem', borderRadius: '10px', fontSize: '0.7rem', fontWeight: 800 }}>
-                v2.27.15 ✨
+                v2.27.16 ✨
               </span>
             </button>
           </div>
@@ -444,22 +444,8 @@ export default function App() {
   const isAdmin = (user?.email || '').toLowerCase() === 'gemy.essam.ge@gmail.com'
 
   useEffect(() => {
-    if (user) {
-      getAuthSecurityStatus()
-        .then(data => {
-          if (data.success && data.isNewDevice) {
-            setShow2FAModal(true)
-            setTotpSetup({
-              needsSetup: !!data.needsTotpSetup,
-              qrCode: data.qrCode || '',
-              secretText: data.secretText || '',
-            })
-          }
-        })
-        .catch(err => console.warn('Device status check error:', err))
-    } else {
-      setShow2FAModal(false)
-    }
+    // 2FA temporarily disabled for seamless direct login
+    setShow2FAModal(false)
   }, [user])
 
   useEffect(() => {
