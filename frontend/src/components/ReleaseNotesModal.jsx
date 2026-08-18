@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.18',
+      version: 'v2.27.19',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'تطبيق حزمة الأمان المصرفية (Bank-Grade Security): تشفير AES-256 والحظر اللحظي' : 'Bank-Grade Security Hardening: AES-256 Encryption & Real-Time Revocation',
+      highlights: [
+        {
+          icon: '🔐',
+          text: isAr
+            ? 'تشفير أسرار ومفاتيح الضرائب في قاعدة البيانات بخوارزمية التشفير العسكري AES-256-GCM.'
+            : 'Encrypted ETA client secrets at rest in Firestore using military-grade AES-256-GCM.'
+        },
+        {
+          icon: '🚫',
+          text: isAr
+            ? 'تطبيق الحظر اللحظي الصارم (Instant Revocation) لطرد أي حساب موقوف فوراً في أجزاء من الثانية.'
+            : 'Enforced sub-second instant revocation kicking out suspended/blocked accounts in real-time.'
+        },
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'تطهير وتعقيم ملفات الإكسيل لمنع هجمات حقن المعادلات الخبيثة (Anti-Formula Injection).'
+            : 'Sanitized Excel and spreadsheet cells against dangerous formula injection and DDE payloads.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.18',
+      date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'إغلاق شامل لجميع الثغرات الأمنية المشابهة وإحكام صلاحيات التوكن والمشاريع' : 'Comprehensive Security Hardening & Cryptographic Token Verification',
       highlights: [
         {
@@ -552,7 +579,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.27.18 {isAr ? 'النسخة الحالية' : 'Active'}
+              v2.27.19 {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}

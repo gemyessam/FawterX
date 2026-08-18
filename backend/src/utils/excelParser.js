@@ -12,6 +12,22 @@ function normalizeArabicText(str) {
     .trim();
 }
 
+/**
+ * Sanitize cell values against Excel / CSV Formula Injection (DDE attacks)
+ */
+function sanitizeCellValue(val) {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "number" || typeof val === "boolean") return val;
+  const str = String(val).trim();
+  if (/^[=+\-@\t\r]/.test(str)) {
+    if (/^[-+]?\d+(\.\d+)?$/.test(str)) {
+      return Number(str);
+    }
+    return `'${str}`;
+  }
+  return val;
+}
+
 // كلمات مفتاحية للبحث عن صف العناوين (Headers) باللغتين الإنجليزية والعربية
 const HEADER_KEYWORDS = [
   "pos", "item", "no", "description", "quantity", "qty", "unit", "measure", "measurement",
@@ -237,7 +253,8 @@ function parseExcel(filePath) {
     let hasData = false;
     headers.forEach((header, idx) => {
       const val = rowArr[idx];
-      rowObj[header] = val !== undefined ? val : "";
+      const safeVal = sanitizeCellValue(val);
+      rowObj[header] = safeVal !== undefined ? safeVal : "";
       if (val !== "" && val !== null && val !== undefined) hasData = true;
     });
 

@@ -145,8 +145,10 @@ async function saveUserProfile(userId, profileData) {
   return false;
 }
 
+const { encryptSecret, decryptSecret } = require("../utils/cryptoUtil");
+
 /**
- * يحفظ إعدادات العميل (ClientId/Secrets) الخاصة بالمستخدم في Firestore بشكل آمن
+ * يحفظ إعدادات العميل (ClientId/Secrets) الخاصة بالمستخدم في Firestore بشكل مشفر وآمن
  */
 async function saveUserSettings(userId, settingsData) {
   const db = getDb();
@@ -154,9 +156,17 @@ async function saveUserSettings(userId, settingsData) {
     throw new Error("لم يتم تهيئة قاعدة بيانات Firebase Admin SDK. يرجى التأكد من توفير مفتاح حساب الخدمة (Service Account JSON) بشكل صحيح.");
   }
   try {
+    const payload = { ...settingsData };
+    if (payload.clientSecret1) {
+      payload.clientSecret1 = encryptSecret(payload.clientSecret1);
+    }
+    if (payload.clientSecret2) {
+      payload.clientSecret2 = encryptSecret(payload.clientSecret2);
+    }
+
     const docRef = db.collection("users").doc(userId);
     await docRef.set({
-      companySettings: settingsData,
+      companySettings: payload,
       updatedAt: new Date().toISOString()
     }, { merge: true });
     return true;
@@ -167,7 +177,7 @@ async function saveUserSettings(userId, settingsData) {
 }
 
 /**
- * يجلب إعدادات العميل (ClientId/Secrets) الخاصة بالمستخدم من Firestore
+ * يجلب إعدادات العميل (ClientId/Secrets) الخاصة بالمستخدم من Firestore ويفك تشفير الأسرار
  */
 async function getUserSettings(userId) {
   const db = getDb();
@@ -179,7 +189,16 @@ async function getUserSettings(userId) {
     const docSnap = await docRef.get();
     if (docSnap.exists) {
       const data = docSnap.data();
-      return data.companySettings || null;
+      const settings = data.companySettings ? { ...data.companySettings } : null;
+      if (settings) {
+        if (settings.clientSecret1) {
+          settings.clientSecret1 = decryptSecret(settings.clientSecret1);
+        }
+        if (settings.clientSecret2) {
+          settings.clientSecret2 = decryptSecret(settings.clientSecret2);
+        }
+      }
+      return settings;
     }
   } catch (e) {
     console.error("Firestore error in getUserSettings:", e);
