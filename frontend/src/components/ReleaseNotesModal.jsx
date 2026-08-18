@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.16',
+      version: 'v2.27.17',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إصلاح وحزم حظر صلاحيات المخزن فورياً مع الحفظ التلقائي الصارم' : 'Instant Warehouse Access Revocation & Auto-Save Enforcement',
+      highlights: [
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'تطبيق الحفظ الفوري التلقائي (Auto-Save) عند تبديل مفتاح السماح بالوصول في بطاقات المستخدمين.'
+            : 'Enforced instant auto-save upon toggling warehouse access switches with immediate toast feedback.'
+        },
+        {
+          icon: '🚫',
+          text: isAr
+            ? 'إلزام الخادم برفض أي مستخدم تم إلغاء صلاحية المخزن له فورياً وإيقاف أي صلاحيات تجاوز قديمة.'
+            : 'Hardened backend permission checks to strictly deny access when warehouseEnabled is false.'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'إضافة فحص أمان تلقائي عند فتح صفحة المخازن لطرد أي مستخدم تم سحب صلاحيته فوراً.'
+            : 'Added live mount verification kicking unauthorized users back to the home page immediately.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.16',
+      date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#8ab4ff',
       title: isAr ? 'إيقاف خاصية التحقق بخطوتين (2FA) مؤقتاً لتسهيل وتسريع تسجيل الدخول' : 'Temporarily Paused 2FA for Direct Login Access',
       highlights: [
         {
@@ -498,7 +525,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.27.16 {isAr ? 'النسخة الحالية' : 'Active'}
+              v2.27.17 {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}

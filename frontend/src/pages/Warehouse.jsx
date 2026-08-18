@@ -4,6 +4,7 @@ import { AppContext } from '../App'
 import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs'
 import {
+  getWarehouseAccess,
   getWarehouseProjects,
   createWarehouseProject,
   deleteWarehouseProject,
@@ -28,6 +29,24 @@ import {
 export default function Warehouse() {
   const { lang, user, isAdmin } = useContext(AppContext)
   const isAr = lang === 'ar'
+
+  // Dynamic live verification on mount
+  useEffect(() => {
+    if (user && !isAdmin) {
+      getWarehouseAccess()
+        .then((res) => {
+          if (!res || !res.enabled) {
+            toast.error(isAr ? 'تم سحب صلاحية الوصول للمخزن لحسابك من قبل الإدارة' : 'Warehouse access has been revoked for your account')
+            setTimeout(() => {
+              window.location.href = '/'
+            }, 1000)
+          }
+        })
+        .catch(() => {
+          window.location.href = '/'
+        })
+    }
+  }, [user, isAdmin])
 
   const [projects, setProjects] = useState(() => {
     try {
@@ -168,8 +187,8 @@ export default function Warehouse() {
     setUpdatingUserUid(userItem.uid)
     try {
       const payload = {
-        warehouseEnabled: userItem.warehouseEnabled,
-        warehouseRole: userItem.warehouseRole,
+        warehouseEnabled: Boolean(userItem.warehouseEnabled),
+        warehouseRole: userItem.warehouseEnabled ? (userItem.warehouseRole || 'warehouse_operator') : 'disabled',
         allowedProjects: userItem.allowedProjects || ['*'],
         canDelete: userItem.canDelete ?? true,
         canEdit: userItem.canEdit ?? true,
@@ -177,11 +196,46 @@ export default function Warehouse() {
       }
       const res = await updateWarehouseUserAccess(userItem.uid, payload)
       if (res && res.success) {
-        toast.success(isAr ? `تم تحديث صلاحيات ${userItem.displayName || userItem.email} بنجاح` : `Updated access for ${userItem.displayName || userItem.email}`)
+        toast.success(isAr ? `تم حفظ وتطبيق صلاحيات ${userItem.displayName || userItem.email} بنجاح` : `Updated access for ${userItem.displayName || userItem.email}`)
         loadWarehouseUsers()
       }
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل حفظ الصلاحيات' : 'Failed to save permissions'))
+    } finally {
+      setUpdatingUserUid(null)
+    }
+  }
+
+  const handleQuickToggleAccess = async (userItem, newEnabledStatus) => {
+    setUpdatingUserUid(userItem.uid)
+    try {
+      const payload = {
+        warehouseEnabled: Boolean(newEnabledStatus),
+        warehouseRole: newEnabledStatus
+          ? (userItem.warehouseRole === 'disabled' || !userItem.warehouseRole ? 'warehouse_operator' : userItem.warehouseRole)
+          : 'disabled',
+        allowedProjects: userItem.allowedProjects || ['*'],
+        canDelete: userItem.canDelete ?? true,
+        canEdit: userItem.canEdit ?? true,
+        canUpload: userItem.canUpload ?? true,
+      }
+      setUsersList(prev => prev.map(u => u.uid === userItem.uid ? { ...u, ...payload } : u))
+
+      const res = await updateWarehouseUserAccess(userItem.uid, payload)
+      if (res && res.success) {
+        toast.success(
+          isAr
+            ? newEnabledStatus
+              ? `✅ تم تفعيل وصول المستخدم (${userItem.displayName || userItem.email}) للمخزن`
+              : `🚫 تم إلغاء وحظر وصول المستخدم (${userItem.displayName || userItem.email}) للمخزن فوراً`
+            : newEnabledStatus
+              ? `Granted warehouse access to ${userItem.displayName || userItem.email}`
+              : `Revoked warehouse access for ${userItem.displayName || userItem.email}`
+        )
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل تحديث الصلاحية' : 'Failed to update access'))
+      loadWarehouseUsers()
     } finally {
       setUpdatingUserUid(null)
     }
@@ -3673,19 +3727,20 @@ export default function Warehouse() {
                           </div>
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }} onClick={(e) => e.stopPropagation()}>
-                            {/* Fast Access Checkbox */}
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer', fontSize: '0.82rem', fontWeight: 600, color: usr.warehouseEnabled ? '#00e0a1' : 'var(--text-muted)' }}>
+                            {/* Fast Access Checkbox (Auto-Saved) */}
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: (isFounderSuperAdmin || updatingUserUid === usr.uid) ? 'not-allowed' : 'pointer', fontSize: '0.82rem', fontWeight: 600, color: usr.warehouseEnabled ? '#00e0a1' : 'var(--text-muted)' }}>
                               <input
                                 type="checkbox"
-                                checked={usr.warehouseEnabled}
-                                disabled={isFounderSuperAdmin}
+                                checked={Boolean(usr.warehouseEnabled)}
+                                disabled={isFounderSuperAdmin || updatingUserUid === usr.uid}
                                 onChange={(e) => {
-                                  const val = e.target.checked
-                                  setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, warehouseEnabled: val } : u))
+                                  handleQuickToggleAccess(usr, e.target.checked)
                                 }}
-                                style={{ width: '16px', height: '16px', accentColor: '#00e0a1', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}
+                                style={{ width: '16px', height: '16px', accentColor: '#00e0a1', cursor: (isFounderSuperAdmin || updatingUserUid === usr.uid) ? 'not-allowed' : 'pointer' }}
                               />
-                              <span style={{ display: 'inline-block' }}>{isAr ? 'السماح بالوصول' : 'Allow Access'}</span>
+                              <span style={{ display: 'inline-block' }}>
+                                {updatingUserUid === usr.uid ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'السماح بالوصول' : 'Allow Access')}
+                              </span>
                             </label>
 
                             {/* Expand Permissions Toggle Button */}

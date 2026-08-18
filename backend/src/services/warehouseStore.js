@@ -13,26 +13,39 @@ function getDb() {
  */
 async function getUserWarehouseAccess(uid, email) {
   if (isAdminEmail(email)) {
-    return { enabled: true, role: "admin" };
+    return {
+      enabled: true,
+      role: "admin",
+      isAdmin: true,
+      allowedProjects: ["*"],
+      canDelete: true,
+      canEdit: true,
+      canUpload: true,
+    };
   }
 
   const db = getDb();
   if (!db || !uid) {
-    return { enabled: false, role: "disabled" };
+    return { enabled: false, role: "disabled", isAdmin: false, allowedProjects: [] };
   }
 
   try {
     const userDoc = await db.collection("users").doc(uid).get();
     if (!userDoc.exists) {
-      return { enabled: false, role: "disabled" };
+      return { enabled: false, role: "disabled", isAdmin: false, allowedProjects: [] };
     }
 
     const data = userDoc.data() || {};
     const access = data.access && typeof data.access === "object" ? data.access : data;
 
-    const role = String(access.role || data.role || "").toLowerCase();
-    if (role === "admin") {
-      return { enabled: true, role: "admin" };
+    // Strict priority 1: If warehouseEnabled is explicitly false or role is disabled, deny immediately
+    if (
+      data.warehouseEnabled === false ||
+      access.warehouseEnabled === false ||
+      data.warehouseRole === "disabled" ||
+      access.warehouseRole === "disabled"
+    ) {
+      return { enabled: false, role: "disabled", isAdmin: false, allowedProjects: [] };
     }
 
     const isEnabled = Boolean(
@@ -42,14 +55,31 @@ async function getUserWarehouseAccess(uid, email) {
       (access.warehouseRole && access.warehouseRole !== "disabled")
     );
 
+    if (!isEnabled) {
+      return { enabled: false, role: "disabled", isAdmin: false, allowedProjects: [] };
+    }
+
     const warehouseRole = String(
-      data.warehouseRole || access.warehouseRole || (isEnabled ? "warehouse_operator" : "disabled")
+      data.warehouseRole || access.warehouseRole || "warehouse_operator"
     );
 
-    return { enabled: isEnabled, role: isEnabled ? warehouseRole : "disabled" };
+    const isWarehouseAdmin = warehouseRole === "admin";
+    const allowedProjects = Array.isArray(data.allowedProjects)
+      ? data.allowedProjects
+      : (Array.isArray(access.allowedProjects) ? access.allowedProjects : ["*"]);
+
+    return {
+      enabled: true,
+      role: warehouseRole,
+      isAdmin: isWarehouseAdmin,
+      allowedProjects,
+      canDelete: typeof data.canDelete === "boolean" ? data.canDelete : (typeof access.canDelete === "boolean" ? access.canDelete : true),
+      canEdit: typeof data.canEdit === "boolean" ? data.canEdit : (typeof access.canEdit === "boolean" ? access.canEdit : true),
+      canUpload: typeof data.canUpload === "boolean" ? data.canUpload : (typeof access.canUpload === "boolean" ? access.canUpload : true),
+    };
   } catch (err) {
     console.error("Error getting warehouse access:", err.message);
-    return { enabled: false, role: "disabled" };
+    return { enabled: false, role: "disabled", isAdmin: false, allowedProjects: [] };
   }
 }
 
@@ -174,6 +204,8 @@ async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehous
     warehouseAccessUpdatedAt: new Date().toISOString(),
     warehouseAccessUpdatedBy: actorEmail || "admin",
     updatedAt: new Date().toISOString(),
+    "access.warehouseEnabled": enabled,
+    "access.warehouseRole": role,
   };
 
   await userRef.set(updatePayload, { merge: true });
