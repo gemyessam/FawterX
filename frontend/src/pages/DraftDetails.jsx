@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { AppContext } from '../App'
-import { getDraftById, submitDraft, getETAStatus, submitToETA, deleteDraft } from '../services/api'
+import { getDraftById, submitDraft, getETAStatus, submitToETA, deleteDraft, ensureLocalSignerActive } from '../services/api'
 import toast from 'react-hot-toast'
 
 function fmt(n, digits = 4) {
@@ -56,24 +56,19 @@ export default function DraftDetails() {
       );
       return;
     }
-    setSubmitting(true)
-    setEtaResult(null)
-    setEtaError(null)
-    setVerificationResult(null)
 
-    toast.loading(lang === 'ar' ? 'جاري التحقق من أداة التوقيع المحلية...' : 'Checking local signer tool...', { id: 'draft-submit' })
+    setSubmitting(true);
+    setEtaResult(null);
+    setEtaError(null);
+    setVerificationResult(null);
+
+    toast.loading(lang === 'ar' ? 'جاري التحقق من أداة التوقيع المحلية...' : 'Checking local signer tool...', { id: 'draft-submit' });
     
     try {
-      // 1. Health check to local signer at http://localhost:8585/
-      let localSignerActive = false;
-      try {
-        const pingRes = await fetch("http://localhost:8585/", { method: "GET" });
-        if (pingRes.ok) {
-          localSignerActive = true;
-        }
-      } catch (pingErr) {
-        console.warn("Local signer is not running:", pingErr);
-      }
+      // 1. Health check to local signer with auto-launch and smart wait
+      const localSignerActive = await ensureLocalSignerActive((msg) => {
+        toast.loading(lang === 'ar' ? msg : 'Starting FawterX Signer and checking USB Token...', { id: 'draft-submit' });
+      });
 
       if (!localSignerActive) {
         toast.dismiss('draft-submit');

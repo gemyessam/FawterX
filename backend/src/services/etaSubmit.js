@@ -87,15 +87,20 @@ async function submitDocuments(documents, dryRun = false, customCredentials = nu
 /**
  * يجيب حالة document معين باستخدام UUID
  * @param {string} uuid
+ * @param {object|null} customCredentials
  */
-async function getDocumentStatus(uuid) {
-  const token = await getAccessToken();
+async function getDocumentStatus(uuid, customCredentials = null) {
+  const token = await getAccessToken(customCredentials);
 
   console.log("[ETA Status] Checking UUID:", uuid);
 
   const response = await axios.get(
     `${ETA_API_BASE}/documents/${uuid}/raw`,
-    { headers: { Authorization: `Bearer ${token}` } }
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 30000,
+      httpsAgent: new https.Agent({ family: 4 })
+    }
   );
 
   console.log("[ETA Status] ✅ Status received for:", uuid);

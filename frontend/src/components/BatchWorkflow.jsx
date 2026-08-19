@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react'
 import { SettingsContext } from '../App'
 import UploadStep from './UploadStep'
-import { generateInvoice, submitToETA, getETAStatus, getCustomers, saveCustomer } from '../services/api'
+import { generateInvoice, submitToETA, getETAStatus, getCustomers, saveCustomer, ensureLocalSignerActive } from '../services/api'
 import { stampUploadIssuedTimestamp, formatCairoDateTime, formatCairoDateTimeInput, cairoLocalInputToUtcIso } from '../utils/uploadTime'
 import { applySavedCustomerMatches } from '../utils/customerMatching'
 import toast from 'react-hot-toast'
@@ -608,12 +608,10 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
     let signedDocs = []
     
     try {
-      // 1. Health check to local signer
-      let localSignerActive = false;
-      try {
-        const pingRes = await fetch("http://localhost:8585/", { method: "GET" });
-        if (pingRes.ok) localSignerActive = true;
-      } catch (pingErr) {}
+      // 1. Health check to local signer with auto-launch and smart wait
+      const localSignerActive = await ensureLocalSignerActive((msg) => {
+        toast.loading(lang === 'ar' ? msg : 'Starting FawterX Signer and checking USB Token...', { id: 'batch-submit' });
+      });
 
       if (!localSignerActive) {
         toast.dismiss('batch-submit');

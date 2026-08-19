@@ -125,8 +125,43 @@ export async function previewInvoice(mapping, rows, metadata = {}) {
   return data
 }
 
+/** إيقاظ سيرفر Render مبكراً في الخلفية لتفادي الـ Cold Start */
+export async function warmUpServer() {
+  try {
+    const baseUrl = API_BASE_URL.replace(/\/api$/, '')
+    await fetch(`${baseUrl}/`, { method: 'GET', cache: 'no-store' }).catch(() => {})
+  } catch (e) {}
+}
+
+/** التحقق من تشغيل أداة التوقيع وإطلاقها تلقائياً مع الانتظار الذكي إذا لزم الأمر */
+export async function ensureLocalSignerActive(onStatusUpdate = null) {
+  try {
+    const res = await fetch('http://localhost:8585/', { method: 'GET' });
+    if (res.ok) return true;
+  } catch (e) {}
+
+  try {
+    window.location.href = 'fawterx-signer://open';
+  } catch (e) {}
+
+  if (onStatusUpdate) {
+    onStatusUpdate('جاري إطلاق برنامج التوقيع والاتصال بالدونجل...');
+  }
+
+  // Poll for up to 4.5 seconds (9 iterations x 500ms)
+  for (let i = 0; i < 9; i++) {
+    await new Promise(r => setTimeout(r, 500));
+    try {
+      const res = await fetch('http://localhost:8585/', { method: 'GET' });
+      if (res.ok) return true;
+    } catch (e) {}
+  }
+
+  return false;
+}
+
 /** اختبار الاتصال بـ ETA */
-export async function testETAAuth(customSettings = null) {
+export async function testETAAuth(customSettings = null, allowSingleSecret = false) {
   if (!customSettings) {
     throw new Error('No ETA settings were provided for testing.')
   }
@@ -140,11 +175,16 @@ export async function testETAAuth(customSettings = null) {
     throw new Error('Please enter the ETA Client ID first.')
   }
 
-  if (!cleanSecret1 || !cleanSecret2) {
+  if (!cleanSecret1 && !cleanSecret2) {
+    throw new Error('Please enter at least one ETA Secret.')
+  }
+
+  if (!allowSingleSecret && (!cleanSecret1 || !cleanSecret2)) {
     throw new Error('Please enter both ETA Secret 1 and ETA Secret 2. Each secret will be tested against ETA separately.')
   }
 
   const testSecret = async (label, secret) => {
+    if (!secret) return null;
     try {
       const { data } = await api.get('/eta/test-auth', {
         headers: {
@@ -162,15 +202,56 @@ export async function testETAAuth(customSettings = null) {
     }
   }
 
-  const secret1Result = await testSecret('Secret 1', cleanSecret1)
-  const secret2Result = await testSecret('Secret 2', cleanSecret2)
+  let secret1Result = null;
+  let secret2Result = null;
+  let error1 = null;
+  let error2 = null;
+
+  if (cleanSecret1) {
+    try {
+      secret1Result = await testSecret('Secret 1', cleanSecret1);
+    } catch (e) {
+      error1 = e;
+    }
+  }
+
+  if (cleanSecret2) {
+    try {
+      secret2Result = await testSecret('Secret 2', cleanSecret2);
+    } catch (e) {
+      error2 = e;
+    }
+  }
+
+  // If both failed or single failed in strict mode
+  if (!secret1Result && !secret2Result) {
+    throw (error1 || error2 || new Error('ETA Authentication failed for provided credentials'));
+  }
+
+  if (!allowSingleSecret && (!secret1Result || !secret2Result)) {
+    throw (error1 || error2 || new Error('One of the secrets failed ETA verification'));
+  }
 
   return { success: true, secret1: secret1Result, secret2: secret2Result }
 }
-/** إرسال الفاتورة لـ ETA أو حفظ Draft */
+
+/** إرسال الفاتورة لـ ETA أو حفظ Draft مع إعادة المحاولة التلقائية عند تأخر استيقاظ السيرفر */
 export async function submitToETA(document, dryRun = false) {
-  const { data } = await api.post('/eta/submit', { document, dryRun })
-  return data
+  const maxRetries = 1;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const { data } = await api.post('/eta/submit', { document, dryRun }, { timeout: 90000 });
+      return data;
+    } catch (err) {
+      const isTransient = !err.response || err.code === 'ECONNABORTED' || err.message?.includes('timeout') || (err.response?.status >= 502);
+      if (attempt < maxRetries && isTransient) {
+        console.warn(`[submitToETA] Retrying submission after transient failure:`, err.message);
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 /** جلب كل الـ Drafts */

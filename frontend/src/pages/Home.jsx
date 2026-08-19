@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppContext, SettingsContext } from '../App'
-import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations, getCustomers, saveCustomer } from '../services/api'
+import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations, getCustomers, saveCustomer, ensureLocalSignerActive } from '../services/api'
 import BatchWorkflow from '../components/BatchWorkflow'
 import { stampUploadIssuedTimestamp, formatCairoDateTime, formatCairoDateTimeInput, cairoLocalInputToUtcIso } from '../utils/uploadTime'
 import { applySavedCustomerMatches } from '../utils/customerMatching'
@@ -932,21 +932,14 @@ export default function Home() {
 
     let updatedDocs = [];
     try {
-      // 1. Health check to local signer at http://localhost:8585/
-      let localSignerActive = false;
-      try {
-        const pingRes = await fetch("http://localhost:8585/", { method: "GET" });
-        if (pingRes.ok) {
-          localSignerActive = true;
-        }
-      } catch (pingErr) {
-        console.warn("Local signer is not running:", pingErr);
-      }
+      // 1. Health check to local signer at http://localhost:8585/ with auto-launch and smart wait
+      const localSignerActive = await ensureLocalSignerActive((statusMsg) => {
+        toast.loading(lang === 'ar' ? statusMsg : 'Starting FawterX Signer and checking USB Token...', { id: 'submit-loader' });
+      });
 
       if (!localSignerActive) {
         toast.dismiss('submit-loader');
         setSubmitting(false);
-        // Show an explicit beautiful warning that they need to download/run the signer
         toast.error(
           lang === 'ar' 
             ? '⚠️ لم يتم الكشف عن أداة التوقيع! يرجى تحميل وتشغيل برنامج FawterX Signer أولاً والتأكد من توصيل الدونجل.' 

@@ -9,7 +9,7 @@ import Warehouse from './pages/Warehouse'
 import ReleaseNotesModal from './components/ReleaseNotesModal'
 import Security2FAModal from './components/Security2FAModal'
 import StepGuideModal from './components/StepGuideModal'
-import { testETAAuth, getCompanySettings, saveCompanySettings, syncUserData, getAuthSecurityStatus } from './services/api'
+import { testETAAuth, getCompanySettings, saveCompanySettings, syncUserData, getAuthSecurityStatus, warmUpServer } from './services/api'
 import { getWarehouseAccess } from './services/warehouseApi'
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase'
 
@@ -19,7 +19,7 @@ export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
-    logo: 'فاوتر إكس v2.27.21',
+    logo: 'فاوتر إكس v2.27.22',
     logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
@@ -38,33 +38,41 @@ const TRANSLATIONS = {
     clientId: 'معرف العميل (Client ID)',
     secret1: 'السر الأول المعتمد (Secret 1)',
     secret2: 'السر الثاني المعتمد (Secret 2)',
-    actCode: 'نشاط الشركة (Taxpayer Activity Code)',
-    testConn: 'اختبار الاتصال المباشر',
-    saveConn: 'حفظ المفاتيح والتحديث',
-    etaConnected: '✅ متصل بـ ETA بنجاح',
-    etaFailed: '❌ بيانات الربط غير صالحة',
-    welcomeHeader: 'التحول الرقمي لرفع الفواتير الإلكترونية بذكاء ⚡',
-    welcomeSub: 'أبسط وأسرع منصة ذكية لتحويل ملفات Excel المعقدة إلى فواتير معتمدة رسمياً ومرفوعة تلقائياً لمنظومة مصلحة الضرائب المصرية بمعدل امتثال 100%.',
-    welcomeCTA: 'ابدأ تحويل الفواتير الآن',
-    recentSubmissions: 'آخر التقديمات',
-    statsTitle: 'إحصائيات الأداء'
+    saveBtn: 'حفظ الإعدادات في حسابي',
+    testBtn: 'اختبار الاتصال',
+    verifiedBadge: 'المفاتيح معتمدة وشغالة 100%',
+    unverifiedBadge: 'المفاتيح غير مختبرة أو لم تُحفظ',
+    testingBadge: 'جاري اختبار المفاتيح مع ETA...',
+    errEmpty: 'يرجى إدخال جميع الحقول بما فيها المفتاحين الأول والثاني',
+    errConnect: 'فشل الاتصال: تأكد من صحة Client ID و السر 1 و السر 2 ومن اتصالك بالإنترنت',
+    successSave: 'تم حفظ الإعدادات بنجاح وتفعيل التشفير لحسابك!',
+    successTest: 'تم الاتصال بخوادم مصلحة الضرائب بنجاح!',
+    securitySection: 'حماية وأمان الحساب (المصادقة الثنائية 2FA)',
+    securitySubtitle: 'تأمين الحساب برمز تحقق إضافي يرسل عبر البريد الإلكتروني لمنع الوصول غير المصرح به',
+    twoFactorStatus: 'حالة المصادقة الثنائية (2FA)',
+    twoFactorActive: 'مفعلة ونشطة',
+    twoFactorDisabled: 'معطلة',
+    disable2FABtn: 'تعطيل المصادقة الثنائية',
+    enable2FABtn: 'تفعيل المصادقة الثنائية',
+    sendCodeBtn: 'إرسال رمز التفعيل',
+    verifyCodeBtn: 'تأكيد الرمز والتفعيل',
+    otpPlaceholder: 'أدخل رمز الـ OTP المكون من 6 أرقام',
   },
   en: {
-    logo: 'FawterX v2.27.21',
-    logoSub: 'ERP Alternative for ETA Invoices',
+    logo: 'FawterX v2.27.22',
+    logoSub: 'Fast ERP Alternative for Tax Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
-    navCreate: 'Excel Auto',
-    navDrafts: 'Saved Recovery',
-    navSettings: 'Tax Settings',
+    navCreate: 'Batch Excel Upload',
+    navDrafts: 'Suspended Drafts',
+    navSettings: 'Company Settings',
     navWarehouse: 'Warehouse',
     navAdmin: 'Admin Panel',
     logout: 'Logout',
-    footer: 'FawterX Automation Platform · Egyptian Tax Authority Server Compliant',
-    loginTitle: 'Sign in to FawterX Portal',
-    loginSubtitle: 'Official lightweight platform for ETA compliance with 1-click Google auth',
+    footer: 'FawterX Platform for Official E-Invoicing · Egyptian Tax Authority Servers',
+    loginTitle: 'Sign In to FawterX',
+    loginSubtitle: 'Lightweight Certified Tax Invoice Platform with Google Auth',
     googleBtn: 'Continue with Google',
-    settingsTitle: 'Egyptian Tax Authority (ETA) Credentials',
     settingsSubtitle: 'Store your encrypted portal secrets locally for direct secure API submissions',
     clientId: 'Client ID',
     secret1: 'Client Secret 1',
@@ -132,8 +140,8 @@ function Layout({ children }) {
           try { finalSettings = JSON.parse(saved); } catch (e) {}
         }
 
-        if (finalSettings && finalSettings.clientId && finalSettings.clientSecret1 && finalSettings.clientSecret2) {
-          testETAAuth(finalSettings)
+        if (finalSettings && finalSettings.clientId && (finalSettings.clientSecret1 || finalSettings.clientSecret2)) {
+          testETAAuth(finalSettings, true)
             .then(() => {
               setSettings(prev => {
                 const next = { ...finalSettings, isVerified: true }
@@ -142,7 +150,7 @@ function Layout({ children }) {
               })
             })
             .catch((err) => {
-              console.warn('Background ETA verification failed or timed out. Keeping existing verified status.', err)
+              console.warn('Background ETA verification check completed.', err?.message || err)
             })
         }
       })
@@ -246,7 +254,7 @@ function Layout({ children }) {
             >
               <span>⚡ {lang === 'ar' ? 'منصة رفع الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Platform'}</span>
               <span style={{ background: 'rgba(0, 224, 161, 0.2)', color: '#00e0a1', padding: '0.1rem 0.4rem', borderRadius: '10px', fontSize: '0.7rem', fontWeight: 800 }}>
-                v2.27.21 ✨
+                v2.27.22 ✨
               </span>
             </button>
           </div>

@@ -481,8 +481,12 @@ router.delete("/drafts/:draftId", async (req, res) => {
 router.get("/status/:uuid", async (req, res) => {
   try {
     console.log("\n[/status] Checking UUID:", req.params.uuid);
+    const clientId = req.headers["x-eta-client-id"] || req.query.clientId || null;
+    const clientSecret = req.headers["x-eta-client-secret"] || req.query.clientSecret || null;
+    const customCredentials = (clientId && clientSecret) ? { clientId, clientSecret } : null;
+
     try {
-      const data = await getDocumentStatus(req.params.uuid);
+      const data = await getDocumentStatus(req.params.uuid, customCredentials);
       console.log("[/status] ✅ Done\n");
       return res.json({ success: true, data });
     } catch (err) {

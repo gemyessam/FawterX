@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.21',
-      date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
+      version: 'v2.27.22',
+      date: isAr ? '19 أغسطس 2026' : 'Aug 19, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'تسريع الاستيقاظ ومنع أخطاء التقديم والمحاولة الأولى' : 'Preemptive Server Warm-up, Signer Auto-Wait & Status Check Fixes',
+      highlights: [
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'إيقاظ السيرفر مبكراً في الخلفية لتفادي بطء الاستيقاظ (Render Cold Start) في أول فاتورة.'
+            : 'Preemptive server warm-up on page load to eliminate Render free-tier cold-start delays.'
+        },
+        {
+          icon: '🔑',
+          text: isAr
+            ? 'انتظار ذكي لأداة التوقيع FawterX-Signer عند فتحها لأول مرة لمنع فشل الاتصال.'
+            : 'Smart auto-launch and polling for FawterX Signer desktop tool to prevent connection refused errors.'
+        },
+        {
+          icon: '🛠️',
+          text: isAr
+            ? 'إصلاح استعلام حالة الفاتورة /api/eta/status وتمرير مفاتيح الربط لمنع ظهور خطأ 500 في السيرفر.'
+            : 'Fixed ETA status checking endpoint (/api/eta/status) by supplying custom company credentials.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.21',
+      date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'استعادة ترقيم فواتير شوكو القياسي بالبادئة 202303xxx تلقائياً' : 'Restored Standard Schuco Invoice Number Formatting with 202303xxx Prefix',
       highlights: [
         {
@@ -633,7 +660,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.27.21 {isAr ? 'النسخة الحالية' : 'Active'}
+              v2.27.22 {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}
