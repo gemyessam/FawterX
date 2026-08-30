@@ -403,16 +403,19 @@ router.post("/drafts/:draftId/submit", async (req, res) => {
     console.log(`\n[/drafts/submit] Submitting draft: ${draft.draftId} for User: ${req.user.uid}`);
     console.log("ETA DOCUMENT (DRAFT SUBMIT)", JSON.stringify(draft.document, null, 2));
 
-    // Auto-inject mock signature if missing
+    // ─── Strict Digital Signature Check ───────────────────────────
+    // ETA requires a real digital signature from a USB Token (CMS/PKCS#7).
+    // Mock/fake signatures are REJECTED by ETA with:
+    // "Profile is configured to submit digitally signed documents only"
     const docsArray = Array.isArray(draft.document) ? draft.document : [draft.document];
-    docsArray.forEach(doc => {
-      if (!doc.signatures || !Array.isArray(doc.signatures) || doc.signatures.length === 0) {
-        doc.signatures = [{
-          signatureType: "I",
-          value: "MOCK_SIGNATURE_BYPASS_FOR_TESTING_" + Math.random().toString(36).substring(7)
-        }];
-      }
-    });
+    const hasUnsignedDraftDoc = docsArray.some(doc => !doc.signatures || !Array.isArray(doc.signatures) || doc.signatures.length === 0 || (doc.signatures[0]?.value || "").startsWith("MOCK_"));
+    if (hasUnsignedDraftDoc) {
+      return res.status(400).json({
+        success: false,
+        requiresLocalSigning: true,
+        message: "⚠️ هذه المسودة لا تحتوي على توقيع إلكتروني حقيقي. يرجى استخدام زر 'توقيع وإرسال' من صفحة تفاصيل المسودة لتوقيعها عبر USB Token أولاً ثم إرسالها لـ ETA."
+      });
+    }
 
     try {
       const result    = await submitDocuments(draft.document, false, customCredentials);

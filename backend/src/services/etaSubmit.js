@@ -18,15 +18,22 @@ async function submitDocuments(documents, dryRun = false, customCredentials = nu
 
   const docsArray = Array.isArray(documents) ? documents : [documents];
 
-  // التحقق الحقيقي: منظومة الضرائب تشترط وجود التوقيع الإلكتروني، ولكن في وضع الاختبار نسمح بالمرور للحصول على رد المنظومة
+  // ─── Strict signature check for production submission ─────────────────────
+  // ETA profile is set to "digitally signed documents only" — sending
+  // an unsigned or mock-signed document causes immediate rejection:
+  // "Profile is configured to submit digitally signed documents only"
   if (!dryRun) {
-    const hasUnsigned = docsArray.some(d => !d.signatures || !Array.isArray(d.signatures) || d.signatures.length === 0);
+    const hasUnsigned = docsArray.some(d =>
+      !d.signatures ||
+      !Array.isArray(d.signatures) ||
+      d.signatures.length === 0 ||
+      (d.signatures[0]?.value || "").startsWith("MOCK_")
+    );
     if (hasUnsigned) {
-      if (process.env.TESTING_MODE === "true") {
-        console.warn("Submitting unsigned payload for testing...");
-      } else {
-        throw new Error("Digital signature required before ETA submission (لم يتم العثور على توقيع إلكتروني رقمي صالح في الفاتورة)");
-      }
+      throw new Error(
+        "⚠️ يلزم وجود توقيع رقمي إلكتروني حقيقي (CMS/PKCS#7) من USB Token قبل الإرسال لـ ETA.\n" +
+        "ETA ترفض الفواتير غير الموقعة برسالة: 'Profile is configured to submit digitally signed documents only'"
+      );
     }
   }
 
