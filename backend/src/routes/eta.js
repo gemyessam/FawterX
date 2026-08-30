@@ -243,18 +243,24 @@ router.post("/submit", async (req, res) => {
       });
     }
 
-    // التوقيع الرقمي
+    // ─── التوقيع الرقمي — فحص صارم بلا استثناء ──────────────────────
+    // ETA ترفض أي فاتورة بدون توقيع CMS/PKCS#7 حقيقي من USB Token
+    // بغض النظر عن TESTING_MODE أو أي متغير بيئة آخر
     const docsArray = Array.isArray(document) ? document : [document];
-    const hasUnsigned = docsArray.some(doc => !doc.signatures || !Array.isArray(doc.signatures) || doc.signatures.length === 0);
+    const hasUnsigned = docsArray.some(doc =>
+      !doc.signatures ||
+      !Array.isArray(doc.signatures) ||
+      doc.signatures.length === 0 ||
+      (doc.signatures[0]?.value || "").startsWith("MOCK_") ||
+      (doc.signatures[0]?.value || "").trim() === ""
+    );
     if (hasUnsigned) {
-      if (process.env.TESTING_MODE === "true") {
-        console.warn("Submitting unsigned payload for testing...");
-      } else {
-        return res.status(400).json({
-          success: false,
-          message: "Digital signature required before ETA submission (يلزم وجود توقيع رقمي إلكتروني صالح للفاتورة قبل الإرسال الحقيقي للإنتاج)"
-        });
-      }
+      console.error("[/submit] ❌ Unsigned document blocked — ETA would reject with 'Profile is configured to submit digitally signed documents only'");
+      return res.status(400).json({
+        success: false,
+        requiresLocalSigning: true,
+        message: "⚠️ الفاتورة لا تحتوي على توقيع رقمي إلكتروني حقيقي. يرجى استخدام زر 'توقيع وإرسال' مع التأكد من تشغيل FawterX Signer وتوصيل USB Token."
+      });
     }
 
     // استخراج بيانات الفاتورة لسجل العمليات
