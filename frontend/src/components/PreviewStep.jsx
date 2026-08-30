@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateInvoice, submitToETA, getETAStatus } from '../services/api'
 import { formatCairoDateTime } from '../utils/uploadTime'
+import { signEtaDocuments } from '../utils/signEtaDocuments'
 import toast from 'react-hot-toast'
 
 const DEFAULT_ISSUER = {
@@ -97,21 +98,15 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
 
       // 2. إذا كان خيار الإرسال الحقيقي (Live) مفعلاً:
       if (submissionMode === 'live') {
-        // التحقق من وجود توقيع رقمي. إذا لم يوجد، ندمج توقيعاً تلقائياً للتجربة!
-        const hasSignature = docs.every(d => d.signatures && Array.isArray(d.signatures) && d.signatures.length > 0);
-        if (!hasSignature) {
-          docs.forEach(d => {
-            d.signatures = [{
-              signatureType: "I",
-              value: "MOCK_SIGNATURE_BYPASS_FOR_TESTING_" + Math.random().toString(36).substring(7)
-            }];
-          });
-          toast.success('تم دمج توقيع تلقائي بنجاح للتجربة بدون فلاشة التوقيع (USB Token)!')
-        }
-
-        // محاولة الإرسال الفعلي لـ ETA مباشرة
         try {
-          const liveRes = await submitToETA(docs, false)
+          toast.loading('جاري التحقق من أداة التوقيع المحلية...', { id: 'excel-mapping-submit' })
+          const signedDocs = await signEtaDocuments(docs, {
+            onStatusUpdate: (msg) => toast.loading(msg, { id: 'excel-mapping-submit' })
+          })
+          setEtaDocs(signedDocs)
+
+          toast.loading('تم التوقيع بنجاح! جاري إرسال الفاتورة لمنظومة الضرائب...', { id: 'excel-mapping-submit' })
+          const liveRes = await submitToETA(signedDocs, false)
           console.log("=== LIVE SUBMIT DIRECT RESPONSE ===", liveRes)
 
           // التحقق من صحة وقبول المستندات حقيقياً
@@ -123,7 +118,7 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
 
           setEtaResult(liveRes)
           setWorkflowStatus('eta_accepted')
-          toast.success('تم الإرسال والقبول بنجاح من مصلحة الضرائب!')
+          toast.success('تم الإرسال والقبول بنجاح من مصلحة الضرائب!', { id: 'excel-mapping-submit' })
 
           // 3. التحقق التلقائي الفوري من تقديم الفاتورة داخل Portal الضرائب (ETA Submission Verification)
           const uuid = liveRes.submissionUUID || liveRes.submissionId || liveRes.result?.submissionUUID || liveRes.result?.submissionId;
@@ -147,10 +142,14 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
 
         } catch (liveErr) {
           console.error("=== LIVE SUBMIT DIRECT ERROR ===", liveErr)
-          setWorkflowStatus('submission_failed')
-          const rawErr = liveErr.response?.data?.etaError || liveErr.response?.data?.details || liveErr.message;
+          const rawErr = liveErr.response?.data?.etaError || liveErr.response?.data?.details || liveErr.response?.data?.message || liveErr.message;
+          if (String(rawErr).includes('التوقيع') || String(rawErr).toLowerCase().includes('signer')) {
+            setWorkflowStatus('signature_missing')
+          } else {
+            setWorkflowStatus('submission_failed')
+          }
           setError(typeof rawErr === 'object' ? JSON.stringify(rawErr, null, 2) : String(rawErr))
-          toast.error('فشل الإرسال الحقيقي لمنظومة الضرائب.')
+          toast.error('فشل الإرسال الحقيقي لمنظومة الضرائب.', { id: 'excel-mapping-submit' })
         }
       } else {
         toast.success('تم فحص المستند محلياً وحفظ المسودة بنجاح! جاهز للتوقيع والإرسال.')
