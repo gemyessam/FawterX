@@ -4,6 +4,7 @@ import UploadStep from './UploadStep'
 import { generateInvoice, submitToETA, getETAStatus, getCustomers, saveCustomer, ensureLocalSignerActive } from '../services/api'
 import { stampUploadIssuedTimestamp, formatCairoDateTime, formatCairoDateTimeInput, cairoLocalInputToUtcIso } from '../utils/uploadTime'
 import { applySavedCustomerMatches } from '../utils/customerMatching'
+import { signEtaDocuments } from '../utils/signEtaDocuments'
 import toast from 'react-hot-toast'
 
 function textDirection(str) {
@@ -608,57 +609,13 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
     let signedDocs = []
     
     try {
-      // 1. Health check to local signer with auto-launch and smart wait
-      const localSignerActive = await ensureLocalSignerActive((msg) => {
-        toast.loading(lang === 'ar' ? msg : 'Starting FawterX Signer and checking USB Token...', { id: 'batch-submit' });
-      });
-
-      if (!localSignerActive) {
-        toast.dismiss('batch-submit');
-        setSubmitting(false);
-        toast.error(
-          lang === 'ar' 
-            ? '⚠️ لم يتم العثور على نافذة أداة التوقيع! يرجى فتح FawterX Signer وترك النافذة ظاهرة مع توصيل الدونجل.' 
-            : '⚠️ Local signer window not detected! Please open FawterX Signer and keep its window visible with your USB Token plugged in.',
-          { duration: 7000 }
-        );
-        return;
-      }
-
-      // 2. Sign each document locally
-      const safeDate = new Date();
-      safeDate.setMinutes(safeDate.getMinutes() - 5);
-      const fallbackIsoTime = safeDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
-      for (const doc of invoices) {
-        const { _fileName, ...pureDoc } = doc
-        if (pureDoc.dateTimeIssued) {
-          const parsed = new Date(pureDoc.dateTimeIssued);
-          if (!isNaN(parsed.getTime())) {
-            pureDoc.dateTimeIssued = parsed.toISOString().replace(/\.\d{3}Z$/, 'Z');
-          } else {
-            pureDoc.dateTimeIssued = fallbackIsoTime;
-          }
-        } else {
-          pureDoc.dateTimeIssued = fallbackIsoTime;
+      // 1. Sign each document locally using centralized signing helper
+      const cleanedInvoices = invoices.map(({ _fileName, ...pureDoc }) => pureDoc);
+      signedDocs = await signEtaDocuments(cleanedInvoices, {
+        onStatusUpdate: (msg) => {
+          toast.loading(lang === 'ar' ? msg : 'Connecting to FawterX Signer...', { id: 'batch-submit' });
         }
-        const cleanedDoc = cleanObject(pureDoc)
-        const canonicalString = serializeToken(cleanedDoc)
-        
-        const signRes = await fetch("http://localhost:8585/sign", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ canonicalString })
-        });
-        
-        if (!signRes.ok) throw new Error('Local signing request failed.');
-        const signData = await signRes.json();
-        if (!signData.success) throw new Error(signData.error || 'Unknown signing error');
-        
-        signedDocs.push({
-          ...cleanedDoc,
-          signatures: [{ signatureType: "I", value: signData.signature }]
-        })
-      }
+      });
 
       // 3. Submit the entire signed batch to ETA
       toast.loading(lang === 'ar' ? 'تم التوقيع بنجاح! جاري إرسال الدفعة لمنظومة الضرائب...' : 'Signed successfully! Submitting batch to ETA...', { id: 'batch-submit' })

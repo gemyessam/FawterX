@@ -1,7 +1,8 @@
 import { useState, useEffect, useContext } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { AppContext } from '../App'
-import { getDraftById, submitDraft, getETAStatus, submitToETA, deleteDraft, ensureLocalSignerActive } from '../services/api'
+import { getDraftById, getETAStatus, submitToETA, deleteDraft } from '../services/api'
+import { signEtaDocuments } from '../utils/signEtaDocuments'
 import toast from 'react-hot-toast'
 
 function fmt(n, digits = 4) {
@@ -44,89 +45,40 @@ export default function DraftDetails() {
     fetchDraft()
   }, [id, navigate])
 
+  const { validationResult, document: docPayload, status } = draft || {}
+  const isValid = status === 'valid'
+  const score = isValid ? 100 : (validationResult?.complianceScore || 0)
+  const docs = Array.isArray(docPayload) ? docPayload : (docPayload?._batchDocuments || (docPayload ? [docPayload] : []))
+
   async function handleTriggerSubmit() {
     if (!isValid) {
-      const errs = validationResult?.errors || [];
-      const errListStr = errs.map((e, idx) => `${idx + 1}. ${e}`).join("\n");
+      const errs = validationResult?.errors || []
+      const errListStr = errs.map((e, idx) => `${idx + 1}. ${e}`).join("\n")
       toast.error(
         lang === 'ar'
           ? `⚠️ لا يمكن الإرسال لوجود أخطاء في الفاتورة:\n${errListStr || 'خطأ غير معروف في البيانات'}`
           : `⚠️ Cannot submit due to validation errors:\n${errListStr || 'Unknown validation error'}`,
         { duration: 8000 }
-      );
-      return;
+      )
+      return
     }
 
-    setSubmitting(true);
-    setEtaResult(null);
-    setEtaError(null);
-    setVerificationResult(null);
+    setSubmitting(true)
+    setEtaResult(null)
+    setEtaError(null)
+    setVerificationResult(null)
 
-    toast.loading(lang === 'ar' ? 'جاري التحقق من أداة التوقيع المحلية...' : 'Checking local signer tool...', { id: 'draft-submit' });
-    
     try {
-      // 1. Health check to local signer with auto-launch and smart wait
-      const localSignerActive = await ensureLocalSignerActive((msg) => {
-        toast.loading(lang === 'ar' ? msg : 'Starting FawterX Signer and checking USB Token...', { id: 'draft-submit' });
-      });
-
-      if (!localSignerActive) {
-        toast.dismiss('draft-submit');
-        setSubmitting(false);
-        toast.error(
-          lang === 'ar' 
-            ? '⚠️ لم يتم الكشف عن أداة التوقيع! يرجى تحميل وتشغيل برنامج FawterX Signer أولاً والتأكد من توصيل الدونجل.' 
-            : '⚠️ Local signer app not detected! Please download & run FawterX Signer and ensure your USB Token is plugged in.',
-          { duration: 7000 }
-        );
-        return;
-      }
-
-      // 2. Sign the draft document
-      toast.loading(lang === 'ar' ? 'يرجى اختيار الشهادة وإدخال رقم الـ PIN في نافذة التوقيع...' : 'Please choose certificate & enter PIN in signer popup...', { id: 'draft-submit' });
-      
-      const docs = Array.isArray(docPayload) ? docPayload : (docPayload._batchDocuments || [docPayload]);
-      const signedDocs = [];
-      
-      for (let i = 0; i < docs.length; i++) {
-        const doc = docs[i];
-        const cleanedDoc = cleanObject(doc);
-        const canonicalString = serializeToken(cleanedDoc);
-        console.log("=== JSON BEFORE SIGNING ===");
-        console.log(JSON.stringify(cleanedDoc, null, 2));
-        console.log("=== CANONICAL STRING USED FOR SIGNING ===");
-        console.log(canonicalString);
-
-        
-        const signRes = await fetch("http://localhost:8585/sign", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ canonicalString })
-        });
-        
-        if (!signRes.ok) {
-          throw new Error(lang === 'ar' ? 'فشلت عملية التوقيع محلياً.' : 'Local signing request failed.');
+      // 1. Sign the draft document locally using centralized signing helper
+      const signedDocs = await signEtaDocuments(docs, {
+        onStatusUpdate: (msg) => {
+          toast.loading(lang === 'ar' ? msg : 'Connecting to FawterX Signer...', { id: 'draft-submit' })
         }
-        
-        const signData = await signRes.json();
-        if (!signData.success) {
-          throw new Error(signData.error || 'Unknown signing error');
-        }
-        
-        signedDocs.push({
-          ...cleanedDoc,
-          signatures: [{
-            signatureType: "I",
-            value: signData.signature
-          }]
-        });
-      }
+      })
 
       toast.loading(lang === 'ar' ? 'تم التوقيع بنجاح! جاري إرسال الفواتير لمنظومة الضرائب المصرية...' : 'Signed successfully! Submitting to ETA...', { id: 'draft-submit' })
 
-      // 3. Submit directly to ETA
+      // 2. Submit directly to ETA
       const res = await submitToETA(signedDocs, false)
       console.log("Draft Submit Success:", res)
       setEtaResult(res)
@@ -134,12 +86,12 @@ export default function DraftDetails() {
 
       // Delete this draft since it has been successfully signed and submitted!
       try {
-        await deleteDraft(id);
+        await deleteDraft(id)
       } catch (delErr) {
-        console.warn("Could not delete draft after submission:", delErr);
+        console.warn("Could not delete draft after submission:", delErr)
       }
 
-      const uuid = res.requestId || res.result?.submissionUUID || res.result?.submissionId || res.result?.requestId;
+      const uuid = res.requestId || res.result?.submissionUUID || res.result?.submissionId || res.result?.requestId
       if (uuid && uuid !== "N/A") {
         setVerifyingStatus(true)
         toast.loading(lang === 'ar' ? 'جاري التحقق التلقائي من البوابة...' : 'Directly verifying on Portal...', { id: 'draft-verify' })
@@ -150,19 +102,19 @@ export default function DraftDetails() {
           setVerificationResult(verifyRes.data)
           toast.success(lang === 'ar' ? 'تم تأكيد ظهور الفاتورة بالبوابة!' : 'Invoice appearance confirmed in Portal!', { id: 'draft-verify' })
         } catch (vErr) {
-        toast(
-          lang === 'ar'
-            ? 'المستند وصل، وبوابة الضرائب ما زالت تراجعه.'
-            : 'The document has been sent and ETA Portal is still reviewing it.',
-          { id: 'draft-verify', icon: '⏳' }
-        )
+          toast(
+            lang === 'ar'
+              ? 'المستند وصل، وبوابة الضرائب ما زالت تراجعه.'
+              : 'The document has been sent and ETA Portal is still reviewing it.',
+            { id: 'draft-verify', icon: '⏳' }
+          )
         } finally {
           setVerifyingStatus(false)
         }
       }
     } catch (e) {
       console.error(e)
-      const rawError = e.response?.data?.etaError || e.response?.data?.details || e.message;
+      const rawError = e.response?.data?.etaError || e.response?.data?.details || e.message
       setEtaError({
         statusCode: e.response?.status || 400,
         message: e.response?.data?.message || e.message || 'Error occurred',
@@ -176,11 +128,6 @@ export default function DraftDetails() {
 
   if (loading) return <div style={{ textAlign: 'center', padding: '5rem' }}><span className="spinner"></span></div>
   if (!draft) return null
-
-  const { validationResult, document: docPayload, status } = draft
-  const isValid = status === 'valid'
-  const score = isValid ? 100 : (validationResult?.complianceScore || 0)
-  const docs = Array.isArray(docPayload) ? docPayload : (docPayload._batchDocuments || [docPayload])
 
   return (
     <div className="card fade-in">
@@ -204,9 +151,9 @@ export default function DraftDetails() {
 
       {/* Timeline flow display */}
       {(() => {
-        const hasSignature = docs.every(d => d.signatures && Array.isArray(d.signatures) && d.signatures.length > 0);
-        const etaSubmitted = !!etaResult;
-        const portalVerified = !!verificationResult;
+        const hasSignature = docs.every(d => d.signatures && Array.isArray(d.signatures) && d.signatures.length > 0)
+        const etaSubmitted = !!etaResult
+        const portalVerified = !!verificationResult
 
         const timelineSteps = [
           {
@@ -229,7 +176,7 @@ export default function DraftDetails() {
             desc: etaSubmitted ? (lang === 'ar' ? 'مقبول بالبوابة' : 'Accepted') : (etaError ? (lang === 'ar' ? 'مرفوض' : 'Rejected') : (lang === 'ar' ? 'انتظار...' : 'Pending')),
             state: etaSubmitted ? "success" : (etaError ? "error" : "pending")
           }
-        ];
+        ]
 
         return (
           <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '1.5rem', borderRadius: '12px', marginBottom: '2rem', border: '1px solid var(--border)' }}>
@@ -238,26 +185,26 @@ export default function DraftDetails() {
             </h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
               {timelineSteps.map((step, idx) => {
-                let badgeColor = '#6c757d';
-                let badgeBg = 'rgba(255,255,255,0.02)';
-                let borderStyle = '1px solid var(--border)';
-                let icon = '⚪';
+                let badgeColor = '#6c757d'
+                let badgeBg = 'rgba(255,255,255,0.02)'
+                let borderStyle = '1px solid var(--border)'
+                let icon = '⚪'
 
                 if (step.state === 'success') {
-                  badgeColor = 'var(--accent)';
-                  badgeBg = 'rgba(0, 224, 161, 0.04)';
-                  borderStyle = '1px solid rgba(0, 224, 161, 0.25)';
-                  icon = '✅';
+                  badgeColor = 'var(--accent)'
+                  badgeBg = 'rgba(0, 224, 161, 0.04)'
+                  borderStyle = '1px solid rgba(0, 224, 161, 0.25)'
+                  icon = '✅'
                 } else if (step.state === 'warning') {
-                  badgeColor = 'var(--warning)';
-                  badgeBg = 'rgba(255, 184, 79, 0.04)';
-                  borderStyle = '1px solid rgba(255, 184, 79, 0.25)';
-                  icon = '⚠️';
+                  badgeColor = 'var(--warning)'
+                  badgeBg = 'rgba(255, 184, 79, 0.04)'
+                  borderStyle = '1px solid rgba(255, 184, 79, 0.25)'
+                  icon = '⚠️'
                 } else if (step.state === 'error') {
-                  badgeColor = 'var(--danger)';
-                  badgeBg = 'rgba(255, 79, 106, 0.04)';
-                  borderStyle = '1px solid rgba(255, 79, 106, 0.25)';
-                  icon = '❌';
+                  badgeColor = 'var(--danger)'
+                  badgeBg = 'rgba(255, 79, 106, 0.04)'
+                  borderStyle = '1px solid rgba(255, 79, 106, 0.25)'
+                  icon = '❌'
                 }
 
                 return (
@@ -367,7 +314,7 @@ export default function DraftDetails() {
         </table>
       </div>
 
-      {/* Advanced developers accordion (simplification requirement) */}
+      {/* Advanced developers accordion */}
       <div className="expandable-advanced" style={{ marginBottom: '2.5rem' }}>
         <div className="advanced-toggle-header" onClick={() => setShowAdvanced(!showAdvanced)}>
           <span>🛠️ {lang === 'ar' ? 'عرض تفاصيل ومخرجات الـ JSON الفنية' : 'Advanced Developers JSON Schema'}</span>
@@ -394,87 +341,6 @@ export default function DraftDetails() {
         </button>
       </div>
 
-
     </div>
   )
-}
-
-function escapeJsonString(str) {
-  if (typeof str !== 'string') str = String(str);
-  let result = '';
-  for (let i = 0; i < str.length; i++) {
-    const char = str[i];
-    const code = str.charCodeAt(i);
-    switch (char) {
-      case '"': result += '\\"'; break;
-      case '\\': result += '\\\\'; break;
-      case '\n': result += '\\n'; break;
-      case '\r': result += '\\r'; break;
-      case '\t': result += '\\t'; break;
-      case '\f': result += '\\f'; break;
-      case '\b': result += '\\b'; break;
-      default:
-        if (code < 32) {
-          result += '\\u' + code.toString(16).padStart(4, '0');
-        } else {
-          result += char;
-        }
-        break;
-    }
-  }
-  return `"${result}"`;
-}
-
-function serializeToken(object) {
-  let serialized = "";
-  // ETA canonicalization follows the JSON property insertion order. Sorting keys changes
-  // the byte stream that ETA recalculates and causes 4043 message-digest mismatches.
-  const keys = Object.keys(object);
-  for (const key of keys) {
-    const val = object[key];
-    if (key === "signatures" || val === null || val === undefined) {
-      continue;
-    }
-    serialized += `"${key.toUpperCase()}"`;
-    if (Array.isArray(val)) {
-      for (const item of val) {
-        serialized += `"${key.toUpperCase()}"`;
-        if (item !== null && typeof item === "object") {
-          serialized += serializeToken(item);
-        } else {
-          serialized += typeof item === "string" ? escapeJsonString(item) : `"${item.toString()}"`;
-        }
-      }
-    } else if (typeof val === "object") {
-      serialized += serializeToken(val);
-    } else {
-      serialized += typeof val === "string" ? escapeJsonString(val) : `"${val.toString()}"`;
-    }
-  }
-  return serialized;
-}
-
-function cleanObject(obj) {
-  if (typeof obj === 'number') {
-    return parseFloat(obj.toFixed(5));
-  }
-  if (Array.isArray(obj)) {
-    return obj
-      .map(v => (v !== null && v !== undefined ? cleanObject(v) : v))
-      .filter(v => v !== null && v !== undefined && v !== "");
-  } else if (obj !== null && typeof obj === 'object') {
-    return Object.entries(obj).reduce((acc, [key, value]) => {
-      if (value === null || value === undefined || value === "") return acc;
-      if (Array.isArray(value) && value.length === 0) return acc;
-      
-      const cleanedValue = cleanObject(value);
-      
-      if (typeof cleanedValue === 'object' && !Array.isArray(cleanedValue) && Object.keys(cleanedValue).length === 0) return acc;
-      if (Array.isArray(cleanedValue) && cleanedValue.length === 0) return acc;
-
-      acc[key] = cleanedValue;
-      return acc;
-    }, {});
-  }
-  return obj;
 }
