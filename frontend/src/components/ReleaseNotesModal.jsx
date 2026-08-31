@@ -7,10 +7,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.22',
-      date: isAr ? '19 أغسطس 2026' : 'Aug 19, 2026',
+      version: 'v2.27.26',
+      date: isAr ? '31 أغسطس 2026' : 'Aug 31, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'توحيد منظومة التوقيع الرقمي لمنع رفض الفواتير لعدم وجود توقيع' : 'Universal Digital Signing Pipeline & Strict Pre-Dispatch Validation',
+      highlights: [
+        {
+          icon: '🔑',
+          text: isAr
+            ? 'توحيد كافة مسارات الإرسال المباشر والمسودات والدفعات عبر أداة signEtaDocuments لضمان وجود توقيع CAdES-BES معتمد.'
+            : 'Unified all live submission surfaces (Batch, Drafts, Preview) to use signEtaDocuments guaranteeing valid CAdES-BES token signature.'
+        },
+        {
+          icon: '⏱️',
+          text: isAr
+            ? 'ضبط ومعايرة التوقيت التلقائي للفواتير normalizeIssueDate لمنع أي تفاوت زمني مع خوادم مصلحة الضرائب.'
+            : 'Automatic timestamp normalization to prevent ETA out-of-sync rejection errors.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.22',
+      date: isAr ? '19 أغسطس 2026' : 'Aug 19, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'تسريع الاستيقاظ ومنع أخطاء التقديم والمحاولة الأولى' : 'Preemptive Server Warm-up, Signer Auto-Wait & Status Check Fixes',
       highlights: [
         {
@@ -660,7 +681,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.27.22 {isAr ? 'النسخة الحالية' : 'Active'}
+              v2.27.26 {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}
