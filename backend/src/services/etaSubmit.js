@@ -6,6 +6,14 @@ const { getAccessToken } = require("./etaAuth");
 // ─── Production API URL ────────────────────────────────────────────
 const ETA_API_BASE = "https://api.invoicing.eta.gov.eg/api/v1";
 
+// A real ETA CAdES/PKCS#7 signature is Base64-encoded and considerably
+// larger than a placeholder value. This deliberately stays structural: ETA
+// remains the authority that validates the certificate and document hash.
+function isLikelyCmsSignature(value) {
+  const signature = String(value || "").trim();
+  return signature.length > 1000 && /^[A-Za-z0-9+/=\r\n]+$/.test(signature);
+}
+
 /**
  * يرسل document/s لـ ETA Production API
  *
@@ -27,7 +35,8 @@ async function submitDocuments(documents, dryRun = false, customCredentials = nu
       !d.signatures ||
       !Array.isArray(d.signatures) ||
       d.signatures.length === 0 ||
-      (d.signatures[0]?.value || "").startsWith("MOCK_")
+      (d.signatures[0]?.value || "").startsWith("MOCK_") ||
+      !isLikelyCmsSignature(d.signatures[0]?.value)
     );
     if (hasUnsigned) {
       throw new Error(

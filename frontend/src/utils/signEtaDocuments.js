@@ -100,12 +100,18 @@ export function assertSignedBeforeLiveSubmit(documents) {
   const missingSignature = docs.some((doc) =>
     !Array.isArray(doc.signatures) ||
     !doc.signatures[0]?.value ||
-    String(doc.signatures[0].value).startsWith('MOCK_')
+    String(doc.signatures[0].value).startsWith('MOCK_') ||
+    !isLikelyCmsSignature(doc.signatures[0].value)
   )
 
   if (missingSignature) {
     throw new Error('لا يمكن إرسال الفاتورة للضرائب قبل التوقيع الإلكتروني الحقيقي.')
   }
+}
+
+function isLikelyCmsSignature(value) {
+  const signature = String(value || '').trim()
+  return signature.length > 1000 && /^[A-Za-z0-9+/=\r\n]+$/.test(signature)
 }
 
 export async function signEtaDocuments(documents, { onStatusUpdate = null } = {}) {
@@ -139,6 +145,10 @@ export async function signEtaDocuments(documents, { onStatusUpdate = null } = {}
     const signData = await signRes.json()
     if (!signData.success || !signData.signature) {
       throw new Error(signData.error || 'لم يرجع برنامج التوقيع توقيعاً صالحاً.')
+    }
+
+    if (!isLikelyCmsSignature(signData.signature)) {
+      throw new Error('برنامج التوقيع رجع قيمة غير صالحة. افتح FawterX Signer وتأكد من اختيار شهادة الدونجل الصحيحة.')
     }
 
     signedDocs.push({

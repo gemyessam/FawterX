@@ -9,6 +9,24 @@ const api = axios.create({
   baseURL: API_BASE_URL
 })
 
+function isLikelyCmsSignature(value) {
+  const signature = String(value || '').trim()
+  return signature.length > 1000 && /^[A-Za-z0-9+/=\r\n]+$/.test(signature)
+}
+
+function assertLiveDocumentsAreSigned(document) {
+  const documents = Array.isArray(document) ? document : [document]
+  const unsignedDocument = documents.find((doc) =>
+    !Array.isArray(doc?.signatures) ||
+    !isLikelyCmsSignature(doc.signatures[0]?.value)
+  )
+
+  if (unsignedDocument) {
+    const id = unsignedDocument?.internalID || unsignedDocument?.internalId || ''
+    throw new Error(`لا يمكن إرسال${id ? ` الفاتورة ${id}` : ' الفاتورة'} إلى ETA قبل التوقيع الإلكتروني الحقيقي عبر FawterX Signer.`)
+  }
+}
+
 async function getCurrentAuthToken() {
   const useQuickLogin = localStorage.getItem('useQuickLogin') === 'true'
   if (useQuickLogin) {
@@ -237,6 +255,10 @@ export async function testETAAuth(customSettings = null, allowSingleSecret = fal
 
 /** إرسال الفاتورة لـ ETA أو حفظ Draft مع إعادة المحاولة التلقائية عند تأخر استيقاظ السيرفر */
 export async function submitToETA(document, dryRun = false) {
+  if (!dryRun) {
+    assertLiveDocumentsAreSigned(document)
+  }
+
   const maxRetries = 1;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {

@@ -16,6 +16,11 @@ router.use(express.json({ limit: "50mb" }));
 // تطبيق الـ authMiddleware لعزل الجلسات وربط المستندات بالمستخدم الحالي
 router.use(authMiddleware);
 
+function isLikelyCmsSignature(value) {
+  const signature = String(value || "").trim();
+  return signature.length > 1000 && /^[A-Za-z0-9+/=\r\n]+$/.test(signature);
+}
+
 router.get("/customers", async (req, res) => {
   try {
     const customers = await listCustomers(req.user.uid);
@@ -252,7 +257,8 @@ router.post("/submit", async (req, res) => {
       !Array.isArray(doc.signatures) ||
       doc.signatures.length === 0 ||
       (doc.signatures[0]?.value || "").startsWith("MOCK_") ||
-      (doc.signatures[0]?.value || "").trim() === ""
+      (doc.signatures[0]?.value || "").trim() === "" ||
+      !isLikelyCmsSignature(doc.signatures[0]?.value)
     );
     if (hasUnsigned) {
       console.error("[/submit] ❌ Unsigned document blocked — ETA would reject with 'Profile is configured to submit digitally signed documents only'");
@@ -414,7 +420,13 @@ router.post("/drafts/:draftId/submit", async (req, res) => {
     // Mock/fake signatures are REJECTED by ETA with:
     // "Profile is configured to submit digitally signed documents only"
     const docsArray = Array.isArray(draft.document) ? draft.document : [draft.document];
-    const hasUnsignedDraftDoc = docsArray.some(doc => !doc.signatures || !Array.isArray(doc.signatures) || doc.signatures.length === 0 || (doc.signatures[0]?.value || "").startsWith("MOCK_"));
+    const hasUnsignedDraftDoc = docsArray.some(doc =>
+      !doc.signatures ||
+      !Array.isArray(doc.signatures) ||
+      doc.signatures.length === 0 ||
+      (doc.signatures[0]?.value || "").startsWith("MOCK_") ||
+      !isLikelyCmsSignature(doc.signatures[0]?.value)
+    );
     if (hasUnsignedDraftDoc) {
       return res.status(400).json({
         success: false,

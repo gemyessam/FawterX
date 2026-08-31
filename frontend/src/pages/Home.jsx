@@ -5,6 +5,7 @@ import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus
 import BatchWorkflow from '../components/BatchWorkflow'
 import { stampUploadIssuedTimestamp, formatCairoDateTime, formatCairoDateTimeInput, cairoLocalInputToUtcIso } from '../utils/uploadTime'
 import { applySavedCustomerMatches } from '../utils/customerMatching'
+import { signEtaDocuments } from '../utils/signEtaDocuments'
 import toast from 'react-hot-toast'
 
 function textDirection(value) {
@@ -910,7 +911,7 @@ export default function Home() {
     }
   }
 
-  // Submit to ETA directly with automated cloud mock signature (no PIN modal required)
+  // Submit to ETA through the local USB-token signer before calling ETA.
   async function handleTriggerETA() {
     if (validation && !validation.valid) {
       const errs = validation.errors || [];
@@ -930,74 +931,14 @@ export default function Home() {
     
     toast.loading(lang === 'ar' ? 'جاري التحقق من أداة التوقيع المحلية...' : 'Checking local signer tool...', { id: 'submit-loader' })
 
-    let updatedDocs = [];
     try {
-      // 1. Health check to local signer at http://localhost:8585/ with auto-launch and smart wait
-      const localSignerActive = await ensureLocalSignerActive((statusMsg) => {
-        toast.loading(lang === 'ar' ? statusMsg : 'Starting FawterX Signer and checking USB Token...', { id: 'submit-loader' });
-      });
-
-      if (!localSignerActive) {
-        toast.dismiss('submit-loader');
-        setSubmitting(false);
-        toast.error(
-          lang === 'ar' 
-            ? '⚠️ لم يتم الكشف عن أداة التوقيع! يرجى تحميل وتشغيل برنامج FawterX Signer أولاً والتأكد من توصيل الدونجل.' 
-            : '⚠️ Local signer window not detected! Please open FawterX Signer and keep its window visible while your USB Token is plugged in.',
-          { duration: 7000 }
-        );
-        return;
-      }
-
-      // 2. Local signer is active! Let's sign each document
       toast.loading(lang === 'ar' ? 'يرجى اختيار الشهادة وإدخال رقم الـ PIN في نافذة التوقيع...' : 'Please choose certificate & enter PIN in signer popup...', { id: 'submit-loader' });
-      
-      const safeDate = new Date();
-      safeDate.setMinutes(safeDate.getMinutes() - 5);
-      const fallbackIsoTime = safeDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
-      for (let i = 0; i < etaDocs.length; i++) {
-        const doc = etaDocs[i];
-        if (doc.dateTimeIssued) {
-          const parsed = new Date(doc.dateTimeIssued);
-          if (!isNaN(parsed.getTime())) {
-            doc.dateTimeIssued = parsed.toISOString().replace(/\.\d{3}Z$/, 'Z');
-          } else {
-            doc.dateTimeIssued = fallbackIsoTime;
-          }
-        } else {
-          doc.dateTimeIssued = fallbackIsoTime;
+      const updatedDocs = await signEtaDocuments(etaDocs, {
+        onStatusUpdate: (statusMsg) => {
+          toast.loading(lang === 'ar' ? statusMsg : 'Starting FawterX Signer and checking USB Token...', { id: 'submit-loader' })
         }
-        
-        // Clean the document recursively to strip empty optional fields before canonicalization & submission
-        const cleanedDoc = cleanObject(doc);
-        const canonicalString = serializeToken(cleanedDoc);
-        
-        // Request the local signer to sign the canonicalized string
-        const signRes = await fetch("http://localhost:8585/sign", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ canonicalString })
-        });
-        
-        if (!signRes.ok) {
-          throw new Error(lang === 'ar' ? 'فشلت عملية التوقيع محلياً.' : 'Local signing request failed.');
-        }
-        
-        const signData = await signRes.json();
-        if (!signData.success) {
-          throw new Error(signData.error || 'Unknown signing error');
-        }
-        
-        updatedDocs.push({
-          ...cleanedDoc,
-          signatures: [{
-            signatureType: "I",
-            value: signData.signature
-          }]
-        });
-      }
+      })
+      setEtaDocs(updatedDocs)
 
       toast.loading(lang === 'ar' ? 'تم التوقيع بنجاح! جاري إرسال الفواتير لمنظومة الضرائب المصرية...' : 'Signed successfully! Submitting to ETA...', { id: 'submit-loader' })
       setStep(4) // Move to real-time verification screen
