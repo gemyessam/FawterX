@@ -56,7 +56,7 @@ function mapToETADocument(mapping, rows, issuer, metadata = {}) {
   const issuerName = metadata.issuer || metadata.supplierName || issuer.name || "";
   
   const documentType = metadata.documentType || "I";
-  const documentTypeVersion = metadata.documentTypeVersion || "1.0";
+  const documentTypeVersion = "1.0";
   const dateTimeIssued = metadata.dateTimeIssued || new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   const taxpayerActivityCode = metadata.taxpayerActivityCode || issuer.activityCode || "1234";
 

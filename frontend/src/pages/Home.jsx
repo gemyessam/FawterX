@@ -866,12 +866,21 @@ export default function Home() {
       const genRes = await generateInvoice(mapping, uploadResult.rows || [], issuer, effectiveUploadResult.metadata || {})
       if (!genRes.success) throw new Error(genRes.message)
       const docs = genRes.documents || [genRes.document]
-      // Clean all empty properties, arrays, and objects from the payload to guarantee 100% hash matching
-      const cleanedDocs = docs.map(d => cleanObject(d))
-      setEtaDocs(cleanedDocs)
+      const customerList = customers.length ? customers : await fetchCustomers()
+      const matched = applySavedCustomerMatches(docs, customerList)
+      const finalDocs = matched.documents
+      if (matched.firstMatch) {
+        setSelectedCustomerId(matched.firstMatch.id)
+        toast.success(
+          lang === 'ar'
+            ? `تم تطبيق بيانات العميل المحفوظ تلقائيًا: ${matched.firstMatch.name || matched.firstMatch.id}`
+            : `Saved customer applied automatically: ${matched.firstMatch.name || matched.firstMatch.id}`
+        )
+      }
+      setEtaDocs(finalDocs)
 
       // Get local validation copy (Dry-run call)
-      const dryRes = await submitToETA(cleanedDocs, true)
+      const dryRes = await submitToETA(finalDocs, true)
       setValidation(dryRes.validation)
       setDraftId(dryRes.draftId)
       

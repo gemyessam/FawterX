@@ -7,10 +7,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.26',
+      version: 'v2.27.27',
       date: isAr ? '31 أغسطس 2026' : 'Aug 31, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'توحيد مطابقة عملاء إكسيل وفرض Schema v1.0 لمنع رفض الفواتير' : 'Excel Mapping Parity with Smart Upload & Strict v1.0 Schema Enforcement',
+      highlights: [
+        {
+          icon: '🔄',
+          text: isAr
+            ? 'تطبيق المطابقة التلقائية لبيانات العملاء applySavedCustomerMatches في مسار مطابقة إكسيل اليدوي بالتطابق الكامل مع مسار الرفع الذكي.'
+            : 'Applied automatic saved customer matching in manual Excel Mapping to match Smart Upload behavior.'
+        },
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'فرض إصدار المستند القياسي documentTypeVersion: 1.0 في كافة المسارات لمنع أي رفض من منظومة الضرائب.'
+            : 'Enforced documentTypeVersion 1.0 across all parsing and mapping pipelines.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.26',
+      date: isAr ? '31 أغسطس 2026' : 'Aug 31, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'توحيد منظومة التوقيع الرقمي لمنع رفض الفواتير لعدم وجود توقيع' : 'Universal Digital Signing Pipeline & Strict Pre-Dispatch Validation',
       highlights: [
         {
@@ -681,7 +702,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.27.26 {isAr ? 'النسخة الحالية' : 'Active'}
+              v2.27.27 {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}

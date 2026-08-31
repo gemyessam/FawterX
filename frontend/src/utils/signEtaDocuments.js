@@ -127,6 +127,8 @@ export async function signEtaDocuments(documents, { onStatusUpdate = null } = {}
   for (const sourceDoc of docs) {
     const doc = {
       ...sourceDoc,
+      documentType: sourceDoc.documentType || 'I',
+      documentTypeVersion: '1.0',
       dateTimeIssued: normalizeIssueDate(sourceDoc),
     }
     const cleanedDoc = cleanObject(doc)

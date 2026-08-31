@@ -187,7 +187,7 @@ function parseExcel(filePath) {
       else if (cleanCell === "documenttypeversion" || cleanCell === "version") {
         let val = getVal();
         if (val) {
-          extractedMetadata.documentTypeVersion = val.toLowerCase().replace(/v/gi, "").trim();
+          extractedMetadata.documentTypeVersion = "1.0";
         }
       }
       else if (cleanCell === "datetimeissued" || cleanCell === "issuedate" || cleanCell === "date") {
