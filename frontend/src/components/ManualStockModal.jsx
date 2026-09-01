@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
-import { processManualStockMovement } from '../services/warehouseApi'
+import { processManualStockMovement, getWarehouseInvoices, getInvoiceMovements } from '../services/warehouseApi'
 
 export default function ManualStockModal({
   isOpen,
@@ -8,6 +8,8 @@ export default function ManualStockModal({
   initialMode = 'inbound', // 'inbound' | 'outbound'
   projectId,
   projectName,
+  projects = [],
+  onSelectProject,
   stock = [],
   preselectedItems = [],
   onSuccess,
@@ -15,12 +17,14 @@ export default function ManualStockModal({
 }) {
   if (!isOpen) return null
 
+  const [activeProjectId, setActiveProjectId] = useState(projectId)
   const [mode, setMode] = useState(initialMode) // 'inbound' | 'outbound'
+  const [sourceType, setSourceType] = useState('manual') // 'manual' | 'invoice'
   const [dispatchType, setDispatchType] = useState('coating_then_customer') // 'coating_then_customer' | 'direct_customer'
   const [submitting, setSubmitting] = useState(false)
 
-  // Dispatch / Lifecycle metadata
-  const [coatingSupplier, setCoatingSupplier] = useState('شركة كانكس للدهانات الحديثة')
+  // Dispatch / Lifecycle metadata (Only coatingSupplier is mandatory for coating)
+  const [coatingSupplier, setCoatingSupplier] = useState('شركة كانكس للدهانات الحديثة (Canex Coating)')
   const [targetFinish, setTargetFinish] = useState('')
   const [customerName, setCustomerName] = useState('')
   const [projectNameOrSite, setProjectNameOrSite] = useState('')
@@ -34,10 +38,17 @@ export default function ManualStockModal({
   const [customerRef, setCustomerRef] = useState('')
   const [docNumber, setDocNumber] = useState('')
 
-  // Lines to process
+  // Invoice-based selection state
+  const [inboundInvoicesList, setInboundInvoicesList] = useState([])
+  const [loadingInvoices, setLoadingInvoices] = useState(false)
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState('')
+  const [loadingInvoiceLines, setLoadingInvoiceLines] = useState(false)
+
+  // Manual Lines to process
   const [lines, setLines] = useState(() => {
     if (preselectedItems && preselectedItems.length > 0) {
       return preselectedItems.map((item) => ({
+        selected: true,
         itemKey: item.itemKey,
         itemCode: item.itemCode,
         customerCode: item.customerCode || '',
@@ -54,6 +65,7 @@ export default function ManualStockModal({
     }
     return [
       {
+        selected: true,
         itemKey: '',
         itemCode: '',
         customerCode: '',
@@ -69,6 +81,84 @@ export default function ManualStockModal({
       },
     ]
   })
+
+  // Keep active project in sync
+  useEffect(() => {
+    if (projectId) setActiveProjectId(projectId)
+  }, [projectId])
+
+  // Load Inbound Invoices when Switching to 'invoice' source
+  useEffect(() => {
+    if (sourceType === 'invoice' && activeProjectId) {
+      setLoadingInvoices(true)
+      getWarehouseInvoices(activeProjectId)
+        .then((res) => {
+          const invs = res.invoices || []
+          // Filter to inbound invoices or show all
+          setInboundInvoicesList(invs.filter((i) => !i.movementType || i.movementType === 'inbound'))
+        })
+        .catch((err) => {
+          console.error('Failed to load invoices:', err)
+          toast.error(isAr ? 'تعذر جلب قائمة الفواتير السابقة' : 'Failed to load invoices')
+        })
+        .finally(() => setLoadingInvoices(false))
+    }
+  }, [sourceType, activeProjectId, isAr])
+
+  // Fetch movements of selected invoice and populate lines
+  const handleSelectInvoice = async (invId) => {
+    setSelectedInvoiceId(invId)
+    if (!invId) return
+
+    setLoadingInvoiceLines(true)
+    try {
+      const res = await getInvoiceMovements(activeProjectId, invId)
+      const movements = res.movements || []
+
+      if (movements.length === 0) {
+        toast.error(isAr ? 'لا توجد بنود مسجلة لهذه الفاتورة' : 'No line items found for this invoice')
+        return
+      }
+
+      // Map invoice movements to lines with available stock check
+      const mappedLines = movements.map((m) => {
+        const foundStock = stock.find((s) => s.itemKey === m.itemKey || (s.itemCode === m.itemCode && s.finish === m.finish))
+        const avail = foundStock ? Number(foundStock.quantityBar || 0) : 0
+        const invQty = Number(m.quantityBar || m.quantity || 1)
+        const len = Number(m.lengthMm || 6000)
+        const defaultQty = Math.max(1, avail > 0 ? Math.min(invQty, avail) : invQty)
+
+        return {
+          selected: true,
+          itemKey: m.itemKey || (foundStock ? foundStock.itemKey : ''),
+          itemCode: m.itemCode || 'CODE',
+          customerCode: m.customerCode || '',
+          description: m.description || '',
+          finish: m.finish || 'STD',
+          lengthMm: len,
+          invoicedBar: invQty,
+          availableBar: avail,
+          quantityBar: defaultQty,
+          quantityLm: (defaultQty * len) / 1000,
+          quantityKg: m.quantityKg || 0,
+          unitPrice: m.unitPrice || 0,
+          supplier: m.supplier || 'CANEX',
+        }
+      })
+
+      setLines(mappedLines)
+      toast.success(
+        isAr
+          ? `تم استيراد ${mappedLines.length} بند من الفاتورة. يمكنك صرفها كاملة أو تحديد بنود معينة.`
+          : `Loaded ${mappedLines.length} invoice items. You can dispense all or select specific items.`
+      )
+    } catch (err) {
+      console.error('Error fetching invoice movements:', err)
+      toast.error(isAr ? 'فشل جلب تفاصيل الفاتورة' : 'Failed to fetch invoice details')
+    } finally {
+      setLoadingInvoiceLines(false)
+    }
+  }
 
   // Common quick finishing options
   const FINISH_SUGGESTIONS = [
@@ -137,10 +227,15 @@ export default function ManualStockModal({
     })
   }
 
+  const handleToggleSelectAll = (checked) => {
+    setLines((prev) => prev.map((l) => ({ ...l, selected: checked })))
+  }
+
   const handleAddLine = () => {
     setLines((prev) => [
       ...prev,
       {
+        selected: true,
         itemKey: '',
         itemCode: '',
         customerCode: '',
@@ -159,33 +254,56 @@ export default function ManualStockModal({
 
   const handleRemoveLine = (index) => {
     if (lines.length <= 1) {
-      toast.error(isAr ? 'يجب أن يحتوي الأمر على بند واحد على الأقل' : 'At least one line is required')
+      toast.error(isAr ? 'يجب الإبقاء على بند واحد على الأقل' : 'Keep at least one item')
       return
     }
-    setLines((prev) => prev.filter((_, i) => i !== index))
+    setLines((prev) => prev.filter((_, idx) => idx !== index))
   }
 
-  const totalBars = useMemo(() => lines.reduce((acc, l) => acc + Number(l.quantityBar || 0), 0), [lines])
-  const totalLm = useMemo(() => lines.reduce((acc, l) => acc + Number(l.quantityLm || 0), 0), [lines])
+  // Aggregates for selected lines
+  const activeSelectedLines = useMemo(() => {
+    if (sourceType === 'invoice') {
+      return lines.filter((l) => l.selected && Number(l.quantityBar || 0) > 0)
+    }
+    return lines
+  }, [lines, sourceType])
 
+  const totalBars = useMemo(() => {
+    return activeSelectedLines.reduce((acc, curr) => acc + Number(curr.quantityBar || 0), 0)
+  }, [activeSelectedLines])
+
+  const totalLm = useMemo(() => {
+    return activeSelectedLines.reduce((acc, curr) => acc + Number(curr.quantityLm || 0), 0)
+  }, [activeSelectedLines])
+
+  const totalEstimatedCost = useMemo(() => {
+    return activeSelectedLines.reduce((acc, curr) => acc + Number(curr.quantityBar || 0) * Number(curr.unitPrice || 0), 0)
+  }, [activeSelectedLines])
+
+  const allSelected = useMemo(() => {
+    return lines.length > 0 && lines.every((l) => l.selected)
+  }, [lines])
+
+  // Submit Handler
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!projectId) {
-      toast.error(isAr ? 'يرجى اختيار المشروع أولاً' : 'Please select a project')
+
+    if (!activeProjectId) {
+      toast.error(isAr ? 'يرجى تحديد المشروع أو المستودع' : 'Please select project')
       return
     }
 
-    // Validation
-    const validLines = lines.filter((l) => (l.itemCode || l.itemKey) && Number(l.quantityBar) > 0)
+    const validLines = activeSelectedLines.filter((l) => l.itemCode && Number(l.quantityBar) > 0)
+
     if (validLines.length === 0) {
-      toast.error(isAr ? 'يرجى ملء بيانات كود القطاع وعدد الأعواد' : 'Please enter item codes and bar quantities')
+      toast.error(isAr ? 'يرجى تحديد الأصناف والكميات المراد تنفيذ الحركة عليها' : 'Please select items and valid quantities')
       return
     }
 
+    // Outbound Validations
     if (mode === 'outbound') {
-      // Check stock availability
       for (const line of validLines) {
-        if (line.availableBar !== undefined && Number(line.quantityBar) > line.availableBar) {
+        if (line.availableBar !== undefined && Number(line.quantityBar) > Number(line.availableBar)) {
           toast.error(
             isAr
               ? `الكمية المطلوبة للصنف (${line.itemCode}) [${line.quantityBar} عود] تتجاوز الرصيد المتاح بالمخزن [${line.availableBar} عود]`
@@ -195,18 +313,18 @@ export default function ManualStockModal({
         }
       }
 
+      // Only coating supplier is mandatory if coating stage
       if (dispatchType === 'coating_then_customer' && !coatingSupplier.trim()) {
-        toast.error(isAr ? 'يرجى تحديد اسم مورد الدهان' : 'Please specify coating supplier')
-        return
-      }
-      if (!customerName.trim()) {
-        toast.error(isAr ? 'يرجى تحديد اسم العميل النهائي أو المشروع' : 'Please specify customer or project name')
+        toast.error(isAr ? 'يرجى تحديد اسم مورد / ورشة الدهان (إجباري)' : 'Please specify coating supplier (mandatory)')
         return
       }
     }
 
     setSubmitting(true)
     try {
+      const resolvedCustomerName = customerName.trim() || (isAr ? 'عميل عام / قيد التحديد' : 'General Customer / TBD')
+      const resolvedTargetFinish = targetFinish.trim() || (isAr ? 'حسب أمر التشغيل / قياسي' : 'Standard / As per Order')
+
       const payload = {
         movementType: mode,
         lines: validLines,
@@ -214,7 +332,7 @@ export default function ManualStockModal({
           supplier: mode === 'inbound' ? inboundSupplier : 'CANEX',
           salesOrder,
           customerReference: customerRef,
-          docNumber: deliveryNote || docNumber,
+          docNumber: deliveryNote || docNumber || (selectedInvoiceId ? `FROM-INV-${selectedInvoiceId}` : ''),
           notes,
         },
         dispatchDetails:
@@ -222,9 +340,9 @@ export default function ManualStockModal({
             ? {
                 dispatchType,
                 coatingSupplier: dispatchType === 'coating_then_customer' ? coatingSupplier : 'تسليم مباشر',
-                targetFinish: dispatchType === 'coating_then_customer' ? (targetFinish || 'حسب المواصفات') : 'تسليم فوري',
-                customerName,
-                projectNameOrSite,
+                targetFinish: dispatchType === 'coating_then_customer' ? resolvedTargetFinish : 'تسليم فوري',
+                customerName: resolvedCustomerName,
+                projectNameOrSite: projectNameOrSite || (isAr ? 'الموقع العام' : 'General Site'),
                 deliveryNote: deliveryNote || `DSP-${Date.now().toString().slice(-6)}`,
                 dispatchDate,
                 notes,
@@ -232,13 +350,13 @@ export default function ManualStockModal({
             : null,
       }
 
-      const res = await processManualStockMovement(projectId, payload)
+      const res = await processManualStockMovement(activeProjectId, payload)
       if (res && res.success) {
         const isOut = mode === 'outbound'
         const msgAr = isOut
           ? dispatchType === 'coating_then_customer'
             ? `✅ تم صرف ${totalBars} عود بنجاح وإرسالها لمرحلة الدهان لدى (${coatingSupplier})!`
-            : `✅ تم صرف وتسليم ${totalBars} عود للعميل النهائي (${customerName}) مباشرة وإغلاق العملية!`
+            : `✅ تم صرف وتسليم ${totalBars} عود للعميل النهائي (${resolvedCustomerName}) مباشرة وإغلاق العملية!`
           : `✅ تم توريد ${totalBars} عود بنجاح وإضافتها لرصيد المخزن!`
 
         const msgEn = isOut
@@ -258,6 +376,8 @@ export default function ManualStockModal({
       setSubmitting(false)
     }
   }
+
+  const activeProjectObject = projects.find((p) => p.id === activeProjectId) || { name: projectName || 'المستودع الرئيسي' }
 
   return (
     <div
@@ -281,7 +401,7 @@ export default function ManualStockModal({
           background: '#121629',
           border: `1px solid ${mode === 'outbound' ? 'rgba(255, 71, 87, 0.4)' : 'rgba(0, 224, 161, 0.4)'}`,
           borderRadius: '16px',
-          maxWidth: '1000px',
+          maxWidth: '1100px',
           width: '100%',
           maxHeight: '92vh',
           display: 'flex',
@@ -293,41 +413,67 @@ export default function ManualStockModal({
         {/* Header */}
         <div
           style={{
-            padding: '1.2rem 1.5rem',
+            padding: '1.1rem 1.5rem',
             borderBottom: '1px solid rgba(255,255,255,0.08)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            background: mode === 'outbound' ? 'rgba(255, 71, 87, 0.08)' : 'rgba(0, 224, 161, 0.08)',
+            background: mode === 'outbound' ? 'linear-gradient(90deg, rgba(255,71,87,0.1) 0%, rgba(18,22,41,0.5) 100%)' : 'linear-gradient(90deg, rgba(0,224,161,0.1) 0%, rgba(18,22,41,0.5) 100%)',
           }}
         >
-          <div>
-            <h3
-              style={{
-                margin: 0,
-                fontSize: '1.25rem',
-                color: mode === 'outbound' ? '#ff6b81' : '#00e0a1',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.6rem',
-                fontWeight: 800,
-              }}
-            >
-              {mode === 'outbound' ? '📤 صرف قطاعات وتتبع المراحل (دهان ⬅️ عميل نهائي)' : '📥 توريد يدوي مباشر للقطاعات (+)'}
-            </h3>
-            <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              {isAr ? `مشروع المخزن: ${projectName || projectId}` : `Warehouse: ${projectName || projectId}`}
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '1.6rem' }}>{mode === 'outbound' ? '📤' : '📥'}</span>
+            <div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+                {mode === 'outbound'
+                  ? (isAr ? 'صرف وتتبع مراحل القطاعات (Outbound Dispatch)' : 'Outbound Profile Dispatch')
+                  : (isAr ? 'توريد يدوي للقطاعات (Manual Stock Supply)' : 'Manual Stock Supply')}
+              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.2rem' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                  {isAr ? 'المستودع / المشروع:' : 'Warehouse / Project:'}
+                </span>
+                {projects && projects.length > 1 ? (
+                  <select
+                    value={activeProjectId}
+                    onChange={(e) => {
+                      setActiveProjectId(e.target.value)
+                      if (onSelectProject) onSelectProject(e.target.value)
+                    }}
+                    style={{
+                      background: '#1a1f3a',
+                      color: '#00e0a1',
+                      border: '1px solid rgba(0, 224, 161, 0.4)',
+                      padding: '0.2rem 0.6rem',
+                      borderRadius: '6px',
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.code || 'CODE'})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.3)', fontSize: '0.8rem' }}>
+                    {activeProjectObject.name}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             {/* Mode Switcher */}
-            <div style={{ display: 'flex', background: '#0a0d18', padding: '3px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', background: '#0a0d1a', padding: '0.25rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
               <button
                 type="button"
                 className={`btn btn-sm ${mode === 'inbound' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setMode('inbound')}
-                style={{ borderRadius: '6px', fontSize: '0.8rem', padding: '4px 12px' }}
+                style={{ borderRadius: '7px', fontWeight: 700 }}
               >
                 📥 {isAr ? 'توريد (+)' : 'Inbound'}
               </button>
@@ -336,12 +482,11 @@ export default function ManualStockModal({
                 className="btn btn-sm"
                 onClick={() => setMode('outbound')}
                 style={{
-                  borderRadius: '6px',
-                  fontSize: '0.8rem',
-                  padding: '4px 12px',
+                  borderRadius: '7px',
+                  fontWeight: 700,
                   background: mode === 'outbound' ? '#ff4757' : 'transparent',
+                  borderColor: mode === 'outbound' ? '#ff4757' : 'transparent',
                   color: '#fff',
-                  border: 'none',
                 }}
               >
                 📤 {isAr ? 'صرف بمراحل (-)' : 'Outbound'}
@@ -350,431 +495,705 @@ export default function ManualStockModal({
 
             <button
               onClick={onClose}
-              style={{
-                background: 'rgba(255,255,255,0.1)',
-                border: 'none',
-                color: '#fff',
-                fontSize: '1.2rem',
-                cursor: 'pointer',
-                borderRadius: '50%',
-                width: '34px',
-                height: '34px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+              className="btn btn-ghost"
+              style={{ padding: '0.4rem 0.75rem', borderRadius: '50%', color: 'var(--text-muted)' }}
+              title={isAr ? 'إغلاق' : 'Close'}
             >
               ✕
             </button>
           </div>
         </div>
 
-        {/* Modal Form Body */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-          <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
-            {/* Outbound Stages Selector Banner */}
+        {/* Modal Scrollable Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem' }}>
+          <form id="manual-stock-form" onSubmit={handleSubmit}>
+            
+            {/* ─── SOURCE PICKER: Manual Profile vs From Inbound Invoice ─── */}
+            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                {isAr ? 'طريقة اختيار البنود:' : 'Item Selection Source:'}
+              </span>
+              <button
+                type="button"
+                className={`btn btn-sm ${sourceType === 'manual' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setSourceType('manual')}
+                style={{ borderRadius: '8px', fontWeight: 700, fontSize: '0.82rem' }}
+              >
+                📋 {isAr ? 'اختيار وتحديد يدوي للقطاعات' : 'Manual Profile Entry'}
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${sourceType === 'invoice' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setSourceType('invoice')}
+                style={{
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  background: sourceType === 'invoice' ? 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)' : 'transparent',
+                  borderColor: sourceType === 'invoice' ? '#3b82f6' : 'var(--border)',
+                  color: '#fff',
+                }}
+              >
+                🧾 {isAr ? 'استيراد وصرف من فاتورة واردة مسجلة' : 'From Recorded Inbound Invoice'}
+              </button>
+            </div>
+
+            {/* If Source Type === Invoice: Invoice Selector Card */}
+            {sourceType === 'invoice' && (
+              <div
+                className="fade-in"
+                style={{
+                  background: 'rgba(59, 130, 246, 0.06)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  borderRadius: '12px',
+                  padding: '1.1rem',
+                  marginBottom: '1.25rem',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <label style={{ fontWeight: 800, color: '#60a5fa', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    🧾 {isAr ? 'اختر الفاتورة الواردة المراد صرفها (أو جزء منها):' : 'Select Inbound Invoice to Dispense:'}
+                  </label>
+                  {loadingInvoices && <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>⏳ {isAr ? 'جاري جلب الفواتير...' : 'Loading invoices...'}</span>}
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select
+                    value={selectedInvoiceId}
+                    onChange={(e) => handleSelectInvoice(e.target.value)}
+                    disabled={loadingInvoices || loadingInvoiceLines}
+                    style={{
+                      flex: 1,
+                      minWidth: '280px',
+                      background: '#101426',
+                      color: '#ffffff',
+                      border: '1px solid #3b82f6',
+                      padding: '0.6rem 1rem',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      fontSize: '0.9rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="">-- {isAr ? 'اختر فاتورة من القائمة...' : 'Select an invoice...'} --</option>
+                    {inboundInvoicesList.map((inv) => (
+                      <option key={inv.id} value={inv.id}>
+                        {inv.invoiceNumber || inv.id} | {inv.supplier || 'CANEX'} | {(inv.totalQuantityBar || 0).toLocaleString()} عود | {inv.salesOrder ? `SO: ${inv.salesOrder}` : ''} | {inv.issueDate || ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedInvoiceId && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => handleSelectInvoice(selectedInvoiceId)}
+                      disabled={loadingInvoiceLines}
+                      style={{ padding: '0.6rem 0.9rem', borderRadius: '8px' }}
+                    >
+                      {loadingInvoiceLines ? <span className="spinner"></span> : '🔄 ' + (isAr ? 'إعادة تحميل البنود' : 'Reload Lines')}
+                    </button>
+                  )}
+                </div>
+
+                {selectedInvoiceId && (
+                  <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#93c5fd', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                    <span>💡 {isAr ? 'تم جلب كافة بنود الفاتورة. يمكنك الضغط على "تحديد الكل" لصرف الفاتورة بأكملها، أو تعديل كمية أي بند تريده.' : 'Loaded all invoice items. You can select all to dispense the entire invoice or tweak specific quantities.'}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ─── OUTBOUND LIFECYCLE & STAGE SELECTOR (Only in Outbound Mode) ─── */}
             {mode === 'outbound' && (
               <div
                 style={{
-                  background: 'rgba(255, 215, 0, 0.05)',
-                  border: '1px solid rgba(255, 215, 0, 0.25)',
+                  background: 'rgba(255, 71, 87, 0.05)',
+                  border: '1px solid rgba(255, 71, 87, 0.25)',
                   borderRadius: '12px',
-                  padding: '1rem 1.25rem',
-                  marginBottom: '1.5rem',
+                  padding: '1.25rem',
+                  marginBottom: '1.25rem',
                 }}
               >
-                <div style={{ fontWeight: 700, color: '#FFD700', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
-                  🎯 {isAr ? 'حدد خط سير ومراحل صرف القطاعات:' : 'Select Dispatch Workflow:'}
+                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#ff6b81', marginBottom: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  🎨 {isAr ? 'حدد خط سير ومراحل صرف القطاعات:' : 'Dispatch Workflow & Lifecycle:'}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.75rem' }}>
+                {/* Workflow Selector Radios */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+                  {/* Option 1: 2 Stages (Coating -> Customer) */}
                   <label
                     style={{
                       display: 'flex',
                       alignItems: 'flex-start',
                       gap: '0.75rem',
-                      padding: '0.75rem 1rem',
-                      borderRadius: '8px',
-                      background: dispatchType === 'coating_then_customer' ? 'rgba(0, 224, 161, 0.12)' : 'rgba(255,255,255,0.02)',
-                      border: `1px solid ${dispatchType === 'coating_then_customer' ? '#00e0a1' : 'rgba(255,255,255,0.1)'}`,
+                      padding: '1rem',
+                      background: dispatchType === 'coating_then_customer' ? 'rgba(0, 224, 161, 0.08)' : 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${dispatchType === 'coating_then_customer' ? '#00e0a1' : 'rgba(255,255,255,0.08)'}`,
+                      borderRadius: '10px',
                       cursor: 'pointer',
                     }}
                   >
                     <input
                       type="radio"
                       name="dispatchType"
+                      value="coating_then_customer"
                       checked={dispatchType === 'coating_then_customer'}
                       onChange={() => setDispatchType('coating_then_customer')}
-                      style={{ marginTop: '0.2rem', accentColor: '#00e0a1' }}
+                      style={{ marginTop: '0.25rem', accentColor: '#00e0a1' }}
                     />
                     <div>
-                      <strong style={{ color: '#fff', fontSize: '0.9rem', display: 'block' }}>
-                        1️⃣ {isAr ? 'مرحلتين (مورد دهان ⬅️ ثم عميل نهائي)' : '2 Stages (Coating ➡️ Customer)'}
-                      </strong>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '0.95rem' }}>
+                        1️⃣ {isAr ? 'مرحلتين (مورد دهان ⬅️ ثم عميل نهائي)' : '2 Stages (Coating Supplier ➡️ Customer)'}
+                      </div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
                         {isAr
                           ? 'تخرج القطاعات من رصيد المخزن الخام وتبقى قيد المتابعة لدى مورد الدهان حتى إتمام تسليمها للعميل.'
-                          : 'Items deducted from raw stock and tracked at coating supplier until final delivery.'}
-                      </span>
+                          : 'Profiles leave raw stock and remain tracked at coating supplier until final customer delivery.'}
+                      </div>
                     </div>
                   </label>
 
+                  {/* Option 2: 1 Stage (Direct Delivery) */}
                   <label
                     style={{
                       display: 'flex',
                       alignItems: 'flex-start',
                       gap: '0.75rem',
-                      padding: '0.75rem 1rem',
-                      borderRadius: '8px',
-                      background: dispatchType === 'direct_customer' ? 'rgba(0, 224, 161, 0.12)' : 'rgba(255,255,255,0.02)',
-                      border: `1px solid ${dispatchType === 'direct_customer' ? '#00e0a1' : 'rgba(255,255,255,0.1)'}`,
+                      padding: '1rem',
+                      background: dispatchType === 'direct_customer' ? 'rgba(0, 224, 161, 0.08)' : 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${dispatchType === 'direct_customer' ? '#00e0a1' : 'rgba(255,255,255,0.08)'}`,
+                      borderRadius: '10px',
                       cursor: 'pointer',
                     }}
                   >
                     <input
                       type="radio"
                       name="dispatchType"
+                      value="direct_customer"
                       checked={dispatchType === 'direct_customer'}
                       onChange={() => setDispatchType('direct_customer')}
-                      style={{ marginTop: '0.2rem', accentColor: '#00e0a1' }}
+                      style={{ marginTop: '0.25rem', accentColor: '#00e0a1' }}
                     />
                     <div>
-                      <strong style={{ color: '#fff', fontSize: '0.9rem', display: 'block' }}>
+                      <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '0.95rem' }}>
                         2️⃣ {isAr ? 'مرحلة واحدة (تسليم مباشر للعميل النهائي)' : '1 Stage (Direct Customer Delivery)'}
-                      </strong>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      </div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
                         {isAr
                           ? 'صرف فوري ومباشر لقطاعات جاهزة ومدهونة لموقع العميل وإغلاق العملية مباشرة.'
-                          : 'Direct dispatch to customer site and immediate order completion.'}
-                      </span>
+                          : 'Immediate delivery for ready/finished profiles directly to customer site.'}
+                      </div>
                     </div>
                   </label>
                 </div>
 
-                {/* Workflow Metadata Inputs */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.85rem', marginTop: '1rem' }}>
+                {/* Stage 1 Fields: Coating Details (Only coatingSupplier is mandatory) */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
                   {dispatchType === 'coating_then_customer' && (
-                    <>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.8rem', color: '#FFD700', marginBottom: '0.3rem', fontWeight: 600 }}>
-                          🏭 {isAr ? 'مورد / ورشة الدهان' : 'Coating Supplier'} *
-                        </label>
-                        <input
-                          type="text"
-                          list="coating-suppliers-list"
-                          value={coatingSupplier}
-                          onChange={(e) => setCoatingSupplier(e.target.value)}
-                          placeholder={isAr ? 'اختر أو اكتب اسم مورد الدهان...' : 'Coating supplier name...'}
-                          required
-                          style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
-                        />
-                        <datalist id="coating-suppliers-list">
-                          {COATING_SUPPLIERS.map((s, idx) => (
-                            <option key={idx} value={s} />
-                          ))}
-                        </datalist>
-                      </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#ff6b81' }}>
+                        🏭 {isAr ? 'مورد / ورشة الدهان * (إجباري)' : 'Coating Supplier * (Mandatory)'}
+                      </label>
+                      <input
+                        type="text"
+                        list="coating-suppliers-list"
+                        value={coatingSupplier}
+                        onChange={(e) => setCoatingSupplier(e.target.value)}
+                        placeholder={isAr ? 'اختر أو اكتب اسم الورشة...' : 'Workshop or painter name...'}
+                        required
+                        style={{
+                          width: '100%',
+                          background: '#101223',
+                          border: '1px solid #ff4757',
+                          padding: '0.55rem 0.85rem',
+                          borderRadius: '8px',
+                          color: '#fff',
+                        }}
+                      />
+                      <datalist id="coating-suppliers-list">
+                        {COATING_SUPPLIERS.map((s) => (
+                          <option key={s} value={s} />
+                        ))}
+                      </datalist>
+                    </div>
+                  )}
 
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.8rem', color: '#64b5f6', marginBottom: '0.3rem', fontWeight: 600 }}>
-                          🎨 {isAr ? 'اللون / التشطيب المطلوب (RAL Code)' : 'Target Finish / Color'} *
-                        </label>
-                        <input
-                          type="text"
-                          list="finish-suggestions-list"
-                          value={targetFinish}
-                          onChange={(e) => setTargetFinish(e.target.value)}
-                          placeholder={isAr ? 'مثال: RAL 9005 أسود مط...' : 'e.g. RAL 9005 Black...'}
-                          required
-                          style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
-                        />
-                        <datalist id="finish-suggestions-list">
-                          {FINISH_SUGGESTIONS.map((f, idx) => (
-                            <option key={idx} value={f} />
-                          ))}
-                        </datalist>
-                      </div>
-                    </>
+                  {dispatchType === 'coating_then_customer' && (
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                        🎨 {isAr ? 'اللون / التشطيب المطلوب (اختياري)' : 'Target Finish / RAL (Optional)'}
+                      </label>
+                      <input
+                        type="text"
+                        list="target-finish-list"
+                        value={targetFinish}
+                        onChange={(e) => setTargetFinish(e.target.value)}
+                        placeholder={isAr ? 'مثال: RAL 9005 أسود مط...' : 'e.g. RAL 9005 Matt Black'}
+                        style={{
+                          width: '100%',
+                          background: '#101223',
+                          border: '1px solid var(--border)',
+                          padding: '0.55rem 0.85rem',
+                          borderRadius: '8px',
+                          color: '#fff',
+                        }}
+                      />
+                      <datalist id="target-finish-list">
+                        {FINISH_SUGGESTIONS.map((f) => (
+                          <option key={f} value={f} />
+                        ))}
+                      </datalist>
+                    </div>
                   )}
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#00e0a1', marginBottom: '0.3rem', fontWeight: 600 }}>
-                      👤 {isAr ? 'اسم العميل النهائي' : 'Final Customer'} *
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                      👤 {isAr ? 'اسم العميل النهائي (اختياري)' : 'Customer Name (Optional)'}
                     </label>
                     <input
                       type="text"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder={isAr ? 'اسم العميل / المستلم...' : 'Customer name...'}
-                      required
-                      style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                      placeholder={isAr ? 'اسم العميل أو جهة التسليم...' : 'Customer or receiver name...'}
+                      style={{
+                        width: '100%',
+                        background: '#101223',
+                        border: '1px solid var(--border)',
+                        padding: '0.55rem 0.85rem',
+                        borderRadius: '8px',
+                        color: '#fff',
+                      }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#a29bfe', marginBottom: '0.3rem', fontWeight: 600 }}>
-                      🏢 {isAr ? 'المشروع / وجهة التسليم' : 'Project / Destination'}
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                      🏢 {isAr ? 'المشروع / وجهة التسليم (اختياري)' : 'Project / Destination Site'}
                     </label>
                     <input
                       type="text"
                       value={projectNameOrSite}
                       onChange={(e) => setProjectNameOrSite(e.target.value)}
-                      placeholder={isAr ? 'مثال: مول التجمع / برج الياسمين...' : 'e.g. Site or project name...'}
-                      style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                      placeholder={isAr ? 'مثال: مول التجمع / برج الياسمين...' : 'e.g. Site name...'}
+                      style={{
+                        width: '100%',
+                        background: '#101223',
+                        border: '1px solid var(--border)',
+                        padding: '0.55rem 0.85rem',
+                        borderRadius: '8px',
+                        color: '#fff',
+                      }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
-                      📄 {isAr ? 'رقم إذن الصرف اليدوي' : 'Delivery Note #'}
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                      📄 {isAr ? 'رقم إذن الصرف اليدوي' : 'Delivery Note / DSP #'}
                     </label>
                     <input
                       type="text"
                       value={deliveryNote}
                       onChange={(e) => setDeliveryNote(e.target.value)}
-                      placeholder={isAr ? 'مثال: DSP-104...' : 'e.g. DSP-104...'}
-                      style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                      placeholder={isAr ? 'مثال: DSP-104...' : 'e.g. DSP-104'}
+                      style={{
+                        width: '100%',
+                        background: '#101223',
+                        border: '1px solid var(--border)',
+                        padding: '0.55rem 0.85rem',
+                        borderRadius: '8px',
+                        color: '#fff',
+                      }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
                       📅 {isAr ? 'تاريخ الصرف والخروج' : 'Dispatch Date'}
                     </label>
                     <input
                       type="date"
                       value={dispatchDate}
                       onChange={(e) => setDispatchDate(e.target.value)}
-                      style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                      style={{
+                        width: '100%',
+                        background: '#101223',
+                        border: '1px solid var(--border)',
+                        padding: '0.55rem 0.85rem',
+                        borderRadius: '8px',
+                        color: '#fff',
+                      }}
                     />
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Inbound Metadata Fields */}
+            {/* ─── INBOUND METADATA (Only in Inbound Mode) ─── */}
             {mode === 'inbound' && (
               <div
                 style={{
                   background: 'rgba(0, 224, 161, 0.05)',
                   border: '1px solid rgba(0, 224, 161, 0.2)',
                   borderRadius: '12px',
-                  padding: '1rem 1.25rem',
-                  marginBottom: '1.5rem',
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                  gap: '0.85rem',
+                  padding: '1.25rem',
+                  marginBottom: '1.25rem',
                 }}
               >
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#00e0a1', marginBottom: '0.3rem', fontWeight: 600 }}>
-                    🏭 {isAr ? 'المورد / جهة التوريد' : 'Supplier'}
-                  </label>
-                  <input
-                    type="text"
-                    value={inboundSupplier}
-                    onChange={(e) => setInboundSupplier(e.target.value)}
-                    placeholder="CANEX"
-                    style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
-                  />
+                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#00e0a1', marginBottom: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  📥 {isAr ? 'بيانات التوريد والإذن:' : 'Inbound Supply Details:'}
                 </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#8ab4ff', marginBottom: '0.3rem' }}>
-                    📦 {isAr ? 'أمر البيع (SO)' : 'Sales Order #'}
-                  </label>
-                  <input
-                    type="text"
-                    value={salesOrder}
-                    onChange={(e) => setSalesOrder(e.target.value)}
-                    placeholder={isAr ? 'مثال: SO-8940...' : 'SO number...'}
-                    style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
-                  />
-                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                      🏭 {isAr ? 'المورد / المصنع' : 'Supplier'}
+                    </label>
+                    <input
+                      type="text"
+                      value={inboundSupplier}
+                      onChange={(e) => setInboundSupplier(e.target.value)}
+                      placeholder="CANEX"
+                      style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: '#fff' }}
+                    />
+                  </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#ffb74d', marginBottom: '0.3rem' }}>
-                    👤 {isAr ? 'مرجع العميل (Customer Ref)' : 'Customer Ref'}
-                  </label>
-                  <input
-                    type="text"
-                    value={customerRef}
-                    onChange={(e) => setCustomerRef(e.target.value)}
-                    placeholder={isAr ? 'مرجع أو كود العميل...' : 'Customer reference...'}
-                    style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
-                  />
-                </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                      📋 {isAr ? 'أمر البيع (Sales Order)' : 'Sales Order (SO)'}
+                    </label>
+                    <input
+                      type="text"
+                      value={salesOrder}
+                      onChange={(e) => setSalesOrder(e.target.value)}
+                      placeholder={isAr ? 'مثال: SO-10928...' : 'e.g. SO-10928'}
+                      style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: '#fff' }}
+                    />
+                  </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
-                    📄 {isAr ? 'رقم إذن الاستلام / الفاتورة اليدوية' : 'Receipt / Doc #'}
-                  </label>
-                  <input
-                    type="text"
-                    value={docNumber}
-                    onChange={(e) => setDocNumber(e.target.value)}
-                    placeholder={isAr ? 'مثال: REC-2026-01...' : 'Receipt number...'}
-                    style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
-                  />
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                      🏷️ {isAr ? 'مرجع العميل (Customer Ref)' : 'Customer Ref'}
+                    </label>
+                    <input
+                      type="text"
+                      value={customerRef}
+                      onChange={(e) => setCustomerRef(e.target.value)}
+                      placeholder={isAr ? 'مثال: CUST-44...' : 'e.g. CUST-44'}
+                      style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: '#fff' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                      📄 {isAr ? 'رقم إذن الاستلام / الفاتورة' : 'Receipt / Doc #'}
+                    </label>
+                    <input
+                      type="text"
+                      value={docNumber}
+                      onChange={(e) => setDocNumber(e.target.value)}
+                      placeholder={isAr ? 'مثال: REC-9921...' : 'e.g. REC-9921'}
+                      style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: '#fff' }}
+                    />
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Line Items Table */}
-            <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h4 style={{ margin: 0, fontSize: '1rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                📋 {isAr ? 'بنود القطاعات المراد تنفيذ الحركة عليها:' : 'Stock Line Items:'}
+            {/* ─── LINES TABLE ─── */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div style={{ fontWeight: 800, fontSize: '1rem', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                📑 {isAr ? 'بنود القطاعات المراد تنفيذ الحركة عليها:' : 'Line Items:'}
                 <span className="badge" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff' }}>
-                  {lines.length} {isAr ? 'بند' : 'items'}
+                  {activeSelectedLines.length} {isAr ? 'بند محدد' : 'selected'}
                 </span>
-              </h4>
+              </div>
 
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={handleAddLine}
-                style={{
-                  background: 'rgba(0, 224, 161, 0.15)',
-                  color: '#00e0a1',
-                  border: '1px solid rgba(0, 224, 161, 0.3)',
-                  fontWeight: 600,
-                  fontSize: '0.8rem',
-                }}
-              >
-                ➕ {isAr ? 'إضافة قطاع آخر' : 'Add Item'}
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                {sourceType === 'invoice' && lines.length > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleToggleSelectAll(!allSelected)}
+                    style={{ borderRadius: '8px', fontSize: '0.8rem' }}
+                  >
+                    {allSelected ? (isAr ? '❌ إلغاء تحديد الكل' : 'Deselect All') : (isAr ? '✅ تحديد وصرف الكل' : 'Select All')}
+                  </button>
+                )}
+
+                {sourceType === 'manual' && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleAddLine}
+                    style={{
+                      background: 'rgba(0, 224, 161, 0.15)',
+                      color: '#00e0a1',
+                      border: '1px solid rgba(0, 224, 161, 0.3)',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    ➕ {isAr ? 'إضافة قطاع آخر' : 'Add Profile'}
+                  </button>
+                )}
+              </div>
             </div>
 
-            <div style={{ overflowX: 'auto', background: 'rgba(0,0,0,0.25)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ overflowX: 'auto', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)', marginBottom: '1rem' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                 <thead>
                   <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
-                    <th style={{ padding: '0.65rem 0.8rem', width: '35px' }}>#</th>
-                    <th style={{ padding: '0.65rem 0.8rem', minWidth: '180px' }}>{isAr ? 'اختيار من رصيد المخزن' : 'Select From Stock'}</th>
-                    <th style={{ padding: '0.65rem 0.8rem', width: '110px' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
-                    <th style={{ padding: '0.65rem 0.8rem', minWidth: '180px' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
-                    <th style={{ padding: '0.65rem 0.8rem', width: '90px' }}>{isAr ? 'الدهان' : 'Finish'}</th>
-                    <th style={{ padding: '0.65rem 0.8rem', width: '85px' }}>{isAr ? 'الطول (mm)' : 'Length'}</th>
-                    <th style={{ padding: '0.65rem 0.8rem', width: '100px' }}>{isAr ? 'الأعواد (BAR)' : 'Bars'}</th>
-                    {mode === 'outbound' && <th style={{ padding: '0.65rem 0.8rem', width: '90px', color: '#FFD700' }}>{isAr ? 'المتاح' : 'Available'}</th>}
-                    <th style={{ padding: '0.65rem 0.8rem', width: '90px' }}>{isAr ? 'الأمتار (LM)' : 'Meters'}</th>
-                    {mode === 'inbound' && <th style={{ padding: '0.65rem 0.8rem', width: '100px' }}>{isAr ? 'السعر (EGP)' : 'Unit Cost'}</th>}
-                    <th style={{ padding: '0.65rem 0.8rem', width: '45px', textAlign: 'center' }}>-</th>
+                    {sourceType === 'invoice' && (
+                      <th style={{ padding: '0.65rem 0.5rem', textAlign: 'center', width: '40px' }}>
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          onChange={(e) => handleToggleSelectAll(e.target.checked)}
+                          style={{ accentColor: '#00e0a1', cursor: 'pointer' }}
+                        />
+                      </th>
+                    )}
+                    <th style={{ padding: '0.65rem 0.5rem', width: '30px' }}>#</th>
+                    <th style={{ padding: '0.65rem 0.5rem', minWidth: '180px' }}>
+                      {sourceType === 'invoice' ? (isAr ? 'كود الصنف' : 'Item Code') : (isAr ? 'اختيار من رصيد المخزن' : 'Select From Stock')}
+                    </th>
+                    <th style={{ padding: '0.65rem 0.5rem', minWidth: '100px' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
+                    <th style={{ padding: '0.65rem 0.5rem', minWidth: '130px' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
+                    <th style={{ padding: '0.65rem 0.5rem', width: '80px' }}>{isAr ? 'الدهان' : 'Finish'}</th>
+                    <th style={{ padding: '0.65rem 0.5rem', width: '70px' }}>{isAr ? 'الطول (mm)' : 'Length'}</th>
+                    {sourceType === 'invoice' && (
+                      <th style={{ padding: '0.65rem 0.5rem', width: '80px', color: '#60a5fa' }}>{isAr ? 'كمية الفاتورة' : 'Inv Qty'}</th>
+                    )}
+                    {mode === 'outbound' && (
+                      <th style={{ padding: '0.65rem 0.5rem', width: '80px', color: '#FFD700' }}>{isAr ? 'المتاح' : 'Available'}</th>
+                    )}
+                    <th style={{ padding: '0.65rem 0.5rem', width: '90px' }}>
+                      {mode === 'outbound' ? (isAr ? 'المنصرف (BAR)' : 'Dispensed (BAR)') : (isAr ? 'الوارد (BAR)' : 'Inbound (BAR)')}
+                    </th>
+                    <th style={{ padding: '0.65rem 0.5rem', width: '80px' }}>{isAr ? 'الأمتار (LM)' : 'Meters'}</th>
+                    {mode === 'inbound' && (
+                      <th style={{ padding: '0.65rem 0.5rem', width: '90px' }}>{isAr ? 'سعر الوحدة' : 'Unit Cost'}</th>
+                    )}
+                    <th style={{ padding: '0.65rem 0.5rem', width: '40px', textAlign: 'center' }}>-</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lines.map((line, idx) => {
-                    const isExceeding = mode === 'outbound' && line.availableBar !== undefined && Number(line.quantityBar) > line.availableBar
+                    const isSelectedLine = sourceType !== 'invoice' || line.selected
+                    const isOverStock = mode === 'outbound' && line.availableBar !== undefined && Number(line.quantityBar) > Number(line.availableBar)
+
                     return (
-                      <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: isExceeding ? 'rgba(255, 71, 87, 0.1)' : 'transparent' }}>
-                        <td style={{ padding: '0.65rem 0.8rem', color: 'var(--text-muted)' }}>{idx + 1}</td>
-                        <td style={{ padding: '0.65rem 0.8rem' }}>
-                          <select
-                            value={line.itemKey || ''}
-                            onChange={(e) => handleSelectStockItem(idx, e.target.value)}
-                            style={{
-                              width: '100%',
-                              background: '#0d1020',
-                              color: '#fff',
-                              border: '1px solid var(--border)',
-                              borderRadius: '6px',
-                              padding: '0.4rem 0.5rem',
-                              fontSize: '0.8rem',
-                            }}
-                          >
-                            <option value="">{isAr ? '-- اختر قطاع من المخزن --' : '-- Choose stock item --'}</option>
-                            {stock.map((s) => (
-                              <option key={s.itemKey} value={s.itemKey}>
-                                {s.itemCode} | {s.description ? s.description.slice(0, 24) : ''} ({s.quantityBar || 0} عود)
-                              </option>
-                            ))}
-                          </select>
+                      <tr
+                        key={idx}
+                        style={{
+                          borderBottom: '1px solid rgba(255,255,255,0.04)',
+                          background: !isSelectedLine ? 'rgba(0,0,0,0.3)' : isOverStock ? 'rgba(255, 71, 87, 0.12)' : 'transparent',
+                          opacity: !isSelectedLine ? 0.5 : 1,
+                        }}
+                      >
+                        {sourceType === 'invoice' && (
+                          <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(line.selected)}
+                              onChange={(e) => handleUpdateLine(idx, 'selected', e.target.checked)}
+                              style={{ accentColor: '#00e0a1', cursor: 'pointer' }}
+                            />
+                          </td>
+                        )}
+                        <td style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>{idx + 1}</td>
+
+                        {/* Selection Column */}
+                        <td style={{ padding: '0.5rem' }}>
+                          {sourceType === 'manual' ? (
+                            <select
+                              value={line.itemKey || ''}
+                              onChange={(e) => handleSelectStockItem(idx, e.target.value)}
+                              style={{
+                                width: '100%',
+                                background: '#101223',
+                                border: '1px solid var(--border)',
+                                color: '#fff',
+                                padding: '0.4rem 0.6rem',
+                                borderRadius: '6px',
+                                fontSize: '0.8rem',
+                              }}
+                            >
+                              <option value="">-- {isAr ? 'اختر قطاع من المخزن --' : 'Select from Stock --'}</option>
+                              {stock.map((s) => (
+                                <option key={s.itemKey} value={s.itemKey}>
+                                  {s.itemCode} | {s.finish} | {s.quantityBar} عود ({s.description?.slice(0, 25) || ''})
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span style={{ fontWeight: 700, color: '#ffffff' }}>{line.itemCode}</span>
+                          )}
                         </td>
-                        <td style={{ padding: '0.65rem 0.8rem' }}>
+
+                        {/* Item Code */}
+                        <td style={{ padding: '0.5rem' }}>
                           <input
                             type="text"
                             value={line.itemCode}
                             onChange={(e) => handleUpdateLine(idx, 'itemCode', e.target.value)}
                             placeholder="184060"
-                            required
-                            style={{ width: '100%', background: '#0d1020', color: '#00e0a1', fontWeight: 700, border: '1px solid var(--border)', borderRadius: '6px', padding: '0.4rem 0.5rem', fontSize: '0.8rem' }}
+                            disabled={sourceType === 'invoice'}
+                            style={{
+                              width: '100%',
+                              background: '#101223',
+                              border: '1px solid var(--border)',
+                              color: '#fff',
+                              padding: '0.4rem 0.5rem',
+                              borderRadius: '6px',
+                            }}
                           />
                         </td>
-                        <td style={{ padding: '0.65rem 0.8rem' }}>
+
+                        {/* Description */}
+                        <td style={{ padding: '0.5rem' }}>
                           <input
                             type="text"
                             value={line.description}
                             onChange={(e) => handleUpdateLine(idx, 'description', e.target.value)}
                             placeholder={isAr ? 'بيان الصنف...' : 'Description...'}
-                            style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.4rem 0.5rem', fontSize: '0.8rem' }}
+                            disabled={sourceType === 'invoice'}
+                            style={{
+                              width: '100%',
+                              background: '#101223',
+                              border: '1px solid var(--border)',
+                              color: '#fff',
+                              padding: '0.4rem 0.5rem',
+                              borderRadius: '6px',
+                            }}
                           />
                         </td>
-                        <td style={{ padding: '0.65rem 0.8rem' }}>
+
+                        {/* Finish */}
+                        <td style={{ padding: '0.5rem' }}>
                           <input
                             type="text"
                             value={line.finish}
                             onChange={(e) => handleUpdateLine(idx, 'finish', e.target.value)}
                             placeholder="STD"
-                            style={{ width: '100%', background: '#0d1020', color: '#FFD700', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.4rem 0.5rem', fontSize: '0.8rem' }}
+                            disabled={sourceType === 'invoice'}
+                            style={{
+                              width: '100%',
+                              background: '#101223',
+                              border: '1px solid var(--border)',
+                              color: '#fff',
+                              padding: '0.4rem 0.5rem',
+                              borderRadius: '6px',
+                              textAlign: 'center',
+                            }}
                           />
                         </td>
-                        <td style={{ padding: '0.65rem 0.8rem' }}>
+
+                        {/* Length */}
+                        <td style={{ padding: '0.5rem' }}>
                           <input
                             type="number"
                             value={line.lengthMm}
-                            onChange={(e) => handleUpdateLine(idx, 'lengthMm', Number(e.target.value))}
-                            placeholder="6000"
-                            style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.4rem 0.5rem', fontSize: '0.8rem' }}
+                            onChange={(e) => handleUpdateLine(idx, 'lengthMm', e.target.value)}
+                            disabled={sourceType === 'invoice'}
+                            style={{
+                              width: '100%',
+                              background: '#101223',
+                              border: '1px solid var(--border)',
+                              color: '#fff',
+                              padding: '0.4rem 0.5rem',
+                              borderRadius: '6px',
+                              textAlign: 'center',
+                            }}
                           />
                         </td>
-                        <td style={{ padding: '0.65rem 0.8rem' }}>
+
+                        {/* Invoiced Quantity if invoice source */}
+                        {sourceType === 'invoice' && (
+                          <td style={{ padding: '0.5rem', textAlign: 'center', color: '#60a5fa', fontWeight: 700 }}>
+                            {line.invoicedBar || 0} عود
+                          </td>
+                        )}
+
+                        {/* Available Stock */}
+                        {mode === 'outbound' && (
+                          <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                            <span
+                              style={{
+                                color: (line.availableBar || 0) > 0 ? '#00e0a1' : '#ff4757',
+                                fontWeight: 700,
+                              }}
+                            >
+                              {line.availableBar || 0} عود
+                            </span>
+                          </td>
+                        )}
+
+                        {/* Quantity to Move */}
+                        <td style={{ padding: '0.5rem' }}>
                           <input
                             type="number"
                             min="1"
                             value={line.quantityBar}
                             onChange={(e) => handleUpdateLine(idx, 'quantityBar', Number(e.target.value))}
-                            required
                             style={{
                               width: '100%',
-                              background: '#0d1020',
-                              color: isExceeding ? '#ff4757' : mode === 'outbound' ? '#ff6b81' : '#00e0a1',
-                              fontWeight: 800,
-                              border: `1px solid ${isExceeding ? '#ff4757' : 'var(--border)'}`,
-                              borderRadius: '6px',
+                              background: '#101223',
+                              border: `1px solid ${isOverStock ? '#ff4757' : '#00e0a1'}`,
+                              color: '#fff',
                               padding: '0.4rem 0.5rem',
-                              fontSize: '0.85rem',
+                              borderRadius: '6px',
+                              fontWeight: 800,
+                              textAlign: 'center',
                             }}
                           />
                         </td>
-                        {mode === 'outbound' && (
-                          <td style={{ padding: '0.65rem 0.8rem', fontWeight: 700, color: line.availableBar > 0 ? '#FFD700' : '#ff4757' }}>
-                            {line.availableBar !== undefined ? `${line.availableBar} عود` : '—'}
-                          </td>
-                        )}
-                        <td style={{ padding: '0.65rem 0.8rem', color: '#64b5f6' }}>
-                          <span dir="ltr">{(line.quantityLm || 0).toFixed(1)} m</span>
+
+                        {/* Meters */}
+                        <td style={{ padding: '0.5rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                          <span dir="ltr">{(Number(line.quantityLm) || 0).toFixed(1)} m</span>
                         </td>
+
+                        {/* Unit Price (for Inbound) */}
                         {mode === 'inbound' && (
-                          <td style={{ padding: '0.65rem 0.8rem' }}>
+                          <td style={{ padding: '0.5rem' }}>
                             <input
                               type="number"
-                              step="0.1"
+                              step="0.01"
                               value={line.unitPrice}
                               onChange={(e) => handleUpdateLine(idx, 'unitPrice', Number(e.target.value))}
-                              placeholder="0"
-                              style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.4rem 0.5rem', fontSize: '0.8rem' }}
+                              style={{
+                                width: '100%',
+                                background: '#101223',
+                                border: '1px solid var(--border)',
+                                color: '#fff',
+                                padding: '0.4rem 0.5rem',
+                                borderRadius: '6px',
+                                textAlign: 'center',
+                              }}
                             />
                           </td>
                         )}
-                        <td style={{ padding: '0.65rem 0.8rem', textAlign: 'center' }}>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveLine(idx)}
-                            style={{ background: 'transparent', border: 'none', color: '#ff4757', cursor: 'pointer', fontSize: '1rem' }}
-                            title={isAr ? 'حذف البند' : 'Remove'}
-                          >
-                            🗑️
-                          </button>
+
+                        {/* Actions */}
+                        <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                          {sourceType === 'manual' && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveLine(idx)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#ff4757',
+                                cursor: 'pointer',
+                                fontSize: '1rem',
+                              }}
+                              title={isAr ? 'حذف هذا البند' : 'Delete line'}
+                            >
+                              🗑️
+                            </button>
+                          )}
                         </td>
                       </tr>
                     )
@@ -783,88 +1202,92 @@ export default function ManualStockModal({
               </table>
             </div>
 
-            {/* Total Summary Footer */}
+            {/* Optional Notes */}
+            <div style={{ marginBottom: '1rem' }}>
+              <input
+                type="text"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={isAr ? 'ملاحظات إضافية على أمر الحركة...' : 'Additional notes...'}
+                style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: '#fff' }}
+              />
+            </div>
+
+            {/* Total Summary Footer Strip */}
             <div
               style={{
-                marginTop: '1.25rem',
                 display: 'flex',
-                gap: '1.5rem',
-                flexWrap: 'wrap',
+                justifyContent: 'space-between',
+                alignItems: 'center',
                 background: 'rgba(255,255,255,0.03)',
-                padding: '0.75rem 1.25rem',
+                padding: '0.85rem 1.25rem',
                 borderRadius: '10px',
                 border: '1px solid rgba(255,255,255,0.06)',
-                alignItems: 'center',
-                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '1rem',
               }}
             >
-              <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-                <div>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'إجمالي الأعواد:' : 'Total Bars:'} </span>
+              <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ fontSize: '0.9rem' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'إجمالي الأعواد:' : 'Total Bars:'} </span>
                   <strong style={{ color: mode === 'outbound' ? '#ff6b81' : '#00e0a1', fontSize: '1.1rem' }}>
-                    {totalBars} BAR
+                    {totalBars.toLocaleString()} BAR
                   </strong>
                 </div>
-                <div>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'إجمالي الأمتار:' : 'Total Meters:'} </span>
-                  <strong style={{ color: '#64b5f6', fontSize: '1.1rem' }}>
-                    {totalLm.toFixed(1)} m
+                <div style={{ fontSize: '0.9rem' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'إجمالي الأمتار:' : 'Total Meters:'} </span>
+                  <strong style={{ color: '#ffffff' }}>
+                    {totalLm.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} m
                   </strong>
                 </div>
+                {mode === 'inbound' && totalEstimatedCost > 0 && (
+                  <div style={{ fontSize: '0.9rem' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'إجمالي القيمة التقديرية:' : 'Est. Total Value:'} </span>
+                    <strong style={{ color: '#FFD700' }}>
+                      {totalEstimatedCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP
+                    </strong>
+                  </div>
+                )}
               </div>
 
-              <div>
-                <input
-                  type="text"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder={isAr ? 'ملاحظات إضافية على أمر الحركة...' : 'Additional notes...'}
-                  style={{ width: '320px', maxWidth: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.45rem 0.75rem', fontSize: '0.8rem' }}
-                />
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={onClose}
+                  disabled={submitting}
+                  style={{ padding: '0.55rem 1.2rem', borderRadius: '8px' }}
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="btn"
+                  disabled={submitting || totalBars <= 0}
+                  style={{
+                    background: mode === 'outbound' ? 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)' : 'linear-gradient(135deg, #00e0a1 0%, #00b894 100%)',
+                    color: mode === 'outbound' ? '#fff' : '#000',
+                    border: 'none',
+                    padding: '0.55rem 1.75rem',
+                    borderRadius: '8px',
+                    fontWeight: 800,
+                    fontSize: '0.95rem',
+                    cursor: submitting || totalBars <= 0 ? 'not-allowed' : 'pointer',
+                    boxShadow: mode === 'outbound' ? '0 4px 14px rgba(255, 71, 87, 0.35)' : '0 4px 14px rgba(0, 224, 161, 0.35)',
+                  }}
+                >
+                  {submitting ? (
+                    <span className="spinner"></span>
+                  ) : mode === 'outbound' ? (
+                    isAr ? `🚀 تأكيد الصرف (${totalBars} عود)` : `Confirm Outbound (${totalBars} Bars)`
+                  ) : (
+                    isAr ? `📥 تأكيد التوريد (+${totalBars} عود)` : `Confirm Inbound (+${totalBars} Bars)`
+                  )}
+                </button>
               </div>
             </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div
-            style={{
-              padding: '1rem 1.5rem',
-              borderTop: '1px solid rgba(255,255,255,0.08)',
-              background: 'rgba(0,0,0,0.2)',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '0.75rem',
-            }}
-          >
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={submitting}
-              onClick={onClose}
-              style={{ padding: '0.55rem 1.25rem' }}
-            >
-              {isAr ? 'إلغاء' : 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              className="btn"
-              disabled={submitting}
-              style={{
-                background: mode === 'outbound' ? 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)' : 'linear-gradient(135deg, #00e0a1 0%, #00b894 100%)',
-                color: mode === 'outbound' ? '#fff' : '#000',
-                border: 'none',
-                padding: '0.55rem 1.75rem',
-                borderRadius: '8px',
-                fontWeight: 700,
-                fontSize: '0.9rem',
-                cursor: 'pointer',
-                boxShadow: mode === 'outbound' ? '0 4px 14px rgba(255, 71, 87, 0.35)' : '0 4px 14px rgba(0, 224, 161, 0.35)',
-              }}
-            >
-              {submitting ? '...' : mode === 'outbound' ? (isAr ? '🚀 تأكيد الصرف وتتبع المراحل' : 'Confirm Outbound') : (isAr ? '💾 تأكيد التوريد وإضافة للرصيد' : 'Confirm Inbound')}
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   )

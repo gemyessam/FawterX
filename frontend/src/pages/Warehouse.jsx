@@ -212,6 +212,8 @@ export default function Warehouse() {
         canDelete: userItem.canDelete ?? true,
         canEdit: userItem.canEdit ?? true,
         canUpload: userItem.canUpload ?? true,
+        canDispatch: userItem.canDispatch ?? true,
+        canManual: userItem.canManual ?? true,
       }
       const res = await updateWarehouseUserAccess(userItem.uid, payload)
       if (res && res.success) {
@@ -237,6 +239,8 @@ export default function Warehouse() {
         canDelete: userItem.canDelete ?? true,
         canEdit: userItem.canEdit ?? true,
         canUpload: userItem.canUpload ?? true,
+        canDispatch: userItem.canDispatch ?? true,
+        canManual: userItem.canManual ?? true,
       }
       setUsersList(prev => prev.map(u => u.uid === userItem.uid ? { ...u, ...payload } : u))
 
@@ -4051,6 +4055,34 @@ export default function Warehouse() {
                                       />
                                       <span>📥 {isAr ? 'صلاحية رفع واعتماد الفواتير (Can Upload/Process)' : 'Can Process Invoices'}</span>
                                     </label>
+
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={usr.canManual ?? true}
+                                        disabled={isFounderSuperAdmin}
+                                        onChange={(e) => {
+                                          const val = e.target.checked
+                                          setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canManual: val } : u))
+                                        }}
+                                        style={{ accentColor: '#00e0a1' }}
+                                      />
+                                      <span>📦 {isAr ? 'صلاحية التوريد والصرف اليدوي (Can Manual Movement)' : 'Can Manual Movement'}</span>
+                                    </label>
+
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer' }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={usr.canDispatch ?? true}
+                                        disabled={isFounderSuperAdmin}
+                                        onChange={(e) => {
+                                          const val = e.target.checked
+                                          setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canDispatch: val } : u))
+                                        }}
+                                        style={{ accentColor: '#ff4757' }}
+                                      />
+                                      <span>🚚 {isAr ? 'صلاحية صرف وتتبع مراحل القطاعات (Can Dispatch & Track)' : 'Can Dispatch & Track'}</span>
+                                    </label>
                                   </div>
                                 </div>
                               </div>
@@ -4296,6 +4328,8 @@ export default function Warehouse() {
         initialMode={manualModalMode}
         projectId={selectedProjectId}
         projectName={selectedProject?.name}
+        projects={projects}
+        onSelectProject={handleSelectProject}
         stock={stock}
         preselectedItems={manualPreselectedItems}
         isAr={isAr}

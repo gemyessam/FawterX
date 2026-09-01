@@ -76,6 +76,8 @@ async function getUserWarehouseAccess(uid, email) {
       canDelete: typeof data.canDelete === "boolean" ? data.canDelete : (typeof access.canDelete === "boolean" ? access.canDelete : true),
       canEdit: typeof data.canEdit === "boolean" ? data.canEdit : (typeof access.canEdit === "boolean" ? access.canEdit : true),
       canUpload: typeof data.canUpload === "boolean" ? data.canUpload : (typeof access.canUpload === "boolean" ? access.canUpload : true),
+      canDispatch: typeof data.canDispatch === "boolean" ? data.canDispatch : (typeof access.canDispatch === "boolean" ? access.canDispatch : true),
+      canManual: typeof data.canManual === "boolean" ? data.canManual : (typeof access.canManual === "boolean" ? access.canManual : true),
     };
   } catch (err) {
     console.error("Error getting warehouse access:", err.message);
@@ -166,6 +168,12 @@ async function listWarehouseUsers() {
     const canUpload = isSuperAdmin
       ? true
       : (typeof data.canUpload === "boolean" ? data.canUpload : (typeof access.canUpload === "boolean" ? access.canUpload : (warehouseRole !== "warehouse_viewer")));
+    const canDispatch = isSuperAdmin
+      ? true
+      : (typeof data.canDispatch === "boolean" ? data.canDispatch : (typeof access.canDispatch === "boolean" ? access.canDispatch : (warehouseRole !== "warehouse_viewer")));
+    const canManual = isSuperAdmin
+      ? true
+      : (typeof data.canManual === "boolean" ? data.canManual : (typeof access.canManual === "boolean" ? access.canManual : (warehouseRole !== "warehouse_viewer")));
 
     return {
       uid: uid,
@@ -178,6 +186,8 @@ async function listWarehouseUsers() {
       canDelete,
       canEdit,
       canUpload,
+      canDispatch,
+      canManual,
     };
   });
 }
@@ -185,7 +195,7 @@ async function listWarehouseUsers() {
 /**
  * Update user warehouse permission (Admin Action)
  */
-async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehouseRole, allowedProjects, canDelete, canEdit, canUpload }, actorEmail) {
+async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehouseRole, allowedProjects, canDelete, canEdit, canUpload, canDispatch, canManual }, actorEmail) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
 
@@ -218,6 +228,8 @@ async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehous
   const boolDelete = isSuperAdminTarget ? true : (typeof canDelete === "boolean" ? canDelete : true);
   const boolEdit = isSuperAdminTarget ? true : (typeof canEdit === "boolean" ? canEdit : true);
   const boolUpload = isSuperAdminTarget ? true : (typeof canUpload === "boolean" ? canUpload : true);
+  const boolDispatch = isSuperAdminTarget ? true : (typeof canDispatch === "boolean" ? canDispatch : true);
+  const boolManual = isSuperAdminTarget ? true : (typeof canManual === "boolean" ? canManual : true);
 
   const updatePayload = {
     email,
@@ -228,6 +240,8 @@ async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehous
     canDelete: boolDelete,
     canEdit: boolEdit,
     canUpload: boolUpload,
+    canDispatch: boolDispatch,
+    canManual: boolManual,
     warehouseAccessUpdatedAt: new Date().toISOString(),
     warehouseAccessUpdatedBy: actorEmail || "admin",
     updatedAt: new Date().toISOString(),
@@ -244,7 +258,9 @@ async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehous
     allowedProjects: formattedProjects,
     canDelete: boolDelete,
     canEdit: boolEdit,
-    canUpload: boolUpload
+    canUpload: boolUpload,
+    canDispatch: boolDispatch,
+    canManual: boolManual
   };
 }
 

@@ -144,10 +144,10 @@ router.get("/users", requireAdmin, async (req, res) => {
  */
 router.post("/users/:uid", requireAdmin, async (req, res) => {
   try {
-    const { warehouseEnabled, warehouseRole, allowedProjects, canDelete, canEdit, canUpload } = req.body;
+    const { warehouseEnabled, warehouseRole, allowedProjects, canDelete, canEdit, canUpload, canDispatch, canManual } = req.body;
     const result = await updateWarehouseUserAccess(
       req.params.uid,
-      { warehouseEnabled, warehouseRole, allowedProjects, canDelete, canEdit, canUpload },
+      { warehouseEnabled, warehouseRole, allowedProjects, canDelete, canEdit, canUpload, canDispatch, canManual },
       req.user.email
     );
     return res.json({ success: true, access: result });
@@ -285,10 +285,13 @@ router.post("/projects/:projectId/invoices/process", requireWarehouse, async (re
  */
 router.post("/projects/:projectId/manual-movement", requireWarehouse, async (req, res) => {
   try {
-    if (req.warehouseAccess?.canUpload === false || req.warehouseRole === "warehouse_viewer") {
-      return res.status(403).json({ success: false, message: "Forbidden: You do not have permissions to perform warehouse movements." });
+    if (req.warehouseRole === "warehouse_viewer" || req.warehouseAccess?.canManual === false) {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have permissions to perform manual warehouse movements." });
     }
     const { movementType, lines, meta, dispatchDetails } = req.body;
+    if (movementType === "outbound" && req.warehouseAccess?.canDispatch === false) {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have permissions to dispatch stock items." });
+    }
     if (!lines || !Array.isArray(lines) || lines.length === 0) {
       return res.status(400).json({ success: false, message: "يجب تحديد بند واحد على الأقل." });
     }
@@ -327,7 +330,7 @@ router.get("/projects/:projectId/dispatches", requireWarehouse, async (req, res)
  */
 router.patch("/projects/:projectId/dispatches/:dispatchId/stage", requireWarehouse, async (req, res) => {
   try {
-    if (req.warehouseAccess?.canEdit === false || req.warehouseRole === "warehouse_viewer") {
+    if (req.warehouseRole === "warehouse_viewer" || req.warehouseAccess?.canDispatch === false || req.warehouseAccess?.canEdit === false) {
       return res.status(403).json({ success: false, message: "Forbidden: You do not have permissions to update dispatch stages." });
     }
     const { stage, notes, completionDate, customerReceivedBy } = req.body;

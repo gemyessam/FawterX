@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.28',
+      version: 'v2.27.29',
       date: isAr ? '1 سبتمبر 2026' : 'Sep 1, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'صرف الفواتير الواردة بالكامل أو أجزاء منها، تحديد المستودع، وتخصيص صلاحيات الصرف والتوريد' : 'Invoice-Based Bulk/Partial Outbound, Warehouse Picker & Granular Permissions',
+      highlights: [
+        {
+          icon: '🧾',
+          text: isAr
+            ? 'ميزة استيراد وصرف بنود أي فاتورة واردة سابقة بالكامل بضغطة زر أو تحديد وتعديل كميات بنود معينة منها.'
+            : 'Import and dispense all line items of any previous inbound invoice or select/adjust specific lines.'
+        },
+        {
+          icon: '🏢',
+          text: isAr
+            ? 'إمكانية اختيار وتبديل المستودع/المشروع من أعلى نافذة الصرف والتوريد مباشرة مع جعل اسم العميل واللون اختياريين.'
+            : 'Warehouse project picker at the top of modal, with coating supplier as the only required field.'
+        },
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'إضافة أذونات تفصيلية مستقلة في إدارة الصلاحيات لصرف وتتبع مراحل القطاعات والتوريد اليدوي.'
+            : 'Fine-grained permissions added in Access Control for manual movements and multi-stage lifecycle dispatches.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.28',
+      date: isAr ? '1 سبتمبر 2026' : 'Sep 1, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'إضافة التوريد والصرف اليدوي ونظام تتبع مراحل الصرف (دهان ⬅️ عميل نهائي)' : 'Manual Stock Supply, Multi-Stage Outbound & Lifecycle Tracking Pipeline',
       highlights: [
         {
@@ -729,7 +756,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.27.28 {isAr ? 'النسخة الحالية' : 'Active'}
+              v2.27.29 {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}
