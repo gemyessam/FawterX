@@ -13,6 +13,10 @@ const {
   deleteProject,
   getProjectStock,
   processInboundInvoice,
+  processManualStockMovement,
+  getProjectDispatches,
+  updateDispatchStage,
+  deleteProjectDispatch,
   getProjectInvoices,
   getProjectMovements,
   getItemMovementsHistory,
@@ -265,6 +269,93 @@ router.post("/projects/:projectId/invoices/process", requireWarehouse, async (re
       req.params.projectId,
       invoiceMeta || {},
       lines,
+      req.user.uid,
+      req.user.email,
+      userName
+    );
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/warehouse/projects/:projectId/manual-movement
+ * Process manual inbound (supply) or outbound (dispatch with lifecycle)
+ */
+router.post("/projects/:projectId/manual-movement", requireWarehouse, async (req, res) => {
+  try {
+    if (req.warehouseAccess?.canUpload === false || req.warehouseRole === "warehouse_viewer") {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have permissions to perform warehouse movements." });
+    }
+    const { movementType, lines, meta, dispatchDetails } = req.body;
+    if (!lines || !Array.isArray(lines) || lines.length === 0) {
+      return res.status(400).json({ success: false, message: "يجب تحديد بند واحد على الأقل." });
+    }
+
+    const userName = req.user.name || req.user.displayName || req.user.email;
+    const result = await processManualStockMovement(
+      req.params.projectId,
+      { movementType, lines, meta, dispatchDetails },
+      req.user.uid,
+      req.user.email,
+      userName
+    );
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/warehouse/projects/:projectId/dispatches
+ * Fetch all dispatches and lifecycle stages for a project
+ */
+router.get("/projects/:projectId/dispatches", requireWarehouse, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const dispatches = await getProjectDispatches(req.params.projectId, status);
+    return res.json({ success: true, dispatches });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * PATCH /api/warehouse/projects/:projectId/dispatches/:dispatchId/stage
+ * Transition dispatch stage or mark completed
+ */
+router.patch("/projects/:projectId/dispatches/:dispatchId/stage", requireWarehouse, async (req, res) => {
+  try {
+    if (req.warehouseAccess?.canEdit === false || req.warehouseRole === "warehouse_viewer") {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have permissions to update dispatch stages." });
+    }
+    const { stage, notes, completionDate, customerReceivedBy } = req.body;
+    const userName = req.user.name || req.user.displayName || req.user.email;
+    const result = await updateDispatchStage(
+      req.params.projectId,
+      req.params.dispatchId,
+      { stage, notes, completionDate, customerReceivedBy },
+      req.user.uid,
+      req.user.email,
+      userName
+    );
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * DELETE /api/warehouse/projects/:projectId/dispatches/:dispatchId
+ * Delete a dispatch record (Admin only)
+ */
+router.delete("/projects/:projectId/dispatches/:dispatchId", requireAdmin, async (req, res) => {
+  try {
+    const userName = req.user.name || req.user.displayName || req.user.email;
+    const result = await deleteProjectDispatch(
+      req.params.projectId,
+      req.params.dispatchId,
       req.user.uid,
       req.user.email,
       userName

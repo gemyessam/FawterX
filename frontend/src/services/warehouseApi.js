@@ -146,4 +146,31 @@ export async function deleteProjectRestorePoint(projectId, pointId) {
   return data
 }
 
+/** Process manual inbound stock (supply) or outbound (dispatch with stages) */
+export async function processManualStockMovement(projectId, payload) {
+  const { data } = await api.post(`/warehouse/projects/${projectId}/manual-movement`, payload)
+  return data
+}
+
+/** Fetch all dispatches and lifecycle stages for a project */
+export async function getWarehouseDispatches(projectId, status) {
+  const { data } = await api.get(`/warehouse/projects/${projectId}/dispatches`, {
+    params: { status },
+  })
+  return data
+}
+
+/** Update dispatch lifecycle stage (e.g. In Coating -> Delivered to Final Customer) */
+export async function updateDispatchStage(projectId, dispatchId, payload) {
+  const { data } = await api.patch(`/warehouse/projects/${projectId}/dispatches/${dispatchId}/stage`, payload)
+  return data
+}
+
+/** Delete a dispatch record (Admin only) */
+export async function deleteWarehouseDispatch(projectId, dispatchId) {
+  const { data } = await api.delete(`/warehouse/projects/${projectId}/dispatches/${dispatchId}`)
+  return data
+}
+
+
 

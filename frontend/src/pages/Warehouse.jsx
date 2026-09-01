@@ -25,6 +25,8 @@ import {
   restoreProjectToPoint,
   deleteProjectRestorePoint,
 } from '../services/warehouseApi'
+import ManualStockModal from '../components/ManualStockModal'
+import DispatchesTrackerView from '../components/DispatchesTrackerView'
 
 export default function Warehouse() {
   const { lang, user, isAdmin } = useContext(AppContext)
@@ -96,7 +98,24 @@ export default function Warehouse() {
     } catch (e) {}
   }
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('stock') // 'stock' | 'history' | 'upload' | 'users' | 'projects'
+  const [activeTab, setActiveTab] = useState('stock') // 'stock' | 'history' | 'upload' | 'dispatches' | 'users' | 'projects'
+
+  // Manual Stock Movement & Multi-Stage Dispatches Modal State
+  const [showManualModal, setShowManualModal] = useState(false)
+  const [manualModalMode, setManualModalMode] = useState('inbound') // 'inbound' | 'outbound'
+  const [manualPreselectedItems, setManualPreselectedItems] = useState([])
+
+  const handleOpenManualModal = (m = 'inbound', preselected = []) => {
+    setManualModalMode(m)
+    setManualPreselectedItems(preselected)
+    setShowManualModal(true)
+  }
+
+  const handleOpenOutboundForSelected = () => {
+    if (selectedStockKeys.length === 0) return
+    const selectedItems = stock.filter((s) => selectedStockKeys.includes(s.itemKey))
+    handleOpenManualModal('outbound', selectedItems)
+  }
 
   // Transaction History State
   const [invoices, setInvoices] = useState([])
@@ -1796,6 +1815,12 @@ export default function Warehouse() {
         >
           🧾 {isAr ? 'حركات الفواتير (إضافة / خصم)' : 'Invoice Movements (In / Out)'}
         </button>
+        <button
+          className={`btn ${activeTab === 'dispatches' ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => setActiveTab('dispatches')}
+        >
+          🚚 {isAr ? 'تتبع مراحل الصرف والدهان' : 'Dispatches Tracker'}
+        </button>
         {isAdmin && (
           <button
             className={`btn ${activeTab === 'users' ? 'btn-primary' : 'btn-ghost'}`}
@@ -1889,6 +1914,71 @@ export default function Warehouse() {
                   color: '#fff',
                 }}
               />
+              <button
+                className="btn"
+                onClick={() => handleOpenManualModal('inbound')}
+                style={{
+                  background: 'linear-gradient(135deg, #00e0a1 0%, #00b894 100%)',
+                  color: '#000',
+                  border: 'none',
+                  padding: '0.55rem 1.1rem',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(0, 224, 161, 0.25)',
+                }}
+                title={isAr ? 'إضافة وتوريد قطاعات جديدة أو رصيد يدوي' : 'Manual stock supply'}
+              >
+                📥 {isAr ? 'توريد يدوي (+)' : 'Manual Supply'}
+              </button>
+
+              <button
+                className="btn"
+                onClick={() => handleOpenManualModal('outbound')}
+                style={{
+                  background: 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '0.55rem 1.1rem',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(255, 71, 87, 0.25)',
+                }}
+                title={isAr ? 'صرف قطاعات وتتبع مراحل الدهان والتسليم' : 'Manual dispatch with stages'}
+              >
+                📤 {isAr ? 'صرف بمراحل (-)' : 'Dispatch with Stages'}
+              </button>
+
+              {selectedStockKeys.length > 0 && (
+                <button
+                  className="btn"
+                  onClick={handleOpenOutboundForSelected}
+                  style={{
+                    background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
+                    color: '#000',
+                    border: 'none',
+                    padding: '0.55rem 1.1rem',
+                    borderRadius: '8px',
+                    fontWeight: 800,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(255, 215, 0, 0.4)',
+                  }}
+                  title={isAr ? `صرف (${selectedStockKeys.length}) قطاعات محددة وتتبع مراحلها` : `Dispatch (${selectedStockKeys.length}) selected items`}
+                >
+                  🚀 {isAr ? `صرف المحدد بمراحل (${selectedStockKeys.length})` : `Dispatch Selected (${selectedStockKeys.length})`}
+                </button>
+              )}
+
               <button
                 className="btn"
                 onClick={handleExportStockToExcel}
@@ -2775,30 +2865,64 @@ export default function Warehouse() {
               </p>
             </div>
 
-            {/* Global Movement Mode Switcher */}
-            <div style={{ display: 'flex', gap: '0.5rem', background: '#101223', padding: '0.3rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Quick Manual Actions */}
               <button
                 type="button"
-                className={`btn btn-sm ${movementType === 'inbound' ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setAllBatchMovementType('inbound')}
-                style={{ borderRadius: '7px', fontWeight: 700 }}
+                className="btn btn-sm"
+                onClick={() => handleOpenManualModal('inbound')}
+                style={{
+                  background: 'linear-gradient(135deg, #00e0a1 0%, #00b894 100%)',
+                  color: '#000',
+                  fontWeight: 700,
+                  borderRadius: '8px',
+                  padding: '0.45rem 0.9rem',
+                  fontSize: '0.82rem',
+                }}
               >
-                📥 {isAr ? 'تعيين الكل: توريد (+)' : 'Set All: Inbound (+)'}
+                📥 {isAr ? 'توريد يدوي مباشر' : 'Manual Inbound'}
               </button>
               <button
                 type="button"
                 className="btn btn-sm"
-                onClick={() => setAllBatchMovementType('outbound')}
+                onClick={() => handleOpenManualModal('outbound')}
                 style={{
-                  borderRadius: '7px',
-                  fontWeight: 700,
-                  background: movementType === 'outbound' ? '#ff4d4f' : 'transparent',
-                  borderColor: movementType === 'outbound' ? '#ff4d4f' : 'transparent',
+                  background: 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)',
                   color: '#fff',
+                  fontWeight: 700,
+                  borderRadius: '8px',
+                  padding: '0.45rem 0.9rem',
+                  fontSize: '0.82rem',
                 }}
               >
-                📤 {isAr ? 'تعيين الكل: صرف (-)' : 'Set All: Outbound (-)'}
+                📤 {isAr ? 'صرف يدوي وتتبع مراحل' : 'Manual Outbound'}
               </button>
+
+              {/* Global Movement Mode Switcher */}
+              <div style={{ display: 'flex', gap: '0.5rem', background: '#101223', padding: '0.3rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${movementType === 'inbound' ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setAllBatchMovementType('inbound')}
+                  style={{ borderRadius: '7px', fontWeight: 700 }}
+                >
+                  📥 {isAr ? 'تعيين الكل: توريد (+)' : 'Set All: Inbound (+)'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => setAllBatchMovementType('outbound')}
+                  style={{
+                    borderRadius: '7px',
+                    fontWeight: 700,
+                    background: movementType === 'outbound' ? '#ff4d4f' : 'transparent',
+                    borderColor: movementType === 'outbound' ? '#ff4d4f' : 'transparent',
+                    color: '#fff',
+                  }}
+                >
+                  📤 {isAr ? 'تعيين الكل: صرف (-)' : 'Set All: Outbound (-)'}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -3225,6 +3349,17 @@ export default function Warehouse() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ─── TAB: Dispatches & Lifecycle Tracker ─── */}
+      {activeTab === 'dispatches' && (
+        <DispatchesTrackerView
+          projectId={selectedProjectId}
+          projectName={selectedProject?.name}
+          isAdmin={isAdmin}
+          isAr={isAr}
+          onOpenManualModal={handleOpenManualModal}
+        />
       )}
 
       {/* ─── TAB 3: Access Control (Admin Only) ─── */}
@@ -4150,6 +4285,25 @@ export default function Warehouse() {
           </div>
         </div>
       )}
+
+      {/* ─── MANUAL STOCK MOVEMENT & MULTI-STAGE OUTBOUND MODAL ─── */}
+      <ManualStockModal
+        isOpen={showManualModal}
+        onClose={() => {
+          setShowManualModal(false)
+          setManualPreselectedItems([])
+        }}
+        initialMode={manualModalMode}
+        projectId={selectedProjectId}
+        projectName={selectedProject?.name}
+        stock={stock}
+        preselectedItems={manualPreselectedItems}
+        isAr={isAr}
+        onSuccess={() => {
+          loadStock(selectedProjectId)
+          setSelectedStockKeys([])
+        }}
+      />
     </div>
   )
 }

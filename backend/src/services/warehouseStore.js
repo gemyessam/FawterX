@@ -1713,6 +1713,355 @@ async function deleteProject(projectId, actorUid) {
   return { success: true, message: `تم حذف المشروع ${projData.name || resolvedId} بنجاح` };
 }
 
+/**
+ * Process manual stock movement (Inbound or Outbound with Multi-Stage Dispatches)
+ */
+async function processManualStockMovement(projectId, { movementType, lines, meta, dispatchDetails }, userUid, userEmail, userName) {
+  const db = getDb();
+  if (!db) throw new Error("Firestore is unavailable.");
+  projectId = await resolveProjectId(db, projectId);
+
+  const projectRef = db.collection("warehouseProjects").doc(projectId);
+  const isOutbound = (movementType || "").toLowerCase() === "outbound";
+  const nowIso = new Date().toISOString();
+
+  if (!lines || !Array.isArray(lines) || lines.length === 0) {
+    throw new Error("يجب تحديد بند واحد على الأقل للحركة اليدوية.");
+  }
+
+  let batch = db.batch();
+  let opCount = 0;
+  const createdMovements = [];
+
+  const commitBatchIfNeeded = async (force = false) => {
+    if (opCount >= 400 || (force && opCount > 0)) {
+      await batch.commit();
+      batch = db.batch();
+      opCount = 0;
+    }
+  };
+
+  // Generate a unique dispatch ID if outbound and dispatch stage is configured
+  let dispatchId = null;
+  let dispatchNumber = null;
+  const isCoatingStage = isOutbound && (dispatchDetails?.dispatchType === "coating_then_customer" || dispatchDetails?.dispatchType === "coating_only");
+  const initialStage = isCoatingStage ? "in_coating" : "delivered_to_customer";
+
+  if (isOutbound && dispatchDetails) {
+    const dRef = projectRef.collection("dispatches").doc();
+    dispatchId = dRef.id;
+    const yearMonth = new Date().getFullYear();
+    dispatchNumber = dispatchDetails.deliveryNote || `DSP-${yearMonth}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const totalBars = lines.reduce((sum, l) => sum + Number(l.quantityBar || l.bars || 0), 0);
+    const totalLm = lines.reduce((sum, l) => {
+      const qLm = Number(l.quantityLm || 0);
+      if (qLm > 0) return sum + qLm;
+      const qBar = Number(l.quantityBar || l.bars || 0);
+      const lenMm = Number(l.lengthMm || 6000);
+      return sum + (qBar * lenMm) / 1000;
+    }, 0);
+    const totalKg = lines.reduce((sum, l) => sum + Number(l.quantityKg || l.weightKg || 0), 0);
+
+    const dispatchDoc = {
+      id: dispatchId,
+      dispatchNumber,
+      deliveryNote: dispatchDetails.deliveryNote || dispatchNumber,
+      dispatchType: dispatchDetails.dispatchType || (isCoatingStage ? "coating_then_customer" : "direct_customer"),
+      currentStage: initialStage,
+      coatingSupplier: dispatchDetails.coatingSupplier || "ورشة / مورد الدهان",
+      targetFinish: dispatchDetails.targetFinish || "تشطيب خاص",
+      customerName: dispatchDetails.customerName || "العميل النهائي",
+      projectNameOrSite: dispatchDetails.projectNameOrSite || dispatchDetails.destination || "الموقع العام",
+      notes: dispatchDetails.notes || "",
+      items: lines.map(l => ({
+        itemKey: l.itemKey || generateItemKey(l.supplier || "CANEX", l.itemCode, l.finish || "STD", l.lengthMm || 6000),
+        itemCode: l.itemCode || "CODE",
+        customerCode: l.customerCode || "",
+        description: l.description || "",
+        finish: l.finish || "STD",
+        lengthMm: Number(l.lengthMm || 6000),
+        quantityBar: Number(l.quantityBar || l.bars || 0),
+        quantityLm: Number(l.quantityLm || (Number(l.quantityBar || 0) * Number(l.lengthMm || 6000)) / 1000),
+        quantityKg: Number(l.quantityKg || 0),
+        unitPrice: Number(l.unitPrice || 0),
+      })),
+      totalQuantityBar: totalBars,
+      totalQuantityLm: Number(totalLm.toFixed(2)),
+      totalQuantityKg: Number(totalKg.toFixed(2)),
+      dispatchedAt: dispatchDetails.dispatchDate || nowIso,
+      dispatchedBy: userUid || "admin",
+      dispatchedByEmail: userEmail || "",
+      dispatchedByName: userName || userEmail || "مستخدم",
+      stageHistory: [
+        {
+          stage: initialStage,
+          label: isCoatingStage ? `تم الصرف والإرسال لمورد الدهان (${dispatchDetails.coatingSupplier || "المورد"})` : `تم الصرف والتسليم للعميل النهائي (${dispatchDetails.customerName || "العميل"})`,
+          timestamp: nowIso,
+          user: userName || userEmail || "مستخدم",
+          notes: dispatchDetails.notes || (isCoatingStage ? `اللون المطلوب: ${dispatchDetails.targetFinish || "—"}` : "تسليم مباشر"),
+        }
+      ],
+      isCompleted: !isCoatingStage,
+      completedAt: !isCoatingStage ? nowIso : null,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    batch.set(dRef, dispatchDoc);
+    opCount++;
+  }
+
+  for (const line of lines) {
+    const supplier = line.supplier || meta?.supplier || "CANEX";
+    const itemCode = line.itemCode || line.internalCode || "CODE";
+    const customerCode = line.customerCode || "";
+    const finish = line.finish || line.color || "STD";
+    const lengthMm = Number(line.lengthMm || line.length || 6000);
+    const itemKey = line.itemKey || generateItemKey(supplier, itemCode, finish, lengthMm);
+
+    const qtyBar = Number(line.quantityBar || line.quantity || line.bars || 0);
+    const qtyLm = Number(line.quantityLm || (qtyBar * lengthMm) / 1000);
+    const qtyKg = Number(line.quantityKg || line.weightKg || 0);
+    const unitPrice = Number(line.unitPrice || 0);
+    const netTotal = Number(line.netTotal || qtyBar * unitPrice);
+
+    const factorBar = isOutbound ? -qtyBar : qtyBar;
+    const factorLm = isOutbound ? -qtyLm : qtyLm;
+    const factorKg = isOutbound ? -qtyKg : qtyKg;
+
+    // Movement entry
+    const mvtRef = projectRef.collection("movements").doc();
+    const docNo = meta?.docNumber || dispatchNumber || (isOutbound ? `MAN-OUT-${Date.now()}` : `MAN-IN-${Date.now()}`);
+    const movementData = {
+      sourceType: "manual",
+      movementType: isOutbound ? "outbound" : "inbound",
+      invoiceNumber: docNo,
+      salesOrder: meta?.salesOrder || line.salesOrder || (dispatchDetails?.customerName ? `طلب: ${dispatchDetails.customerName}` : "يدوي"),
+      customerReference: meta?.customerReference || line.customerReference || (dispatchDetails?.projectNameOrSite ? `موقع: ${dispatchDetails.projectNameOrSite}` : "إذن يدوي"),
+      supplier: isOutbound ? (dispatchDetails?.coatingSupplier || "العميل النهائي") : (supplier || "توريد يدوي"),
+      dispatchId: dispatchId || null,
+      dispatchStage: isOutbound ? initialStage : "inbound_stock",
+      itemKey,
+      itemCode,
+      customerCode,
+      description: line.description || "قطاع ألومنيوم",
+      finish,
+      lengthMm,
+      unit: line.unit || "BAR",
+      quantityBar: qtyBar,
+      quantityLm: Number(qtyLm.toFixed(2)),
+      quantityKg: Number(qtyKg.toFixed(2)),
+      unitPrice,
+      netTotal,
+      currency: meta?.currency || "EGP",
+      notes: meta?.notes || dispatchDetails?.notes || (isOutbound ? "صرف يدوي للقطاعات" : "توريد يدوي للقطاعات"),
+      createdBy: userUid || "admin",
+      createdAt: nowIso,
+    };
+
+    batch.set(mvtRef, movementData);
+    createdMovements.push({ id: mvtRef.id, ...movementData });
+    opCount++;
+
+    // Update Stock Snapshot
+    const stockRef = projectRef.collection("stock").doc(itemKey);
+    const stockUpdatePayload = {
+      itemKey,
+      itemCode,
+      customerCode,
+      description: line.description || "قطاع ألومنيوم",
+      finish,
+      color: line.color || finish,
+      lengthMm,
+      unit: line.unit || "BAR",
+      quantityBar: admin.firestore.FieldValue.increment(factorBar),
+      quantityLm: admin.firestore.FieldValue.increment(factorLm),
+      quantityKg: admin.firestore.FieldValue.increment(factorKg),
+      lastMovementType: isOutbound ? "outbound" : "inbound",
+      lastInvoiceNumber: docNo,
+      lastSalesOrder: movementData.salesOrder,
+      lastCustomerRef: movementData.customerReference,
+      updatedAt: nowIso,
+    };
+
+    if (!isOutbound && unitPrice > 0) {
+      stockUpdatePayload.lastUnitCost = unitPrice;
+    }
+
+    batch.set(stockRef, stockUpdatePayload, { merge: true });
+    opCount++;
+
+    // Ensure item master
+    const itemRef = projectRef.collection("items").doc(itemKey);
+    batch.set(itemRef, {
+      itemKey,
+      itemCode,
+      customerCode,
+      description: line.description || "",
+      finish,
+      color: line.color || finish,
+      lengthMm,
+      unit: line.unit || "BAR",
+      secondaryUnit: "LM",
+      updatedAt: nowIso,
+    }, { merge: true });
+    opCount++;
+
+    await commitBatchIfNeeded(false);
+  }
+
+  await commitBatchIfNeeded(true);
+
+  await logWarehouseAudit(projectId, {
+    action: isOutbound ? "MANUAL_OUTBOUND_DISPATCH" : "MANUAL_INBOUND_SUPPLY",
+    userUid,
+    userEmail,
+    userName,
+    details: {
+      movementType: isOutbound ? "صرف يدوي بمراحل" : "توريد يدوي",
+      docNumber: meta?.docNumber || dispatchNumber,
+      dispatchId,
+      dispatchStage: initialStage,
+      itemsCount: lines.length,
+      totalQuantityBar: lines.reduce((acc, l) => acc + Number(l.quantityBar || 0), 0),
+      coatingSupplier: dispatchDetails?.coatingSupplier || null,
+      customerName: dispatchDetails?.customerName || null,
+    }
+  });
+
+  return {
+    success: true,
+    movementType: isOutbound ? "outbound" : "inbound",
+    dispatchId,
+    dispatchNumber,
+    currentStage: initialStage,
+    itemsCount: lines.length,
+    movementsCount: createdMovements.length,
+  };
+}
+
+/**
+ * Fetch all dispatches and lifecycle stages for a project
+ */
+async function getProjectDispatches(projectId, statusFilter = "all") {
+  const db = getDb();
+  if (!db) return [];
+  projectId = await resolveProjectId(db, projectId);
+
+  try {
+    let query = db.collection("warehouseProjects").doc(projectId).collection("dispatches");
+    const snap = await query.orderBy("dispatchedAt", "desc").get();
+    let dispatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    if (statusFilter === "active" || statusFilter === "in_progress") {
+      dispatches = dispatches.filter(d => !d.isCompleted && d.currentStage !== "closed");
+    } else if (statusFilter === "completed" || statusFilter === "closed") {
+      dispatches = dispatches.filter(d => d.isCompleted || d.currentStage === "closed" || d.currentStage === "delivered_to_customer");
+    }
+
+    return dispatches;
+  } catch (err) {
+    console.error(`Error fetching dispatches for ${projectId}:`, err.message);
+    return [];
+  }
+}
+
+/**
+ * Transition a dispatch to the next stage or mark completed
+ */
+async function updateDispatchStage(projectId, dispatchId, { stage, notes, completionDate, customerReceivedBy }, userUid, userEmail, userName) {
+  const db = getDb();
+  if (!db) throw new Error("Firestore is unavailable.");
+  projectId = await resolveProjectId(db, projectId);
+
+  const dispatchRef = db.collection("warehouseProjects").doc(projectId).collection("dispatches").doc(dispatchId);
+  const dDoc = await dispatchRef.get();
+  if (!dDoc.exists) throw new Error("سجل أمر الصرف والتتبع غير موجود.");
+
+  const currentData = dDoc.data() || {};
+  const nowIso = new Date().toISOString();
+  const targetStage = stage || "delivered_to_customer";
+  const isNowCompleted = targetStage === "delivered_to_customer" || targetStage === "closed";
+
+  const stageLabelMap = {
+    in_coating: "المرحلة 1: قيد الدهان والمعالجة لدى المورد",
+    ready_from_coating: "تم استلام القطاعات من الدهان وجاهزة للتسليم",
+    delivered_to_customer: "المرحلة 2: تم التسليم للعميل النهائي وإغلاق العملية",
+    closed: "مكتمل ومغلق نهائياً",
+  };
+
+  const newHistoryEntry = {
+    stage: targetStage,
+    label: stageLabelMap[targetStage] || targetStage,
+    timestamp: completionDate || nowIso,
+    user: userName || userEmail || "مستخدم",
+    notes: notes || (targetStage === "delivered_to_customer" ? `تم التسليم للعميل النهائي (${currentData.customerName || "العميل"})${customerReceivedBy ? ` - المستلم: ${customerReceivedBy}` : ""}` : "تحديث المرحلة"),
+  };
+
+  const updatePayload = {
+    currentStage: targetStage,
+    isCompleted: isNowCompleted,
+    completedAt: isNowCompleted ? (completionDate || nowIso) : null,
+    customerReceivedBy: customerReceivedBy || currentData.customerReceivedBy || "",
+    stageHistory: admin.firestore.FieldValue.arrayUnion(newHistoryEntry),
+    updatedAt: nowIso,
+    updatedBy: userUid || "admin",
+  };
+
+  await dispatchRef.set(updatePayload, { merge: true });
+
+  await logWarehouseAudit(projectId, {
+    action: "UPDATE_DISPATCH_STAGE",
+    userUid,
+    userEmail,
+    userName,
+    details: {
+      dispatchId,
+      dispatchNumber: currentData.dispatchNumber,
+      previousStage: currentData.currentStage,
+      newStage: targetStage,
+      isCompleted: isNowCompleted,
+      notes,
+    },
+  });
+
+  return {
+    success: true,
+    dispatchId,
+    currentStage: targetStage,
+    isCompleted: isNowCompleted,
+  };
+}
+
+/**
+ * Delete a dispatch record (Admin only)
+ */
+async function deleteProjectDispatch(projectId, dispatchId, userUid, userEmail, userName) {
+  const db = getDb();
+  if (!db) throw new Error("Firestore is unavailable.");
+  projectId = await resolveProjectId(db, projectId);
+
+  const dispatchRef = db.collection("warehouseProjects").doc(projectId).collection("dispatches").doc(dispatchId);
+  const dDoc = await dispatchRef.get();
+  const dData = dDoc.exists ? dDoc.data() : {};
+
+  await dispatchRef.delete();
+
+  await logWarehouseAudit(projectId, {
+    action: "DELETE_DISPATCH",
+    userUid,
+    userEmail,
+    userName,
+    details: {
+      dispatchId,
+      dispatchNumber: dData.dispatchNumber || dispatchId,
+    },
+  });
+
+  return { success: true, dispatchId };
+}
+
 module.exports = {
   getUserWarehouseAccess,
   listWarehouseUsers,
@@ -1722,6 +2071,10 @@ module.exports = {
   deleteProject,
   getProjectStock,
   processInboundInvoice,
+  processManualStockMovement,
+  getProjectDispatches,
+  updateDispatchStage,
+  deleteProjectDispatch,
   getProjectInvoices,
   getProjectMovements,
   getItemMovementsHistory,
