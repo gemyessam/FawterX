@@ -32,11 +32,112 @@ import {
 import ManualStockModal from '../components/ManualStockModal'
 import DispatchesTrackerView from '../components/DispatchesTrackerView'
 
+function buildStockCheckResult(matchedItem, availableBar, reqBar, diff, viaAlias, aliasInfo, line) {
+  const isDelmarCovered = Boolean(line.delmarCovered)
+  const delmarMode = line.delmarMode || (isDelmarCovered ? 'shortage' : null)
+
+  let remainingAfter = 0
+  let delmarDispatched = 0
+  let warehouseDispatched = 0
+
+  if (isDelmarCovered) {
+    if (delmarMode === 'full') {
+      delmarDispatched = reqBar
+      warehouseDispatched = 0
+      remainingAfter = availableBar // Main warehouse untouched!
+    } else {
+      // shortage coverage only
+      warehouseDispatched = Math.min(availableBar, reqBar)
+      delmarDispatched = Math.max(0, reqBar - availableBar)
+      remainingAfter = Math.max(0, availableBar - reqBar)
+    }
+  } else {
+    warehouseDispatched = reqBar
+    delmarDispatched = 0
+    remainingAfter = availableBar - reqBar
+  }
+
+  if (!matchedItem) {
+    if (isDelmarCovered) {
+      return {
+        status: 'sufficient',
+        availableBar: 0,
+        reqBar,
+        diff: 0,
+        remainingAfter: 0,
+        matchedItem: null,
+        viaAlias: false,
+        delmarCovered: true,
+        delmarMode,
+        delmarDispatched,
+        warehouseDispatched,
+        delmarShortage: reqBar,
+      }
+    }
+    return {
+      status: 'missing',
+      availableBar: 0,
+      reqBar,
+      diff: -reqBar,
+      remainingAfter: -reqBar,
+      matchedItem: null,
+      viaAlias: false,
+      delmarCovered: false,
+      delmarMode: null,
+      delmarDispatched: 0,
+      warehouseDispatched: reqBar,
+    }
+  }
+
+  if (isDelmarCovered) {
+    return {
+      status: 'sufficient',
+      availableBar,
+      reqBar,
+      diff: 0,
+      remainingAfter,
+      matchedItem,
+      viaAlias,
+      aliasInfo,
+      delmarCovered: true,
+      delmarMode,
+      delmarDispatched,
+      warehouseDispatched,
+      delmarShortage: Math.max(0, Math.abs(diff)),
+    }
+  }
+
+  return {
+    status: diff >= 0 ? 'sufficient' : 'shortage',
+    availableBar,
+    reqBar,
+    diff,
+    remainingAfter,
+    matchedItem,
+    viaAlias,
+    aliasInfo,
+    delmarCovered: false,
+    delmarMode: null,
+    delmarDispatched: 0,
+    warehouseDispatched: reqBar,
+  }
+}
+
 function checkStockAvailability(line, stock = [], aliasesMap = {}) {
   if (!line || (!line.itemCode && !line.customerCode)) {
-    return { status: 'missing', availableBar: 0, diff: 0, matchedItem: null, viaAlias: false }
+    return {
+      status: 'missing',
+      availableBar: 0,
+      reqBar: 0,
+      diff: 0,
+      remainingAfter: 0,
+      matchedItem: null,
+      viaAlias: false,
+      delmarCovered: false,
+      delmarMode: null,
+    }
   }
-  const reqBar = Number(line.quantityBar || line.bars || 0)
+  const reqBar = Number(line.quantityBar || line.bars || line.quantity || 0)
   const cleanCode = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
   let lineItemNorm = cleanCode(line.itemCode)
   let lineCustNorm = cleanCode(line.customerCode)
@@ -44,7 +145,7 @@ function checkStockAvailability(line, stock = [], aliasesMap = {}) {
   let viaAlias = false
   let aliasInfo = null
 
-  // 0. Check project aliases dictionary
+  // 0. Check project aliases dictionary (match against both itemCode and customerCode)
   const mappedAlias = aliasesMap[lineItemNorm] || (lineCustNorm && aliasesMap[lineCustNorm])
   if (mappedAlias) {
     viaAlias = true
@@ -54,14 +155,7 @@ function checkStockAvailability(line, stock = [], aliasesMap = {}) {
       if (matchKey) {
         const availableBar = Number(matchKey.quantityBar || 0)
         const diff = availableBar - reqBar
-        return {
-          status: diff >= 0 ? 'sufficient' : 'shortage',
-          availableBar,
-          diff,
-          matchedItem: matchKey,
-          viaAlias: true,
-          aliasInfo,
-        }
+        return buildStockCheckResult(matchKey, availableBar, reqBar, diff, true, aliasInfo, line)
       }
     }
     if (mappedAlias.targetItemCode) {
@@ -69,100 +163,46 @@ function checkStockAvailability(line, stock = [], aliasesMap = {}) {
     }
   }
 
-  // 1. Exact match on itemCode
-  let match = stock.find((s) => cleanCode(s.itemCode) === lineItemNorm)
+  // 1. Exact match on itemCode OR customerCode across warehouse stock
+  let match = stock.find((s) => {
+    const sItem = cleanCode(s.itemCode)
+    const sCust = cleanCode(s.customerCode)
+    if (lineItemNorm && (sItem === lineItemNorm || sCust === lineItemNorm)) return true
+    if (lineCustNorm && (sItem === lineCustNorm || sCust === lineCustNorm)) return true
+    return false
+  })
 
-  // 2. Match on customerCode
-  if (!match && lineCustNorm) {
-    match = stock.find(
-      (s) => cleanCode(s.customerCode) === lineCustNorm || cleanCode(s.itemCode) === lineCustNorm
-    )
-  }
-
-  // 3. Match where warehouse item has line itemCode in its customerCode
-  if (!match) {
-    match = stock.find((s) => cleanCode(s.customerCode) === lineItemNorm)
-  }
-
-  // 4. Match where warehouse item has this code in its aliases array
+  // 2. Match where warehouse item has this code in its aliases array
   if (!match) {
     match = stock.find((s) => {
       if (Array.isArray(s.aliases) && s.aliases.length > 0) {
-        return s.aliases.some((a) => cleanCode(a) === lineItemNorm || (lineCustNorm && cleanCode(a) === lineCustNorm))
+        return s.aliases.some(
+          (a) =>
+            (lineItemNorm && cleanCode(a) === lineItemNorm) ||
+            (lineCustNorm && cleanCode(a) === lineCustNorm)
+        )
       }
       return false
     })
     if (match) viaAlias = true
   }
 
-  // 5. Substring / partial numeric match
+  // 3. Substring match (min 4 chars) to catch codes with suffixes
   if (!match) {
     match = stock.find((s) => {
       const sItem = cleanCode(s.itemCode)
       const sCust = cleanCode(s.customerCode)
       return (
-        (lineItemNorm && (sItem.includes(lineItemNorm) || sCust.includes(lineItemNorm))) ||
-        (lineCustNorm && (sItem.includes(lineCustNorm) || sCust.includes(lineCustNorm)))
+        (lineItemNorm && lineItemNorm.length >= 4 && (sItem.includes(lineItemNorm) || sCust.includes(lineItemNorm))) ||
+        (lineCustNorm && lineCustNorm.length >= 4 && (sItem.includes(lineCustNorm) || sCust.includes(lineCustNorm)))
       )
     })
   }
 
-  if (!match) {
-    if (line.delmarCovered) {
-      return {
-        status: 'sufficient',
-        availableBar: 0,
-        diff: 0,
-        matchedItem: null,
-        viaAlias: false,
-        delmarCovered: true,
-        delmarShortage: reqBar,
-      }
-    }
-    return {
-      status: 'missing', // ⚪ غير مسجل بالمخزن
-      availableBar: 0,
-      diff: -reqBar,
-      matchedItem: null,
-      viaAlias: false,
-    }
-  }
-
-  const availableBar = Number(match.quantityBar || 0)
+  const availableBar = match ? Number(match.quantityBar || 0) : 0
   const diff = availableBar - reqBar
 
-  if (line.delmarCovered) {
-    return {
-      status: 'sufficient', // 🟢 مغطى بطلب المالك بالصرف من دلمار
-      availableBar,
-      diff: 0,
-      matchedItem: match,
-      viaAlias,
-      aliasInfo,
-      delmarCovered: true,
-      delmarShortage: Math.max(0, Math.abs(diff)),
-    }
-  }
-
-  if (diff >= 0) {
-    return {
-      status: 'sufficient', // 🟢 متوفر بالكامل
-      availableBar,
-      diff,
-      matchedItem: match,
-      viaAlias,
-      aliasInfo,
-    }
-  } else {
-    return {
-      status: 'shortage', // 🔴 عجز في الرصيد
-      availableBar,
-      diff,
-      matchedItem: match,
-      viaAlias,
-      aliasInfo,
-    }
-  }
+  return buildStockCheckResult(match, availableBar, reqBar, diff, viaAlias, aliasInfo, line)
 }
 
 function findSmartFuzzyMatch(line, stock = [], aliasesMap = {}) {
@@ -447,28 +487,60 @@ export default function Warehouse() {
     setLinkModalData(null)
   }
 
+  const handleSetDelmarMode = (batchId, lineIndex, mode) => {
+    setBatchInvoices((prev) =>
+      prev.map((batch) => {
+        if (batch.id !== batchId) return batch
+        const copy = [...batch.reviewLines]
+        if (!mode) {
+          copy[lineIndex] = { ...copy[lineIndex], delmarCovered: false, delmarMode: null }
+        } else {
+          copy[lineIndex] = { ...copy[lineIndex], delmarCovered: true, delmarMode: mode }
+        }
+        return { ...batch, reviewLines: copy }
+      })
+    )
+    toast.success(
+      isAr
+        ? mode === 'full'
+          ? '✅ تم تعيين الصرف بالكامل من مخزن دلمار (رصيد المستودع محفوظ بالكامل)'
+          : mode === 'shortage'
+            ? '✅ تم تعيين تغطية عجز الأعواد من مخزن دلمار'
+            : 'تم إلغاء التغطية من دلمار'
+        : 'Delmar status updated'
+    )
+  }
+
   const handleToggleDelmarCover = (batchId, lineIndex) => {
     setBatchInvoices((prev) =>
       prev.map((batch) => {
         if (batch.id !== batchId) return batch
         const copy = [...batch.reviewLines]
         const current = !!copy[lineIndex].delmarCovered
-        copy[lineIndex] = { ...copy[lineIndex], delmarCovered: !current }
+        copy[lineIndex] = {
+          ...copy[lineIndex],
+          delmarCovered: !current,
+          delmarMode: !current ? 'shortage' : null,
+        }
         return { ...batch, reviewLines: copy }
       })
     )
-    toast.success(isAr ? '✅ تم تحديث تغطية فرق الأعواد من مخزن دلمار' : 'Delmar coverage updated')
+    toast.success(isAr ? '✅ تم تحديث حالة الصرف من دلمار' : 'Delmar status updated')
   }
 
-  const handleCoverAllDelmar = (batchId) => {
+  const handleCoverAllDelmar = (batchId, mode = 'shortage') => {
     setBatchInvoices((prev) =>
       prev.map((batch) => {
         if (batch.id !== batchId) return batch
         const updated = (batch.reviewLines || []).map((l) => {
-          if (!l.ignored && isCoatedItem(l)) {
-            const chk = checkStockAvailability(l, stock, aliasesMap)
-            if (chk.status !== 'sufficient' || (chk.diff !== undefined && chk.diff < 0)) {
-              return { ...l, delmarCovered: true }
+          if (!l.ignored && !l.isService) {
+            if (mode === 'full') {
+              return { ...l, delmarCovered: true, delmarMode: 'full' }
+            } else {
+              const chk = checkStockAvailability(l, stock, aliasesMap)
+              if (chk.status !== 'sufficient' || (chk.diff !== undefined && chk.diff < 0)) {
+                return { ...l, delmarCovered: true, delmarMode: 'shortage' }
+              }
             }
           }
           return l
@@ -476,7 +548,28 @@ export default function Warehouse() {
         return { ...batch, reviewLines: updated }
       })
     )
-    toast.success(isAr ? '✅ تم اعتماد تغطية كافة فروق الأعواد بالصرف من مخزن دلمار!' : 'All shortages covered from Delmar!')
+    toast.success(
+      isAr
+        ? mode === 'full'
+          ? '✅ تم اعتماد صرف كافة بنود الإذن بالكامل من مخزن دلمار (أرصدة المستودع محفوظة)!'
+          : '✅ تم اعتماد تغطية كافة فروق الأعواد بالصرف من مخزن دلمار!'
+        : 'Delmar batch status updated!'
+    )
+  }
+
+  const handleClearAllDelmar = (batchId) => {
+    setBatchInvoices((prev) =>
+      prev.map((batch) => {
+        if (batch.id !== batchId) return batch
+        const updated = (batch.reviewLines || []).map((l) => ({
+          ...l,
+          delmarCovered: false,
+          delmarMode: null,
+        }))
+        return { ...batch, reviewLines: updated }
+      })
+    )
+    toast.info(isAr ? 'تم إلغاء التغطية وإعادة كافة البنود للمستودع الرئيسي' : 'Reset to main warehouse')
   }
 
   const handleRejectSuggestion = (batchId, lineIndex) => {
@@ -3954,42 +4047,62 @@ export default function Warehouse() {
                                     </div>
                                   </div>
                                 </div>
-                                {hasIssues && (
-                                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                    <span
-                                      className="badge"
-                                      style={{
-                                        background: 'rgba(255, 71, 87, 0.2)',
-                                        color: '#ff4757',
-                                        border: '1px solid #ff4757',
-                                        fontWeight: 800,
-                                        padding: '0.4rem 0.8rem',
-                                        borderRadius: '8px',
-                                        fontSize: '0.82rem',
-                                      }}
-                                    >
-                                      ⚠️ {isAr ? 'يرجى مراجعة العجز قبل الاعتماد' : 'Review shortages before dispatch'}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleCoverAllDelmar(batch.id)}
-                                      className="btn btn-sm"
-                                      style={{
-                                        background: '#00e0a1',
-                                        color: '#000',
-                                        border: 'none',
-                                        fontWeight: 800,
-                                        padding: '0.4rem 0.85rem',
-                                        borderRadius: '8px',
-                                        fontSize: '0.82rem',
-                                        cursor: 'pointer',
-                                      }}
-                                      title={isAr ? 'تغطية كافة فروق الأعواد بالصرف مباشرة من مخزن دلمار' : 'Cover all bar differences from Delmar'}
-                                    >
-                                      ✅ {isAr ? 'أيوه، تغطية فرق الأعواد من دلمار' : 'Yes, cover from Delmar'}
-                                    </button>
-                                  </div>
-                                )}
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCoverAllDelmar(batch.id, 'full')}
+                                    className="btn btn-sm"
+                                    style={{
+                                      background: '#00e0a1',
+                                      color: '#000',
+                                      border: 'none',
+                                      fontWeight: 800,
+                                      padding: '0.4rem 0.85rem',
+                                      borderRadius: '8px',
+                                      fontSize: '0.82rem',
+                                      cursor: 'pointer',
+                                    }}
+                                    title={isAr ? 'صرف جميع بنود هذا الإذن بالكامل من مخزن دلمار وحفظ رصيد المستودع الرئيسي بدون خصم' : 'Dispatch all lines from Delmar, preserve warehouse stock'}
+                                  >
+                                    🏭 {isAr ? 'صرف الإذن بالكامل من دلمار' : 'Full Delmar'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCoverAllDelmar(batch.id, 'shortage')}
+                                    className="btn btn-sm"
+                                    style={{
+                                      background: 'rgba(245, 158, 11, 0.2)',
+                                      color: '#fbbf24',
+                                      border: '1px solid #fbbf24',
+                                      fontWeight: 800,
+                                      padding: '0.4rem 0.85rem',
+                                      borderRadius: '8px',
+                                      fontSize: '0.82rem',
+                                      cursor: 'pointer',
+                                    }}
+                                    title={isAr ? 'صرف المتاح بالمستودع وتغطية كافة الفروق والعجز فقط من مخزن دلمار' : 'Cover shortages from Delmar'}
+                                  >
+                                    ⚖️ {isAr ? 'تغطية العجز من دلمار' : 'Cover Shortages'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleClearAllDelmar(batch.id)}
+                                    className="btn btn-sm"
+                                    style={{
+                                      background: 'rgba(255, 255, 255, 0.08)',
+                                      color: '#aaa',
+                                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                                      fontWeight: 600,
+                                      padding: '0.4rem 0.75rem',
+                                      borderRadius: '8px',
+                                      fontSize: '0.8rem',
+                                      cursor: 'pointer',
+                                    }}
+                                    title={isAr ? 'إعادة تعيين للصرف من المستودع الرئيسي فقط' : 'Reset to main warehouse'}
+                                  >
+                                    🔄 {isAr ? 'إعادة للمستودع' : 'Reset'}
+                                  </button>
+                                </div>
                               </div>
                             )
                           })()}
@@ -4092,14 +4205,19 @@ export default function Warehouse() {
 
                           {/* Line Items Table */}
                           <div style={{ overflowX: 'auto', marginBottom: '0.5rem' }}>
-                            <table style={{ minWidth: batch.movementType === 'outbound' ? '2200px' : '1950px', width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
+                            <table style={{ minWidth: batch.movementType === 'outbound' ? '2450px' : '1950px', width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
                               <colgroup>
                                 <col style={{ width: '45px' }} />
-                                <col style={{ width: '60px' }} />
-                                <col style={{ width: '140px' }} />
+                                <col style={{ width: '55px' }} />
                                 <col style={{ width: '130px' }} />
-                                {batch.movementType === 'outbound' && <col style={{ width: '280px' }} />}
-                                <col style={{ width: '430px' }} /> {/* Description */}
+                                <col style={{ width: '130px' }} />
+                                {batch.movementType === 'outbound' && (
+                                  <>
+                                    <col style={{ width: '270px' }} />
+                                    <col style={{ width: '270px' }} />
+                                  </>
+                                )}
+                                <col style={{ width: '420px' }} /> {/* Description */}
                                 <col style={{ width: '100px' }} /> {/* Bars (الأعواد) - Right After Description! */}
                                 <col style={{ width: '110px' }} /> {/* Finish */}
                                 <col style={{ width: '90px' }} />  {/* Length */}
@@ -4114,9 +4232,12 @@ export default function Warehouse() {
                                   <th style={{ padding: '0.6rem 0.4rem', textAlign: 'center' }}>#</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'تجاهل' : 'Ignore'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'كود الصنف' : 'Item'}</th>
-                                  <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
+                                  <th style={{ padding: '0.6rem 0.4rem', color: '#8ab4ff' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
                                   {batch.movementType === 'outbound' && (
-                                    <th style={{ padding: '0.6rem 0.4rem', color: '#ff6b81' }}>{isAr ? '🔍 فحص الرصيد ومخزن دلمار' : '🔍 Stock & Delmar Check'}</th>
+                                    <>
+                                      <th style={{ padding: '0.6rem 0.4rem', color: '#00e0a1' }}>{isAr ? '📦 رصيد المستودع والمتبقي' : '📦 Warehouse Stock & Remaining'}</th>
+                                      <th style={{ padding: '0.6rem 0.4rem', color: '#fbbf24' }}>{isAr ? '🏭 مخزن دلمار والتغطية' : '🏭 Delmar Warehouse & Coverage'}</th>
+                                    </>
                                   )}
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'وصف الصنف / القطاع' : 'Description'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem', color: '#00e0a1', fontWeight: 800 }}>{isAr ? 'الأعواد (Bars)' : 'Bars'}</th>
@@ -4168,372 +4289,345 @@ export default function Warehouse() {
                                       />
                                     </td>
                                     {batch.movementType === 'outbound' && (
-                                      <td style={{ padding: '0.5rem 0.4rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', alignItems: 'flex-start', width: '100%' }}>
-                                          {/* Stock Availability Badge */}
-                                          {(() => {
-                                            const chk = checkStockAvailability(line, stock, aliasesMap)
+                                      <td style={{ padding: '0.5rem 0.4rem', verticalAlign: 'top' }}>
+                                        {(() => {
+                                          const chk = checkStockAvailability(line, stock, aliasesMap)
+                                          const isDelmarCovered = Boolean(line.delmarCovered)
+                                          const isFullDelmar = isDelmarCovered && line.delmarMode === 'full'
+                                          const isShortageDelmar = isDelmarCovered && line.delmarMode !== 'full'
 
-                                            // 1. Delmar Covered State
-                                            if (chk.delmarCovered) {
-                                              return (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start', width: '100%' }}>
-                                                  <span
-                                                    className="badge"
-                                                    style={{
-                                                      background: 'rgba(0, 224, 161, 0.2)',
-                                                      color: '#00e0a1',
-                                                      border: '1px solid #00e0a1',
-                                                      fontSize: '0.73rem',
-                                                      fontWeight: 800,
-                                                      padding: '0.2rem 0.45rem',
-                                                    }}
-                                                  >
-                                                    🟢 {isAr ? `مغطى بالكامل (${chk.availableBar} بالمخزن + ${chk.delmarShortage} من دلمار)` : `Fully covered (${chk.availableBar} wh + ${chk.delmarShortage} Delmar)`}
-                                                  </span>
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => handleToggleDelmarCover(batch.id, idx)}
-                                                    style={{ background: 'none', border: 'none', color: '#ff6b81', fontSize: '0.66rem', cursor: 'pointer', textDecoration: 'underline' }}
-                                                  >
-                                                    {isAr ? 'إلغاء التغطية من دلمار' : 'Undo Delmar coverage'}
-                                                  </button>
+                                          return (
+                                            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                              {/* Detailed Quantities Box */}
+                                              <div style={{
+                                                background: 'rgba(0,0,0,0.35)',
+                                                border: `1px solid ${chk.status === 'shortage' && !isDelmarCovered ? 'rgba(255, 71, 87, 0.4)' : 'rgba(255,255,255,0.08)'}`,
+                                                borderRadius: '6px',
+                                                padding: '0.35rem 0.5rem',
+                                                fontSize: '0.74rem',
+                                                lineHeight: 1.4,
+                                                width: '100%',
+                                              }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#e2e8f0' }}>
+                                                  <span>{isAr ? 'رصيد المستودع الحالي:' : 'Current Stock:'}</span>
+                                                  <strong style={{ color: chk.availableBar > 0 ? '#00e0a1' : '#ff4757' }}>{chk.availableBar} عود</strong>
                                                 </div>
-                                              )
-                                            }
-
-                                            // 2. Sufficient Stock
-                                            if (chk.status === 'sufficient') {
-                                              return (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', alignItems: 'flex-start' }}>
-                                                  <span
-                                                    className="badge"
-                                                    style={{
-                                                      background: 'rgba(0, 224, 161, 0.15)',
-                                                      color: '#00e0a1',
-                                                      border: '1px solid rgba(0, 224, 161, 0.3)',
-                                                      fontSize: '0.73rem',
-                                                      display: 'inline-flex',
-                                                      alignItems: 'center',
-                                                      gap: '0.2rem',
-                                                      whiteSpace: 'nowrap',
-                                                    }}
-                                                    title={isAr ? `متوفر بالمخزن: ${chk.availableBar} عود (المطلوب: ${line.quantityBar || line.bars || 0})` : `Available: ${chk.availableBar}`}
-                                                  >
-                                                    🟢 {isAr ? `متوفر (${chk.availableBar} عود)` : `In Stock (${chk.availableBar})`}
-                                                  </span>
-                                                  {chk.viaAlias && (
-                                                    <span
-                                                      className="badge"
-                                                      style={{
-                                                        background: 'rgba(138, 180, 248, 0.18)',
-                                                        color: '#8ab4ff',
-                                                        border: '1px solid rgba(138, 180, 248, 0.35)',
-                                                        fontSize: '0.67rem',
-                                                        padding: '0.1rem 0.35rem',
-                                                      }}
-                                                      title={isAr ? `تمت المطابقة عبر الكود البديل: ${chk.matchedItem?.itemCode}` : `Matched via alias: ${chk.matchedItem?.itemCode}`}
-                                                    >
-                                                      🔗 {isAr ? `بديل لـ (${chk.matchedItem?.itemCode})` : `Alias: ${chk.matchedItem?.itemCode}`}
-                                                    </span>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
+                                                  <span>{isAr ? 'المطلوب صرفه:' : 'Requested:'}</span>
+                                                  <strong style={{ color: '#fff' }}>{chk.reqBar} عود</strong>
+                                                </div>
+                                                <div style={{
+                                                  borderTop: '1px dashed rgba(255,255,255,0.1)',
+                                                  marginTop: '0.25rem',
+                                                  paddingTop: '0.25rem',
+                                                  display: 'flex',
+                                                  justifyContent: 'space-between',
+                                                  fontWeight: 800,
+                                                }}>
+                                                  {isFullDelmar ? (
+                                                    <>
+                                                      <span style={{ color: '#00e0a1' }}>{isAr ? 'المتبقي بالمستودع:' : 'Remaining:'}</span>
+                                                      <span style={{ color: '#00e0a1' }}>🟢 {chk.availableBar} عود (محفوظ لم يُمس)</span>
+                                                    </>
+                                                  ) : isShortageDelmar ? (
+                                                    <>
+                                                      <span style={{ color: '#00e0a1' }}>{isAr ? 'المتبقي بالمستودع:' : 'Remaining:'}</span>
+                                                      <span style={{ color: '#00e0a1' }}>🟢 {chk.remainingAfter} عود (مغطى من دلمار)</span>
+                                                    </>
+                                                  ) : chk.status === 'sufficient' ? (
+                                                    <>
+                                                      <span style={{ color: '#00e0a1' }}>{isAr ? 'يتبقى بعد الصرف:' : 'Remaining:'}</span>
+                                                      <span style={{ color: '#00e0a1' }}>🟢 {chk.remainingAfter} عود متبقي</span>
+                                                    </>
+                                                  ) : chk.status === 'shortage' ? (
+                                                    <>
+                                                      <span style={{ color: '#ff4757' }}>{isAr ? 'عجز بالمستودع:' : 'Shortage:'}</span>
+                                                      <span style={{ color: '#ff4757' }}>🔴 {Math.abs(chk.diff)} عود (المتبقي: 0)</span>
+                                                    </>
+                                                  ) : (
+                                                    <>
+                                                      <span style={{ color: '#94a3b8' }}>{isAr ? 'المتبقي بالمستودع:' : 'Remaining:'}</span>
+                                                      <span style={{ color: '#94a3b8' }}>⚪ غير مسجل (0)</span>
+                                                    </>
                                                   )}
                                                 </div>
-                                              )
-                                            }
-
-                                            // 3. Stock Shortage (with Delmar Coverage Prompt)
-                                            if (chk.status === 'shortage') {
-                                              return (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', alignItems: 'flex-start', width: '100%' }}>
-                                                  <span
-                                                    className="badge"
-                                                    style={{
-                                                      background: 'rgba(255, 71, 87, 0.18)',
-                                                      color: '#ff4757',
-                                                      border: '1px solid rgba(255, 71, 87, 0.45)',
-                                                      fontSize: '0.73rem',
-                                                      fontWeight: 700,
-                                                    }}
-                                                    title={isAr ? `عجز رصيد! متاح بالمخزن ${chk.availableBar} والمطلوب ${line.quantityBar || line.bars || 0}` : `Shortage!`}
-                                                  >
-                                                    🔴 {isAr ? `عجز ${Math.abs(chk.diff)} (متاح ${chk.availableBar} بالمخزن)` : `Short ${Math.abs(chk.diff)}`}
-                                                  </span>
-                                                  {chk.viaAlias && (
-                                                    <span
-                                                      className="badge"
-                                                      style={{
-                                                        background: 'rgba(138, 180, 248, 0.18)',
-                                                        color: '#8ab4ff',
-                                                        border: '1px solid rgba(138, 180, 248, 0.35)',
-                                                        fontSize: '0.67rem',
-                                                        padding: '0.1rem 0.35rem',
-                                                      }}
-                                                    >
-                                                      🔗 {isAr ? `بديل لـ (${chk.matchedItem?.itemCode})` : `Alias: ${chk.matchedItem?.itemCode}`}
-                                                    </span>
-                                                  )}
-
-                                                  {/* Delmar Shortage Coverage Box */}
-                                                  {isCoated && (
-                                                    <div
-                                                      style={{
-                                                        background: 'rgba(245, 158, 11, 0.08)',
-                                                        border: '1px solid rgba(245, 158, 11, 0.3)',
-                                                        borderRadius: '6px',
-                                                        padding: '0.35rem 0.45rem',
-                                                        width: '100%',
-                                                        fontSize: '0.7rem',
-                                                        lineHeight: 1.35,
-                                                      }}
-                                                    >
-                                                      <div style={{ color: '#fbbf24' }}>
-                                                        {isAr ? (
-                                                          <>
-                                                            معاك في المخزن: <strong>{chk.availableBar} عود</strong><br />
-                                                            يوجد في مخزن دلمار: <strong>{line.quantityBar || line.bars || 0} عود</strong> بتدهن.<br />
-                                                            تحب تغطي فرق الأعواد ({Math.abs(chk.diff)} عود) من دلمار؟
-                                                          </>
-                                                        ) : (
-                                                          <>Stock: {chk.availableBar} | Delmar: {line.quantityBar || 0} bars. Cover short?</>
-                                                        )}
-                                                      </div>
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => handleToggleDelmarCover(batch.id, idx)}
-                                                        style={{
-                                                          marginTop: '0.3rem',
-                                                          background: '#00e0a1',
-                                                          color: '#000',
-                                                          border: 'none',
-                                                          borderRadius: '4px',
-                                                          fontWeight: 800,
-                                                          fontSize: '0.72rem',
-                                                          padding: '0.2rem 0.55rem',
-                                                          cursor: 'pointer',
-                                                        }}
-                                                      >
-                                                        ✅ {isAr ? 'أيوه، غطي واصرف الفرق من دلمار' : 'Yes, cover from Delmar'}
-                                                      </button>
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              )
-                                            }
-
-                                            // 4. Missing Item (with direct manual code input & fuzzy match)
-                                            const fuzzyMatch = findSmartFuzzyMatch(line, stock, aliasesMap)
-                                            return (
-                                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', alignItems: 'flex-start', width: '100%' }}>
-                                                <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                                  <span
-                                                    className="badge"
-                                                    style={{
-                                                      background: 'rgba(255, 255, 255, 0.08)',
-                                                      color: '#bbb',
-                                                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                                                      fontSize: '0.73rem',
-                                                      display: 'inline-flex',
-                                                      alignItems: 'center',
-                                                      gap: '0.2rem',
-                                                      whiteSpace: 'nowrap',
-                                                    }}
-                                                  >
-                                                    ⚪ {isAr ? 'غير مسجل (0)' : 'Not in Stock (0)'}
-                                                  </span>
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                      setAliasSearchQuery(line.itemCode || '')
-                                                      setLinkModalData({
-                                                        isOpen: true,
-                                                        batchId: batch.id,
-                                                        lineIndex: idx,
-                                                        sourceCode: line.itemCode,
-                                                        sourceDesc: line.description || '',
-                                                        selectedItemKey: fuzzyMatch ? fuzzyMatch.item.itemKey : '',
-                                                        rememberAlways: true,
-                                                      })
-                                                    }}
-                                                    style={{
-                                                      background: 'rgba(138, 180, 248, 0.15)',
-                                                      color: '#8ab4ff',
-                                                      border: '1px solid rgba(138, 180, 248, 0.35)',
-                                                      borderRadius: '4px',
-                                                      fontSize: '0.68rem',
-                                                      padding: '0.1rem 0.4rem',
-                                                      cursor: 'pointer',
-                                                      fontWeight: 700,
-                                                    }}
-                                                    title={isAr ? 'بحث واختيار صنف من المخزن' : 'Search stock'}
-                                                  >
-                                                    🔍 {isAr ? 'بحث' : 'Search'}
-                                                  </button>
-                                                </div>
-
-                                                {/* Direct Manual Code Input Field */}
-                                                <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', width: '100%', marginTop: '0.15rem' }}>
-                                                  <input
-                                                    type="text"
-                                                    placeholder={isAr ? 'اكتب كود الصنف بالمخزن (515756)...' : 'Type stock code...'}
-                                                    value={line.manualTargetCode || ''}
-                                                    onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'manualTargetCode', e.target.value)}
-                                                    onKeyDown={(e) => {
-                                                      if (e.key === 'Enter') {
-                                                        handleManualLinkByCode(batch.id, idx, line.itemCode, line.manualTargetCode)
-                                                      }
-                                                    }}
-                                                    style={{
-                                                      background: '#0d1117',
-                                                      border: '1px solid #3b82f6',
-                                                      borderRadius: '4px',
-                                                      color: '#fff',
-                                                      fontSize: '0.72rem',
-                                                      padding: '0.2rem 0.4rem',
-                                                      flex: '1 1 auto',
-                                                      minWidth: '120px',
-                                                    }}
-                                                  />
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => handleManualLinkByCode(batch.id, idx, line.itemCode, line.manualTargetCode)}
-                                                    style={{
-                                                      background: '#2563eb',
-                                                      color: '#fff',
-                                                      border: 'none',
-                                                      borderRadius: '4px',
-                                                      fontSize: '0.7rem',
-                                                      fontWeight: 800,
-                                                      padding: '0.2rem 0.45rem',
-                                                      cursor: 'pointer',
-                                                      whiteSpace: 'nowrap',
-                                                    }}
-                                                    title={isAr ? 'ربط هذا الكود بالصنف في المخزن وحفظه دائماً' : 'Link code'}
-                                                  >
-                                                    🔗 {isAr ? 'ربط' : 'Link'}
-                                                  </button>
-                                                </div>
-
-                                                {/* Smart Similarity Suggestion (with Reject button) */}
-                                                {fuzzyMatch && !line.rejectedSuggestion && (
-                                                  <div
-                                                    style={{
-                                                      background: 'rgba(96, 165, 250, 0.1)',
-                                                      border: '1px solid rgba(96, 165, 250, 0.3)',
-                                                      borderRadius: '6px',
-                                                      padding: '0.35rem 0.5rem',
-                                                      display: 'flex',
-                                                      flexDirection: 'column',
-                                                      gap: '0.25rem',
-                                                      marginTop: '0.15rem',
-                                                      width: '100%',
-                                                    }}
-                                                  >
-                                                    <div style={{ fontSize: '0.68rem', color: '#93c5fd', lineHeight: 1.25 }}>
-                                                      💡 {isAr ? 'اقتراح ذكي:' : 'Smart Match:'} هل تقصد <strong>{fuzzyMatch.item.itemCode}</strong>؟
-                                                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'block' }}>
-                                                        ({fuzzyMatch.reason} - {fuzzyMatch.score}%)
-                                                      </span>
-                                                    </div>
-                                                    <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => handleQuickLinkAlias(batch.id, idx, line.itemCode, fuzzyMatch.item)}
-                                                        style={{
-                                                          background: '#2563eb',
-                                                          color: '#fff',
-                                                          border: 'none',
-                                                          borderRadius: '4px',
-                                                          fontSize: '0.65rem',
-                                                          fontWeight: 800,
-                                                          padding: '0.2rem 0.5rem',
-                                                          cursor: 'pointer',
-                                                        }}
-                                                      >
-                                                        ⚡ {isAr ? 'ربط واعتماد' : 'Link'}
-                                                      </button>
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => handleRejectSuggestion(batch.id, idx)}
-                                                        style={{
-                                                          background: 'rgba(255, 71, 87, 0.15)',
-                                                          color: '#ff4757',
-                                                          border: '1px solid rgba(255, 71, 87, 0.3)',
-                                                          borderRadius: '4px',
-                                                          fontSize: '0.65rem',
-                                                          fontWeight: 700,
-                                                          padding: '0.2rem 0.45rem',
-                                                          cursor: 'pointer',
-                                                        }}
-                                                      >
-                                                        ❌ {isAr ? 'رفض' : 'Reject'}
-                                                      </button>
-                                                    </div>
-                                                  </div>
-                                                )}
                                               </div>
-                                            )
-                                          })()}
 
-                                          {/* Delmar Coating Status & Owner Toggle */}
-                                          {isCoated ? (
-                                            <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                              <span
-                                                className="badge"
-                                                style={{
-                                                  background: 'rgba(245, 158, 11, 0.15)',
-                                                  color: '#fbbf24',
-                                                  border: '1px solid rgba(245, 158, 11, 0.35)',
-                                                  fontSize: '0.7rem',
-                                                  padding: '0.1rem 0.35rem',
-                                                }}
-                                                title={isAr ? 'هذا البند يخص التسليم وقيد الدهان في مخزن دلمار' : 'Coating profile at Delmar warehouse'}
-                                              >
-                                                🏭 دلمار (بتدهن) 🎨
-                                              </span>
-                                              {!line.ignored ? (
+                                              {/* Alias Badge if Matched */}
+                                              {chk.viaAlias && (
+                                                <span
+                                                  className="badge"
+                                                  style={{
+                                                    background: 'rgba(138, 180, 248, 0.18)',
+                                                    color: '#8ab4ff',
+                                                    border: '1px solid rgba(138, 180, 248, 0.35)',
+                                                    fontSize: '0.67rem',
+                                                    padding: '0.1rem 0.35rem',
+                                                  }}
+                                                  title={isAr ? `مطابق عبر الكود البديل: ${chk.matchedItem?.itemCode}` : `Matched via alias: ${chk.matchedItem?.itemCode}`}
+                                                >
+                                                  🔗 {isAr ? `بديل لـ (${chk.matchedItem?.itemCode})` : `Alias: ${chk.matchedItem?.itemCode}`}
+                                                </span>
+                                              )}
+
+                                              {/* Missing Item: Search & Direct Code Input */}
+                                              {chk.status === 'missing' && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', width: '100%' }}>
+                                                  <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', width: '100%' }}>
+                                                    <input
+                                                      type="text"
+                                                      placeholder={isAr ? 'اكتب كود الصنف بالمخزن (515756)...' : 'Type stock code...'}
+                                                      value={line.manualTargetCode || ''}
+                                                      onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'manualTargetCode', e.target.value)}
+                                                      onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                          handleManualLinkByCode(batch.id, idx, line.itemCode, line.manualTargetCode)
+                                                        }
+                                                      }}
+                                                      style={{
+                                                        background: '#0d1117',
+                                                        border: '1px solid #3b82f6',
+                                                        borderRadius: '4px',
+                                                        color: '#fff',
+                                                        fontSize: '0.72rem',
+                                                        padding: '0.2rem 0.4rem',
+                                                        flex: '1 1 auto',
+                                                        minWidth: '100px',
+                                                      }}
+                                                    />
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleManualLinkByCode(batch.id, idx, line.itemCode, line.manualTargetCode)}
+                                                      style={{
+                                                        background: '#2563eb',
+                                                        color: '#fff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: 800,
+                                                        padding: '0.2rem 0.45rem',
+                                                        cursor: 'pointer',
+                                                        whiteSpace: 'nowrap',
+                                                      }}
+                                                      title={isAr ? 'ربط هذا الكود بالصنف في المخزن وحفظه دائماً' : 'Link code'}
+                                                    >
+                                                      🔗 {isAr ? 'ربط' : 'Link'}
+                                                    </button>
+                                                  </div>
+
+                                                  {/* Fuzzy Suggestion */}
+                                                  {(() => {
+                                                    const fuzzy = findSmartFuzzyMatch(line, stock, aliasesMap)
+                                                    if (!fuzzy || line.rejectedSuggestion) return null
+                                                    return (
+                                                      <div
+                                                        style={{
+                                                          background: 'rgba(96, 165, 250, 0.1)',
+                                                          border: '1px solid rgba(96, 165, 250, 0.3)',
+                                                          borderRadius: '6px',
+                                                          padding: '0.3rem 0.45rem',
+                                                          display: 'flex',
+                                                          flexDirection: 'column',
+                                                          gap: '0.2rem',
+                                                          width: '100%',
+                                                        }}
+                                                      >
+                                                        <div style={{ fontSize: '0.67rem', color: '#93c5fd', lineHeight: 1.25 }}>
+                                                          💡 {isAr ? 'اقتراح ذكي:' : 'Smart Match:'} هل تقصد <strong>{fuzzy.item.itemCode}</strong>؟
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                                                          <button
+                                                            type="button"
+                                                            onClick={() => handleQuickLinkAlias(batch.id, idx, line.itemCode, fuzzy.item)}
+                                                            style={{
+                                                              background: '#00e0a1',
+                                                              color: '#000',
+                                                              border: 'none',
+                                                              borderRadius: '4px',
+                                                              fontSize: '0.66rem',
+                                                              fontWeight: 800,
+                                                              padding: '0.15rem 0.4rem',
+                                                              cursor: 'pointer',
+                                                            }}
+                                                          >
+                                                            ✅ {isAr ? 'اعتماد' : 'Apply'}
+                                                          </button>
+                                                          <button
+                                                            type="button"
+                                                            onClick={() => handleRejectSuggestion(batch.id, idx)}
+                                                            style={{
+                                                              background: 'rgba(255, 71, 87, 0.15)',
+                                                              color: '#ff4757',
+                                                              border: '1px solid rgba(255, 71, 87, 0.3)',
+                                                              borderRadius: '4px',
+                                                              fontSize: '0.66rem',
+                                                              fontWeight: 700,
+                                                              padding: '0.15rem 0.4rem',
+                                                              cursor: 'pointer',
+                                                            }}
+                                                          >
+                                                            ❌ {isAr ? 'رفض' : 'Reject'}
+                                                          </button>
+                                                        </div>
+                                                      </div>
+                                                    )
+                                                  })()}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )
+                                        })()}
+                                      </td>
+                                    )}
+
+                                    {/* ─── COLUMN 2: DELMAR WAREHOUSE & COVERAGE ─── */}
+                                    {batch.movementType === 'outbound' && (
+                                      <td style={{ padding: '0.5rem 0.4rem', verticalAlign: 'top' }}>
+                                        {(() => {
+                                          const chk = checkStockAvailability(line, stock, aliasesMap)
+                                          const isDelmarCovered = Boolean(line.delmarCovered)
+                                          const isFullDelmar = isDelmarCovered && line.delmarMode === 'full'
+                                          const isShortageDelmar = isDelmarCovered && line.delmarMode !== 'full'
+                                          const hasShortage = chk.diff < 0
+
+                                          if (isFullDelmar) {
+                                            return (
+                                              <div style={{
+                                                background: 'rgba(0, 224, 161, 0.12)',
+                                                border: '1px solid #00e0a1',
+                                                borderRadius: '8px',
+                                                padding: '0.4rem 0.55rem',
+                                                fontSize: '0.73rem',
+                                                lineHeight: 1.35,
+                                                width: '100%',
+                                              }}>
+                                                <div style={{ fontWeight: 800, color: '#00e0a1', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                  <span>🏭</span>
+                                                  <span>{isAr ? `صرف من دلمار بالكامل (${chk.reqBar} عود)` : `Full Delmar (${chk.reqBar})`}</span>
+                                                </div>
+                                                <div style={{ fontSize: '0.67rem', color: '#e2e8f0', marginTop: '0.2rem' }}>
+                                                  {isAr ? `✅ رصيد المستودع محفوظ (${chk.availableBar} عود لم يُمس)` : `Warehouse preserved (${chk.availableBar} bars)`}
+                                                </div>
                                                 <button
                                                   type="button"
-                                                  onClick={() => updateBatchInvoiceLine(batch.id, idx, 'ignored', true)}
+                                                  onClick={() => handleSetDelmarMode(batch.id, idx, null)}
+                                                  style={{
+                                                    marginTop: '0.3rem',
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: '#ff6b81',
+                                                    fontSize: '0.67rem',
+                                                    cursor: 'pointer',
+                                                    textDecoration: 'underline',
+                                                    padding: 0,
+                                                  }}
+                                                >
+                                                  {isAr ? '❌ إلغاء الصرف من دلمار' : 'Undo Delmar'}
+                                                </button>
+                                              </div>
+                                            )
+                                          }
+
+                                          if (isShortageDelmar) {
+                                            return (
+                                              <div style={{
+                                                background: 'rgba(59, 130, 246, 0.12)',
+                                                border: '1px solid #3b82f6',
+                                                borderRadius: '8px',
+                                                padding: '0.4rem 0.55rem',
+                                                fontSize: '0.73rem',
+                                                lineHeight: 1.35,
+                                                width: '100%',
+                                              }}>
+                                                <div style={{ fontWeight: 800, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                  <span>🏭</span>
+                                                  <span>{isAr ? `تغطية العجز من دلمار (${chk.delmarShortage} عود)` : `Shortage covered (${chk.delmarShortage})`}</span>
+                                                </div>
+                                                <div style={{ fontSize: '0.67rem', color: '#e2e8f0', marginTop: '0.2rem' }}>
+                                                  {isAr ? `✅ سيتم صرف (${chk.warehouseDispatched} عود) من المستودع` : `Dispatching ${chk.warehouseDispatched} from wh`}
+                                                </div>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleSetDelmarMode(batch.id, idx, null)}
+                                                  style={{
+                                                    marginTop: '0.3rem',
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: '#ff6b81',
+                                                    fontSize: '0.67rem',
+                                                    cursor: 'pointer',
+                                                    textDecoration: 'underline',
+                                                    padding: 0,
+                                                  }}
+                                                >
+                                                  {isAr ? '❌ إلغاء التغطية' : 'Undo Delmar'}
+                                                </button>
+                                              </div>
+                                            )
+                                          }
+
+                                          // Not Covered State: Two clear buttons
+                                          return (
+                                            <div style={{
+                                              background: 'rgba(245, 158, 11, 0.06)',
+                                              border: '1px solid rgba(245, 158, 11, 0.25)',
+                                              borderRadius: '8px',
+                                              padding: '0.4rem 0.55rem',
+                                              fontSize: '0.73rem',
+                                              display: 'flex',
+                                              flexDirection: 'column',
+                                              gap: '0.3rem',
+                                              width: '100%',
+                                            }}>
+                                              <div style={{ color: '#fbbf24', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                <span>🏭</span>
+                                                <span>{isAr ? 'مخزن دلمار (بتدهن / تشغيل)' : 'Delmar Warehouse'}</span>
+                                              </div>
+
+                                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleSetDelmarMode(batch.id, idx, 'full')}
                                                   style={{
                                                     background: 'rgba(0, 224, 161, 0.15)',
                                                     color: '#00e0a1',
-                                                    border: '1px solid #00e0a1',
-                                                    borderRadius: '4px',
+                                                    border: '1px solid rgba(0, 224, 161, 0.4)',
+                                                    borderRadius: '5px',
                                                     fontSize: '0.68rem',
-                                                    padding: '0.1rem 0.35rem',
+                                                    fontWeight: 800,
+                                                    padding: '0.25rem 0.4rem',
                                                     cursor: 'pointer',
-                                                    fontWeight: 700,
+                                                    textAlign: isAr ? 'right' : 'left',
                                                   }}
-                                                  title={isAr ? 'اضغط لاستبعاد هذا البند إذا لم يكن تابعاً لنا' : 'Click to exclude'}
+                                                  title={isAr ? 'صرف هذا البند بالكامل من مخزن دلمار لحفظ رصيد المستودع' : 'Full dispatch from Delmar'}
                                                 >
-                                                  ✅ تبعنا
+                                                  ✅ {isAr ? `صرف من دلمار بالكامل (${chk.reqBar} عود)` : `Full Delmar (${chk.reqBar} b)`}
                                                 </button>
-                                              ) : (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => updateBatchInvoiceLine(batch.id, idx, 'ignored', false)}
-                                                  style={{
-                                                    background: 'rgba(255, 71, 87, 0.15)',
-                                                    color: '#ff4757',
-                                                    border: '1px solid #ff4757',
-                                                    borderRadius: '4px',
-                                                    fontSize: '0.68rem',
-                                                    padding: '0.1rem 0.35rem',
-                                                    cursor: 'pointer',
-                                                    fontWeight: 700,
-                                                  }}
-                                                  title={isAr ? 'اضغط لاعتماد هذا البند إذا كان تابعاً لنا' : 'Click to include'}
-                                                >
-                                                  🚫 مستبعد
-                                                </button>
-                                              )}
+
+                                                {hasShortage && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleSetDelmarMode(batch.id, idx, 'shortage')}
+                                                    style={{
+                                                      background: 'rgba(245, 158, 11, 0.15)',
+                                                      color: '#fbbf24',
+                                                      border: '1px solid rgba(245, 158, 11, 0.4)',
+                                                      borderRadius: '5px',
+                                                      fontSize: '0.68rem',
+                                                      fontWeight: 800,
+                                                      padding: '0.25rem 0.4rem',
+                                                      cursor: 'pointer',
+                                                      textAlign: isAr ? 'right' : 'left',
+                                                    }}
+                                                    title={isAr ? `صرف ${chk.availableBar} من المستودع وتغطية العجز (${Math.abs(chk.diff)} عود) من دلمار` : 'Cover shortage only'}
+                                                  >
+                                                    ⚖️ {isAr ? `تغطية العجز فقط (${Math.abs(chk.diff)} عود)` : `Cover short (${Math.abs(chk.diff)} b)`}
+                                                  </button>
+                                                )}
+                                              </div>
                                             </div>
-                                          ) : (
-                                            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-                                              ⚙️ {isAr ? 'خام (بالمستودع)' : 'Raw profile'}
-                                            </span>
-                                          )}
-                                        </div>
+                                          )
+                                        })()}
                                       </td>
                                     )}
 

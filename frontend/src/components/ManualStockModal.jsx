@@ -1024,6 +1024,7 @@ export default function ManualStockModal({
                       {sourceType === 'invoice' ? (isAr ? 'كود الصنف' : 'Item Code') : (isAr ? 'اختيار من رصيد المخزن' : 'Select From Stock')}
                     </th>
                     <th style={{ padding: '0.65rem 0.5rem', minWidth: '100px' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
+                    <th style={{ padding: '0.65rem 0.5rem', minWidth: '100px', color: '#8ab4ff' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
                     <th style={{ padding: '0.65rem 0.5rem', minWidth: '130px' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
                     <th style={{ padding: '0.65rem 0.5rem', width: '80px' }}>{isAr ? 'الدهان' : 'Finish'}</th>
                     <th style={{ padding: '0.65rem 0.5rem', width: '70px' }}>{isAr ? 'الطول (mm)' : 'Length'}</th>
@@ -1088,7 +1089,7 @@ export default function ManualStockModal({
                               <option value="">-- {isAr ? 'اختر قطاع من المخزن --' : 'Select from Stock --'}</option>
                               {stock.map((s) => (
                                 <option key={s.itemKey} value={s.itemKey}>
-                                  {s.itemCode} | {s.finish} | {s.quantityBar} عود ({s.description?.slice(0, 25) || ''})
+                                  {s.itemCode} {s.customerCode ? `(${s.customerCode})` : ''} | {s.finish} | {s.quantityBar} عود ({s.description?.slice(0, 20) || ''})
                                 </option>
                               ))}
                             </select>
@@ -1110,6 +1111,25 @@ export default function ManualStockModal({
                               background: '#101223',
                               border: '1px solid var(--border)',
                               color: '#fff',
+                              padding: '0.4rem 0.5rem',
+                              borderRadius: '6px',
+                            }}
+                          />
+                        </td>
+
+                        {/* Customer Code */}
+                        <td style={{ padding: '0.5rem' }}>
+                          <input
+                            type="text"
+                            value={line.customerCode || ''}
+                            onChange={(e) => handleUpdateLine(idx, 'customerCode', e.target.value)}
+                            placeholder={isAr ? 'كود العميل...' : 'Customer code...'}
+                            disabled={sourceType === 'invoice'}
+                            style={{
+                              width: '100%',
+                              background: '#101223',
+                              border: '1px solid var(--border)',
+                              color: '#8ab4ff',
                               padding: '0.4rem 0.5rem',
                               borderRadius: '6px',
                             }}

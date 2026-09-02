@@ -793,9 +793,28 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
     const netTotal = Number(line.netTotal || qtyBar * unitPrice);
 
     // Factors for stock balance updates (+ for inbound, - for outbound)
-    const factorBar = isOutbound ? -qtyBar : qtyBar;
-    const factorLm = isOutbound ? -qtyLm : qtyLm;
-    const factorKg = isOutbound ? -qtyKg : qtyKg;
+    let actualDeductBar = qtyBar;
+    let actualDeductLm = qtyLm;
+    let actualDeductKg = qtyKg;
+
+    if (isOutbound && line.delmarCovered) {
+      if (line.delmarMode === 'full') {
+        // Dispatched 100% from Delmar stock, main warehouse is untouched!
+        actualDeductBar = 0;
+        actualDeductLm = 0;
+        actualDeductKg = 0;
+      } else {
+        // Shortage covered from Delmar, only deduct available warehouse portion
+        const shortage = Number(line.delmarShortage || 0);
+        actualDeductBar = Math.max(0, qtyBar - shortage);
+        actualDeductLm = (actualDeductBar * lengthMm) / 1000;
+        actualDeductKg = qtyBar > 0 ? (actualDeductBar / qtyBar) * qtyKg : 0;
+      }
+    }
+
+    const factorBar = isOutbound ? -actualDeductBar : qtyBar;
+    const factorLm = isOutbound ? -actualDeductLm : qtyLm;
+    const factorKg = isOutbound ? -actualDeductKg : qtyKg;
 
     // Create Movement
     const mvtRef = projectRef.collection("movements").doc();
@@ -805,6 +824,9 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
       salesOrder: invoiceDoc.salesOrder,
       customerReference: invoiceDoc.customerReference,
       movementType: isOutbound ? "outbound" : "inbound",
+      delmarCovered: Boolean(line.delmarCovered),
+      delmarMode: line.delmarMode || null,
+      delmarDispatchedBars: isOutbound && line.delmarCovered ? (line.delmarMode === 'full' ? qtyBar : Number(line.delmarShortage || 0)) : 0,
       itemKey,
       itemCode,
       customerCode,

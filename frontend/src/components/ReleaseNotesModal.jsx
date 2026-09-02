@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.37',
+      version: 'v2.27.38',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'عمود مخزن دلمار المستقل، تتبع وتأكيد كود العميل، وحساب الرصيد المتبقي بدقة 100%' : 'Dedicated Delmar Column, Customer Code Tracking & Accurate Remaining Stock Calculation',
+      highlights: [
+        {
+          icon: '🏭',
+          text: isAr
+            ? 'عمود مخصص ومستقل لمخزن دلمار: متاح لكافة البنود (بما فيها الخام MF والدهان RAL) مع زرين صريحين (صرف بالكامل من دلمار لحفظ رصيد المستودع) أو (تغطية العجز فقط)، بالإضافة لأزرار الاعتماد الجماعي العلوية.'
+            : 'Dedicated Delmar Warehouse Column: available for all profiles (MF raw & RAL coated) with full Delmar dispatch or shortage coverage, plus batch one-click controls.'
+        },
+        {
+          icon: '🎯',
+          text: isAr
+            ? 'تتبع وتأكيد كود العميل (Customer Code): إضافة عمود كود العميل في جدول الصرف لمراحل دلمار والتتبع الذكي المشترك لكود الصنف وكود العميل معاً لمنع أي أخطاء في التتبع.'
+            : 'Customer Code Tracking: added Customer Code input column in manual dispatch and unified matching on both itemCode and customerCode.'
+        },
+        {
+          icon: '📊',
+          text: isAr
+            ? 'تفصيل الرصيد والمتبقي بعد الصرف: عرض الرصيد الحالي بالمستودع، المطلوب صرفه، والرصيد المتبقي بعد الصرف بدقة تامة وبدون أي التباس للأرقام أمام الإدارة.'
+            : 'Accurate Remaining Stock: crystal-clear breakdown of current warehouse stock, requested quantity, and remaining balance after dispatch.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.37',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'تغطية عجز الأعواد من مخزن دلمار، كتابة الكود الصحيح يدوياً، ونقل عمود الأعواد' : 'Delmar Shortage Coverage Prompt, Manual Code Mapping & Column Reordering',
       highlights: [
         {
