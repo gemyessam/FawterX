@@ -1,4 +1,5 @@
 import React from 'react'
+import packageInfo from '../../package.json'
 
 export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
   if (!isOpen) return null
@@ -1041,7 +1042,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.27.29 {isAr ? 'النسخة الحالية' : 'Active'}
+              v{packageInfo.version} {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}

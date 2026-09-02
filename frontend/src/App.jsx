@@ -12,6 +12,9 @@ import StepGuideModal from './components/StepGuideModal'
 import { testETAAuth, getCompanySettings, saveCompanySettings, syncUserData, getAuthSecurityStatus, warmUpServer } from './services/api'
 import { getWarehouseAccess } from './services/warehouseApi'
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase'
+import packageInfo from '../package.json'
+
+export const CURRENT_APP_VERSION = `v${packageInfo.version}`
 
 // bilingual context
 export const AppContext = createContext(null)
@@ -19,7 +22,7 @@ export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
-    logo: 'فاوتر إكس v2.27.37',
+    logo: `فاوتر إكس ${CURRENT_APP_VERSION}`,
     logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
@@ -59,7 +62,7 @@ const TRANSLATIONS = {
     otpPlaceholder: 'أدخل رمز الـ OTP المكون من 6 أرقام',
   },
   en: {
-    logo: 'FawterX v2.27.37',
+    logo: `FawterX ${CURRENT_APP_VERSION}`,
     logoSub: 'Fast ERP Alternative for Tax Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
@@ -254,7 +257,7 @@ function Layout({ children }) {
             >
               <span>⚡ {lang === 'ar' ? 'منصة رفع الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Platform'}</span>
               <span style={{ background: 'rgba(0, 224, 161, 0.2)', color: '#00e0a1', padding: '0.1rem 0.4rem', borderRadius: '10px', fontSize: '0.7rem', fontWeight: 800 }}>
-                v2.27.37 ✨
+                {CURRENT_APP_VERSION} ✨
               </span>
             </button>
           </div>
