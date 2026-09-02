@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.38',
+      version: 'v2.27.39',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'التحكم الرقمي المباشر في أعواد دلمار، أزرار الأولويات الفورية، والربط المانيوال بكود كانكس' : 'Interactive Delmar Bar Input, 1-Click Priority Controls & Always-Available Canex Code Linking',
+      highlights: [
+        {
+          icon: '🔢',
+          text: isAr
+            ? 'خانة رقمية تفاعلية لتحديد أعواد دلمار يدوياً: إمكانية كتابة عدد الأعواد المطلوب سحبها من دلمار بدقة، مع احتساب فوري وتلقائي لحصة المستودع والرصيد المتبقي دون أي التباس.'
+            : 'Interactive Delmar Bars Input: explicitly type the exact number of bars from Delmar with instant real-time calculation of warehouse balance.'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'أزرار أولوية الصرف الفورية: (🏭 دلمار أولاً) لسحب كامل المطلوب من دلمار وحفظ المستودع، و (📦 المستودع أولاً) لصرف المتاح بالمستودع وتغطية الفارق من دلمار، بالإضافة لأزرار الأولوية الجماعية بالبانر العلوي.'
+            : '1-Click Priority Controls: (Delmar First) or (Warehouse First) per line and for the entire delivery batch at once.'
+        },
+        {
+          icon: '🔗',
+          text: isAr
+            ? 'خانة إدخال كود كانكس المانيوال متاحة دائماً لكل سطر: إمكانية كتابة كود كانكس (مثل 515756) وربطه فوراً بكود شوكو (مثل 515750) وحفظه في القاموس للأبد بضغطة زر واحدة.'
+            : 'Always-Available Manual Canex Linking: link different codes (e.g. Schuco 515750 to Canex 515756) manually in any row and store permanently in dictionary.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.38',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'عمود مخزن دلمار المستقل، تتبع وتأكيد كود العميل، وحساب الرصيد المتبقي بدقة 100%' : 'Dedicated Delmar Column, Customer Code Tracking & Accurate Remaining Stock Calculation',
       highlights: [
         {

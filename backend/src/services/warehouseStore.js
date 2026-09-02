@@ -798,7 +798,13 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
     let actualDeductKg = qtyKg;
 
     if (isOutbound && line.delmarCovered) {
-      if (line.delmarMode === 'full') {
+      if (line.delmarBars !== undefined && line.delmarBars !== null && line.delmarBars !== '') {
+        // User explicitly specified the exact number of bars from Delmar
+        const dBars = Math.min(qtyBar, Math.max(0, Number(line.delmarBars)));
+        actualDeductBar = Math.max(0, qtyBar - dBars);
+        actualDeductLm = (actualDeductBar * lengthMm) / 1000;
+        actualDeductKg = qtyBar > 0 ? (actualDeductBar / qtyBar) * qtyKg : 0;
+      } else if (line.delmarMode === 'full') {
         // Dispatched 100% from Delmar stock, main warehouse is untouched!
         actualDeductBar = 0;
         actualDeductLm = 0;
@@ -826,7 +832,11 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
       movementType: isOutbound ? "outbound" : "inbound",
       delmarCovered: Boolean(line.delmarCovered),
       delmarMode: line.delmarMode || null,
-      delmarDispatchedBars: isOutbound && line.delmarCovered ? (line.delmarMode === 'full' ? qtyBar : Number(line.delmarShortage || 0)) : 0,
+      delmarDispatchedBars: isOutbound && line.delmarCovered
+        ? (line.delmarBars !== undefined && line.delmarBars !== null && line.delmarBars !== ''
+            ? Math.min(qtyBar, Math.max(0, Number(line.delmarBars)))
+            : (line.delmarMode === 'full' ? qtyBar : Number(line.delmarShortage || 0)))
+        : 0,
       itemKey,
       itemCode,
       customerCode,
