@@ -25,18 +25,49 @@ import {
   restoreProjectToPoint,
   deleteProjectRestorePoint,
   rollbackWarehouseInvoice,
+  getProjectItemAliases,
+  saveProjectItemAlias,
+  deleteProjectItemAlias,
 } from '../services/warehouseApi'
 import ManualStockModal from '../components/ManualStockModal'
 import DispatchesTrackerView from '../components/DispatchesTrackerView'
 
-function checkStockAvailability(line, stock = []) {
+function checkStockAvailability(line, stock = [], aliasesMap = {}) {
   if (!line || (!line.itemCode && !line.customerCode)) {
-    return { status: 'missing', availableBar: 0, diff: 0, matchedItem: null }
+    return { status: 'missing', availableBar: 0, diff: 0, matchedItem: null, viaAlias: false }
   }
   const reqBar = Number(line.quantityBar || line.bars || 0)
   const cleanCode = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
-  const lineItemNorm = cleanCode(line.itemCode)
-  const lineCustNorm = cleanCode(line.customerCode)
+  let lineItemNorm = cleanCode(line.itemCode)
+  let lineCustNorm = cleanCode(line.customerCode)
+
+  let viaAlias = false
+  let aliasInfo = null
+
+  // 0. Check project aliases dictionary
+  const mappedAlias = aliasesMap[lineItemNorm] || (lineCustNorm && aliasesMap[lineCustNorm])
+  if (mappedAlias) {
+    viaAlias = true
+    aliasInfo = mappedAlias
+    if (mappedAlias.targetItemKey) {
+      const matchKey = stock.find((s) => s.itemKey === mappedAlias.targetItemKey)
+      if (matchKey) {
+        const availableBar = Number(matchKey.quantityBar || 0)
+        const diff = availableBar - reqBar
+        return {
+          status: diff >= 0 ? 'sufficient' : 'shortage',
+          availableBar,
+          diff,
+          matchedItem: matchKey,
+          viaAlias: true,
+          aliasInfo,
+        }
+      }
+    }
+    if (mappedAlias.targetItemCode) {
+      lineItemNorm = cleanCode(mappedAlias.targetItemCode)
+    }
+  }
 
   // 1. Exact match on itemCode
   let match = stock.find((s) => cleanCode(s.itemCode) === lineItemNorm)
@@ -53,7 +84,18 @@ function checkStockAvailability(line, stock = []) {
     match = stock.find((s) => cleanCode(s.customerCode) === lineItemNorm)
   }
 
-  // 4. Substring / partial numeric match
+  // 4. Match where warehouse item has this code in its aliases array
+  if (!match) {
+    match = stock.find((s) => {
+      if (Array.isArray(s.aliases) && s.aliases.length > 0) {
+        return s.aliases.some((a) => cleanCode(a) === lineItemNorm || (lineCustNorm && cleanCode(a) === lineCustNorm))
+      }
+      return false
+    })
+    if (match) viaAlias = true
+  }
+
+  // 5. Substring / partial numeric match
   if (!match) {
     match = stock.find((s) => {
       const sItem = cleanCode(s.itemCode)
@@ -71,6 +113,7 @@ function checkStockAvailability(line, stock = []) {
       availableBar: 0,
       diff: -reqBar,
       matchedItem: null,
+      viaAlias: false,
     }
   }
 
@@ -83,6 +126,8 @@ function checkStockAvailability(line, stock = []) {
       availableBar,
       diff,
       matchedItem: match,
+      viaAlias,
+      aliasInfo,
     }
   } else {
     return {
@@ -90,8 +135,83 @@ function checkStockAvailability(line, stock = []) {
       availableBar,
       diff,
       matchedItem: match,
+      viaAlias,
+      aliasInfo,
     }
   }
+}
+
+function findSmartFuzzyMatch(line, stock = [], aliasesMap = {}) {
+  if (!line || !line.itemCode || !Array.isArray(stock) || stock.length === 0) return null
+  const cleanCode = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
+  const queryCode = cleanCode(line.itemCode)
+  if (queryCode.length < 4) return null
+
+  // If already mapped in aliases, no suggestion needed
+  if (aliasesMap[queryCode]) return null
+
+  const queryDesc = String(line.description || '').toLowerCase()
+  let bestCandidate = null
+  let bestScore = 0
+
+  for (const item of stock) {
+    const itemCode = cleanCode(item.itemCode)
+    const custCode = cleanCode(item.customerCode)
+    const itemDesc = String(item.description || '').toLowerCase()
+
+    let codeScore = 0
+    if (itemCode && queryCode) {
+      if (itemCode.length === queryCode.length) {
+        let matchingChars = 0
+        for (let i = 0; i < queryCode.length; i++) {
+          if (queryCode[i] === itemCode[i]) matchingChars++
+        }
+        if (matchingChars >= queryCode.length - 1 && matchingChars >= 4) {
+          codeScore = 95 // 1 digit difference on a 6+ char code (e.g. 515750 vs 515756)
+        } else if (matchingChars >= queryCode.length - 2 && matchingChars >= 4) {
+          codeScore = 80
+        }
+      } else if (itemCode.includes(queryCode) || queryCode.includes(itemCode)) {
+        codeScore = 85
+      }
+    }
+
+    if (custCode && queryCode) {
+      if (custCode.length === queryCode.length) {
+        let matchingChars = 0
+        for (let i = 0; i < queryCode.length; i++) {
+          if (queryCode[i] === custCode[i]) matchingChars++
+        }
+        if (matchingChars >= queryCode.length - 1 && matchingChars >= 4) {
+          codeScore = Math.max(codeScore, 95)
+        }
+      }
+    }
+
+    let descScore = 0
+    if (queryDesc && itemDesc) {
+      const words = queryDesc.split(/[\s,()/-]+/).filter((w) => w.length >= 3 && !/ral|5800|6000|bar|kg|lm/i.test(w))
+      let matchedWords = 0
+      for (const w of words) {
+        if (itemDesc.includes(w)) matchedWords++
+      }
+      if (words.length > 0) {
+        descScore = Math.round((matchedWords / words.length) * 50)
+      }
+    }
+
+    const totalScore = codeScore > 0 ? (codeScore >= 90 ? codeScore : codeScore + descScore * 0.3) : descScore
+    if (totalScore > bestScore && totalScore >= 75) {
+      bestScore = totalScore
+      bestCandidate = {
+        item,
+        score: Math.round(totalScore),
+        reason: codeScore >= 90 ? 'تشابه رقمي فائق (اختلاف رقم واحد فقط)' : 'تطابق في مواصفات ووصف القطاع',
+      }
+    }
+  }
+
+  return bestCandidate
 }
 
 function isCoatedItem(line) {
@@ -185,6 +305,124 @@ export default function Warehouse() {
       }
     } catch (e) {}
   }
+
+  // Item Cross-Reference Aliases (e.g. Schüco 515750 <=> Canex 515756)
+  const [projectAliases, setProjectAliases] = useState([])
+  const aliasesMap = useMemo(() => {
+    const map = {}
+    const clean = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
+    projectAliases.forEach((a) => {
+      if (a.aliasCode) {
+        map[clean(a.aliasCode)] = a
+      }
+    })
+    return map
+  }, [projectAliases])
+
+  const loadProjectAliases = async (pId) => {
+    if (!pId) return
+    try {
+      const res = await getProjectItemAliases(pId)
+      if (res && Array.isArray(res.aliases)) {
+        setProjectAliases(res.aliases)
+      }
+    } catch (e) {
+      console.warn('Failed loading project aliases:', e)
+    }
+  }
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      loadProjectAliases(selectedProjectId)
+    }
+  }, [selectedProjectId])
+
+  const [linkModalData, setLinkModalData] = useState(null)
+  const [aliasSearchQuery, setAliasSearchQuery] = useState('')
+
+  const handleQuickLinkAlias = async (batchId, lineIndex, sourceCode, targetItem) => {
+    if (!selectedProjectId || !targetItem) return
+
+    // 1. Update line in batch
+    setBatchInvoices((prev) =>
+      prev.map((batch) => {
+        if (batch.id !== batchId) return batch
+        const copyLines = [...batch.reviewLines]
+        copyLines[lineIndex] = {
+          ...copyLines[lineIndex],
+          itemCode: targetItem.itemCode,
+          customerCode: copyLines[lineIndex].customerCode || sourceCode,
+          targetItemKey: targetItem.itemKey,
+          targetItemCode: targetItem.itemCode,
+        }
+        return { ...batch, reviewLines: copyLines }
+      })
+    )
+
+    // 2. Save alias permanently to project
+    try {
+      await saveProjectItemAlias(selectedProjectId, {
+        aliasCode: sourceCode,
+        targetItemCode: targetItem.itemCode,
+        targetItemKey: targetItem.itemKey,
+        targetDescription: targetItem.description || '',
+      })
+      toast.success(isAr ? `✅ تم ربط الكود (${sourceCode}) بالصنف (${targetItem.itemCode}) واعتمد في القاموس!` : `Linked ${sourceCode} to ${targetItem.itemCode}!`)
+      loadProjectAliases(selectedProjectId)
+    } catch (err) {
+      console.error('Error saving alias:', err)
+      toast.error(isAr ? 'فشل حفظ الربط في القاموس' : 'Failed to save alias')
+    }
+  }
+
+  const handleConfirmManualLink = async () => {
+    if (!linkModalData || !linkModalData.selectedItemKey) {
+      toast.error(isAr ? 'يرجى اختيار الصنف من المخزن' : 'Please select an item')
+      return
+    }
+
+    const { batchId, lineIndex, sourceCode, selectedItemKey, rememberAlways } = linkModalData
+    const targetItem = stock.find((s) => s.itemKey === selectedItemKey)
+    if (!targetItem) {
+      toast.error(isAr ? 'الصنف المختار غير موجود بالمخزن' : 'Item not found in stock')
+      return
+    }
+
+    setBatchInvoices((prev) =>
+      prev.map((batch) => {
+        if (batch.id !== batchId) return batch
+        const copyLines = [...batch.reviewLines]
+        copyLines[lineIndex] = {
+          ...copyLines[lineIndex],
+          itemCode: targetItem.itemCode,
+          customerCode: copyLines[lineIndex].customerCode || sourceCode,
+          targetItemKey: targetItem.itemKey,
+          targetItemCode: targetItem.itemCode,
+        }
+        return { ...batch, reviewLines: copyLines }
+      })
+    )
+
+    if (rememberAlways && selectedProjectId) {
+      try {
+        await saveProjectItemAlias(selectedProjectId, {
+          aliasCode: sourceCode,
+          targetItemCode: targetItem.itemCode,
+          targetItemKey: targetItem.itemKey,
+          targetDescription: targetItem.description || '',
+        })
+        toast.success(isAr ? `✅ تم حفظ الربط الدائم للكود (${sourceCode} 🔁 ${targetItem.itemCode}) في القاموس!` : `Saved alias permanently!`)
+        loadProjectAliases(selectedProjectId)
+      } catch (e) {
+        console.warn('Failed saving alias:', e)
+      }
+    } else {
+      toast.success(isAr ? 'تم تعديل كود البند لهذه الفاتورة' : 'Updated line item code')
+    }
+
+    setLinkModalData(null)
+  }
+
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('stock') // 'stock' | 'history' | 'upload' | 'dispatches' | 'users' | 'projects'
 
@@ -1150,7 +1388,7 @@ export default function Warehouse() {
     // Check stock availability if outbound
     if (batch.movementType === 'outbound') {
       const shortages = validLines
-        .map((l) => ({ line: l, chk: checkStockAvailability(l, stock) }))
+        .map((l) => ({ line: l, chk: checkStockAvailability(l, stock, aliasesMap) }))
         .filter((x) => x.chk.status !== 'sufficient')
 
       if (shortages.length > 0) {
@@ -1252,7 +1490,7 @@ export default function Warehouse() {
       const valid = (inv.reviewLines || []).filter(
         (l) => !l.ignored && !l.isService && Number(l.quantityBar || l.bars || 0) > 0
       )
-      return valid.some((l) => checkStockAvailability(l, stock).status !== 'sufficient')
+      return valid.some((l) => checkStockAvailability(l, stock, aliasesMap).status !== 'sufficient')
     })
 
     if (outboundWithIssues.length > 0) {
@@ -3554,7 +3792,7 @@ export default function Warehouse() {
                             let shortage = 0
                             let missing = 0
                             validLines.forEach((l) => {
-                              const res = checkStockAvailability(l, stock)
+                              const res = checkStockAvailability(l, stock, aliasesMap)
                               if (res.status === 'sufficient') sufficient++
                               else if (res.status === 'shortage') shortage++
                               else missing++
@@ -3713,13 +3951,13 @@ export default function Warehouse() {
 
                           {/* Line Items Table */}
                           <div style={{ overflowX: 'auto', marginBottom: '0.5rem' }}>
-                            <table style={{ minWidth: batch.movementType === 'outbound' ? '2180px' : '1950px', width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
+                            <table style={{ minWidth: batch.movementType === 'outbound' ? '2200px' : '1950px', width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
                               <colgroup>
                                 <col style={{ width: '45px' }} />
                                 <col style={{ width: '60px' }} />
                                 <col style={{ width: '150px' }} />
                                 <col style={{ width: '140px' }} />
-                                {batch.movementType === 'outbound' && <col style={{ width: '225px' }} />}
+                                {batch.movementType === 'outbound' && <col style={{ width: '240px' }} />}
                                 <col style={{ width: '550px' }} />
                                 <col style={{ width: '110px' }} />
                                 <col style={{ width: '100px' }} />
@@ -3793,63 +4031,170 @@ export default function Warehouse() {
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-start' }}>
                                           {/* Stock Availability Badge */}
                                           {(() => {
-                                            const chk = checkStockAvailability(line, stock)
+                                            const chk = checkStockAvailability(line, stock, aliasesMap)
                                             if (chk.status === 'sufficient') {
                                               return (
-                                                <span
-                                                  className="badge"
-                                                  style={{
-                                                    background: 'rgba(0, 224, 161, 0.15)',
-                                                    color: '#00e0a1',
-                                                    border: '1px solid rgba(0, 224, 161, 0.3)',
-                                                    fontSize: '0.73rem',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '0.2rem',
-                                                    whiteSpace: 'nowrap',
-                                                  }}
-                                                  title={isAr ? `متوفر بالمخزن: ${chk.availableBar} عود (المطلوب: ${line.quantityBar || line.bars || 0})` : `Available: ${chk.availableBar}`}
-                                                >
-                                                  🟢 {isAr ? `متوفر (${chk.availableBar} عود)` : `In Stock (${chk.availableBar})`}
-                                                </span>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', alignItems: 'flex-start' }}>
+                                                  <span
+                                                    className="badge"
+                                                    style={{
+                                                      background: 'rgba(0, 224, 161, 0.15)',
+                                                      color: '#00e0a1',
+                                                      border: '1px solid rgba(0, 224, 161, 0.3)',
+                                                      fontSize: '0.73rem',
+                                                      display: 'inline-flex',
+                                                      alignItems: 'center',
+                                                      gap: '0.2rem',
+                                                      whiteSpace: 'nowrap',
+                                                    }}
+                                                    title={isAr ? `متوفر بالمخزن: ${chk.availableBar} عود (المطلوب: ${line.quantityBar || line.bars || 0})` : `Available: ${chk.availableBar}`}
+                                                  >
+                                                    🟢 {isAr ? `متوفر (${chk.availableBar} عود)` : `In Stock (${chk.availableBar})`}
+                                                  </span>
+                                                  {chk.viaAlias && (
+                                                    <span
+                                                      className="badge"
+                                                      style={{
+                                                        background: 'rgba(138, 180, 248, 0.18)',
+                                                        color: '#8ab4ff',
+                                                        border: '1px solid rgba(138, 180, 248, 0.35)',
+                                                        fontSize: '0.67rem',
+                                                        padding: '0.1rem 0.35rem',
+                                                      }}
+                                                      title={isAr ? `تمت المطابقة عبر الكود البديل: ${chk.matchedItem?.itemCode}` : `Matched via alias: ${chk.matchedItem?.itemCode}`}
+                                                    >
+                                                      🔗 {isAr ? `بديل لـ (${chk.matchedItem?.itemCode})` : `Alias: ${chk.matchedItem?.itemCode}`}
+                                                    </span>
+                                                  )}
+                                                </div>
                                               )
                                             } else if (chk.status === 'shortage') {
                                               return (
-                                                <span
-                                                  className="badge"
-                                                  style={{
-                                                    background: 'rgba(255, 71, 87, 0.18)',
-                                                    color: '#ff4757',
-                                                    border: '1px solid rgba(255, 71, 87, 0.45)',
-                                                    fontSize: '0.73rem',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '0.2rem',
-                                                    fontWeight: 700,
-                                                    whiteSpace: 'nowrap',
-                                                  }}
-                                                  title={isAr ? `عجز رصيد! متاح بالمخزن ${chk.availableBar} والمطلوب ${line.quantityBar || line.bars || 0}` : `Shortage!`}
-                                                >
-                                                  🔴 {isAr ? `عجز ${Math.abs(chk.diff)} (متاح ${chk.availableBar})` : `Short ${Math.abs(chk.diff)}`}
-                                                </span>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', alignItems: 'flex-start' }}>
+                                                  <span
+                                                    className="badge"
+                                                    style={{
+                                                      background: 'rgba(255, 71, 87, 0.18)',
+                                                      color: '#ff4757',
+                                                      border: '1px solid rgba(255, 71, 87, 0.45)',
+                                                      fontSize: '0.73rem',
+                                                      display: 'inline-flex',
+                                                      alignItems: 'center',
+                                                      gap: '0.2rem',
+                                                      fontWeight: 700,
+                                                      whiteSpace: 'nowrap',
+                                                    }}
+                                                    title={isAr ? `عجز رصيد! متاح بالمخزن ${chk.availableBar} والمطلوب ${line.quantityBar || line.bars || 0}` : `Shortage!`}
+                                                  >
+                                                    🔴 {isAr ? `عجز ${Math.abs(chk.diff)} (متاح ${chk.availableBar})` : `Short ${Math.abs(chk.diff)}`}
+                                                  </span>
+                                                  {chk.viaAlias && (
+                                                    <span
+                                                      className="badge"
+                                                      style={{
+                                                        background: 'rgba(138, 180, 248, 0.18)',
+                                                        color: '#8ab4ff',
+                                                        border: '1px solid rgba(138, 180, 248, 0.35)',
+                                                        fontSize: '0.67rem',
+                                                        padding: '0.1rem 0.35rem',
+                                                      }}
+                                                    >
+                                                      🔗 {isAr ? `بديل لـ (${chk.matchedItem?.itemCode})` : `Alias: ${chk.matchedItem?.itemCode}`}
+                                                    </span>
+                                                  )}
+                                                </div>
                                               )
                                             } else {
+                                              const fuzzyMatch = findSmartFuzzyMatch(line, stock, aliasesMap)
                                               return (
-                                                <span
-                                                  className="badge"
-                                                  style={{
-                                                    background: 'rgba(255, 255, 255, 0.08)',
-                                                    color: '#bbb',
-                                                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                                                    fontSize: '0.73rem',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '0.2rem',
-                                                    whiteSpace: 'nowrap',
-                                                  }}
-                                                >
-                                                  ⚪ {isAr ? 'غير مسجل (0)' : 'Not in Stock (0)'}
-                                                </span>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-start', width: '100%' }}>
+                                                  <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                    <span
+                                                      className="badge"
+                                                      style={{
+                                                        background: 'rgba(255, 255, 255, 0.08)',
+                                                        color: '#bbb',
+                                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                        fontSize: '0.73rem',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.2rem',
+                                                        whiteSpace: 'nowrap',
+                                                      }}
+                                                    >
+                                                      ⚪ {isAr ? 'غير مسجل (0)' : 'Not in Stock (0)'}
+                                                    </span>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        setAliasSearchQuery(line.itemCode || '')
+                                                        setLinkModalData({
+                                                          isOpen: true,
+                                                          batchId: batch.id,
+                                                          lineIndex: idx,
+                                                          sourceCode: line.itemCode,
+                                                          sourceDesc: line.description || '',
+                                                          selectedItemKey: fuzzyMatch ? fuzzyMatch.item.itemKey : '',
+                                                          rememberAlways: true,
+                                                        })
+                                                      }}
+                                                      style={{
+                                                        background: 'rgba(138, 180, 248, 0.15)',
+                                                        color: '#8ab4ff',
+                                                        border: '1px solid rgba(138, 180, 248, 0.35)',
+                                                        borderRadius: '4px',
+                                                        fontSize: '0.68rem',
+                                                        padding: '0.1rem 0.4rem',
+                                                        cursor: 'pointer',
+                                                        fontWeight: 700,
+                                                      }}
+                                                      title={isAr ? 'ربط هذا الكود بصنف بديل من المخزن' : 'Link to stock profile'}
+                                                    >
+                                                      🔗 {isAr ? 'ربط بديل' : 'Link'}
+                                                    </button>
+                                                  </div>
+
+                                                  {/* Smart Similarity Suggestion */}
+                                                  {fuzzyMatch && (
+                                                    <div
+                                                      style={{
+                                                        background: 'rgba(96, 165, 250, 0.1)',
+                                                        border: '1px solid rgba(96, 165, 250, 0.3)',
+                                                        borderRadius: '6px',
+                                                        padding: '0.3rem 0.45rem',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        gap: '0.25rem',
+                                                        marginTop: '0.15rem',
+                                                        width: '100%',
+                                                      }}
+                                                    >
+                                                      <div style={{ fontSize: '0.68rem', color: '#93c5fd', lineHeight: 1.25 }}>
+                                                        💡 {isAr ? 'اقتراح ذكي:' : 'Smart Match:'} هل تقصد <strong>{fuzzyMatch.item.itemCode}</strong>؟
+                                                        <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'block' }}>
+                                                          ({fuzzyMatch.reason} - {fuzzyMatch.score}%)
+                                                        </span>
+                                                      </div>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleQuickLinkAlias(batch.id, idx, line.itemCode, fuzzyMatch.item)}
+                                                        style={{
+                                                          background: '#2563eb',
+                                                          color: '#fff',
+                                                          border: 'none',
+                                                          borderRadius: '4px',
+                                                          fontSize: '0.65rem',
+                                                          fontWeight: 800,
+                                                          padding: '0.2rem 0.5rem',
+                                                          cursor: 'pointer',
+                                                          alignSelf: 'flex-start',
+                                                        }}
+                                                      >
+                                                        ⚡ {isAr ? 'ربط واعتماد دائماً' : 'Link & Remember'}
+                                                      </button>
+                                                    </div>
+                                                  )}
+                                                </div>
                                               )
                                             }
                                           })()}
@@ -5027,6 +5372,190 @@ export default function Warehouse() {
           setSelectedStockKeys([])
         }}
       />
+
+      {/* ─── LINK ITEM ALIAS MODAL (شوكو <=> كانكس) ─── */}
+      {linkModalData && linkModalData.isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+        >
+          <div
+            style={{
+              background: '#16192b',
+              border: '1px solid var(--border)',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '540px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '1.2rem 1.5rem',
+                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'rgba(255,255,255,0.02)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <span style={{ fontSize: '1.4rem' }}>🔗</span>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#8ab4ff' }}>
+                    {isAr ? 'ربط كود الفاتورة بصنف بديل من المخزن' : 'Link Item Code to Stock Profile'}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    {isAr ? 'حل مشكلة اختلاف أكواد شوكو وكانكس والتعرف التلقائي عليها' : 'Resolve code discrepancies (e.g. Schüco vs Canex)'}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLinkModalData(null)}
+                style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content */}
+            <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.8rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'كود الصنف في الفاتورة الحالية:' : 'Invoice Profile Code:'}</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#fbbf24', marginTop: '0.2rem' }}>
+                  {linkModalData.sourceCode} <span style={{ fontSize: '0.85rem', fontWeight: 400, color: '#aaa' }}>({linkModalData.sourceDesc || '—'})</span>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: 700, display: 'block', marginBottom: '0.4rem' }}>
+                  {isAr ? 'اختر الصنف المطابق له من المخزن (كانكس / شوكو):' : 'Select Matching Profile in Warehouse Stock:'}
+                </label>
+                <input
+                  type="text"
+                  placeholder={isAr ? '🔍 ابحث برقم الكود أو الوصف...' : 'Search by code or description...'}
+                  value={aliasSearchQuery}
+                  onChange={(e) => setAliasSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: '#101223',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '0.5rem 0.8rem',
+                    color: '#fff',
+                    fontSize: '0.85rem',
+                    marginBottom: '0.6rem',
+                  }}
+                />
+
+                <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px' }}>
+                  {stock
+                    .filter((s) => {
+                      if (!aliasSearchQuery.trim()) return true
+                      const q = aliasSearchQuery.toLowerCase()
+                      return (
+                        String(s.itemCode || '').toLowerCase().includes(q) ||
+                        String(s.customerCode || '').toLowerCase().includes(q) ||
+                        String(s.description || '').toLowerCase().includes(q)
+                      )
+                    })
+                    .slice(0, 40)
+                    .map((item) => {
+                      const isSelected = linkModalData.selectedItemKey === item.itemKey
+                      return (
+                        <div
+                          key={item.itemKey}
+                          onClick={() => setLinkModalData((prev) => ({ ...prev, selectedItemKey: item.itemKey }))}
+                          style={{
+                            padding: '0.6rem 0.8rem',
+                            borderBottom: '1px solid rgba(255,255,255,0.04)',
+                            background: isSelected ? 'rgba(138, 180, 248, 0.18)' : 'transparent',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 700, color: isSelected ? '#8ab4ff' : '#fff', fontSize: '0.88rem' }}>
+                              {item.itemCode} {item.customerCode && <span style={{ color: '#aaa', fontSize: '0.78rem' }}>({item.customerCode})</span>}
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                              {item.description} | {item.finish}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.3)', fontSize: '0.75rem' }}>
+                              {item.quantityBar} {isAr ? 'عود' : 'bars'}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+
+              {/* Remember Checkbox */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', background: 'rgba(0, 224, 161, 0.05)', border: '1px solid rgba(0, 224, 161, 0.2)', padding: '0.7rem 0.9rem', borderRadius: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={linkModalData.rememberAlways}
+                  onChange={(e) => setLinkModalData((prev) => ({ ...prev, rememberAlways: e.target.checked }))}
+                  style={{ width: '17px', height: '17px' }}
+                />
+                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#e2e8f0' }}>
+                  {isAr
+                    ? '☑️ تذكر هذا الربط دائماً وحفظه في قاموس الأكواد المترادفة للمشروع (لن تسألك عنه ثانية)'
+                    : 'Remember this mapping permanently in project aliases dictionary'}
+                </span>
+              </label>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: '1rem 1.5rem',
+                borderTop: '1px solid rgba(255,255,255,0.08)',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '0.8rem',
+                background: 'rgba(255,255,255,0.02)',
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setLinkModalData(null)}
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleConfirmManualLink}
+                disabled={!linkModalData.selectedItemKey}
+                style={{ background: '#3b82f6', color: '#fff', fontWeight: 700 }}
+              >
+                🔗 {isAr ? 'اعتماد الربط وتحديث الرصيد' : 'Confirm Link & Update'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

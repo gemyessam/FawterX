@@ -178,6 +178,24 @@ export async function rollbackWarehouseInvoice(projectId, invoiceId) {
   return data
 }
 
+/** Get all item cross-reference aliases for a project */
+export async function getProjectItemAliases(projectId) {
+  const { data } = await api.get(`/warehouse/projects/${projectId}/aliases`)
+  return data
+}
+
+/** Save or update an item alias mapping */
+export async function saveProjectItemAlias(projectId, aliasData) {
+  const { data } = await api.post(`/warehouse/projects/${projectId}/aliases`, aliasData)
+  return data
+}
+
+/** Delete an item alias mapping */
+export async function deleteProjectItemAlias(projectId, aliasDocId) {
+  const { data } = await api.delete(`/warehouse/projects/${projectId}/aliases/${aliasDocId}`)
+  return data
+}
+
 
 
 

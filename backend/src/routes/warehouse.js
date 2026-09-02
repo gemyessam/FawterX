@@ -29,6 +29,9 @@ const {
   restoreProjectToPoint,
   deleteProjectRestorePoint,
   rollbackInvoiceTransaction,
+  getProjectItemAliases,
+  saveProjectItemAlias,
+  deleteProjectItemAlias,
 } = require("../services/warehouseStore");
 
 const router = express.Router();
@@ -587,6 +590,64 @@ router.delete("/projects/:projectId/restore-points/:pointId", requireWarehouse, 
       userName
     );
     return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/warehouse/projects/:projectId/aliases
+ * Get all item aliases for a project
+ */
+router.get("/projects/:projectId/aliases", requireWarehouse, async (req, res) => {
+  try {
+    const aliases = await getProjectItemAliases(req.params.projectId);
+    return res.json({ success: true, aliases });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/warehouse/projects/:projectId/aliases
+ * Save or update an item alias
+ */
+router.post("/projects/:projectId/aliases", requireWarehouse, async (req, res) => {
+  try {
+    if (req.warehouseAccess?.canEdit === false || req.warehouseRole === "warehouse_viewer") {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have edit permissions in warehouse." });
+    }
+    const userName = req.user.name || req.user.displayName || req.user.email;
+    const result = await saveProjectItemAlias(req.params.projectId, {
+      ...req.body,
+      userUid: req.user.uid,
+      userEmail: req.user.email,
+      userName,
+    });
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * DELETE /api/warehouse/projects/:projectId/aliases/:aliasDocId
+ * Delete an item alias
+ */
+router.delete("/projects/:projectId/aliases/:aliasDocId", requireWarehouse, async (req, res) => {
+  try {
+    if (req.warehouseAccess?.canDelete === false || req.warehouseRole === "warehouse_viewer") {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have delete permissions in warehouse." });
+    }
+    const userName = req.user.name || req.user.displayName || req.user.email;
+    const result = await deleteProjectItemAlias(
+      req.params.projectId,
+      req.params.aliasDocId,
+      req.user.uid,
+      req.user.email,
+      userName
+    );
+    return res.json(result);
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

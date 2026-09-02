@@ -2362,6 +2362,113 @@ async function deleteProjectDispatch(projectId, dispatchId, userUid, userEmail, 
   return { success: true, dispatchId };
 }
 
+/**
+ * Item Aliases Management (Cross-reference mapping between Schüco, Canex, etc.)
+ */
+async function getProjectItemAliases(projectId) {
+  const db = getDb();
+  if (!db) return [];
+  try {
+    const snap = await db.collection("warehouseProjects").doc(projectId).collection("itemAliases").get();
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.error("Error getting item aliases:", err.message);
+    return [];
+  }
+}
+
+async function saveProjectItemAlias(projectId, { aliasCode, targetItemCode, targetItemKey, targetDescription, userUid, userEmail, userName }) {
+  const db = getDb();
+  if (!db) throw new Error("Database not connected");
+  if (!projectId || !aliasCode || (!targetItemCode && !targetItemKey)) {
+    throw new Error("Missing required alias data");
+  }
+
+  const cleanAlias = String(aliasCode).trim();
+  const cleanDocId = cleanAlias.toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+
+  const projectRef = db.collection("warehouseProjects").doc(projectId);
+  const aliasRef = projectRef.collection("itemAliases").doc(cleanDocId);
+
+  const aliasPayload = {
+    aliasCode: cleanAlias,
+    cleanDocId,
+    targetItemCode: String(targetItemCode || "").trim(),
+    targetItemKey: targetItemKey || null,
+    targetDescription: targetDescription || "",
+    createdBy: userUid || null,
+    createdByEmail: userEmail || null,
+    createdByName: userName || null,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await aliasRef.set(aliasPayload, { merge: true });
+
+  // Also add to the target stock item document if targetItemKey exists
+  if (targetItemKey) {
+    try {
+      const stockRef = projectRef.collection("stock").doc(targetItemKey);
+      await stockRef.set(
+        {
+          aliases: admin.firestore.FieldValue.arrayUnion(cleanAlias),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch (sErr) {
+      console.warn("Could not update target stock item aliases field:", sErr.message);
+    }
+  }
+
+  await logWarehouseAudit(projectId, {
+    action: "LINK_ITEM_ALIAS",
+    userUid,
+    userEmail,
+    userName,
+    details: {
+      aliasCode: cleanAlias,
+      targetItemCode,
+      targetItemKey,
+    },
+  });
+
+  return { success: true, alias: aliasPayload };
+}
+
+async function deleteProjectItemAlias(projectId, aliasDocId, userUid, userEmail, userName) {
+  const db = getDb();
+  if (!db) throw new Error("Database not connected");
+
+  const aliasRef = db.collection("warehouseProjects").doc(projectId).collection("itemAliases").doc(aliasDocId);
+  const snap = await aliasRef.get();
+  if (!snap.exists) return { success: true };
+
+  const data = snap.data();
+  await aliasRef.delete();
+
+  if (data.targetItemKey && data.aliasCode) {
+    try {
+      const stockRef = db.collection("warehouseProjects").doc(projectId).collection("stock").doc(data.targetItemKey);
+      await stockRef.update({
+        aliases: admin.firestore.FieldValue.arrayRemove(data.aliasCode),
+      });
+    } catch (e) {}
+  }
+
+  await logWarehouseAudit(projectId, {
+    action: "DELETE_ITEM_ALIAS",
+    userUid,
+    userEmail,
+    userName,
+    details: {
+      aliasDocId,
+      aliasCode: data.aliasCode,
+    },
+  });
+
+  return { success: true };
+}
+
 module.exports = {
   getUserWarehouseAccess,
   listWarehouseUsers,
@@ -2389,5 +2496,8 @@ module.exports = {
   restoreProjectToPoint,
   deleteProjectRestorePoint,
   rollbackInvoiceTransaction,
+  getProjectItemAliases,
+  saveProjectItemAlias,
+  deleteProjectItemAlias,
 };
 

@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.35',
+      version: 'v2.27.36',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'نظام الأكواد المترادفة والبديلة (Item Aliases) والربط الذكي بين أكواد شوكو وكانكس' : 'Item Aliases Dictionary & Smart Match for Schüco vs Canex Discrepancies',
+      highlights: [
+        {
+          icon: '🔗',
+          text: isAr
+            ? 'قاموس الأكواد المترادفة (Item Aliases Dictionary): ربط دائم بين أكواد شوكو وكانكس (مثل 515750 🔁 515756)، حيث يتعرف عليها السيستم فوراً ويخصم الرصيد تلقائياً دون أي تعديل يدوي.'
+            : 'Cross-reference Aliases Dictionary: permanently maps supplier/customer code discrepancies (e.g. 515750 🔁 515756) with automated stock deduction.'
+        },
+        {
+          icon: '💡',
+          text: isAr
+            ? 'محرك الاقتراح التلقائي الذكي: يكتشف تلقائياً القطاعات المتقاربة رقمياً في المخزن بنقرة واحدة (اختلاف رقم واحد أو تشابه فائق) وزر (⚡ ربط واعتماد دائماً).'
+            : 'Automated Smart Suggestion: detects profiles in stock with 1-digit variances or keyword similarity with 1-click Link & Remember.'
+        },
+        {
+          icon: '🎯',
+          text: isAr
+            ? 'مودال الربط السريع (Link Alias Modal): بحث واختيار سريع لأي صنف مطابق بالمخزن مع خيار تذكر الربط وحفظه في قاموس المشروع للأبد.'
+            : 'Interactive Quick Link Modal: search and map any invoice code to an existing warehouse profile with permanent memory.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.35',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'احتساب بنود دهان دلمار للتسليم ولوحة قرار المالك للصرف والاستبعاد' : 'Delmar Coating Delivery Calculation & Owner Dispatch Decision Engine',
       highlights: [
         {
