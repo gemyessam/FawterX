@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.39',
+      version: 'v2.27.40',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'أعمدة الأرصدة والمتبقي (المستودع ودلمار)، إزالة الاقتراحات الزائدة، وشريط الأولوية العام' : 'Independent Stock & Remaining Columns, Cleaner Canex Link UI & Batch Priority Toolbar',
+      highlights: [
+        {
+          icon: '📊',
+          text: isAr
+            ? 'أعمدة صريحة ومستقلة لكل بيان: (المتاح بالمخزن، المتاح بدلمار، المطلوب، الأولوية والتوزيع، والمتبقي بالمخزن وبدلمار) بخطوط مريحة للعين وتصميم أوسع وأسهل.'
+            : 'Independent explicit columns for Warehouse Stock, Delmar Stock, Requested, Priority & Split, and Remaining Balance with larger comfortable font sizes.'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'زرار عام لتطبيق الأولوية بنقرة واحدة: شريط تحكم بارز أعلى الجدول لتطبيق أولوية دلمار أولاً أو المستودع أولاً على كافة بنود الإذن دفعة واحدة دون الحاجة لتعديل كل بند على حدة.'
+            : '1-Click Batch Priority Toolbar: directly set priority for the entire batch at once.'
+        },
+        {
+          icon: '🎯',
+          text: isAr
+            ? 'تنظيف اقتراحات كانكس: إزالة صناديق الاقتراحات تماماً عن أي كود معروف أو له رفرنس بالمخزن، وقصرها فقط على البنود غير المعرفة نهائياً.'
+            : 'Cleaner Code Linking: fuzzy suggestion boxes removed for known referenced codes, only appearing for truly missing items.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.39',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'التحكم الرقمي المباشر في أعواد دلمار، أزرار الأولويات الفورية، والربط المانيوال بكود كانكس' : 'Interactive Delmar Bar Input, 1-Click Priority Controls & Always-Available Canex Code Linking',
       highlights: [
         {
