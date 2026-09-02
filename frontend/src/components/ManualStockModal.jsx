@@ -43,7 +43,6 @@ export default function ManualStockModal({
   const [loadingInvoices, setLoadingInvoices] = useState(false)
   const [selectedInvoiceId, setSelectedInvoiceId] = useState('')
   const [loadingInvoiceLines, setLoadingInvoiceLines] = useState(false)
-  const [lineSearchFilter, setLineSearchFilter] = useState('')
 
   // Manual Lines to process
   const [lines, setLines] = useState(() => {
@@ -116,76 +115,36 @@ export default function ManualStockModal({
       const res = await getInvoiceMovements(activeProjectId, invId)
       const movements = res.movements || []
 
+      if (movements.length === 0) {
+        toast.error(isAr ? 'لا توجد بنود مسجلة لهذه الفاتورة' : 'No line items found for this invoice')
+        return
+      }
+
       // Map invoice movements to lines with available stock check
       const mappedLines = movements.map((m) => {
         const foundStock = stock.find((s) => s.itemKey === m.itemKey || (s.itemCode === m.itemCode && s.finish === m.finish))
         const avail = foundStock ? Number(foundStock.quantityBar || 0) : 0
         const invQty = Number(m.quantityBar || m.quantity || 1)
-        const len = Number(m.lengthMm || (foundStock ? foundStock.lengthMm : 6000) || 6000)
+        const len = Number(m.lengthMm || 6000)
         const defaultQty = Math.max(1, avail > 0 ? Math.min(invQty, avail) : invQty)
 
         return {
           selected: true,
           itemKey: m.itemKey || (foundStock ? foundStock.itemKey : ''),
-          itemCode: m.itemCode || (foundStock ? foundStock.itemCode : 'CODE'),
-          customerCode: m.customerCode || (foundStock ? foundStock.customerCode : '') || '',
-          description: m.description || (foundStock ? foundStock.description : '') || '',
-          finish: m.finish || (foundStock ? foundStock.finish : 'STD') || 'STD',
+          itemCode: m.itemCode || 'CODE',
+          customerCode: m.customerCode || '',
+          description: m.description || '',
+          finish: m.finish || 'STD',
           lengthMm: len,
           invoicedBar: invQty,
           availableBar: avail,
           quantityBar: defaultQty,
           quantityLm: (defaultQty * len) / 1000,
-          quantityKg: m.quantityKg || (foundStock ? foundStock.quantityKg : 0) || 0,
-          unitPrice: m.unitPrice || (foundStock ? foundStock.lastUnitCost : 0) || 0,
-          supplier: m.supplier || (foundStock ? foundStock.supplier : 'CANEX') || 'CANEX',
+          quantityKg: m.quantityKg || 0,
+          unitPrice: m.unitPrice || 0,
+          supplier: m.supplier || 'CANEX',
         }
       })
-
-      // Robust Stock Reconciliation: Check if any stock items are tied to this invoice number
-      const selectedInv = inboundInvoicesList.find((i) => i.id === invId)
-      const selectedInvNum = String(selectedInv?.invoiceNumber || '').trim().toLowerCase()
-
-      if (selectedInvNum && Array.isArray(stock)) {
-        const existingCodes = new Set(mappedLines.map((l) => String(l.itemCode || '').trim().toLowerCase()))
-        stock.forEach((s) => {
-          const sCode = String(s.itemCode || '').trim().toLowerCase()
-          if (existingCodes.has(sCode)) return
-
-          const invList = Array.isArray(s.invoiceNumbers)
-            ? s.invoiceNumbers
-            : [s.lastInvoiceNumber, s.invoiceNumber].filter(Boolean)
-
-          const matchesInv = invList.some((n) => String(n || '').trim().toLowerCase() === selectedInvNum)
-          if (matchesInv) {
-            const avail = Number(s.quantityBar || 0)
-            const len = Number(s.lengthMm || 6000)
-            const defaultQty = Math.max(1, avail)
-            mappedLines.push({
-              selected: true,
-              itemKey: s.itemKey,
-              itemCode: s.itemCode,
-              customerCode: s.customerCode || '',
-              description: s.description || '',
-              finish: s.finish || 'STD',
-              lengthMm: len,
-              invoicedBar: avail,
-              availableBar: avail,
-              quantityBar: defaultQty,
-              quantityLm: (defaultQty * len) / 1000,
-              quantityKg: s.quantityKg || 0,
-              unitPrice: s.lastUnitCost || 0,
-              supplier: s.supplier || 'CANEX',
-            })
-            existingCodes.add(sCode)
-          }
-        })
-      }
-
-      if (mappedLines.length === 0) {
-        toast.error(isAr ? 'لا توجد بنود مسجلة لهذه الفاتورة' : 'No line items found for this invoice')
-        return
-      }
 
       setLines(mappedLines)
       toast.success(
@@ -277,7 +236,6 @@ export default function ManualStockModal({
       ...prev,
       {
         selected: true,
-        isManualAdd: true,
         itemKey: '',
         itemCode: '',
         customerCode: '',
@@ -309,29 +267,6 @@ export default function ManualStockModal({
     }
     return lines
   }, [lines, sourceType])
-
-  // Filtered lines based on user search query in modal (preserves originalIndex for accurate updates)
-  const filteredLines = useMemo(() => {
-    const q = lineSearchFilter.trim().toLowerCase()
-    if (!q) return lines.map((line, originalIndex) => ({ line, originalIndex }))
-
-    return lines
-      .map((line, originalIndex) => ({ line, originalIndex }))
-      .filter(({ line }) => {
-        const text = [
-          line.itemCode,
-          line.customerCode,
-          line.description,
-          line.finish,
-          line.lengthMm,
-          line.supplier,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-        return text.includes(q)
-      })
-  }, [lines, lineSearchFilter])
 
   const totalBars = useMemo(() => {
     return activeSelectedLines.reduce((acc, curr) => acc + Number(curr.quantityBar || 0), 0)
@@ -403,15 +338,15 @@ export default function ManualStockModal({
         dispatchDetails:
           mode === 'outbound'
             ? {
-                dispatchType,
-                coatingSupplier: dispatchType === 'coating_then_customer' ? coatingSupplier : 'تسليم مباشر',
-                targetFinish: dispatchType === 'coating_then_customer' ? resolvedTargetFinish : 'تسليم فوري',
-                customerName: resolvedCustomerName,
-                projectNameOrSite: projectNameOrSite || (isAr ? 'الموقع العام' : 'General Site'),
-                deliveryNote: deliveryNote || `DSP-${Date.now().toString().slice(-6)}`,
-                dispatchDate,
-                notes,
-              }
+              dispatchType,
+              coatingSupplier: dispatchType === 'coating_then_customer' ? coatingSupplier : 'تسليم مباشر',
+              targetFinish: dispatchType === 'coating_then_customer' ? resolvedTargetFinish : 'تسليم فوري',
+              customerName: resolvedCustomerName,
+              projectNameOrSite: projectNameOrSite || (isAr ? 'الموقع العام' : 'General Site'),
+              deliveryNote: deliveryNote || `DSP-${Date.now().toString().slice(-6)}`,
+              dispatchDate,
+              notes,
+            }
             : null,
       }
 
@@ -572,7 +507,7 @@ export default function ManualStockModal({
         {/* Modal Scrollable Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem' }}>
           <form id="manual-stock-form" onSubmit={handleSubmit}>
-            
+
             {/* ─── SOURCE PICKER: Manual Profile vs From Inbound Invoice ─── */}
             <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
               <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>
@@ -972,40 +907,6 @@ export default function ManualStockModal({
                 <span className="badge" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff' }}>
                   {activeSelectedLines.length} {isAr ? 'بند محدد' : 'selected'}
                 </span>
-                {lineSearchFilter && (
-                  <span className="badge" style={{ background: 'rgba(96, 165, 250, 0.15)', color: '#93c5fd' }}>
-                    {filteredLines.length} {isAr ? 'مطابق' : 'matches'}
-                  </span>
-                )}
-              </div>
-
-              {/* Real-time Search by Item Code, Customer Code, or Description */}
-              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', minWidth: '220px', maxWidth: '340px', flex: 1 }}>
-                <input
-                  type="search"
-                  value={lineSearchFilter}
-                  onChange={(e) => setLineSearchFilter(e.target.value)}
-                  placeholder={isAr ? '🔍 بحث بكود الصنف، كود العميل، أو البيان...' : '🔍 Search item / customer code...'}
-                  style={{
-                    width: '100%',
-                    background: '#101426',
-                    border: '1px solid var(--border)',
-                    color: '#fff',
-                    padding: '0.38rem 0.7rem',
-                    borderRadius: '8px',
-                    fontSize: '0.8rem',
-                  }}
-                />
-                {lineSearchFilter && (
-                  <button
-                    type="button"
-                    onClick={() => setLineSearchFilter('')}
-                    style={{ background: 'transparent', border: 'none', color: '#ff4d4f', cursor: 'pointer', fontSize: '0.9rem', padding: '0.2rem' }}
-                    title={isAr ? 'إلغاء البحث' : 'Clear search'}
-                  >
-                    ✕
-                  </button>
-                )}
               </div>
 
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -1020,21 +921,22 @@ export default function ManualStockModal({
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={handleAddLine}
-                  style={{
-                    background: 'rgba(0, 224, 161, 0.15)',
-                    color: '#00e0a1',
-                    border: '1px solid rgba(0, 224, 161, 0.3)',
-                    borderRadius: '8px',
-                    fontWeight: 700,
-                    fontSize: '0.8rem',
-                  }}
-                >
-                  ➕ {isAr ? (sourceType === 'invoice' ? 'إضافة قطاع إضافي' : 'إضافة قطاع آخر') : 'Add Profile'}
-                </button>
+                {sourceType === 'manual' && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleAddLine}
+                    style={{
+                      background: 'rgba(0, 224, 161, 0.15)',
+                      color: '#00e0a1',
+                      border: '1px solid rgba(0, 224, 161, 0.3)',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    ➕ {isAr ? 'إضافة قطاع آخر' : 'Add Profile'}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1053,15 +955,10 @@ export default function ManualStockModal({
                       </th>
                     )}
                     <th style={{ padding: '0.65rem 0.5rem', width: '30px' }}>#</th>
-                    <th style={{ padding: '0.65rem 0.5rem', minWidth: sourceType === 'manual' ? '180px' : '110px' }}>
+                    <th style={{ padding: '0.65rem 0.5rem', minWidth: '180px' }}>
                       {sourceType === 'invoice' ? (isAr ? 'كود الصنف' : 'Item Code') : (isAr ? 'اختيار من رصيد المخزن' : 'Select From Stock')}
                     </th>
-                    {sourceType === 'manual' && (
-                      <th style={{ padding: '0.65rem 0.5rem', minWidth: '100px' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
-                    )}
-                    <th style={{ padding: '0.65rem 0.5rem', minWidth: '110px' }}>
-                      <span style={{ color: '#60a5fa' }}>🏷️ {isAr ? 'كود العميل' : 'Customer Code'}</span>
-                    </th>
+                    <th style={{ padding: '0.65rem 0.5rem', minWidth: '100px' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
                     <th style={{ padding: '0.65rem 0.5rem', minWidth: '130px' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
                     <th style={{ padding: '0.65rem 0.5rem', width: '80px' }}>{isAr ? 'الدهان' : 'Finish'}</th>
                     <th style={{ padding: '0.65rem 0.5rem', width: '70px' }}>{isAr ? 'الطول (mm)' : 'Length'}</th>
@@ -1082,249 +979,206 @@ export default function ManualStockModal({
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredLines.length === 0 ? (
-                    <tr>
-                      <td colSpan={13} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                        🔍 {isAr ? 'لا توجد بنود تطابق البحث' : 'No line items match your search'}
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredLines.map(({ line, originalIndex: idx }) => {
-                      const isSelectedLine = sourceType !== 'invoice' || line.selected
-                      const isOverStock = mode === 'outbound' && line.availableBar !== undefined && Number(line.quantityBar) > Number(line.availableBar)
+                  {lines.map((line, idx) => {
+                    const isSelectedLine = sourceType !== 'invoice' || line.selected
+                    const isOverStock = mode === 'outbound' && line.availableBar !== undefined && Number(line.quantityBar) > Number(line.availableBar)
 
-                      return (
-                        <tr
-                          key={idx}
-                          style={{
-                            borderBottom: '1px solid rgba(255,255,255,0.04)',
-                            background: !isSelectedLine ? 'rgba(0,0,0,0.3)' : isOverStock ? 'rgba(255, 71, 87, 0.12)' : 'transparent',
-                            opacity: !isSelectedLine ? 0.5 : 1,
-                          }}
-                        >
-                          {sourceType === 'invoice' && (
-                            <td style={{ padding: '0.5rem', textAlign: 'center' }}>
-                              <input
-                                type="checkbox"
-                                checked={Boolean(line.selected)}
-                                onChange={(e) => handleUpdateLine(idx, 'selected', e.target.checked)}
-                                style={{ accentColor: '#00e0a1', cursor: 'pointer' }}
-                              />
-                            </td>
-                          )}
-                          <td style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>{idx + 1}</td>
-
-                          {/* Selection Column (Stock picker for manual or added lines, static code for invoice lines) */}
-                          <td style={{ padding: '0.5rem' }}>
-                            {sourceType === 'manual' || line.isManualAdd ? (
-                              <select
-                                value={line.itemKey || ''}
-                                onChange={(e) => handleSelectStockItem(idx, e.target.value)}
-                                style={{
-                                  width: '100%',
-                                  background: '#101223',
-                                  border: '1px solid var(--border)',
-                                  color: '#fff',
-                                  padding: '0.4rem 0.6rem',
-                                  borderRadius: '6px',
-                                  fontSize: '0.8rem',
-                                }}
-                              >
-                                <option value="">-- {isAr ? 'اختر قطاع من المخزن --' : 'Select from Stock --'}</option>
-                                {stock.map((s) => (
-                                  <option key={s.itemKey} value={s.itemKey}>
-                                    {s.itemCode} {s.customerCode ? `[عميل: ${s.customerCode}]` : ''} | {s.finish} | {s.quantityBar} عود ({s.description?.slice(0, 25) || ''})
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              <span style={{ fontWeight: 800, color: '#ffffff', letterSpacing: '0.5px' }}>{line.itemCode}</span>
-                            )}
-                          </td>
-
-                          {/* Item Code (Manual Only) */}
-                          {sourceType === 'manual' && (
-                            <td style={{ padding: '0.5rem' }}>
-                              <input
-                                type="text"
-                                value={line.itemCode}
-                                onChange={(e) => handleUpdateLine(idx, 'itemCode', e.target.value)}
-                                placeholder="184060"
-                                style={{
-                                  width: '100%',
-                                  background: '#101223',
-                                  border: '1px solid var(--border)',
-                                  color: '#fff',
-                                  padding: '0.4rem 0.5rem',
-                                  borderRadius: '6px',
-                                }}
-                              />
-                            </td>
-                          )}
-
-                          {/* Customer Code (Dedicated Column) */}
-                          <td style={{ padding: '0.5rem' }}>
-                            {sourceType === 'invoice' && !line.isManualAdd ? (
-                              <span
-                                style={{
-                                  display: 'inline-block',
-                                  padding: '0.25rem 0.6rem',
-                                  borderRadius: '6px',
-                                  background: 'rgba(96, 165, 250, 0.15)',
-                                  color: '#93c5fd',
-                                  fontWeight: 700,
-                                  fontSize: '0.85rem',
-                                  border: '1px solid rgba(96, 165, 250, 0.3)',
-                                }}
-                              >
-                                {line.customerCode || '—'}
-                              </span>
-                            ) : (
-                              <input
-                                type="text"
-                                value={line.customerCode || ''}
-                                onChange={(e) => handleUpdateLine(idx, 'customerCode', e.target.value)}
-                                placeholder={isAr ? 'كود العميل...' : 'Customer Code...'}
-                                style={{
-                                  width: '100%',
-                                  background: '#101223',
-                                  border: '1px solid rgba(96, 165, 250, 0.3)',
-                                  color: '#93c5fd',
-                                  padding: '0.4rem 0.5rem',
-                                  borderRadius: '6px',
-                                  fontWeight: 600,
-                                }}
-                              />
-                            )}
-                          </td>
-
-                          {/* Description */}
-                          <td style={{ padding: '0.5rem' }}>
-                            <input
-                              type="text"
-                              value={line.description}
-                              onChange={(e) => handleUpdateLine(idx, 'description', e.target.value)}
-                              placeholder={isAr ? 'بيان الصنف...' : 'Description...'}
-                              disabled={sourceType === 'invoice' && !line.isManualAdd}
-                              style={{
-                                width: '100%',
-                                background: '#101223',
-                                border: '1px solid var(--border)',
-                                color: '#fff',
-                                padding: '0.4rem 0.5rem',
-                                borderRadius: '6px',
-                              }}
-                            />
-                          </td>
-
-                          {/* Finish */}
-                          <td style={{ padding: '0.5rem' }}>
-                            <input
-                              type="text"
-                              value={line.finish}
-                              onChange={(e) => handleUpdateLine(idx, 'finish', e.target.value)}
-                              placeholder="STD"
-                              disabled={sourceType === 'invoice' && !line.isManualAdd}
-                              style={{
-                                width: '100%',
-                                background: '#101223',
-                                border: '1px solid var(--border)',
-                                color: '#fff',
-                                padding: '0.4rem 0.5rem',
-                                borderRadius: '6px',
-                                textAlign: 'center',
-                              }}
-                            />
-                          </td>
-
-                          {/* Length */}
-                          <td style={{ padding: '0.5rem' }}>
-                            <input
-                              type="number"
-                              value={line.lengthMm}
-                              onChange={(e) => handleUpdateLine(idx, 'lengthMm', e.target.value)}
-                              disabled={sourceType === 'invoice' && !line.isManualAdd}
-                              style={{
-                                width: '100%',
-                                background: '#101223',
-                                border: '1px solid var(--border)',
-                                color: '#fff',
-                                padding: '0.4rem 0.5rem',
-                                borderRadius: '6px',
-                                textAlign: 'center',
-                              }}
-                            />
-                          </td>
-
-                          {/* Invoiced Quantity if invoice source */}
-                          {sourceType === 'invoice' && (
-                            <td style={{ padding: '0.5rem', textAlign: 'center', color: '#60a5fa', fontWeight: 700 }}>
-                              {line.invoicedBar || 0} عود
-                            </td>
-                          )}
-
-                          {/* Available Stock */}
-                          {mode === 'outbound' && (
-                            <td style={{ padding: '0.5rem', textAlign: 'center' }}>
-                              <span
-                                style={{
-                                  color: (line.availableBar || 0) > 0 ? '#00e0a1' : '#ff4757',
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {line.availableBar || 0} عود
-                              </span>
-                            </td>
-                          )}
-
-                          {/* Quantity to Move */}
-                          <td style={{ padding: '0.5rem' }}>
-                            <input
-                              type="number"
-                              min="1"
-                              value={line.quantityBar}
-                              onChange={(e) => handleUpdateLine(idx, 'quantityBar', Number(e.target.value))}
-                              style={{
-                                width: '100%',
-                                background: '#101223',
-                                border: `1px solid ${isOverStock ? '#ff4757' : '#00e0a1'}`,
-                                color: '#fff',
-                                padding: '0.4rem 0.5rem',
-                                borderRadius: '6px',
-                                fontWeight: 800,
-                                textAlign: 'center',
-                              }}
-                            />
-                          </td>
-
-                          {/* Meters */}
-                          <td style={{ padding: '0.5rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                            <span dir="ltr">{(Number(line.quantityLm) || 0).toFixed(1)} m</span>
-                          </td>
-
-                          {/* Unit Price (for Inbound) */}
-                          {mode === 'inbound' && (
-                            <td style={{ padding: '0.5rem' }}>
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={line.unitPrice}
-                                onChange={(e) => handleUpdateLine(idx, 'unitPrice', Number(e.target.value))}
-                                style={{
-                                  width: '100%',
-                                  background: '#101223',
-                                  border: '1px solid var(--border)',
-                                  color: '#fff',
-                                  padding: '0.4rem 0.5rem',
-                                  borderRadius: '6px',
-                                  textAlign: 'center',
-                                }}
-                              />
-                            </td>
-                          )}
-
-                          {/* Actions */}
+                    return (
+                      <tr
+                        key={idx}
+                        style={{
+                          borderBottom: '1px solid rgba(255,255,255,0.04)',
+                          background: !isSelectedLine ? 'rgba(0,0,0,0.3)' : isOverStock ? 'rgba(255, 71, 87, 0.12)' : 'transparent',
+                          opacity: !isSelectedLine ? 0.5 : 1,
+                        }}
+                      >
+                        {sourceType === 'invoice' && (
                           <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(line.selected)}
+                              onChange={(e) => handleUpdateLine(idx, 'selected', e.target.checked)}
+                              style={{ accentColor: '#00e0a1', cursor: 'pointer' }}
+                            />
+                          </td>
+                        )}
+                        <td style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>{idx + 1}</td>
+
+                        {/* Selection Column */}
+                        <td style={{ padding: '0.5rem' }}>
+                          {sourceType === 'manual' ? (
+                            <select
+                              value={line.itemKey || ''}
+                              onChange={(e) => handleSelectStockItem(idx, e.target.value)}
+                              style={{
+                                width: '100%',
+                                background: '#101223',
+                                border: '1px solid var(--border)',
+                                color: '#fff',
+                                padding: '0.4rem 0.6rem',
+                                borderRadius: '6px',
+                                fontSize: '0.8rem',
+                              }}
+                            >
+                              <option value="">-- {isAr ? 'اختر قطاع من المخزن --' : 'Select from Stock --'}</option>
+                              {stock.map((s) => (
+                                <option key={s.itemKey} value={s.itemKey}>
+                                  {s.itemCode} | {s.finish} | {s.quantityBar} عود ({s.description?.slice(0, 25) || ''})
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span style={{ fontWeight: 700, color: '#ffffff' }}>{line.itemCode}</span>
+                          )}
+                        </td>
+
+                        {/* Item Code */}
+                        <td style={{ padding: '0.5rem' }}>
+                          <input
+                            type="text"
+                            value={line.itemCode}
+                            onChange={(e) => handleUpdateLine(idx, 'itemCode', e.target.value)}
+                            placeholder="184060"
+                            disabled={sourceType === 'invoice'}
+                            style={{
+                              width: '100%',
+                              background: '#101223',
+                              border: '1px solid var(--border)',
+                              color: '#fff',
+                              padding: '0.4rem 0.5rem',
+                              borderRadius: '6px',
+                            }}
+                          />
+                        </td>
+
+                        {/* Description */}
+                        <td style={{ padding: '0.5rem' }}>
+                          <input
+                            type="text"
+                            value={line.description}
+                            onChange={(e) => handleUpdateLine(idx, 'description', e.target.value)}
+                            placeholder={isAr ? 'بيان الصنف...' : 'Description...'}
+                            disabled={sourceType === 'invoice'}
+                            style={{
+                              width: '100%',
+                              background: '#101223',
+                              border: '1px solid var(--border)',
+                              color: '#fff',
+                              padding: '0.4rem 0.5rem',
+                              borderRadius: '6px',
+                            }}
+                          />
+                        </td>
+
+                        {/* Finish */}
+                        <td style={{ padding: '0.5rem' }}>
+                          <input
+                            type="text"
+                            value={line.finish}
+                            onChange={(e) => handleUpdateLine(idx, 'finish', e.target.value)}
+                            placeholder="STD"
+                            disabled={sourceType === 'invoice'}
+                            style={{
+                              width: '100%',
+                              background: '#101223',
+                              border: '1px solid var(--border)',
+                              color: '#fff',
+                              padding: '0.4rem 0.5rem',
+                              borderRadius: '6px',
+                              textAlign: 'center',
+                            }}
+                          />
+                        </td>
+
+                        {/* Length */}
+                        <td style={{ padding: '0.5rem' }}>
+                          <input
+                            type="number"
+                            value={line.lengthMm}
+                            onChange={(e) => handleUpdateLine(idx, 'lengthMm', e.target.value)}
+                            disabled={sourceType === 'invoice'}
+                            style={{
+                              width: '100%',
+                              background: '#101223',
+                              border: '1px solid var(--border)',
+                              color: '#fff',
+                              padding: '0.4rem 0.5rem',
+                              borderRadius: '6px',
+                              textAlign: 'center',
+                            }}
+                          />
+                        </td>
+
+                        {/* Invoiced Quantity if invoice source */}
+                        {sourceType === 'invoice' && (
+                          <td style={{ padding: '0.5rem', textAlign: 'center', color: '#60a5fa', fontWeight: 700 }}>
+                            {line.invoicedBar || 0} عود
+                          </td>
+                        )}
+
+                        {/* Available Stock */}
+                        {mode === 'outbound' && (
+                          <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                            <span
+                              style={{
+                                color: (line.availableBar || 0) > 0 ? '#00e0a1' : '#ff4757',
+                                fontWeight: 700,
+                              }}
+                            >
+                              {line.availableBar || 0} عود
+                            </span>
+                          </td>
+                        )}
+
+                        {/* Quantity to Move */}
+                        <td style={{ padding: '0.5rem' }}>
+                          <input
+                            type="number"
+                            min="1"
+                            value={line.quantityBar}
+                            onChange={(e) => handleUpdateLine(idx, 'quantityBar', Number(e.target.value))}
+                            style={{
+                              width: '100%',
+                              background: '#101223',
+                              border: `1px solid ${isOverStock ? '#ff4757' : '#00e0a1'}`,
+                              color: '#fff',
+                              padding: '0.4rem 0.5rem',
+                              borderRadius: '6px',
+                              fontWeight: 800,
+                              textAlign: 'center',
+                            }}
+                          />
+                        </td>
+
+                        {/* Meters */}
+                        <td style={{ padding: '0.5rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                          <span dir="ltr">{(Number(line.quantityLm) || 0).toFixed(1)} m</span>
+                        </td>
+
+                        {/* Unit Price (for Inbound) */}
+                        {mode === 'inbound' && (
+                          <td style={{ padding: '0.5rem' }}>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={line.unitPrice}
+                              onChange={(e) => handleUpdateLine(idx, 'unitPrice', Number(e.target.value))}
+                              style={{
+                                width: '100%',
+                                background: '#101223',
+                                border: '1px solid var(--border)',
+                                color: '#fff',
+                                padding: '0.4rem 0.5rem',
+                                borderRadius: '6px',
+                                textAlign: 'center',
+                              }}
+                            />
+                          </td>
+                        )}
+
+                        {/* Actions */}
+                        <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                          {sourceType === 'manual' && (
                             <button
                               type="button"
                               onClick={() => handleRemoveLine(idx)}
@@ -1333,23 +1187,20 @@ export default function ManualStockModal({
                                 border: 'none',
                                 color: '#ff4757',
                                 cursor: 'pointer',
-                                fontSize: '0.9rem',
-                                opacity: lines.length <= 1 ? 0.3 : 1,
+                                fontSize: '1rem',
                               }}
-                              disabled={lines.length <= 1}
-                              title={isAr ? 'حذف البند' : 'Remove item'}
+                              title={isAr ? 'حذف هذا البند' : 'Delete line'}
                             >
                               🗑️
                             </button>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
-
 
             {/* Optional Notes */}
             <div style={{ marginBottom: '1rem' }}>

@@ -531,32 +531,32 @@ async function getProjectStock(projectId) {
   const finalStock = Array.from(stockMap.values())
     .filter((item) => !deletedKeys.has(item.itemKey))
     .map((item) => {
-    const keyInvoices = itemInvoicesMap.get(item.itemKey) || itemInvoicesMap.get(item.itemCode) || new Set();
-    const existingInvoices = new Set(Array.isArray(item.invoiceNumbers) ? item.invoiceNumbers : []);
-    if (item.lastInvoiceNumber && item.lastInvoiceNumber !== "—" && item.lastInvoiceNumber !== "-") {
-      existingInvoices.add(item.lastInvoiceNumber);
-    }
-    keyInvoices.forEach((inv) => existingInvoices.add(inv));
+      const keyInvoices = itemInvoicesMap.get(item.itemKey) || itemInvoicesMap.get(item.itemCode) || new Set();
+      const existingInvoices = new Set(Array.isArray(item.invoiceNumbers) ? item.invoiceNumbers : []);
+      if (item.lastInvoiceNumber && item.lastInvoiceNumber !== "—" && item.lastInvoiceNumber !== "-") {
+        existingInvoices.add(item.lastInvoiceNumber);
+      }
+      keyInvoices.forEach((inv) => existingInvoices.add(inv));
 
-    const combinedInvoices = Array.from(existingInvoices).filter(Boolean);
-    const latestFromMvts = itemLatestInvoiceMap.get(item.itemKey) || itemLatestInvoiceMap.get(item.itemCode);
-    const lastInvoiceNumber = item.lastInvoiceNumber && item.lastInvoiceNumber !== "—" && item.lastInvoiceNumber !== "-"
-      ? item.lastInvoiceNumber
-      : (latestFromMvts ? latestFromMvts.invoiceNumber : (combinedInvoices[combinedInvoices.length - 1] || "—"));
+      const combinedInvoices = Array.from(existingInvoices).filter(Boolean);
+      const latestFromMvts = itemLatestInvoiceMap.get(item.itemKey) || itemLatestInvoiceMap.get(item.itemCode);
+      const lastInvoiceNumber = item.lastInvoiceNumber && item.lastInvoiceNumber !== "—" && item.lastInvoiceNumber !== "-"
+        ? item.lastInvoiceNumber
+        : (latestFromMvts ? latestFromMvts.invoiceNumber : (combinedInvoices[combinedInvoices.length - 1] || "—"));
 
-    const lastSalesOrder = item.lastSalesOrder || (latestFromMvts ? latestFromMvts.salesOrder : "") || "—";
-    const lastCustomerRef = item.lastCustomerRef || (latestFromMvts ? latestFromMvts.customerReference : "") || "—";
+      const lastSalesOrder = item.lastSalesOrder || (latestFromMvts ? latestFromMvts.salesOrder : "") || "—";
+      const lastCustomerRef = item.lastCustomerRef || (latestFromMvts ? latestFromMvts.customerReference : "") || "—";
 
-    return {
-      ...item,
-      invoiceNumbers: combinedInvoices,
-      lastInvoiceNumber,
-      lastSalesOrder,
-      lastCustomerRef,
-      salesOrder: lastSalesOrder,
-      customerReference: lastCustomerRef,
-    };
-  });
+      return {
+        ...item,
+        invoiceNumbers: combinedInvoices,
+        lastInvoiceNumber,
+        lastSalesOrder,
+        lastCustomerRef,
+        salesOrder: lastSalesOrder,
+        customerReference: lastCustomerRef,
+      };
+    });
 
   return finalStock;
 }
@@ -765,6 +765,13 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
     }
   };
 
+  // 1.5 Auto-Snapshot before applying invoice movements (Zero-Click Auto Restore Point)
+  const autoTitle = isOutbound
+    ? `[تلقائي] قبل معالجة فاتورة صرف رقم ${invoiceDoc.invoiceNumber || '—'}`
+    : `[تلقائي] قبل معالجة فاتورة توريد رقم ${invoiceDoc.invoiceNumber || '—'}`;
+  const autoDesc = `حفظ تلقائي قبل معالجة فاتورة ${isOutbound ? 'صرف' : 'توريد'} (${invoiceDoc.invoiceNumber || '—'}) - بواسطة: ${userName || userEmail || 'النظام'}`;
+  await createAutoRestorePoint(projectId, autoTitle, autoDesc, userUid, userEmail, userName);
+
   // 2. Loop through lines
   for (const line of lines) {
     if (line.ignored || line.isService) continue;
@@ -851,7 +858,7 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
       const deletedRef = projectRef.collection("deletedStock").doc(itemKey);
       batch.delete(deletedRef);
       opCount++;
-    } catch (dErr) {}
+    } catch (dErr) { }
 
     // Update Stock Snapshot
     const stockRef = projectRef.collection("stock").doc(itemKey);
@@ -1004,92 +1011,16 @@ async function getProjectMovements(projectId, invoiceId) {
 
   const fetchMovementsFromProj = async (pid) => {
     try {
-      if (!invoiceId) {
-        const snapshot = await db.collection("warehouseProjects").doc(pid).collection("movements").get();
-        snapshot.docs.forEach((doc) => {
-          if (!mvtMap.has(doc.id)) {
-            mvtMap.set(doc.id, { id: doc.id, ...doc.data() });
-          }
-        });
-        return;
+      let query = db.collection("warehouseProjects").doc(pid).collection("movements");
+      if (invoiceId) {
+        query = query.where("invoiceId", "==", invoiceId);
       }
-
-      const trimmedInvId = String(invoiceId).trim();
-      const targetInvoiceIds = new Set([trimmedInvId]);
-      const targetInvoiceNumbers = new Set([trimmedInvId]);
-
-      // 1. Resolve invoice document metadata if invoiceId is a doc ID
-      try {
-        const invDoc = await db.collection("warehouseProjects").doc(pid).collection("invoices").doc(trimmedInvId).get();
-        if (invDoc.exists) {
-          const invData = invDoc.data() || {};
-          if (invData.invoiceNumber) {
-            targetInvoiceNumbers.add(String(invData.invoiceNumber).trim());
-          }
+      const snapshot = await query.get();
+      snapshot.docs.forEach((doc) => {
+        if (!mvtMap.has(doc.id)) {
+          mvtMap.set(doc.id, { id: doc.id, ...doc.data() });
         }
-      } catch (err) {
-        // ignore
-      }
-
-      // 2. Discover any duplicate / sibling invoice documents sharing the same invoiceNumber
-      for (const num of Array.from(targetInvoiceNumbers)) {
-        if (!num) continue;
-        try {
-          const matchingInvs = await db
-            .collection("warehouseProjects")
-            .doc(pid)
-            .collection("invoices")
-            .where("invoiceNumber", "==", num)
-            .get();
-          matchingInvs.docs.forEach((d) => {
-            targetInvoiceIds.add(d.id);
-            const dData = d.data() || {};
-            if (dData.invoiceNumber) targetInvoiceNumbers.add(String(dData.invoiceNumber).trim());
-          });
-        } catch (e) {
-          // ignore
-        }
-      }
-
-      // 3. Query movements matching invoiceId
-      for (const id of targetInvoiceIds) {
-        if (!id) continue;
-        try {
-          const snap = await db
-            .collection("warehouseProjects")
-            .doc(pid)
-            .collection("movements")
-            .where("invoiceId", "==", id)
-            .get();
-          snap.docs.forEach((doc) => {
-            if (!mvtMap.has(doc.id)) {
-              mvtMap.set(doc.id, { id: doc.id, ...doc.data() });
-            }
-          });
-        } catch (e) {
-          // ignore
-        }
-      }
-
-      // 4. Query movements matching invoiceNumber directly
-      for (const num of targetInvoiceNumbers) {
-        if (!num) continue;
-        try {
-          const snap = await db
-            .collection("warehouseProjects")
-            .doc(pid)
-            .collection("movements")
-            .where("invoiceNumber", "==", num)
-            .get();
-          snap.docs.forEach((doc) => {
-            if (!mvtMap.has(doc.id)) {
-              mvtMap.set(doc.id, { id: doc.id, ...doc.data() });
-            }
-          });
-        } catch (e) {
-          // ignore
-        }
-      }
+      });
     } catch (e) {
       console.warn(`Error fetching project movements for ${pid}:`, e.message);
     }
@@ -1097,8 +1028,9 @@ async function getProjectMovements(projectId, invoiceId) {
 
   await fetchMovementsFromProj(projectId);
 
-  // Return non-deleted movements scoped strictly to current project
-  return Array.from(mvtMap.values()).filter((m) => !m.isDeleted);
+  // Return movements scoped strictly to current project
+
+  return Array.from(mvtMap.values());
 }
 
 /**
@@ -1119,12 +1051,12 @@ async function updateStockItem(projectId, itemKey, updateData, userUid, userEmai
   const qtyLm = Number(updateData.quantityLm !== undefined ? updateData.quantityLm : ((qtyBar * lengthMm) / 1000));
   const qtyKg = Number(updateData.quantityKg !== undefined ? updateData.quantityKg : (existing.quantityKg || 0));
 
-  const newSalesOrder = updateData.lastSalesOrder !== undefined 
-    ? updateData.lastSalesOrder 
+  const newSalesOrder = updateData.lastSalesOrder !== undefined
+    ? updateData.lastSalesOrder
     : (updateData.salesOrder !== undefined ? updateData.salesOrder : (existing.lastSalesOrder || existing.salesOrder || ""));
 
-  const newCustomerRef = updateData.lastCustomerRef !== undefined 
-    ? updateData.lastCustomerRef 
+  const newCustomerRef = updateData.lastCustomerRef !== undefined
+    ? updateData.lastCustomerRef
     : (updateData.customerReference !== undefined ? updateData.customerReference : (existing.lastCustomerRef || existing.customerReference || ""));
 
   const payload = {
@@ -1455,6 +1387,7 @@ async function createProjectRestorePoint(projectId, { name, description }, userU
   const restorePointData = {
     name: pointName,
     description: pointDesc,
+    isAuto: Boolean(isAuto),
     totalItems: stockItems.length,
     totalQuantityBar,
     totalQuantityLm: Number(totalQuantityLm.toFixed(2)),
@@ -1482,6 +1415,7 @@ async function createProjectRestorePoint(projectId, { name, description }, userU
       pointId: pointRef.id,
       name: pointName,
       description: pointDesc,
+      isAuto: Boolean(isAuto),
       totalItems: stockItems.length,
       totalQuantityBar,
     },
@@ -1489,6 +1423,231 @@ async function createProjectRestorePoint(projectId, { name, description }, userU
 
   const { stockSnapshot, ...summaryData } = restorePointData;
   return { id: pointRef.id, ...summaryData };
+}
+
+/**
+ * Create an automatic Restore Point (Snapshot) before critical stock mutations
+ */
+async function createAutoRestorePoint(projectId, actionTitle, actionDescription, userUid, userEmail, userName) {
+  try {
+    const db = getDb();
+    if (!db) return null;
+
+    const res = await createProjectRestorePoint(
+      projectId,
+      {
+        name: actionTitle,
+        description: actionDescription,
+        isAuto: true,
+      },
+      userUid,
+      userEmail,
+      userName
+    );
+
+    // Prune older auto restore points beyond the latest 30 to prevent excessive storage
+    try {
+      const resolvedProjId = await resolveProjectId(db, projectId);
+      const allPointsSnap = await db
+        .collection("warehouseProjects")
+        .doc(resolvedProjId)
+        .collection("restorePoints")
+        .orderBy("createdAt", "desc")
+        .get();
+
+      const autoDocs = allPointsSnap.docs.filter((d) => d.data()?.isAuto === true);
+      if (autoDocs.length > 30) {
+        const toDelete = autoDocs.slice(30);
+        let delBatch = db.batch();
+        let delCount = 0;
+        for (const doc of toDelete) {
+          delBatch.delete(doc.ref);
+          delCount++;
+          if (delCount % 400 === 0) {
+            await delBatch.commit();
+            delBatch = db.batch();
+          }
+        }
+        if (delCount % 400 !== 0) {
+          await delBatch.commit();
+        }
+      }
+    } catch (pruneErr) {
+      console.warn("[createAutoRestorePoint] Prune warning:", pruneErr.message);
+    }
+
+    return res;
+  } catch (err) {
+    console.warn("[createAutoRestorePoint] Auto-snapshot skipped on error:", err.message);
+    return null;
+  }
+}
+
+/**
+ * Rollback / Undo an Invoice transaction and reverse stock movements (Admin Only)
+ */
+async function rollbackInvoiceTransaction(projectId, invoiceId, userUid, userEmail, userName) {
+  const db = getDb();
+  if (!db) throw new Error("Firestore is unavailable.");
+  projectId = await resolveProjectId(db, projectId);
+  const projectRef = db.collection("warehouseProjects").doc(projectId);
+
+  // 1. Fetch Invoice
+  const invRef = projectRef.collection("invoices").doc(invoiceId);
+  const invDoc = await invRef.get();
+  if (!invDoc.exists) {
+    throw new Error("الفاتورة غير موجودة أو تم حذفها مسبقاً.");
+  }
+
+  const invData = invDoc.data() || {};
+  if (invData.isCancelled || invData.status === "cancelled") {
+    throw new Error("تم إلغاء هذه الفاتورة والتراجع عن حركاتها مسبقاً.");
+  }
+
+  // 2. Fetch associated movements
+  let mvtsSnap = await projectRef
+    .collection("movements")
+    .where("invoiceId", "==", invoiceId)
+    .get();
+
+  if (mvtsSnap.empty && invData.invoiceNumber) {
+    mvtsSnap = await projectRef
+      .collection("movements")
+      .where("invoiceNumber", "==", invData.invoiceNumber)
+      .get();
+  }
+
+  const isOutbound = (invData.movementType || "").toLowerCase() === "outbound";
+  const nowIso = new Date().toISOString();
+
+  // 3. Take an auto restore point before doing the rollback (Safety Net)
+  await createAutoRestorePoint(
+    projectId,
+    `[تلقائي] قبل التراجع عن فاتورة ${invData.invoiceNumber || invoiceId}`,
+    `حفظ تلقائي قبل التراجع عن الفاتورة وعكس أرصدتها بواسطة ${userName || userEmail || 'SuperAdmin'}`,
+    userUid,
+    userEmail,
+    userName
+  );
+
+  let batch = db.batch();
+  let opCount = 0;
+
+  const commitBatchIfNeeded = async (force = false) => {
+    if (opCount >= 400 || (force && opCount > 0)) {
+      await batch.commit();
+      batch = db.batch();
+      opCount = 0;
+    }
+  };
+
+  // 4. Reverse Stock quantities for each movement item
+  const reversedItems = [];
+  for (const mDoc of mvtsSnap.docs) {
+    const mData = mDoc.data() || {};
+    if (mData.isDeleted) continue;
+
+    const itemKey = mData.itemKey;
+    const qtyBar = Number(mData.quantityBar || mData.quantity || 0);
+    const qtyLm = Number(mData.quantityLm || 0);
+    const qtyKg = Number(mData.quantityKg || 0);
+
+    // If original was Inbound (+), we subtract (-). If Outbound (-), we add back (+).
+    const reverseFactorBar = isOutbound ? qtyBar : -qtyBar;
+    const reverseFactorLm = isOutbound ? qtyLm : -qtyLm;
+    const reverseFactorKg = isOutbound ? qtyKg : -qtyKg;
+
+    if (itemKey) {
+      const stockRef = projectRef.collection("stock").doc(itemKey);
+      batch.set(
+        stockRef,
+        {
+          quantityBar: admin.firestore.FieldValue.increment(reverseFactorBar),
+          quantityLm: admin.firestore.FieldValue.increment(reverseFactorLm),
+          quantityKg: admin.firestore.FieldValue.increment(reverseFactorKg),
+          invoiceNumbers: admin.firestore.FieldValue.arrayRemove(invData.invoiceNumber),
+          updatedAt: nowIso,
+        },
+        { merge: true }
+      );
+      opCount++;
+      await commitBatchIfNeeded(false);
+    }
+
+    // Mark movement as cancelled & soft-deleted
+    batch.update(mDoc.ref, {
+      isDeleted: true,
+      isCancelled: true,
+      cancelledAt: nowIso,
+      cancelledBy: userUid || "admin",
+      cancelledByName: userName || userEmail || "",
+    });
+    opCount++;
+    await commitBatchIfNeeded(false);
+
+    reversedItems.push({
+      itemKey,
+      itemCode: mData.itemCode,
+      qtyBar,
+      reversal: isOutbound ? `+${qtyBar} BAR (إعادة للمخزن)` : `-${qtyBar} BAR (خصم من المخزن)`,
+    });
+  }
+
+  // 5. If there's an associated dispatch, mark it cancelled
+  if (invData.dispatchId) {
+    try {
+      const dRef = projectRef.collection("dispatches").doc(invData.dispatchId);
+      batch.update(dRef, {
+        currentStage: "cancelled",
+        isCancelled: true,
+        cancelledAt: nowIso,
+        notes: `تم إلغاء الإذن وعكس حركة الصرف بواسطة ${userName || userEmail}`,
+      });
+      opCount++;
+      await commitBatchIfNeeded(false);
+    } catch (dErr) {
+      console.warn("[rollbackInvoiceTransaction] Dispatch cancel warning:", dErr.message);
+    }
+  }
+
+  // 6. Mark Invoice document as cancelled
+  batch.update(invRef, {
+    status: "cancelled",
+    isCancelled: true,
+    cancelledAt: nowIso,
+    cancelledBy: userUid || "admin",
+    cancelledByName: userName || userEmail || "",
+    updatedAt: nowIso,
+  });
+  opCount++;
+
+  await commitBatchIfNeeded(true);
+
+  // 7. Audit Log
+  await logWarehouseAudit(projectId, {
+    action: "ROLLBACK_INVOICE",
+    userUid,
+    userEmail,
+    userName,
+    invoiceId,
+    details: {
+      invoiceNumber: invData.invoiceNumber,
+      movementType: invData.movementType,
+      reversedItemsCount: reversedItems.length,
+      reversedItems,
+      actionNote: isOutbound
+        ? "تم إلغاء إذن/فاتورة الصرف وإعادة الكميات المسحوبة لرصيد المخزن بنجاح"
+        : "تم إلغاء فاتورة التوريد وخصم الكميات الموردة من رصيد المخزن بنجاح",
+    },
+  });
+
+  return {
+    success: true,
+    invoiceId,
+    invoiceNumber: invData.invoiceNumber,
+    reversedItemsCount: reversedItems.length,
+    movementType: invData.movementType,
+  };
 }
 
 /**
@@ -1509,7 +1668,7 @@ async function listProjectRestorePoints(projectId) {
   return snap.docs.map((doc) => {
     const data = doc.data() || {};
     const { stockSnapshot, ...summary } = data;
-    return { id: doc.id, ...summary };
+    return { id: doc.id, isAuto: Boolean(data.isAuto), ...summary };
   });
 }
 
@@ -1790,7 +1949,7 @@ async function deleteProject(projectId, actorUid) {
   if (projectId === "default_canex" || resolvedId === "default_canex") {
     try {
       await db.collection("warehouseProjects").doc("default_canex").delete();
-    } catch (e) {}
+    } catch (e) { }
   }
   if (projData.code) {
     try {
@@ -1798,7 +1957,7 @@ async function deleteProject(projectId, actorUid) {
       for (const dDoc of codeDups.docs) {
         await dDoc.ref.delete();
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   return { success: true, message: `تم حذف المشروع ${projData.name || resolvedId} بنجاح` };
@@ -1903,6 +2062,56 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
     opCount++;
   }
 
+  // Auto-Snapshot before manual movement
+  const docRef = meta?.docNumber || dispatchNumber || (isOutbound ? "إذن صرف يدوي" : "إذن توريد يدوي");
+  const autoTitle = isOutbound
+    ? `[تلقائي] قبل حركة صرف يدوي (${docRef})`
+    : `[تلقائي] قبل حركة توريد يدوي (${docRef})`;
+  const autoDesc = `حفظ تلقائي قبل حركة ${isOutbound ? 'صرف' : 'توريد'} يدوي (${lines.length} بند) - بواسطة: ${userName || userEmail || 'النظام'}`;
+  await createAutoRestorePoint(projectId, autoTitle, autoDesc, userUid, userEmail, userName);
+
+  // Create an invoice record for the manual movement so it appears in history & can be rolled back
+  const manualInvoiceRef = projectRef.collection("invoices").doc();
+  const manualInvoiceId = manualInvoiceRef.id;
+  const docNo = meta?.docNumber || dispatchNumber || (isOutbound ? `MAN-OUT-${Date.now()}` : `MAN-IN-${Date.now()}`);
+
+  const totalBarsManual = lines.reduce((acc, l) => acc + Number(l.quantityBar || l.quantity || l.bars || 0), 0);
+  const totalLmManual = lines.reduce((acc, l) => {
+    const qLm = Number(l.quantityLm || 0);
+    if (qLm > 0) return acc + qLm;
+    const qBar = Number(l.quantityBar || l.quantity || l.bars || 0);
+    const lenMm = Number(l.lengthMm || 6000);
+    return acc + (qBar * lenMm) / 1000;
+  }, 0);
+  const totalKgManual = lines.reduce((acc, l) => acc + Number(l.quantityKg || l.weightKg || 0), 0);
+  const totalAmountManual = lines.reduce((acc, l) => acc + Number(l.netTotal || (Number(l.quantityBar || 0) * Number(l.unitPrice || 0))), 0);
+
+  const manualInvoiceDoc = {
+    id: manualInvoiceId,
+    invoiceNumber: docNo,
+    movementType: isOutbound ? "outbound" : "inbound",
+    salesOrder: meta?.salesOrder || (dispatchDetails?.customerName ? `طلب: ${dispatchDetails.customerName}` : "يدوي"),
+    customerReference: meta?.customerReference || (dispatchDetails?.projectNameOrSite ? `موقع: ${dispatchDetails.projectNameOrSite}` : "إذن يدوي"),
+    supplier: isOutbound ? (dispatchDetails?.coatingSupplier || "صرف خارجي") : (meta?.supplier || "توريد يدوي"),
+    fileName: isOutbound ? "إذن صرف يدوي" : "إذن توريد يدوي",
+    sourceType: "manual",
+    lineItemsCount: lines.length,
+    totalQuantityBar: totalBarsManual,
+    totalQuantityLm: Number(totalLmManual.toFixed(2)),
+    totalQuantityKg: Number(totalKgManual.toFixed(2)),
+    totalAmount: totalAmountManual,
+    currency: meta?.currency || "EGP",
+    dispatchId: dispatchId || null,
+    dispatchNumber: dispatchNumber || null,
+    status: "active",
+    createdBy: userUid || "admin",
+    createdByName: userName || userEmail || "",
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+  batch.set(manualInvoiceRef, manualInvoiceDoc);
+  opCount++;
+
   for (const line of lines) {
     const supplier = line.supplier || meta?.supplier || "CANEX";
     const itemCode = line.itemCode || line.internalCode || "CODE";
@@ -1923,9 +2132,9 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
 
     // Movement entry
     const mvtRef = projectRef.collection("movements").doc();
-    const docNo = meta?.docNumber || dispatchNumber || (isOutbound ? `MAN-OUT-${Date.now()}` : `MAN-IN-${Date.now()}`);
     const movementData = {
       sourceType: "manual",
+      invoiceId: manualInvoiceId,
       movementType: isOutbound ? "outbound" : "inbound",
       invoiceNumber: docNo,
       salesOrder: meta?.salesOrder || line.salesOrder || (dispatchDetails?.customerName ? `طلب: ${dispatchDetails.customerName}` : "يدوي"),
@@ -2175,8 +2384,10 @@ module.exports = {
   logWarehouseAudit,
   getWarehouseAuditLogs,
   createProjectRestorePoint,
+  createAutoRestorePoint,
   listProjectRestorePoints,
   restoreProjectToPoint,
   deleteProjectRestorePoint,
+  rollbackInvoiceTransaction,
 };
 

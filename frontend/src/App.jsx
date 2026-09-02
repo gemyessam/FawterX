@@ -19,7 +19,7 @@ export const SettingsContext = createContext(null)
 
 const TRANSLATIONS = {
   ar: {
-    logo: 'فاوتر إكس v2.27.30',
+    logo: 'فاوتر إكس v2.27.31',
     logoSub: 'بديل ERP system لرفع الفواتير',
     badge: 'بوابة الإنتاج',
     navHome: 'لوحة التحكم',
@@ -59,7 +59,7 @@ const TRANSLATIONS = {
     otpPlaceholder: 'أدخل رمز الـ OTP المكون من 6 أرقام',
   },
   en: {
-    logo: 'FawterX v2.27.30',
+    logo: 'FawterX v2.27.31',
     logoSub: 'Fast ERP Alternative for Tax Invoices',
     badge: 'Production Portal',
     navHome: 'Dashboard',
@@ -126,7 +126,7 @@ function Layout({ children }) {
 
     const saved = localStorage.getItem('companySettings')
     if (saved) {
-      try { setSettings(JSON.parse(saved)) } catch (e) {}
+      try { setSettings(JSON.parse(saved)) } catch (e) { }
     }
 
     getCompanySettings()
@@ -137,7 +137,7 @@ function Layout({ children }) {
           setSettings(res.settings)
           localStorage.setItem('companySettings', JSON.stringify(res.settings))
         } else if (saved) {
-          try { finalSettings = JSON.parse(saved); } catch (e) {}
+          try { finalSettings = JSON.parse(saved); } catch (e) { }
         }
 
         if (finalSettings && finalSettings.clientId && (finalSettings.clientSecret1 || finalSettings.clientSecret2)) {
@@ -154,7 +154,7 @@ function Layout({ children }) {
             })
         }
       })
-      .catch(() => {})
+      .catch(() => { })
   }, [user])
 
   useEffect(() => {
@@ -254,7 +254,7 @@ function Layout({ children }) {
             >
               <span>⚡ {lang === 'ar' ? 'منصة رفع الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Platform'}</span>
               <span style={{ background: 'rgba(0, 224, 161, 0.2)', color: '#00e0a1', padding: '0.1rem 0.4rem', borderRadius: '10px', fontSize: '0.7rem', fontWeight: 800 }}>
-                v2.27.30 ✨
+                v2.27.31 ✨
               </span>
             </button>
           </div>
@@ -283,18 +283,18 @@ function Layout({ children }) {
           <button className="lang-toggle-btn" onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}>
             🌐 {lang === 'ar' ? 'English' : 'العربية'}
           </button>
-          
+
           {user && (() => {
             const isMaster = user.email === 'gemy.essam.ge@gmail.com';
             return (
-              <div 
+              <div
                 className={`user-profile-widget ${isMaster ? 'master-gm-widget' : ''}`}
                 onClick={() => setShowUserDropdown(!showUserDropdown)}
               >
-                <div 
+                <div
                   className={`user-avatar ${isMaster ? 'master-gm-avatar' : ''}`}
-                  style={{ 
-                    backgroundImage: user.photoURL ? `url(${user.photoURL})` : 'none', 
+                  style={{
+                    backgroundImage: user.photoURL ? `url(${user.photoURL})` : 'none',
                     backgroundSize: 'cover',
                     position: 'relative'
                   }}
@@ -351,7 +351,7 @@ function Layout({ children }) {
             </div>
             <div className="modal-body">
               <p className="modal-desc-sub">{t.settingsSubtitle}</p>
-              
+
               <div className="form-group-grid">
                 <div className="input-field-wrapper">
                   <label>{t.clientId}</label>
@@ -497,8 +497,8 @@ export default function App() {
       toast.success(lang === 'ar' ? `مرحباً بك ${result.user.displayName}` : `Welcome ${result.user.displayName}`)
     } catch (error) {
       console.error(error)
-      toast.error(lang === 'ar' 
-        ? 'فشل تسجيل الدخول بواسطة Google: يرجى التحقق من إعدادات المتصفح أو الاتصال بالدعم' 
+      toast.error(lang === 'ar'
+        ? 'فشل تسجيل الدخول بواسطة Google: يرجى التحقق من إعدادات المتصفح أو الاتصال بالدعم'
         : 'Sign in failed via Google: Please verify your browser popup block settings')
     }
   }
@@ -537,7 +537,7 @@ export default function App() {
           lang={lang}
         />
         <Toaster position="bottom-center" toastOptions={{ style: { background: '#101223', color: '#e8eaf6', border: '1px solid #202442', borderRadius: '12px' } }} />
-        
+
         {!user ? (
           <div className={`auth-full-screen ${lang === 'en' ? 'ltr-layout' : ''}`}>
             <div className="auth-brand-side">
@@ -576,18 +576,18 @@ export default function App() {
               <div className="auth-form animate-fade-in" style={{ textAlign: 'center' }}>
                 <h2 style={{ marginBottom: '1rem' }}>{t.loginTitle}</h2>
                 <p className="form-sub-desc" style={{ marginBottom: '2.5rem' }}>{t.loginSubtitle}</p>
-                
-                <button 
-                  type="button" 
-                  className="btn btn-primary btn-block btn-lg" 
+
+                <button
+                  type="button"
+                  className="btn btn-primary btn-block btn-lg"
                   onClick={handleGoogleLogin}
                   style={{ background: '#ffffff', color: '#000000', border: '1px solid #cccccc', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '1rem' }}
                 >
                   <svg width="24" height="24" viewBox="0 0 48 48">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
                   </svg>
                   {t.googleBtn}
                 </button>

@@ -200,7 +200,7 @@ function extractHeaderBlockPairs(text) {
 function extractLabelValue(text, labelVariants) {
   for (const label of labelVariants) {
     const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    
+
     // Pattern 1: Same line (supports colons, tabs, commas, spaces)
     const regexSameLine = new RegExp(`(?:\\b|_)${escapedLabel}(?:\\b|_)?\\s*[:,\t]*\\s*([^\\r\\n]+)`, 'i');
     const matchSame = text.match(regexSameLine);

@@ -7,29 +7,29 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.30',
+      version: 'v2.27.31',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
-      title: isAr ? 'إظهار والبحث بكود العميل (Customer Code) وضمان استيراد كافة بنود الفواتير كاملة 100%' : 'Customer Code Display & Search with Complete 100% Invoice Line Retrieval',
+      title: isAr ? 'نظام الحفظ الاحتياطي التلقائي (Auto-Snapshots) والتراجع الفوري عن الحركات والفواتير للمالك' : 'Zero-Click Auto Restore Points & Instant Invoice/Movement Rollback System',
       highlights: [
         {
-          icon: '🏷️',
+          icon: '🔄',
           text: isAr
-            ? 'إظهار كود العميل (Customer Code) في عمود مخصص بجدول الصرف والبحث السريع به وبكود الصنف والبيان.'
-            : 'Dedicated Customer Code column in dispatch table with real-time search & filter by customer code, item code, or description.'
+            ? 'أخذ نقاط حفظ احتياطي تلقائية وفورية (Auto-Snapshots) لحالة المخزن قبل أي حركة توريد أو صرف (إكسيل أو يدوي).'
+            : 'Automatic zero-click restore point snapshots captured before any stock inbound or outbound movement.'
         },
         {
-          icon: '🔍',
+          icon: '👑',
           text: isAr
-            ? 'استيراد بنود الفواتير الواردة كاملة 100% بدون نقص عبر البحث المزدوج برقم الفاتورة ومعرف الوثيقة والمطابقة مع رصيد المخزن.'
-            : 'Complete 100% invoice line items retrieval by multi-index invoiceId & invoiceNumber lookup and stock reconciliation.'
+            ? 'زر تراجع فوري عن الفواتير والحركات للإدارة العليا (الملك جمال) يعكس الكميات في رصيد المخزن ويلغي أثر الحركة بنقرة واحدة.'
+            : 'Instant rollback action for Super Admin to undo any invoice transaction and cleanly reverse stock quantities.'
         },
         {
-          icon: '➕',
+          icon: '📋',
           text: isAr
-            ? 'إتاحة إضافة بنود وقطاعات إضافية من المخزن مع إظهار كود العميل داخل خيارات قائمة الأصناف.'
-            : 'Allow adding extra profiles directly from stock with customer codes visible in profile dropdown.'
+            ? 'تصفية ذكية لنقاط الحفظ (الكل / تلقائي / يدوي) وتوثيق كامل لكافة عمليات التراجع في سجل التدقيق.'
+            : 'Smart restore point filtering (All / Auto / Manual) and full audit trail logging for all rollback actions.'
         }
       ]
     },
@@ -783,7 +783,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.27.30 {isAr ? 'النسخة الحالية' : 'Active'}
+              v2.27.29 {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}

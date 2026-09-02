@@ -28,6 +28,7 @@ const {
   listProjectRestorePoints,
   restoreProjectToPoint,
   deleteProjectRestorePoint,
+  rollbackInvoiceTransaction,
 } = require("../services/warehouseStore");
 
 const router = express.Router();
@@ -478,6 +479,26 @@ router.patch("/projects/:projectId/invoices/:invoiceId", requireWarehouse, async
       req.params.projectId,
       req.params.invoiceId,
       { salesOrder, customerReference },
+      req.user.uid,
+      req.user.email,
+      userName
+    );
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/warehouse/projects/:projectId/invoices/:invoiceId/rollback
+ * Rollback/Undo an invoice transaction and reverse stock movements (Admin Only)
+ */
+router.post("/projects/:projectId/invoices/:invoiceId/rollback", requireAdmin, async (req, res) => {
+  try {
+    const userName = req.user.name || req.user.displayName || req.user.email;
+    const result = await rollbackInvoiceTransaction(
+      req.params.projectId,
+      req.params.invoiceId,
       req.user.uid,
       req.user.email,
       userName

@@ -172,5 +172,12 @@ export async function deleteWarehouseDispatch(projectId, dispatchId) {
   return data
 }
 
+/** Rollback / Undo an invoice transaction and reverse stock movements (Admin only) */
+export async function rollbackWarehouseInvoice(projectId, invoiceId) {
+  const { data } = await api.post(`/warehouse/projects/${projectId}/invoices/${invoiceId}/rollback`)
+  return data
+}
+
+
 
 

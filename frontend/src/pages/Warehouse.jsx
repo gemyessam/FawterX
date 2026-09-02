@@ -24,6 +24,7 @@ import {
   createProjectRestorePoint,
   restoreProjectToPoint,
   deleteProjectRestorePoint,
+  rollbackWarehouseInvoice,
 } from '../services/warehouseApi'
 import ManualStockModal from '../components/ManualStockModal'
 import DispatchesTrackerView from '../components/DispatchesTrackerView'
@@ -353,6 +354,14 @@ export default function Warehouse() {
   const [newPointDesc, setNewPointDesc] = useState('')
   const [creatingRestorePoint, setCreatingRestorePoint] = useState(false)
   const [restoringPointId, setRestoringPointId] = useState(null)
+  const [restoreFilter, setRestoreFilter] = useState('all')
+  const [rollingBackInvoiceId, setRollingBackInvoiceId] = useState(null)
+
+  const filteredRestorePoints = useMemo(() => {
+    if (restoreFilter === 'auto') return restorePoints.filter((p) => p.isAuto)
+    if (restoreFilter === 'manual') return restorePoints.filter((p) => !p.isAuto)
+    return restorePoints
+  }, [restorePoints, restoreFilter])
 
   // Stock Item Admin Management State
   const [editingStockKey, setEditingStockKey] = useState(null)
@@ -565,6 +574,34 @@ export default function Warehouse() {
     } catch (err) {
       toast.error(isAr ? 'فشل حذف نقطة الحفظ' : 'Failed to delete restore point')
       loadRestorePoints(selectedProjectId)
+    }
+  }
+
+  async function handleRollbackInvoice(inv) {
+    if (!selectedProjectId || !inv) return
+    const isOut = inv.movementType === 'outbound'
+    const actionText = isOut
+      ? (isAr ? 'إعادة الكميات المصروفة إلى رصيد المخزن' : 'return dispensed quantities back to inventory')
+      : (isAr ? 'خصم الكميات المورّدة من رصيد المخزن' : 'deduct received quantities from inventory')
+
+    const confirmMsg = isAr
+      ? `👑 تأكيد التراجع عن الفاتورة (صلاحية الإدارة العليا):\n\nهل أنت متأكد من إلغاء الفاتورة رقم (${inv.invoiceNumber || inv.id})؟\n\n⚙️ سيقوم النظام تلقائياً بما يلي:\n1. ${actionText}.\n2. إلغاء أثر حركاتها وتوثيقها في سجل التدقيق (Audit Log).\n3. حفظ نقطة استرجاع تلقائية قبل الإلغاء لضمان الأمان التام.`
+      : `👑 Confirm Invoice Rollback (Admin Only):\n\nAre you sure you want to rollback invoice (${inv.invoiceNumber || inv.id})?\n\nThis will automatically ${actionText} and record the audit trail.`
+
+    if (!window.confirm(confirmMsg)) return
+
+    setRollingBackInvoiceId(inv.id)
+    try {
+      const res = await rollbackWarehouseInvoice(selectedProjectId, inv.id)
+      if (res.success) {
+        toast.success(isAr ? `تم التراجع عن الفاتورة (${inv.invoiceNumber}) وعكس أرصدة المخزن بنجاح!` : `Invoice (${inv.invoiceNumber}) rolled back successfully!`)
+        loadStock(selectedProjectId)
+        loadInvoices(selectedProjectId)
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل التراجع عن الفاتورة' : 'Failed to rollback invoice'))
+    } finally {
+      setRollingBackInvoiceId(null)
     }
   }
 
@@ -2458,16 +2495,43 @@ export default function Warehouse() {
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'إجمالي الأمتار' : 'Total Meters'}</th>
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'إجمالي القيمة' : 'Total Amount'}</th>
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'تاريخ التسجيل' : 'Date & Time'}</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>{isAr ? 'التفاصيل' : 'Details'}</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>{isAr ? 'الإجراءات' : 'Actions'}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredInvoices.map((inv, idx) => {
                     const isOut = inv.movementType === 'outbound'
+                    const isCancelled = inv.status === 'cancelled' || inv.isCancelled
                     return (
-                      <tr key={inv.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                      <tr
+                        key={inv.id || idx}
+                        style={{
+                          borderBottom: '1px solid rgba(255,255,255,0.04)',
+                          background: isCancelled ? 'rgba(255,71,87,0.04)' : 'transparent',
+                          opacity: isCancelled ? 0.75 : 1,
+                        }}
+                      >
                         <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600 }}>{idx + 1}</td>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#64b5f6' }}>{inv.invoiceNumber || '—'}</td>
+                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#64b5f6' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            <span>{inv.invoiceNumber || '—'}</span>
+                            {isCancelled && (
+                              <span
+                                className="badge"
+                                style={{
+                                  background: 'rgba(255, 71, 87, 0.2)',
+                                  color: '#ff4757',
+                                  border: '1px solid rgba(255, 71, 87, 0.4)',
+                                  fontSize: '0.75rem',
+                                  padding: '1px 6px',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                ⚠️ {isAr ? 'ملغاة (تم التراجع)' : 'Cancelled'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>{inv.salesOrder || '—'}</td>
                         <td style={{ padding: '0.75rem 1rem', color: '#ffb74d' }}>{inv.customerReference || '—'}</td>
                         <td style={{ padding: '0.75rem 1rem' }}>
@@ -2500,14 +2564,39 @@ export default function Warehouse() {
                         <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                           {inv.createdAt ? new Date(inv.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US') : '—'}
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                          <button
-                            className="btn btn-sm"
-                            onClick={() => handleViewInvoiceDetails(inv)}
-                            style={{ background: 'rgba(0, 168, 255, 0.15)', color: '#70a1ff', border: '1px solid rgba(0, 168, 255, 0.3)' }}
-                          >
-                            👁️ {isAr ? 'عرض البنود' : 'Items'}
-                          </button>
+                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'inline-flex', gap: '0.4rem', alignItems: 'center' }}>
+                            <button
+                              className="btn btn-sm"
+                              onClick={() => handleViewInvoiceDetails(inv)}
+                              style={{ background: 'rgba(0, 168, 255, 0.15)', color: '#70a1ff', border: '1px solid rgba(0, 168, 255, 0.3)' }}
+                            >
+                              👁️ {isAr ? 'عرض' : 'View'}
+                            </button>
+                            {isAdmin && !isCancelled && (
+                              <button
+                                className="btn btn-sm"
+                                onClick={() => handleRollbackInvoice(inv)}
+                                disabled={rollingBackInvoiceId === inv.id}
+                                title={isAr ? '👑 خاص بالإدارة العليا: التراجع عن الفاتورة وعكس رصيد المخزن' : 'Rollback invoice & reverse stock balance'}
+                                style={{
+                                  background: 'rgba(255, 71, 87, 0.15)',
+                                  color: '#ff6b81',
+                                  border: '1px solid rgba(255, 71, 87, 0.4)',
+                                  fontWeight: 600,
+                                  fontSize: '0.8rem',
+                                  padding: '0.25rem 0.6rem',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {rollingBackInvoiceId === inv.id ? (
+                                  <span className="spinner"></span>
+                                ) : (
+                                  isAr ? '⏪ تراجع' : 'Rollback'
+                                )}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )
@@ -4242,16 +4331,59 @@ export default function Warehouse() {
               <span style={{ fontSize: '0.85rem', fontWeight: 400, color: 'var(--text-muted)' }}>({restorePoints.length})</span>
             </h4>
 
+            {/* Filter tabs: All / Auto / Manual */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                {isAr ? 'تصفية النقاط:' : 'Filter:'}
+              </span>
+              <button
+                type="button"
+                className={`btn btn-sm ${restoreFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setRestoreFilter('all')}
+                style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }}
+              >
+                {isAr ? 'الكل' : 'All'} ({restorePoints.length})
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${restoreFilter === 'auto' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setRestoreFilter('auto')}
+                style={{
+                  fontSize: '0.8rem',
+                  padding: '0.3rem 0.8rem',
+                  background: restoreFilter === 'auto' ? '#00e0a1' : 'rgba(0, 224, 161, 0.1)',
+                  color: restoreFilter === 'auto' ? '#000' : '#00e0a1',
+                  border: '1px solid rgba(0, 224, 161, 0.3)',
+                }}
+              >
+                🔄 {isAr ? 'تلقائي قبل الحركات' : 'Auto Snapshots'} ({restorePoints.filter((p) => p.isAuto).length})
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${restoreFilter === 'manual' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setRestoreFilter('manual')}
+                style={{
+                  fontSize: '0.8rem',
+                  padding: '0.3rem 0.8rem',
+                  background: restoreFilter === 'manual' ? '#64b5f6' : 'rgba(100, 181, 246, 0.1)',
+                  color: restoreFilter === 'manual' ? '#000' : '#64b5f6',
+                  border: '1px solid rgba(100, 181, 246, 0.3)',
+                }}
+              >
+                💾 {isAr ? 'نقاط يدوية' : 'Manual'} ({restorePoints.filter((p) => !p.isAuto).length})
+              </button>
+            </div>
+
             {loadingRestorePoints ? (
               <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                 <span className="spinner"></span> {isAr ? 'جاري تحميل نقاط الحفظ...' : 'Loading restore points...'}
               </div>
-            ) : restorePoints.length === 0 ? (
+            ) : filteredRestorePoints.length === 0 ? (
               <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.02)', borderRadius: '12px' }}>
                 <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>💾</div>
-                <p>{isAr ? 'لا توجد نقاط حفظ مسجلة حتى الآن لهذا المشروع.' : 'No restore points saved yet for this project.'}</p>
+                <p>{isAr ? 'لا توجد نقاط حفظ مسجلة تطابق التصفية الحالية.' : 'No restore points matching current filter.'}</p>
                 <p style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>
-                  {isAr ? 'قم بإنشاء أول نقطة حفظ بالأعلى لحماية وحفظ حالة مخزنك.' : 'Create your first restore point above to secure your inventory state.'}
+                  {isAr ? 'يتم إنشاء نقاط الحفظ التلقائية مع كل حركة توريد أو صرف، ويمكنك إنشاء نقطة يدوية بالأعلى في أي وقت.' : 'Auto snapshots are created on every stock movement.'}
                 </p>
               </div>
             ) : (
@@ -4270,11 +4402,42 @@ export default function Warehouse() {
                     </tr>
                   </thead>
                   <tbody>
-                    {restorePoints.map((pt, idx) => (
+                    {filteredRestorePoints.map((pt, idx) => (
                       <tr key={pt.id}>
                         <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)' }}>{idx + 1}</td>
                         <td>
-                          <div style={{ fontWeight: 700, color: '#ffffff', fontSize: '0.95rem' }}>{pt.name}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 700, color: '#ffffff', fontSize: '0.95rem' }}>{pt.name}</span>
+                            {pt.isAuto ? (
+                              <span
+                                className="badge"
+                                style={{
+                                  background: 'rgba(0, 224, 161, 0.15)',
+                                  color: '#00e0a1',
+                                  border: '1px solid rgba(0, 224, 161, 0.35)',
+                                  fontSize: '0.72rem',
+                                  padding: '1px 6px',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                🔄 {isAr ? 'حفظ تلقائي قبل حركة' : 'Auto'}
+                              </span>
+                            ) : (
+                              <span
+                                className="badge"
+                                style={{
+                                  background: 'rgba(100, 181, 246, 0.15)',
+                                  color: '#64b5f6',
+                                  border: '1px solid rgba(100, 181, 246, 0.35)',
+                                  fontSize: '0.72rem',
+                                  padding: '1px 6px',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                💾 {isAr ? 'حفظ يدوي' : 'Manual'}
+                              </span>
+                            )}
+                          </div>
                           {pt.description && (
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>{pt.description}</div>
                           )}
