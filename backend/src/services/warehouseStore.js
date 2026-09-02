@@ -1343,7 +1343,7 @@ async function updateInvoiceMetadata(projectId, invoiceId, { salesOrder, custome
 /**
  * Create a new Restore Point (Snapshot) for a project
  */
-async function createProjectRestorePoint(projectId, { name, description }, userUid, userEmail, userName) {
+async function createProjectRestorePoint(projectId, { name, description, isAuto } = {}, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
   projectId = await resolveProjectId(db, projectId);

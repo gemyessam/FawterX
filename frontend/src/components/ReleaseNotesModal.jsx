@@ -7,10 +7,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.31',
+      version: 'v2.27.32',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إصلاح استثناء إنشاء نقاط الحفظ اليدوية والتلقائية في المخزن' : 'Fix isAuto Parameter Exception in Manual & Auto Restore Points',
+      highlights: [
+        {
+          icon: '🛠️',
+          text: isAr
+            ? 'حل مشكلة (isAuto is not defined) عند إنشاء نقطة حفظ احتياطية يدوية جديدة وتأمين كافة معاملات الاستدعاء.'
+            : 'Fixed isAuto parameter destructuring error when creating manual restore points in the warehouse.'
+        },
+        {
+          icon: '💾',
+          text: isAr
+            ? 'تمكين حفظ النقاط اليدوية والتلقائية فورياً ومزامنتها بنجاح مع الفلاتر وسجل التدقيق.'
+            : 'Enabled seamless immediate creation and synchronization of manual snapshots alongside auto-snapshots.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.31',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'نظام الحفظ الاحتياطي التلقائي (Auto-Snapshots) والتراجع الفوري عن الحركات والفواتير للمالك' : 'Zero-Click Auto Restore Points & Instant Invoice/Movement Rollback System',
       highlights: [
         {
