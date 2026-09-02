@@ -29,6 +29,7 @@ import {
   saveProjectItemAlias,
   deleteProjectItemAlias,
   getWarehouseDispatches,
+  reconcileWarehouseDelmarAndCosts,
 } from '../services/warehouseApi'
 import ManualStockModal from '../components/ManualStockModal'
 import DispatchesTrackerView from '../components/DispatchesTrackerView'
@@ -1244,9 +1245,14 @@ export default function Warehouse() {
     }
   }
 
-  async function loadInvoices(projectId) {
+  async function loadInvoices(projectId, silentReconcile = true) {
     setLoadingInvoices(true)
     try {
+      if (silentReconcile && projectId) {
+        try {
+          await reconcileWarehouseDelmarAndCosts(projectId)
+        } catch (e) {}
+      }
       const res = await getWarehouseInvoices(projectId)
       if (res.success && res.invoices) {
         setInvoices(res.invoices)
@@ -1255,6 +1261,27 @@ export default function Warehouse() {
       toast.error(isAr ? 'فشل تحميل سجل الحركات' : 'Failed to load transaction history')
     } finally {
       setLoadingInvoices(false)
+    }
+  }
+
+  const handleManualReconcileCosts = async () => {
+    if (!selectedProjectId) return
+    const toastId = toast.loading(isAr ? 'جاري تدقيق تكاليف الصرف ومطابقة مخزن دلمار...' : 'Reconciling costs & Delmar...')
+    try {
+      const res = await reconcileWarehouseDelmarAndCosts(selectedProjectId)
+      toast.dismiss(toastId)
+      toast.success(isAr ? (res.message || 'تم تدقيق التكاليف وتحديث أوامر دلمار بنجاح!') : 'Reconciled successfully!')
+      await loadInvoices(selectedProjectId, false)
+      await loadStock(selectedProjectId)
+      try {
+        const dRes = await getWarehouseDispatches(selectedProjectId)
+        if (dRes && dRes.success && Array.isArray(dRes.dispatches)) {
+          setActiveDispatches(dRes.dispatches)
+        }
+      } catch (e) {}
+    } catch (err) {
+      toast.dismiss(toastId)
+      toast.error(isAr ? 'فشل التدقيق: ' + err.message : 'Reconciliation failed')
     }
   }
 
@@ -1419,28 +1446,55 @@ export default function Warehouse() {
       try {
         const res = await parseWarehouseInvoice(file)
         if (res.success) {
-          const parsed = (res.lines || []).map((line, idx) => ({
-            id: line.id || `line_${idx + 1}`,
-            itemCode: line.itemCode || `ITEM-${idx + 1}`,
-            customerCode: line.customerCode || '',
-            description: line.description || '',
-            finish: line.finish || line.color || 'MF',
-            color: line.color || line.finish || 'MF',
-            lengthMm: Number(line.lengthMm || 6000),
-            unit: line.unit || 'BAR',
-            priceUnit: line.priceUnit || 'M',
-            quantityBar: Number(line.quantityBar || 0),
-            quantityLm: Number(line.quantityLm || 0),
-            quantityKg: Number(line.quantityKg || 0),
-            unitPrice: Number(line.unitPrice || 0),
-            barPrice: Number(line.barPrice || 0),
-            netTotal: Number(line.netTotal || 0),
-            temper: line.temper || '',
-            alloy: line.alloy || '',
-            hsCode: line.hsCode || '',
-            isService: Boolean(line.isService),
-            ignored: Boolean(line.ignored || line.isService),
-          }))
+          const isOutboundBatch = res.metadata?.movementType === 'outbound' || movementType === 'outbound';
+          const cleanCode = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '');
+
+          const parsed = (res.lines || []).map((line, idx) => {
+            let uPrice = Number(line.unitPrice || 0);
+            let bPrice = Number(line.barPrice || 0);
+            let nTotal = Number(line.netTotal || 0);
+            const qBar = Number(line.quantityBar || 0);
+            const qLm = Number(line.quantityLm || 0);
+            const lMm = Number(line.lengthMm || 6000);
+
+            if (isOutboundBatch && (uPrice === 0 && bPrice === 0)) {
+              const cItem = cleanCode(line.itemCode);
+              const cCust = cleanCode(line.customerCode);
+              const match = stock.find((s) => {
+                const sItem = cleanCode(s.itemCode);
+                const sCust = cleanCode(s.customerCode);
+                return (cItem && (sItem === cItem || sCust === cItem)) || (cCust && (sItem === cCust || sCust === cCust));
+              });
+              if (match) {
+                bPrice = Number(match.barPrice || match.lastBarCost || (match.quantityBar > 0 ? match.netTotal / match.quantityBar : 0) || 0);
+                uPrice = Number(match.unitPrice || match.lastUnitCost || (lMm > 0 ? (bPrice * 1000) / lMm : 0) || 0);
+                nTotal = qBar > 0 && bPrice > 0 ? (qBar * bPrice) : (qLm * uPrice);
+              }
+            }
+
+            return {
+              id: line.id || `line_${idx + 1}`,
+              itemCode: line.itemCode || `ITEM-${idx + 1}`,
+              customerCode: line.customerCode || '',
+              description: line.description || '',
+              finish: line.finish || line.color || 'MF',
+              color: line.color || line.finish || 'MF',
+              lengthMm: lMm,
+              unit: line.unit || 'BAR',
+              priceUnit: line.priceUnit || (bPrice > 0 ? 'BAR' : 'M'),
+              quantityBar: qBar,
+              quantityLm: qLm,
+              quantityKg: Number(line.quantityKg || 0),
+              unitPrice: uPrice,
+              barPrice: bPrice,
+              netTotal: nTotal,
+              temper: line.temper || '',
+              alloy: line.alloy || '',
+              hsCode: line.hsCode || '',
+              isService: Boolean(line.isService),
+              ignored: Boolean(line.ignored || line.isService),
+            };
+          })
 
           const invoiceMeta = {
             invoiceNumber: res.metadata?.invoiceNumber || `INV-${Date.now().toString().slice(-6)}_${i + 1}`,
@@ -3102,6 +3156,27 @@ export default function Warehouse() {
                   color: '#fff',
                 }}
               />
+              <button
+                type="button"
+                className="btn"
+                onClick={handleManualReconcileCosts}
+                style={{
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '0.55rem 1.1rem',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
+                }}
+                title={isAr ? 'تدقيق تكاليف الصرف من فواتير التوريد المخزنية ومطابقة أوامر دلمار المنتهية' : 'Reconcile dispatch costs and Delmar'}
+              >
+                🔄 {isAr ? 'تدقيق تكاليف الصرف ودلمار' : 'Reconcile Costs & Delmar'}
+              </button>
               <button
                 className="btn"
                 onClick={handleExportHistoryToExcel}

@@ -628,6 +628,130 @@ async function getWarehouseAuditLogs(projectId, limit = 150) {
 /**
  * Process reviewed purchase invoice lines into immutable movements and updated stock
  */
+/**
+ * Resolves the original inbound acquisition cost (bar price & meter price) for an item
+ * from project stock or past inbound movements history.
+ */
+async function resolveItemInboundCost(projectRef, itemKey, itemCode, customerCode, lengthMm = 6000) {
+  const clean = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]/gi, "");
+  const normItem = clean(itemCode);
+  const normCust = clean(customerCode);
+
+  // 1. Check stock document by exact itemKey
+  if (itemKey) {
+    try {
+      const sDoc = await projectRef.collection("stock").doc(itemKey).get();
+      if (sDoc.exists) {
+        const s = sDoc.data() || {};
+        const bCost = Number(s.lastBarCost || s.barPrice || 0);
+        const uCost = Number(s.lastUnitCost || s.unitPrice || 0);
+        if (bCost > 0 || uCost > 0) {
+          return {
+            barPrice: bCost || (lengthMm > 0 ? (uCost * lengthMm) / 1000 : 0),
+            unitPrice: uCost || (lengthMm > 0 ? (bCost * 1000) / lengthMm : 0),
+          };
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 2. Scan stock collection for matching itemCode or customerCode
+  try {
+    const sSnap = await projectRef.collection("stock").get();
+    for (const doc of sSnap.docs) {
+      const s = doc.data() || {};
+      const sItem = clean(s.itemCode);
+      const sCust = clean(s.customerCode);
+      if ((normItem && (sItem === normItem || sCust === normItem)) || (normCust && (sItem === normCust || sCust === normCust))) {
+        const bCost = Number(s.lastBarCost || s.barPrice || 0);
+        const uCost = Number(s.lastUnitCost || s.unitPrice || 0);
+        if (bCost > 0 || uCost > 0) {
+          return {
+            barPrice: bCost || (lengthMm > 0 ? (uCost * lengthMm) / 1000 : 0),
+            unitPrice: uCost || (lengthMm > 0 ? (bCost * 1000) / lengthMm : 0),
+          };
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 3. Scan movements for matching inbound movement
+  try {
+    const mSnap = await projectRef.collection("movements")
+      .where("movementType", "==", "inbound")
+      .limit(60)
+      .get();
+    for (const doc of mSnap.docs) {
+      const m = doc.data() || {};
+      const mItem = clean(m.itemCode);
+      const mCust = clean(m.customerCode);
+      if ((normItem && (mItem === normItem || mCust === normItem)) || (normCust && (mItem === normCust || mCust === normCust))) {
+        const bCost = Number(m.barPrice || (m.quantityBar > 0 ? m.netTotal / m.quantityBar : 0));
+        const uCost = Number(m.unitPrice || (m.quantityLm > 0 ? m.netTotal / m.quantityLm : 0));
+        if (bCost > 0 || uCost > 0) {
+          return {
+            barPrice: bCost || (lengthMm > 0 ? (uCost * lengthMm) / 1000 : 0),
+            unitPrice: uCost || (lengthMm > 0 ? (bCost * 1000) / lengthMm : 0),
+          };
+        }
+      }
+    }
+  } catch (e) {}
+
+  return { barPrice: 0, unitPrice: 0 };
+}
+
+/**
+ * Fulfills/closes active Delmar dispatches when an outbound delivery invoice is dispatched from Delmar.
+ */
+async function fulfillDelmarDispatches(projectRef, invoiceDoc, lines, userUid, userEmail, userName) {
+  try {
+    const activeDispatchesSnap = await projectRef.collection("dispatches")
+      .where("isCompleted", "==", false)
+      .get();
+
+    if (activeDispatchesSnap.empty) return;
+
+    const clean = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]/gi, "");
+    const nowIso = new Date().toISOString();
+    const invCustomer = clean(invoiceDoc.customerReference || invoiceDoc.salesOrder || "");
+    const invNumber = invoiceDoc.invoiceNumber || "—";
+
+    for (const dDoc of activeDispatchesSnap.docs) {
+      const d = dDoc.data() || {};
+      const dSupplier = clean(d.coatingSupplier || "");
+      const dCustomer = clean(d.customerName || "");
+
+      // Check if this dispatch belongs to Delmar
+      const isDelmarDispatch = dSupplier.includes("delmar") || dSupplier.includes("دلمار");
+      const customerMatches = invCustomer && (dCustomer.includes(invCustomer) || invCustomer.includes(dCustomer));
+
+      if (isDelmarDispatch || customerMatches) {
+        await dDoc.ref.set(
+          {
+            currentStage: "delivered_to_customer",
+            isCompleted: true,
+            completedAt: nowIso,
+            customerReceivedBy: invoiceDoc.customerReference || invoiceDoc.salesOrder || d.customerName || "العميل النهائي",
+            notes: (d.notes ? d.notes + " | " : "") + `تم تسليم كامل الكمية للعميل النهائي بموجب إذن صرف رقم (${invNumber})`,
+            stageHistory: admin.firestore.FieldValue.arrayUnion({
+              stage: "delivered_to_customer",
+              label: `المرحلة 2: تم تسليم القطاعات للعميل النهائي وإغلاق الدورة بموجب إذن الصرف (${invNumber})`,
+              timestamp: nowIso,
+              user: userName || userEmail || "النظام",
+            }),
+            updatedAt: nowIso,
+            updatedBy: userUid || "system",
+          },
+          { merge: true }
+        );
+      }
+    }
+  } catch (err) {
+    console.error("Error fulfilling Delmar dispatches:", err.message);
+  }
+}
+
 async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
@@ -756,6 +880,8 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
   let batch = db.batch();
   let opCount = 0;
   const createdMovements = [];
+  let computedInvoiceTotal = 0;
+  let totalDelmarDispatchedBars = 0;
 
   const commitBatchIfNeeded = async (force = false) => {
     if (opCount >= 400 || (force && opCount > 0)) {
@@ -787,10 +913,22 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
     const qtyBar = Number(line.quantityBar || line.quantity || line.qtyBar || line.bars || 0);
     const qtyLm = Number(line.quantityLm || (qtyBar * lengthMm) / 1000);
     const qtyKg = Number(line.quantityKg || line.weightKg || 0);
-    const unitPrice = Number(line.unitPrice || 0);
-    const barPrice = Number(line.barPrice || 0);
-    const priceUnit = line.priceUnit || (unitPrice ? "M" : "BAR");
-    const netTotal = Number(line.netTotal || qtyBar * unitPrice);
+    let unitPrice = Number(line.unitPrice || 0);
+    let barPrice = Number(line.barPrice || 0);
+    let priceUnit = line.priceUnit || (unitPrice ? "M" : "BAR");
+    let netTotal = Number(line.netTotal || (qtyBar > 0 && barPrice > 0 ? qtyBar * barPrice : qtyBar * unitPrice));
+
+    // If outbound and unit/bar price or netTotal is missing (like in Schüco SD delivery notes), look up inbound cost!
+    if (isOutbound && (netTotal === 0 || (unitPrice === 0 && barPrice === 0))) {
+      const resolvedCost = await resolveItemInboundCost(projectRef, itemKey, itemCode, customerCode, lengthMm);
+      if (resolvedCost.barPrice > 0 || resolvedCost.unitPrice > 0) {
+        barPrice = resolvedCost.barPrice;
+        unitPrice = resolvedCost.unitPrice;
+        priceUnit = barPrice > 0 ? "BAR" : "M";
+        netTotal = qtyBar > 0 && barPrice > 0 ? (qtyBar * barPrice) : (qtyLm * unitPrice);
+      }
+    }
+    computedInvoiceTotal += netTotal;
 
     // Factors for stock balance updates (+ for inbound, - for outbound)
     let actualDeductBar = qtyBar;
@@ -832,7 +970,12 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
       movementType: isOutbound ? "outbound" : "inbound",
       delmarCovered: Boolean(line.delmarCovered),
       delmarMode: line.delmarMode || null,
-      delmarDispatchedBars: isOutbound && line.delmarCovered
+      delmarDispatchedBars: (() => {
+        const dbars = isOutbound && line.delmarCovered ? (line.delmarBars !== undefined && line.delmarBars !== null && line.delmarBars !== "" ? Math.min(qtyBar, Math.max(0, Number(line.delmarBars))) : (line.delmarMode === "full" ? qtyBar : Number(line.delmarShortage || 0))) : 0;
+        totalDelmarDispatchedBars += dbars;
+        return dbars;
+      })(),
+      _legacyDelmarCheck: isOutbound && line.delmarCovered
         ? (line.delmarBars !== undefined && line.delmarBars !== null && line.delmarBars !== ''
             ? Math.min(qtyBar, Math.max(0, Number(line.delmarBars)))
             : (line.delmarMode === 'full' ? qtyBar : Number(line.delmarShortage || 0)))
@@ -2501,7 +2644,121 @@ async function deleteProjectItemAlias(projectId, aliasDocId, userUid, userEmail,
   return { success: true };
 }
 
+/**
+ * Reconciles outbound invoices with 0 cost (calculates real cost from inbound prices)
+ * and closes active Delmar dispatches fulfilled by those delivery orders.
+ */
+async function reconcileDelmarAndCosts(projectId, targetInvoiceNumber = null, userUid, userEmail, userName) {
+  const db = getDb();
+  if (!db) throw new Error("Firestore is unavailable.");
+  projectId = await resolveProjectId(db, projectId);
+  const projectRef = db.collection("warehouseProjects").doc(projectId);
+  const nowIso = new Date().toISOString();
+
+  let invoicesUpdated = 0;
+  let dispatchesClosed = 0;
+
+  // 1. Fetch outbound invoices
+  const invSnap = await projectRef.collection("invoices")
+    .where("movementType", "==", "outbound")
+    .get();
+
+  for (const invDoc of invSnap.docs) {
+    const invData = invDoc.data() || {};
+    if (targetInvoiceNumber && invData.invoiceNumber !== targetInvoiceNumber && !invData.invoiceNumber.includes(targetInvoiceNumber)) {
+      continue;
+    }
+
+    // If totalAmount is 0 or target specified
+    if (Number(invData.totalAmount || 0) === 0 || targetInvoiceNumber) {
+      const mvtSnap = await projectRef.collection("movements")
+        .where("invoiceId", "==", invDoc.id)
+        .get();
+
+      let invTotal = 0;
+      let batch = db.batch();
+      let bCount = 0;
+
+      for (const mDoc of mvtSnap.docs) {
+        const m = mDoc.data() || {};
+        let bPrice = Number(m.barPrice || 0);
+        let uPrice = Number(m.unitPrice || 0);
+        let nTotal = Number(m.netTotal || 0);
+
+        if (nTotal === 0 || (bPrice === 0 && uPrice === 0)) {
+          const resolved = await resolveItemInboundCost(projectRef, m.itemKey, m.itemCode, m.customerCode, m.lengthMm);
+          bPrice = resolved.barPrice || 0;
+          uPrice = resolved.unitPrice || 0;
+          nTotal = (m.quantityBar > 0 && bPrice > 0) ? (m.quantityBar * bPrice) : (m.quantityLm * uPrice);
+
+          batch.update(mDoc.ref, {
+            barPrice: bPrice,
+            unitPrice: uPrice,
+            netTotal: nTotal,
+            updatedAt: nowIso,
+          });
+          bCount++;
+        }
+        invTotal += nTotal;
+      }
+
+      if (bCount > 0) {
+        await batch.commit();
+      }
+
+      if (invTotal > 0 || Number(invData.totalAmount || 0) === 0) {
+        await invDoc.ref.update({
+          totalAmount: invTotal,
+          updatedAt: nowIso,
+        });
+        invoicesUpdated++;
+      }
+    }
+  }
+
+  // 2. Close active Delmar dispatches delivered by SDs
+  const activeDispatchesSnap = await projectRef.collection("dispatches")
+    .where("isCompleted", "==", false)
+    .get();
+
+  for (const dDoc of activeDispatchesSnap.docs) {
+    const d = dDoc.data() || {};
+    const dSupplier = String(d.coatingSupplier || "").toLowerCase();
+    const dCustomer = String(d.customerName || "").toLowerCase();
+
+    if (dSupplier.includes("delmar") || dSupplier.includes("دلمار") || dCustomer.includes("sotalux")) {
+      await dDoc.ref.set(
+        {
+          currentStage: "delivered_to_customer",
+          isCompleted: true,
+          completedAt: nowIso,
+          customerReceivedBy: d.customerName || "Sotalux",
+          notes: (d.notes ? d.notes + " | " : "") + "تم التسليم للعميل النهائي وإغلاق الدورة بموجب إذن الصرف المعتمد",
+          stageHistory: admin.firestore.FieldValue.arrayUnion({
+            stage: "delivered_to_customer",
+            label: "المرحلة 2: تم تسليم القطاعات للعميل النهائي وإغلاق الدورة بموجب إذن الصرف",
+            timestamp: nowIso,
+            user: userName || userEmail || "النظام",
+          }),
+          updatedAt: nowIso,
+        },
+        { merge: true }
+      );
+      dispatchesClosed++;
+    }
+  }
+
+  return {
+    success: true,
+    invoicesUpdated,
+    dispatchesClosed,
+    message: `تم تحديث تكلفة عدد (${invoicesUpdated}) فواتير صرف، وإغلاق وتسليم عدد (${dispatchesClosed}) أوامر دلمار بنجاح!`,
+  };
+}
+
+
 module.exports = {
+  reconcileDelmarAndCosts,
   getUserWarehouseAccess,
   listWarehouseUsers,
   updateWarehouseUserAccess,

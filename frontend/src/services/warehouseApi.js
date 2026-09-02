@@ -178,6 +178,12 @@ export async function rollbackWarehouseInvoice(projectId, invoiceId) {
   return data
 }
 
+/** Reconcile outbound invoice costs and close Delmar dispatches */
+export async function reconcileWarehouseDelmarAndCosts(projectId, payload = {}) {
+  const { data } = await api.post(`/warehouse/projects/${projectId}/reconcile-delmar-and-costs`, payload)
+  return data
+}
+
 /** Get all item cross-reference aliases for a project */
 export async function getProjectItemAliases(projectId) {
   const { data } = await api.get(`/warehouse/projects/${projectId}/aliases`)

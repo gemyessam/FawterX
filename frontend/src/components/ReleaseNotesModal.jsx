@@ -8,10 +8,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.41',
+      version: 'v2.27.42',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'خصم وإغلاق أوامر مخزن دلمار آلياً عند الصرف، واحتساب قيمة الصرف بسعر تكلفة الدخول' : 'Auto-Fulfill Delmar Dispatches & Valuation of Outbound Deliveries by Inbound Acquisition Cost',
+      highlights: [
+        {
+          icon: '🏭',
+          text: isAr
+            ? 'خصم وإغلاق دورة دلمار تلقائياً: عند صرف أذونات التسليم من مخزن دلمار، يقوم السيستم فوراً بالخصم من أوامر التتبع الجارية وإغلاقها وتحويلها إلى (المرحلة 2: تم التسليم للعميل النهائي) وتصفير الرصيد المنصرف.'
+            : 'Auto-fulfill Delmar Coating Dispatches: delivery orders (SD) automatically deduct and close corresponding open coating batches.'
+        },
+        {
+          icon: '💰',
+          text: isAr
+            ? 'تقييم الصرف بتكلفة التوريد (Inbound Cost): أذونات التسليم التي لا تتضمن أسعاراً مطبوعة يتم احتساب قيمتها تلقائياً بضرب الكميات في تكلفة دخول القطاع الأصلية من المخزن، ومنع ظهور 0.00 EGP نهائياً.'
+            : 'Automatic Inbound Cost Valuation: unpriced delivery notes are automatically valued using incoming unit/bar costs from inventory.'
+        },
+        {
+          icon: '🔄',
+          text: isAr
+            ? 'زر تدقيق وتصحيح الحركات السابقة: زر مخصص في سجل الحركات لتدقيق وتحديث تكلفة إذن SD 594 وتحديث وإغلاق أوامر دلمار المعلقة بنقرة واحدة.'
+            : 'Audit & Reconciliation Action: one-click action to backfill past zero-cost deliveries and synchronize Delmar batches.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.41',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'إخفاء خانة الربط اليدوي تلقائياً وتفعيلها بزر مخصص عند الطلب' : 'Collapsible On-Demand Canex Manual Link Input',
       highlights: [
         {

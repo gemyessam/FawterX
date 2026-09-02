@@ -15,6 +15,7 @@ const {
   processInboundInvoice,
   processManualStockMovement,
   getProjectDispatches,
+  reconcileDelmarAndCosts,
   updateDispatchStage,
   deleteProjectDispatch,
   getProjectInvoices,
@@ -258,6 +259,26 @@ router.post("/invoices/parse", requireWarehouse, upload.single("file"), async (r
  * POST /api/warehouse/projects/:projectId/invoices/process
  * Save reviewed purchase invoice & lines into inbound stock movements
  */
+/**
+ * POST /api/warehouse/projects/:projectId/reconcile-delmar-and-costs
+ * Reconcile outbound invoice costs from inbound stock and close Delmar dispatches
+ */
+router.post("/projects/:projectId/reconcile-delmar-and-costs", requireWarehouse, async (req, res) => {
+  try {
+    const userName = req.user.name || req.user.displayName || req.user.email;
+    const result = await reconcileDelmarAndCosts(
+      req.params.projectId,
+      req.body?.invoiceNumber,
+      req.user.uid,
+      req.user.email,
+      userName
+    );
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 router.post("/projects/:projectId/invoices/process", requireWarehouse, async (req, res) => {
   try {
     if (req.warehouseAccess?.canUpload === false || req.warehouseRole === "warehouse_viewer") {
