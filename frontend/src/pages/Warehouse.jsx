@@ -108,6 +108,17 @@ function checkStockAvailability(line, stock = [], aliasesMap = {}) {
   }
 
   if (!match) {
+    if (line.delmarCovered) {
+      return {
+        status: 'sufficient',
+        availableBar: 0,
+        diff: 0,
+        matchedItem: null,
+        viaAlias: false,
+        delmarCovered: true,
+        delmarShortage: reqBar,
+      }
+    }
     return {
       status: 'missing', // ⚪ غير مسجل بالمخزن
       availableBar: 0,
@@ -119,6 +130,19 @@ function checkStockAvailability(line, stock = [], aliasesMap = {}) {
 
   const availableBar = Number(match.quantityBar || 0)
   const diff = availableBar - reqBar
+
+  if (line.delmarCovered) {
+    return {
+      status: 'sufficient', // 🟢 مغطى بطلب المالك بالصرف من دلمار
+      availableBar,
+      diff: 0,
+      matchedItem: match,
+      viaAlias,
+      aliasInfo,
+      delmarCovered: true,
+      delmarShortage: Math.max(0, Math.abs(diff)),
+    }
+  }
 
   if (diff >= 0) {
     return {
@@ -143,6 +167,8 @@ function checkStockAvailability(line, stock = [], aliasesMap = {}) {
 
 function findSmartFuzzyMatch(line, stock = [], aliasesMap = {}) {
   if (!line || !line.itemCode || !Array.isArray(stock) || stock.length === 0) return null
+  if (line.rejectedSuggestion) return null
+
   const cleanCode = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
   const queryCode = cleanCode(line.itemCode)
   if (queryCode.length < 4) return null
@@ -171,8 +197,6 @@ function findSmartFuzzyMatch(line, stock = [], aliasesMap = {}) {
         } else if (matchingChars >= queryCode.length - 2 && matchingChars >= 4) {
           codeScore = 80
         }
-      } else if (itemCode.includes(queryCode) || queryCode.includes(itemCode)) {
-        codeScore = 85
       }
     }
 
@@ -421,6 +445,103 @@ export default function Warehouse() {
     }
 
     setLinkModalData(null)
+  }
+
+  const handleToggleDelmarCover = (batchId, lineIndex) => {
+    setBatchInvoices((prev) =>
+      prev.map((batch) => {
+        if (batch.id !== batchId) return batch
+        const copy = [...batch.reviewLines]
+        const current = !!copy[lineIndex].delmarCovered
+        copy[lineIndex] = { ...copy[lineIndex], delmarCovered: !current }
+        return { ...batch, reviewLines: copy }
+      })
+    )
+    toast.success(isAr ? '✅ تم تحديث تغطية فرق الأعواد من مخزن دلمار' : 'Delmar coverage updated')
+  }
+
+  const handleCoverAllDelmar = (batchId) => {
+    setBatchInvoices((prev) =>
+      prev.map((batch) => {
+        if (batch.id !== batchId) return batch
+        const updated = (batch.reviewLines || []).map((l) => {
+          if (!l.ignored && isCoatedItem(l)) {
+            const chk = checkStockAvailability(l, stock, aliasesMap)
+            if (chk.status !== 'sufficient' || (chk.diff !== undefined && chk.diff < 0)) {
+              return { ...l, delmarCovered: true }
+            }
+          }
+          return l
+        })
+        return { ...batch, reviewLines: updated }
+      })
+    )
+    toast.success(isAr ? '✅ تم اعتماد تغطية كافة فروق الأعواد بالصرف من مخزن دلمار!' : 'All shortages covered from Delmar!')
+  }
+
+  const handleRejectSuggestion = (batchId, lineIndex) => {
+    setBatchInvoices((prev) =>
+      prev.map((batch) => {
+        if (batch.id !== batchId) return batch
+        const copy = [...batch.reviewLines]
+        copy[lineIndex] = { ...copy[lineIndex], rejectedSuggestion: true }
+        return { ...batch, reviewLines: copy }
+      })
+    )
+    toast.info(isAr ? 'تم رفض الاقتراح. يمكنك كتابة الكود الصحيح بالمخزن في الخانة أدناه' : 'Suggestion rejected. You can enter the correct code below')
+  }
+
+  const handleManualLinkByCode = async (batchId, lineIndex, sourceCode, targetCodeInput) => {
+    if (!targetCodeInput || !String(targetCodeInput).trim()) {
+      toast.error(isAr ? 'يرجى كتابة كود الصنف أولاً' : 'Please enter target item code')
+      return
+    }
+    const clean = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
+    const cleanTarget = clean(targetCodeInput)
+    const targetItem = stock.find(
+      (s) => clean(s.itemCode) === cleanTarget || clean(s.customerCode) === cleanTarget || clean(s.itemCode).includes(cleanTarget)
+    )
+
+    const finalTargetCode = targetItem ? targetItem.itemCode : String(targetCodeInput).trim()
+    const finalTargetKey = targetItem ? targetItem.itemKey : null
+
+    // 1. Update line in batch
+    setBatchInvoices((prev) =>
+      prev.map((batch) => {
+        if (batch.id !== batchId) return batch
+        const copyLines = [...batch.reviewLines]
+        copyLines[lineIndex] = {
+          ...copyLines[lineIndex],
+          itemCode: finalTargetCode,
+          customerCode: copyLines[lineIndex].customerCode || sourceCode,
+          targetItemKey: finalTargetKey,
+          targetItemCode: finalTargetCode,
+          manualTargetCode: '',
+          rejectedSuggestion: true,
+        }
+        return { ...batch, reviewLines: copyLines }
+      })
+    )
+
+    // 2. Save alias permanently
+    if (selectedProjectId) {
+      try {
+        await saveProjectItemAlias(selectedProjectId, {
+          aliasCode: sourceCode,
+          targetItemCode: finalTargetCode,
+          targetItemKey: finalTargetKey,
+          targetDescription: targetItem?.description || '',
+        })
+        toast.success(
+          isAr
+            ? `✅ تم ربط كود شوكو (${sourceCode}) بكود كانكس (${finalTargetCode}) واعتمد في القاموس للأبد!`
+            : `Permanently linked ${sourceCode} to ${finalTargetCode}!`
+        )
+        loadProjectAliases(selectedProjectId)
+      } catch (e) {
+        console.warn('Error saving alias:', e)
+      }
+    }
   }
 
   const [loading, setLoading] = useState(true)
@@ -3834,20 +3955,40 @@ export default function Warehouse() {
                                   </div>
                                 </div>
                                 {hasIssues && (
-                                  <span
-                                    className="badge"
-                                    style={{
-                                      background: 'rgba(255, 71, 87, 0.2)',
-                                      color: '#ff4757',
-                                      border: '1px solid #ff4757',
-                                      fontWeight: 800,
-                                      padding: '0.4rem 0.8rem',
-                                      borderRadius: '8px',
-                                      fontSize: '0.82rem',
-                                    }}
-                                  >
-                                    ⚠️ {isAr ? 'يرجى مراجعة العجز قبل الاعتماد' : 'Review shortages before dispatch'}
-                                  </span>
+                                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <span
+                                      className="badge"
+                                      style={{
+                                        background: 'rgba(255, 71, 87, 0.2)',
+                                        color: '#ff4757',
+                                        border: '1px solid #ff4757',
+                                        fontWeight: 800,
+                                        padding: '0.4rem 0.8rem',
+                                        borderRadius: '8px',
+                                        fontSize: '0.82rem',
+                                      }}
+                                    >
+                                      ⚠️ {isAr ? 'يرجى مراجعة العجز قبل الاعتماد' : 'Review shortages before dispatch'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCoverAllDelmar(batch.id)}
+                                      className="btn btn-sm"
+                                      style={{
+                                        background: '#00e0a1',
+                                        color: '#000',
+                                        border: 'none',
+                                        fontWeight: 800,
+                                        padding: '0.4rem 0.85rem',
+                                        borderRadius: '8px',
+                                        fontSize: '0.82rem',
+                                        cursor: 'pointer',
+                                      }}
+                                      title={isAr ? 'تغطية كافة فروق الأعواد بالصرف مباشرة من مخزن دلمار' : 'Cover all bar differences from Delmar'}
+                                    >
+                                      ✅ {isAr ? 'أيوه، تغطية فرق الأعواد من دلمار' : 'Yes, cover from Delmar'}
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             )
@@ -3893,7 +4034,7 @@ export default function Warehouse() {
                                     {isAr ? (
                                       <>
                                         • تم رصد <strong>{allCoated.length} بند دهان</strong> بإجمالي <strong>{coatedBars.toLocaleString()} عود</strong> تخص التسليم (موجودة في <strong>مخزن دلمار بتدهن</strong>).<br />
-                                        • يوجد <strong>{rawLines.length} بند خام (MF)</strong> بإجمالي <strong>{rawBars.toLocaleString()} عود</strong> بالمستودع الرئيسي.<br />
+                                        • يوجد <strong>{rawLines.length} بند خام (MF)</strong> بالمستودع الرئيسي.<br />
                                         • الحالة الحالية: <span style={{ color: activeCoated.length > 0 ? '#00e0a1' : '#ff4757', fontWeight: 800 }}>({activeCoated.length} بند معتمد للصرف من دلمار)</span> و <span style={{ color: 'var(--text-muted)' }}>({excludedCoated.length} بند مستبعد)</span>.
                                       </>
                                     ) : (
@@ -3955,18 +4096,18 @@ export default function Warehouse() {
                               <colgroup>
                                 <col style={{ width: '45px' }} />
                                 <col style={{ width: '60px' }} />
-                                <col style={{ width: '150px' }} />
                                 <col style={{ width: '140px' }} />
-                                {batch.movementType === 'outbound' && <col style={{ width: '240px' }} />}
-                                <col style={{ width: '550px' }} />
-                                <col style={{ width: '110px' }} />
-                                <col style={{ width: '100px' }} />
-                                <col style={{ width: '120px' }} />
-                                <col style={{ width: '120px' }} />
-                                <col style={{ width: '100px' }} />
-                                <col style={{ width: '120px' }} />
-                                <col style={{ width: '120px' }} />
-                                <col style={{ width: '140px' }} />
+                                <col style={{ width: '130px' }} />
+                                {batch.movementType === 'outbound' && <col style={{ width: '280px' }} />}
+                                <col style={{ width: '430px' }} /> {/* Description */}
+                                <col style={{ width: '100px' }} /> {/* Bars (الأعواد) - Right After Description! */}
+                                <col style={{ width: '110px' }} /> {/* Finish */}
+                                <col style={{ width: '90px' }} />  {/* Length */}
+                                <col style={{ width: '110px' }} /> {/* Total LM */}
+                                <col style={{ width: '110px' }} /> {/* Total KG */}
+                                <col style={{ width: '110px' }} /> {/* Meter Price */}
+                                <col style={{ width: '110px' }} /> {/* Bar Price */}
+                                <col style={{ width: '130px' }} /> {/* Total */}
                               </colgroup>
                               <thead>
                                 <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)' }}>
@@ -3978,11 +4119,11 @@ export default function Warehouse() {
                                     <th style={{ padding: '0.6rem 0.4rem', color: '#ff6b81' }}>{isAr ? '🔍 فحص الرصيد ومخزن دلمار' : '🔍 Stock & Delmar Check'}</th>
                                   )}
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'وصف الصنف / القطاع' : 'Description'}</th>
+                                  <th style={{ padding: '0.6rem 0.4rem', color: '#00e0a1', fontWeight: 800 }}>{isAr ? 'الأعواد (Bars)' : 'Bars'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'التشطيب' : 'Finish'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'الطول mm' : 'Length mm'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'إجمالي الأمتار' : 'Total LM'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'إجمالي الوزن' : 'Total KG'}</th>
-                                  <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'الأعواد' : 'Bars'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'سعر المتر' : 'Meter Price'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'سعر العود' : 'Bar Price'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'الإجمالي' : 'Total'}</th>
@@ -4028,10 +4169,40 @@ export default function Warehouse() {
                                     </td>
                                     {batch.movementType === 'outbound' && (
                                       <td style={{ padding: '0.5rem 0.4rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-start' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', alignItems: 'flex-start', width: '100%' }}>
                                           {/* Stock Availability Badge */}
                                           {(() => {
                                             const chk = checkStockAvailability(line, stock, aliasesMap)
+
+                                            // 1. Delmar Covered State
+                                            if (chk.delmarCovered) {
+                                              return (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start', width: '100%' }}>
+                                                  <span
+                                                    className="badge"
+                                                    style={{
+                                                      background: 'rgba(0, 224, 161, 0.2)',
+                                                      color: '#00e0a1',
+                                                      border: '1px solid #00e0a1',
+                                                      fontSize: '0.73rem',
+                                                      fontWeight: 800,
+                                                      padding: '0.2rem 0.45rem',
+                                                    }}
+                                                  >
+                                                    🟢 {isAr ? `مغطى بالكامل (${chk.availableBar} بالمخزن + ${chk.delmarShortage} من دلمار)` : `Fully covered (${chk.availableBar} wh + ${chk.delmarShortage} Delmar)`}
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleToggleDelmarCover(batch.id, idx)}
+                                                    style={{ background: 'none', border: 'none', color: '#ff6b81', fontSize: '0.66rem', cursor: 'pointer', textDecoration: 'underline' }}
+                                                  >
+                                                    {isAr ? 'إلغاء التغطية من دلمار' : 'Undo Delmar coverage'}
+                                                  </button>
+                                                </div>
+                                              )
+                                            }
+
+                                            // 2. Sufficient Stock
                                             if (chk.status === 'sufficient') {
                                               return (
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', alignItems: 'flex-start' }}>
@@ -4068,9 +4239,12 @@ export default function Warehouse() {
                                                   )}
                                                 </div>
                                               )
-                                            } else if (chk.status === 'shortage') {
+                                            }
+
+                                            // 3. Stock Shortage (with Delmar Coverage Prompt)
+                                            if (chk.status === 'shortage') {
                                               return (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', alignItems: 'flex-start' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', alignItems: 'flex-start', width: '100%' }}>
                                                   <span
                                                     className="badge"
                                                     style={{
@@ -4078,15 +4252,11 @@ export default function Warehouse() {
                                                       color: '#ff4757',
                                                       border: '1px solid rgba(255, 71, 87, 0.45)',
                                                       fontSize: '0.73rem',
-                                                      display: 'inline-flex',
-                                                      alignItems: 'center',
-                                                      gap: '0.2rem',
                                                       fontWeight: 700,
-                                                      whiteSpace: 'nowrap',
                                                     }}
                                                     title={isAr ? `عجز رصيد! متاح بالمخزن ${chk.availableBar} والمطلوب ${line.quantityBar || line.bars || 0}` : `Shortage!`}
                                                   >
-                                                    🔴 {isAr ? `عجز ${Math.abs(chk.diff)} (متاح ${chk.availableBar})` : `Short ${Math.abs(chk.diff)}`}
+                                                    🔴 {isAr ? `عجز ${Math.abs(chk.diff)} (متاح ${chk.availableBar} بالمخزن)` : `Short ${Math.abs(chk.diff)}`}
                                                   </span>
                                                   {chk.viaAlias && (
                                                     <span
@@ -4102,79 +4272,169 @@ export default function Warehouse() {
                                                       🔗 {isAr ? `بديل لـ (${chk.matchedItem?.itemCode})` : `Alias: ${chk.matchedItem?.itemCode}`}
                                                     </span>
                                                   )}
-                                                </div>
-                                              )
-                                            } else {
-                                              const fuzzyMatch = findSmartFuzzyMatch(line, stock, aliasesMap)
-                                              return (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-start', width: '100%' }}>
-                                                  <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                                    <span
-                                                      className="badge"
-                                                      style={{
-                                                        background: 'rgba(255, 255, 255, 0.08)',
-                                                        color: '#bbb',
-                                                        border: '1px solid rgba(255, 255, 255, 0.2)',
-                                                        fontSize: '0.73rem',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '0.2rem',
-                                                        whiteSpace: 'nowrap',
-                                                      }}
-                                                    >
-                                                      ⚪ {isAr ? 'غير مسجل (0)' : 'Not in Stock (0)'}
-                                                    </span>
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => {
-                                                        setAliasSearchQuery(line.itemCode || '')
-                                                        setLinkModalData({
-                                                          isOpen: true,
-                                                          batchId: batch.id,
-                                                          lineIndex: idx,
-                                                          sourceCode: line.itemCode,
-                                                          sourceDesc: line.description || '',
-                                                          selectedItemKey: fuzzyMatch ? fuzzyMatch.item.itemKey : '',
-                                                          rememberAlways: true,
-                                                        })
-                                                      }}
-                                                      style={{
-                                                        background: 'rgba(138, 180, 248, 0.15)',
-                                                        color: '#8ab4ff',
-                                                        border: '1px solid rgba(138, 180, 248, 0.35)',
-                                                        borderRadius: '4px',
-                                                        fontSize: '0.68rem',
-                                                        padding: '0.1rem 0.4rem',
-                                                        cursor: 'pointer',
-                                                        fontWeight: 700,
-                                                      }}
-                                                      title={isAr ? 'ربط هذا الكود بصنف بديل من المخزن' : 'Link to stock profile'}
-                                                    >
-                                                      🔗 {isAr ? 'ربط بديل' : 'Link'}
-                                                    </button>
-                                                  </div>
 
-                                                  {/* Smart Similarity Suggestion */}
-                                                  {fuzzyMatch && (
+                                                  {/* Delmar Shortage Coverage Box */}
+                                                  {isCoated && (
                                                     <div
                                                       style={{
-                                                        background: 'rgba(96, 165, 250, 0.1)',
-                                                        border: '1px solid rgba(96, 165, 250, 0.3)',
+                                                        background: 'rgba(245, 158, 11, 0.08)',
+                                                        border: '1px solid rgba(245, 158, 11, 0.3)',
                                                         borderRadius: '6px',
-                                                        padding: '0.3rem 0.45rem',
-                                                        display: 'flex',
-                                                        flexDirection: 'column',
-                                                        gap: '0.25rem',
-                                                        marginTop: '0.15rem',
+                                                        padding: '0.35rem 0.45rem',
                                                         width: '100%',
+                                                        fontSize: '0.7rem',
+                                                        lineHeight: 1.35,
                                                       }}
                                                     >
-                                                      <div style={{ fontSize: '0.68rem', color: '#93c5fd', lineHeight: 1.25 }}>
-                                                        💡 {isAr ? 'اقتراح ذكي:' : 'Smart Match:'} هل تقصد <strong>{fuzzyMatch.item.itemCode}</strong>؟
-                                                        <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'block' }}>
-                                                          ({fuzzyMatch.reason} - {fuzzyMatch.score}%)
-                                                        </span>
+                                                      <div style={{ color: '#fbbf24' }}>
+                                                        {isAr ? (
+                                                          <>
+                                                            معاك في المخزن: <strong>{chk.availableBar} عود</strong><br />
+                                                            يوجد في مخزن دلمار: <strong>{line.quantityBar || line.bars || 0} عود</strong> بتدهن.<br />
+                                                            تحب تغطي فرق الأعواد ({Math.abs(chk.diff)} عود) من دلمار؟
+                                                          </>
+                                                        ) : (
+                                                          <>Stock: {chk.availableBar} | Delmar: {line.quantityBar || 0} bars. Cover short?</>
+                                                        )}
                                                       </div>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleToggleDelmarCover(batch.id, idx)}
+                                                        style={{
+                                                          marginTop: '0.3rem',
+                                                          background: '#00e0a1',
+                                                          color: '#000',
+                                                          border: 'none',
+                                                          borderRadius: '4px',
+                                                          fontWeight: 800,
+                                                          fontSize: '0.72rem',
+                                                          padding: '0.2rem 0.55rem',
+                                                          cursor: 'pointer',
+                                                        }}
+                                                      >
+                                                        ✅ {isAr ? 'أيوه، غطي واصرف الفرق من دلمار' : 'Yes, cover from Delmar'}
+                                                      </button>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              )
+                                            }
+
+                                            // 4. Missing Item (with direct manual code input & fuzzy match)
+                                            const fuzzyMatch = findSmartFuzzyMatch(line, stock, aliasesMap)
+                                            return (
+                                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', alignItems: 'flex-start', width: '100%' }}>
+                                                <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                  <span
+                                                    className="badge"
+                                                    style={{
+                                                      background: 'rgba(255, 255, 255, 0.08)',
+                                                      color: '#bbb',
+                                                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                      fontSize: '0.73rem',
+                                                      display: 'inline-flex',
+                                                      alignItems: 'center',
+                                                      gap: '0.2rem',
+                                                      whiteSpace: 'nowrap',
+                                                    }}
+                                                  >
+                                                    ⚪ {isAr ? 'غير مسجل (0)' : 'Not in Stock (0)'}
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setAliasSearchQuery(line.itemCode || '')
+                                                      setLinkModalData({
+                                                        isOpen: true,
+                                                        batchId: batch.id,
+                                                        lineIndex: idx,
+                                                        sourceCode: line.itemCode,
+                                                        sourceDesc: line.description || '',
+                                                        selectedItemKey: fuzzyMatch ? fuzzyMatch.item.itemKey : '',
+                                                        rememberAlways: true,
+                                                      })
+                                                    }}
+                                                    style={{
+                                                      background: 'rgba(138, 180, 248, 0.15)',
+                                                      color: '#8ab4ff',
+                                                      border: '1px solid rgba(138, 180, 248, 0.35)',
+                                                      borderRadius: '4px',
+                                                      fontSize: '0.68rem',
+                                                      padding: '0.1rem 0.4rem',
+                                                      cursor: 'pointer',
+                                                      fontWeight: 700,
+                                                    }}
+                                                    title={isAr ? 'بحث واختيار صنف من المخزن' : 'Search stock'}
+                                                  >
+                                                    🔍 {isAr ? 'بحث' : 'Search'}
+                                                  </button>
+                                                </div>
+
+                                                {/* Direct Manual Code Input Field */}
+                                                <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', width: '100%', marginTop: '0.15rem' }}>
+                                                  <input
+                                                    type="text"
+                                                    placeholder={isAr ? 'اكتب كود الصنف بالمخزن (515756)...' : 'Type stock code...'}
+                                                    value={line.manualTargetCode || ''}
+                                                    onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'manualTargetCode', e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                      if (e.key === 'Enter') {
+                                                        handleManualLinkByCode(batch.id, idx, line.itemCode, line.manualTargetCode)
+                                                      }
+                                                    }}
+                                                    style={{
+                                                      background: '#0d1117',
+                                                      border: '1px solid #3b82f6',
+                                                      borderRadius: '4px',
+                                                      color: '#fff',
+                                                      fontSize: '0.72rem',
+                                                      padding: '0.2rem 0.4rem',
+                                                      flex: '1 1 auto',
+                                                      minWidth: '120px',
+                                                    }}
+                                                  />
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleManualLinkByCode(batch.id, idx, line.itemCode, line.manualTargetCode)}
+                                                    style={{
+                                                      background: '#2563eb',
+                                                      color: '#fff',
+                                                      border: 'none',
+                                                      borderRadius: '4px',
+                                                      fontSize: '0.7rem',
+                                                      fontWeight: 800,
+                                                      padding: '0.2rem 0.45rem',
+                                                      cursor: 'pointer',
+                                                      whiteSpace: 'nowrap',
+                                                    }}
+                                                    title={isAr ? 'ربط هذا الكود بالصنف في المخزن وحفظه دائماً' : 'Link code'}
+                                                  >
+                                                    🔗 {isAr ? 'ربط' : 'Link'}
+                                                  </button>
+                                                </div>
+
+                                                {/* Smart Similarity Suggestion (with Reject button) */}
+                                                {fuzzyMatch && !line.rejectedSuggestion && (
+                                                  <div
+                                                    style={{
+                                                      background: 'rgba(96, 165, 250, 0.1)',
+                                                      border: '1px solid rgba(96, 165, 250, 0.3)',
+                                                      borderRadius: '6px',
+                                                      padding: '0.35rem 0.5rem',
+                                                      display: 'flex',
+                                                      flexDirection: 'column',
+                                                      gap: '0.25rem',
+                                                      marginTop: '0.15rem',
+                                                      width: '100%',
+                                                    }}
+                                                  >
+                                                    <div style={{ fontSize: '0.68rem', color: '#93c5fd', lineHeight: 1.25 }}>
+                                                      💡 {isAr ? 'اقتراح ذكي:' : 'Smart Match:'} هل تقصد <strong>{fuzzyMatch.item.itemCode}</strong>؟
+                                                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'block' }}>
+                                                        ({fuzzyMatch.reason} - {fuzzyMatch.score}%)
+                                                      </span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
                                                       <button
                                                         type="button"
                                                         onClick={() => handleQuickLinkAlias(batch.id, idx, line.itemCode, fuzzyMatch.item)}
@@ -4187,16 +4447,31 @@ export default function Warehouse() {
                                                           fontWeight: 800,
                                                           padding: '0.2rem 0.5rem',
                                                           cursor: 'pointer',
-                                                          alignSelf: 'flex-start',
                                                         }}
                                                       >
-                                                        ⚡ {isAr ? 'ربط واعتماد دائماً' : 'Link & Remember'}
+                                                        ⚡ {isAr ? 'ربط واعتماد' : 'Link'}
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleRejectSuggestion(batch.id, idx)}
+                                                        style={{
+                                                          background: 'rgba(255, 71, 87, 0.15)',
+                                                          color: '#ff4757',
+                                                          border: '1px solid rgba(255, 71, 87, 0.3)',
+                                                          borderRadius: '4px',
+                                                          fontSize: '0.65rem',
+                                                          fontWeight: 700,
+                                                          padding: '0.2rem 0.45rem',
+                                                          cursor: 'pointer',
+                                                        }}
+                                                      >
+                                                        ❌ {isAr ? 'رفض' : 'Reject'}
                                                       </button>
                                                     </div>
-                                                  )}
-                                                </div>
-                                              )
-                                            }
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )
                                           })()}
 
                                           {/* Delmar Coating Status & Owner Toggle */}
@@ -4261,6 +4536,8 @@ export default function Warehouse() {
                                         </div>
                                       </td>
                                     )}
+
+                                    {/* Description */}
                                     <td style={{ padding: '0.5rem 0.4rem' }}>
                                       <textarea
                                         value={line.description}
@@ -4269,6 +4546,18 @@ export default function Warehouse() {
                                         style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%', resize: 'vertical', lineHeight: 1.35 }}
                                       />
                                     </td>
+
+                                    {/* Bars (الأعواد) - Right After Description! */}
+                                    <td style={{ padding: '0.5rem 0.4rem' }}>
+                                      <input
+                                        type="number"
+                                        value={line.quantityBar}
+                                        onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'quantityBar', e.target.value)}
+                                        style={{ background: '#101223', border: '1px solid #00e0a1', color: '#00e0a1', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%', fontWeight: 800, fontSize: '0.95rem' }}
+                                      />
+                                    </td>
+
+                                    {/* Finish */}
                                     <td style={{ padding: '0.5rem 0.4rem' }}>
                                       <input
                                         type="text"
@@ -4277,24 +4566,33 @@ export default function Warehouse() {
                                         style={{ background: '#101223', border: '1px solid var(--border)', color: '#FFD700', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }}
                                       />
                                     </td>
+
+                                    {/* Length mm */}
                                     <td style={{ padding: '0.5rem 0.4rem' }}>
                                       <input type="number" value={line.lengthMm} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'lengthMm', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }} />
                                     </td>
+
+                                    {/* Total LM */}
                                     <td style={{ padding: '0.5rem 0.4rem' }}>
                                       <input type="number" step="0.001" value={line.quantityLm} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'quantityLm', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%', fontWeight: 700 }} />
                                     </td>
+
+                                    {/* Total KG */}
                                     <td style={{ padding: '0.5rem 0.4rem' }}>
                                       <input type="number" step="0.001" value={line.quantityKg} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'quantityKg', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }} />
                                     </td>
-                                    <td style={{ padding: '0.5rem 0.4rem' }}>
-                                      <input type="number" value={line.quantityBar} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'quantityBar', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%', fontWeight: 700 }} />
-                                    </td>
+
+                                    {/* Unit Price */}
                                     <td style={{ padding: '0.5rem 0.4rem' }}>
                                       <input type="number" step="0.0001" value={line.unitPrice} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'unitPrice', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }} />
                                     </td>
+
+                                    {/* Bar Price */}
                                     <td style={{ padding: '0.5rem 0.4rem' }}>
                                       <input type="number" step="0.0001" value={line.barPrice || ''} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'barPrice', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }} />
                                     </td>
+
+                                    {/* Total */}
                                     <td style={{ padding: '0.5rem 0.4rem', fontWeight: 700, color: '#64b5f6', whiteSpace: 'nowrap' }}>
                                       {Number(line.netTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </td>

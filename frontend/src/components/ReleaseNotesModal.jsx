@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.36',
+      version: 'v2.27.37',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'تغطية عجز الأعواد من مخزن دلمار، كتابة الكود الصحيح يدوياً، ونقل عمود الأعواد' : 'Delmar Shortage Coverage Prompt, Manual Code Mapping & Column Reordering',
+      highlights: [
+        {
+          icon: '🏭',
+          text: isAr
+            ? 'سؤال تغطية عجز الأعواد من دلمار: زر واضح ومباشر (✅ أيوه، غطي واصرف الفرق من دلمار) لكل سطر وبشكل جماعي، يحول البند فورياً إلى مغطى بالكامل ويعتمد الصرف بسلاسة.'
+            : 'Delmar Shortage Coverage Prompt: direct 1-click button to cover bar shortage from Delmar painted stock without blocking dispatch.'
+        },
+        {
+          icon: '✍️',
+          text: isAr
+            ? 'خانة إدخال الكود الصحيح يدوياً ورفض الاقتراح: إمكانية رفض أي اقتراح ذكي خاطئ بنقرة واحدة، وخانة مباشرة لكتابة كود الصنف بالمخزن (مثل 515756) وربطه فوراً بالقاموس للأبد.'
+            : 'Reject Wrong Suggestion & Manual Code Input: dismiss mismatch suggestions and instantly map the right warehouse profile code inline.'
+        },
+        {
+          icon: '📊',
+          text: isAr
+            ? 'إعادة ترتيب الجدول: نقل عمود الأعواد (Bars) ليكون مباشرة بعد عمود الوصف لسهولة وسرعة الرؤية والمراجعة دون الحاجة للتمرير.'
+            : 'Table Reordering: moved Bars column directly next to Description for instant visibility without scrolling.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.36',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'نظام الأكواد المترادفة والبديلة (Item Aliases) والربط الذكي بين أكواد شوكو وكانكس' : 'Item Aliases Dictionary & Smart Match for Schüco vs Canex Discrepancies',
       highlights: [
         {
