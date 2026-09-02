@@ -615,6 +615,7 @@ export default function Warehouse() {
           targetItemKey: finalTargetKey,
           targetItemCode: finalTargetCode,
           manualTargetCode: '',
+          showManualLink: false,
           rejectedSuggestion: true,
         }
         return { ...batch, reviewLines: copyLines }
@@ -4352,6 +4353,22 @@ export default function Warehouse() {
                                           >
                                             🔍
                                           </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => updateBatchInvoiceLine(batch.id, idx, 'showManualLink', !line.showManualLink)}
+                                            style={{
+                                              background: line.showManualLink ? '#2563eb' : 'rgba(59, 130, 246, 0.15)',
+                                              color: line.showManualLink ? '#fff' : '#60a5fa',
+                                              border: '1px solid rgba(59, 130, 246, 0.35)',
+                                              borderRadius: '5px',
+                                              padding: '0.35rem 0.45rem',
+                                              fontSize: '0.8rem',
+                                              cursor: 'pointer',
+                                            }}
+                                            title={isAr ? 'فتح خانة كتابة كود كانكس والربط اليدوي' : 'Toggle manual Canex linking input'}
+                                          >
+                                            🔗
+                                          </button>
                                         </div>
 
                                         {/* Matched via alias info badge if available */}
@@ -4366,7 +4383,7 @@ export default function Warehouse() {
                                                     background: 'rgba(0, 224, 161, 0.15)',
                                                     color: '#00e0a1',
                                                     border: '1px solid rgba(0, 224, 161, 0.35)',
-                                                    fontSize: '0.72rem',
+                                                    fontSize: '0.74rem',
                                                     fontWeight: 700,
                                                     padding: '0.15rem 0.4rem',
                                                   }}
@@ -4380,48 +4397,66 @@ export default function Warehouse() {
                                           return null
                                         })()}
 
-                                        {/* Direct Manual Link to Canex input field (ALWAYS available!) */}
-                                        <div style={{ display: 'flex', gap: '0.2rem', alignItems: 'center', width: '100%' }}>
-                                          <input
-                                            type="text"
-                                            placeholder={isAr ? 'كود كانكس (515756)...' : 'Canex code...'}
-                                            value={line.manualTargetCode || ''}
-                                            onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'manualTargetCode', e.target.value)}
-                                            onKeyDown={(e) => {
-                                              if (e.key === 'Enter') {
-                                                handleManualLinkByCode(batch.id, idx, line.itemCode, line.manualTargetCode)
-                                              }
-                                            }}
-                                            style={{
-                                              background: '#0d1117',
-                                              border: '1px solid #3b82f6',
-                                              borderRadius: '4px',
-                                              color: '#fff',
-                                              fontSize: '0.75rem',
-                                              padding: '0.25rem 0.4rem',
-                                              flex: '1 1 auto',
-                                              minWidth: '95px',
-                                            }}
-                                          />
-                                          <button
-                                            type="button"
-                                            onClick={() => handleManualLinkByCode(batch.id, idx, line.itemCode, line.manualTargetCode)}
-                                            style={{
-                                              background: '#2563eb',
-                                              color: '#fff',
-                                              border: 'none',
-                                              borderRadius: '4px',
-                                              fontSize: '0.74rem',
-                                              fontWeight: 800,
-                                              padding: '0.25rem 0.45rem',
-                                              cursor: 'pointer',
-                                              whiteSpace: 'nowrap',
-                                            }}
-                                            title={isAr ? 'ربط هذا الكود بصنف كانكس بالمخزن وحفظه للأبد في القاموس' : 'Link to Canex permanently'}
-                                          >
-                                            🔗 {isAr ? 'ربط' : 'Link'}
-                                          </button>
-                                        </div>
+                                        {/* Direct Manual Link to Canex input field (ONLY WHEN TOGGLED ON) */}
+                                        {line.showManualLink && (
+                                          <div style={{ display: 'flex', gap: '0.2rem', alignItems: 'center', width: '100%', marginTop: '0.15rem' }}>
+                                            <input
+                                              type="text"
+                                              placeholder={isAr ? 'كود كانكس (515756)...' : 'Canex code...'}
+                                              value={line.manualTargetCode || ''}
+                                              onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'manualTargetCode', e.target.value)}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                  handleManualLinkByCode(batch.id, idx, line.itemCode, line.manualTargetCode)
+                                                }
+                                              }}
+                                              style={{
+                                                background: '#0d1117',
+                                                border: '1px solid #3b82f6',
+                                                borderRadius: '4px',
+                                                color: '#fff',
+                                                fontSize: '0.78rem',
+                                                padding: '0.25rem 0.4rem',
+                                                flex: '1 1 auto',
+                                                minWidth: '95px',
+                                              }}
+                                              autoFocus
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => handleManualLinkByCode(batch.id, idx, line.itemCode, line.manualTargetCode)}
+                                              style={{
+                                                background: '#2563eb',
+                                                color: '#fff',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                fontSize: '0.74rem',
+                                                fontWeight: 800,
+                                                padding: '0.25rem 0.45rem',
+                                                cursor: 'pointer',
+                                                whiteSpace: 'nowrap',
+                                              }}
+                                              title={isAr ? 'ربط هذا الكود بصنف كانكس بالمخزن وحفظه للأبد في القاموس' : 'Link to Canex permanently'}
+                                            >
+                                              🔗 {isAr ? 'ربط' : 'Link'}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => updateBatchInvoiceLine(batch.id, idx, 'showManualLink', false)}
+                                              style={{
+                                                background: 'transparent',
+                                                color: '#94a3b8',
+                                                border: 'none',
+                                                fontSize: '0.8rem',
+                                                cursor: 'pointer',
+                                                padding: '0.2rem 0.3rem',
+                                              }}
+                                              title={isAr ? 'إغلاق' : 'Close'}
+                                            >
+                                              ✕
+                                            </button>
+                                          </div>
+                                        )}
 
                                         {/* Smart Fuzzy Match Suggestion ONLY IF UNKNOWN / MISSING (NO REFERENCE) */}
                                         {(() => {

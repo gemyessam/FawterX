@@ -7,10 +7,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.40',
+      version: 'v2.27.41',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إخفاء خانة الربط اليدوي تلقائياً وتفعيلها بزر مخصص عند الطلب' : 'Collapsible On-Demand Canex Manual Link Input',
+      highlights: [
+        {
+          icon: '🔗',
+          text: isAr
+            ? 'تصميم مدمج ونظيف: إخفاء خانة إدخال كود كانكس اليدوي افتراضياً لتوفير المساحة ومنع ازدحام الجدول، مع توفير زر رابط [ 🔗 ] سريع بجانب زر البحث [ 🔍 ] لفتح الخانة عند الحاجة فقط.'
+            : 'Compact Clean UI: Canex manual link input is hidden by default and toggled via a sleek [🔗] button, saving vertical space and visual clutter.'
+        },
+        {
+          icon: '✨',
+          text: isAr
+            ? 'إغلاق تلقائي بعد الربط: بمجرد اعتماد الربط بكود كانكس، تُغلق الخانة تلقائياً وتظهر شارة خضراء أنيقة تؤكد الربط الدائم.'
+            : 'Auto-collapse after linking: the input field closes automatically once linked and shows the elegant green verified badge.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.40',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'أعمدة الأرصدة والمتبقي (المستودع ودلمار)، إزالة الاقتراحات الزائدة، وشريط الأولوية العام' : 'Independent Stock & Remaining Columns, Cleaner Canex Link UI & Batch Priority Toolbar',
       highlights: [
         {
