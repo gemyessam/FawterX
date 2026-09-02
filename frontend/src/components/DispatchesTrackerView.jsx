@@ -207,37 +207,58 @@ export default function DispatchesTrackerView({
       </div>
 
       {/* KPI Stats Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div style={{ background: 'rgba(255, 215, 0, 0.08)', border: '1px solid rgba(255, 215, 0, 0.3)', borderRadius: '12px', padding: '1rem' }}>
-          <div style={{ fontSize: '0.8rem', color: '#FFD700', fontWeight: 600 }}>
-            🟡 {isAr ? 'قيد الدهان والمعالجة (المرحلة 1)' : 'In Coating / Processing'}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+        <div style={{ background: 'rgba(255, 215, 0, 0.08)', border: '1px solid rgba(255, 215, 0, 0.35)', borderRadius: '14px', padding: '1.1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          <div style={{ fontSize: '0.85rem', color: '#FFD700', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <span>🟡</span> {isAr ? 'قيد الدهان والمعالجة (المرحلة 1)' : 'In Coating / Processing'}
           </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#FFD700', marginTop: '0.2rem' }}>
-            {kpiStats.activeCount} <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{isAr ? 'أوامر جارية' : 'active orders'}</span>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.2rem' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#FFD700' }}>
+              {kpiStats.activeCount} <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.85 }}>{isAr ? 'أوامر جارية' : 'active orders'}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', background: 'rgba(255, 215, 0, 0.15)', padding: '0.25rem 0.75rem', borderRadius: '10px', border: '1px solid rgba(255, 215, 0, 0.4)' }}>
+              <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#fff', letterSpacing: '0.5px' }}>{kpiStats.activeBars.toLocaleString()}</span>
+              <span style={{ fontSize: '1rem', fontWeight: 900, color: '#FFD700' }}>BAR</span>
+            </div>
           </div>
-          <div style={{ fontSize: '0.85rem', color: '#fff', opacity: 0.9, marginTop: '0.2rem' }}>
-            {kpiStats.activeBars} BAR ({kpiStats.activeLm.toFixed(1)} m) {isAr ? 'تحت الدهان حالياً' : 'at painters'}
-          </div>
-        </div>
-
-        <div style={{ background: 'rgba(0, 224, 161, 0.08)', border: '1px solid rgba(0, 224, 161, 0.3)', borderRadius: '12px', padding: '1rem' }}>
-          <div style={{ fontSize: '0.8rem', color: '#00e0a1', fontWeight: 600 }}>
-            🟢 {isAr ? 'تم التسليم للعميل النهائي (المرحلة 2)' : 'Delivered to Final Customer'}
-          </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#00e0a1', marginTop: '0.2rem' }}>
-            {kpiStats.completedCount} <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{isAr ? 'أوامر منتهية' : 'completed orders'}</span>
-          </div>
-          <div style={{ fontSize: '0.85rem', color: '#00e0a1', opacity: 0.9, marginTop: '0.2rem' }}>
-            {kpiStats.completedBars} BAR {isAr ? 'تم إغلاقها بالكامل' : 'total delivered'}
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+            ({kpiStats.activeLm.toFixed(1)} m) {isAr ? 'تحت الدهان حالياً' : 'at painters'}
           </div>
         </div>
 
-        <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+        <div style={{ background: 'rgba(0, 224, 161, 0.08)', border: '1px solid rgba(0, 224, 161, 0.35)', borderRadius: '14px', padding: '1.1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          <div style={{ fontSize: '0.85rem', color: '#00e0a1', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <span>🟢</span> {isAr ? 'تم التسليم للعميل النهائي (المرحلة 2)' : 'Delivered to Final Customer'}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.2rem' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#00e0a1' }}>
+              {kpiStats.completedCount} <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.85 }}>{isAr ? 'أوامر منتهية' : 'completed orders'}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', background: 'rgba(0, 224, 161, 0.15)', padding: '0.25rem 0.75rem', borderRadius: '10px', border: '1px solid rgba(0, 224, 161, 0.4)' }}>
+              <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#fff', letterSpacing: '0.5px' }}>{kpiStats.completedBars.toLocaleString()}</span>
+              <span style={{ fontSize: '1rem', fontWeight: 900, color: '#00e0a1' }}>BAR</span>
+            </div>
+          </div>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+            {isAr ? 'تم تسليمها وإغلاقها بالكامل' : 'total delivered to customer'}
+          </div>
+        </div>
+
+        <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border)', borderRadius: '14px', padding: '1.1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 700 }}>
             📦 {isAr ? 'إجمالي حركات الصرف المسجلة' : 'Total Dispatches Logged'}
           </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff', marginTop: '0.2rem' }}>
-            {kpiStats.totalCount} <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{isAr ? 'أمر صرف' : 'dispatches'}</span>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.2rem' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#fff' }}>
+              {kpiStats.totalCount} <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.85 }}>{isAr ? 'أمر صرف' : 'dispatches'}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', background: 'rgba(255, 255, 255, 0.06)', padding: '0.25rem 0.75rem', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
+              <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#64b5f6', letterSpacing: '0.5px' }}>{(kpiStats.activeBars + kpiStats.completedBars).toLocaleString()}</span>
+              <span style={{ fontSize: '1rem', fontWeight: 900, color: '#64b5f6' }}>BAR</span>
+            </div>
+          </div>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+            {isAr ? 'إجمالي الأعواد المسجلة في الأوامر' : 'total bars across all dispatches'}
           </div>
         </div>
       </div>
@@ -366,11 +387,12 @@ export default function DispatchesTrackerView({
 
                   {/* Summary Badges & Quick Action */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    <div style={{ textAlign: isAr ? 'left' : 'right', fontSize: '0.85rem' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'الكمية:' : 'Qty:'} </span>
-                      <strong style={{ color: '#64b5f6' }}>{disp.totalQuantityBar || 0} BAR</strong>
-                      <span style={{ color: 'var(--text-muted)', margin: '0 4px' }}>|</span>
-                      <strong style={{ color: '#a29bfe' }}>{(disp.totalQuantityLm || 0).toFixed(1)} m</strong>
+                    <div style={{ textAlign: isAr ? 'left' : 'right', display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(255,255,255,0.04)', padding: '0.3rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isAr ? 'الكمية:' : 'Qty:'}</span>
+                      <strong style={{ color: '#64b5f6', fontSize: '1.25rem', fontWeight: 900 }}>{(disp.totalQuantityBar || 0).toLocaleString()}</strong>
+                      <span style={{ color: '#64b5f6', fontWeight: 800, fontSize: '0.9rem' }}>BAR</span>
+                      <span style={{ color: 'var(--text-muted)', margin: '0 2px' }}>•</span>
+                      <strong style={{ color: '#a29bfe', fontSize: '0.95rem' }}>{(disp.totalQuantityLm || 0).toFixed(1)} m</strong>
                     </div>
 
                     {!isCompleted && (

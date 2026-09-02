@@ -8,10 +8,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.42',
+      version: 'v2.27.43',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'تكبير وإبراز أرقام عدد البارات (BAR) في بطاقات التتبع وجداول الفحص' : 'Enlarged High-Visibility Bar Count Typography Across Lifecycle Tracker & Audit Tables',
+      highlights: [
+        {
+          icon: '🔍',
+          text: isAr
+            ? 'تكبير عدد البارات في بطاقات المراحل: تكبير أرقام البارات (BAR) في بطاقات المرحلة 1 والمرحلة 2 إلى 1.6rem بخط عريض وبادجات مضيئة مميزة لتسهيل قراءتها بنظرة واحدة.'
+            : 'Enlarged Bar Counts in Lifecycle Cards: Bar totals in Phase 1 & Phase 2 cards boosted to 1.6rem with bold illuminated badges.'
+        },
+        {
+          icon: '📊',
+          text: isAr
+            ? 'خطوط أوضح في جداول المراجعة وسجل الحركات: تكبير خانات المتاح والمطلوب وعدد الأعواد في سجل الحركات لضمان قراءة سريعة ومريحة للعين.'
+            : 'Clearer Table Typography: Available, requested, and total dispatched bar counts enlarged for enhanced legibility.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.42',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'خصم وإغلاق أوامر مخزن دلمار آلياً عند الصرف، واحتساب قيمة الصرف بسعر تكلفة الدخول' : 'Auto-Fulfill Delmar Dispatches & Valuation of Outbound Deliveries by Inbound Acquisition Cost',
       highlights: [
         {

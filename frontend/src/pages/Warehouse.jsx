@@ -3281,8 +3281,10 @@ export default function Warehouse() {
                         <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#FFD700' }}>
                           {inv.lineItemsCount || 0} {isAr ? 'بند' : 'items'}
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#64b5f6' }}>
-                          <span dir="ltr">{inv.totalQuantityBar || 0} BAR</span>
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <span dir="ltr" style={{ fontSize: '1.15rem', fontWeight: 900, color: '#64b5f6', background: 'rgba(100, 181, 246, 0.1)', padding: '0.25rem 0.6rem', borderRadius: '6px' }}>
+                            {(inv.totalQuantityBar || 0).toLocaleString()} BAR
+                          </span>
                         </td>
                         <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#a29bfe' }}>
                           <span dir="ltr">{(inv.totalQuantityLm || 0).toFixed(1)} m</span>
@@ -4610,7 +4612,7 @@ export default function Warehouse() {
                                           const chk = checkStockAvailability(line, stock, aliasesMap, activeDispatches)
                                           return (
                                             <div>
-                                              <span style={{ fontSize: '1.05rem', fontWeight: 800, color: chk.availableBar > 0 ? '#00e0a1' : '#ff4757' }}>
+                                              <span style={{ fontSize: '1.25rem', fontWeight: 900, color: chk.availableBar > 0 ? '#00e0a1' : '#ff4757' }}>
                                                 {chk.availableBar}
                                               </span>
                                               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.1rem' }}>
@@ -4635,19 +4637,19 @@ export default function Warehouse() {
                                                 value={line.delmarAvailableBars !== undefined ? line.delmarAvailableBars : chk.availableDelmar}
                                                 onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'delmarAvailableBars', e.target.value)}
                                                 style={{
-                                                  width: '65px',
+                                                  width: '72px',
                                                   background: '#111827',
                                                   border: '1.5px solid #fbbf24',
                                                   color: '#fbbf24',
-                                                  fontSize: '0.95rem',
-                                                  fontWeight: 800,
-                                                  padding: '0.25rem 0.3rem',
-                                                  borderRadius: '5px',
+                                                  fontSize: '1.15rem',
+                                                  fontWeight: 900,
+                                                  padding: '0.3rem 0.35rem',
+                                                  borderRadius: '6px',
                                                   textAlign: 'center',
                                                 }}
                                                 title={isAr ? 'المتاح في مخزن دلمار (اضغط لتعديل الرصيد)' : 'Available in Delmar'}
                                               />
-                                              <span style={{ fontSize: '0.75rem', color: '#fbbf24', fontWeight: 700 }}>{isAr ? 'عود' : 'b'}</span>
+                                              <span style={{ fontSize: '0.8rem', color: '#fbbf24', fontWeight: 800 }}>{isAr ? 'عود' : 'b'}</span>
                                             </div>
                                           )
                                         })()}
@@ -4661,7 +4663,7 @@ export default function Warehouse() {
                                           const chk = checkStockAvailability(line, stock, aliasesMap, activeDispatches)
                                           return (
                                             <div>
-                                              <span style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ffffff' }}>
+                                              <span style={{ fontSize: '1.3rem', fontWeight: 900, color: '#ffffff' }}>
                                                 {chk.reqBar}
                                               </span>
                                               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.1rem' }}>
