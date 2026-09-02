@@ -94,6 +94,28 @@ function checkStockAvailability(line, stock = []) {
   }
 }
 
+function isCoatedItem(line) {
+  if (!line) return false
+  const finish = String(line.finish || line.color || '').trim().toUpperCase()
+  const desc = String(line.description || '').toUpperCase()
+
+  // Explicit mill finish or raw is not coated
+  if (/^(MF|MILL|RAW|خام|MILL\s*FINISH)$/i.test(finish)) {
+    return false
+  }
+
+  // Paint / coating indicators (RAL, Anodized, SD, Powder, etc.)
+  if (/RAL|ANODIZ|SD|POWDER|COAT|دهان|الوان/i.test(finish) || /RAL|ANODIZ|دهان/i.test(desc)) {
+    return true
+  }
+
+  if (finish && finish !== 'MF' && finish !== 'MILL' && finish !== 'RAW') {
+    return true
+  }
+
+  return false
+}
+
 export default function Warehouse() {
   const { lang, user, isAdmin } = useContext(AppContext)
   const isAr = lang === 'ar'
@@ -1038,6 +1060,30 @@ export default function Warehouse() {
     )
   }
 
+  function handleDelmarDecision(batchId, decision) {
+    setBatchInvoices((prev) =>
+      prev.map((batch) => {
+        if (batch.id !== batchId) return batch
+        const updatedLines = (batch.reviewLines || []).map((l) => {
+          if (isCoatedItem(l)) {
+            return { ...l, ignored: decision === 'exclude' }
+          }
+          return l
+        })
+        return {
+          ...batch,
+          reviewLines: updatedLines,
+          delmarDecision: decision,
+        }
+      })
+    )
+    if (decision === 'delmar') {
+      toast.success(isAr ? '✅ تم اعتماد كافة بنود دهان دلمار للصرف' : 'Coated items approved for Delmar dispatch')
+    } else {
+      toast.info(isAr ? '🚫 تم استبعاد كافة بنود دهان دلمار من الصرف' : 'Coated items excluded from dispatch')
+    }
+  }
+
   function removeBatchInvoice(batchId) {
     setBatchInvoices((prev) => prev.filter((item) => item.id !== batchId))
   }
@@ -1133,9 +1179,14 @@ export default function Warehouse() {
     )
 
     try {
+      const hasDelmarActive = batch.movementType === 'outbound' && validLines.some((l) => isCoatedItem(l))
       const payloadMeta = {
         ...batch.parsedMeta,
         movementType: batch.movementType,
+        coatingSupplier: hasDelmarActive
+          ? 'مصنع دلمار للألومنيوم والدهان (Delmar Industrial Coating)'
+          : batch.parsedMeta.supplier || 'المستودع',
+        delmarAllocated: hasDelmarActive,
         forceSave: options.forceSave !== undefined ? options.forceSave : true,
       }
       console.log('[BatchSingleSave] Processing invoice:', payloadMeta.invoiceNumber, payloadMeta)
@@ -3564,15 +3615,111 @@ export default function Warehouse() {
                             )
                           })()}
 
+                          {/* Delmar Coating Decision & Allocation Card */}
+                          {batch.movementType === 'outbound' && (() => {
+                            const allCoated = (batch.reviewLines || []).filter((l) => !l.isService && isCoatedItem(l))
+                            if (allCoated.length === 0) return null
+
+                            const rawLines = (batch.reviewLines || []).filter((l) => !l.isService && !isCoatedItem(l))
+                            const coatedBars = allCoated.reduce((acc, l) => acc + Number(l.quantityBar || l.bars || 0), 0)
+                            const rawBars = rawLines.reduce((acc, l) => acc + Number(l.quantityBar || l.bars || 0), 0)
+                            const activeCoated = allCoated.filter((l) => !l.ignored)
+                            const excludedCoated = allCoated.filter((l) => l.ignored)
+
+                            return (
+                              <div
+                                style={{
+                                  background: 'rgba(245, 158, 11, 0.08)',
+                                  border: '1px solid rgba(245, 158, 11, 0.35)',
+                                  borderRadius: '10px',
+                                  padding: '1rem 1.25rem',
+                                  marginBottom: '1.25rem',
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  flexWrap: 'wrap',
+                                  gap: '1rem',
+                                }}
+                              >
+                                <div style={{ flex: '1 1 350px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                                    <span style={{ fontSize: '1.2rem' }}>🏭</span>
+                                    <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#fbbf24' }}>
+                                      {isAr ? 'بنود الدهان الخاصة بأمر التسليم (مخزن دلمار - بتدهن):' : 'Coating Items for Delivery (Delmar Warehouse):'}
+                                    </span>
+                                    <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', border: '1px solid #fbbf24', fontSize: '0.75rem' }}>
+                                      {allCoated.length} {isAr ? 'بند دهان' : 'coated items'}
+                                    </span>
+                                  </div>
+                                  <div style={{ fontSize: '0.84rem', color: '#e2e8f0', lineHeight: 1.5 }}>
+                                    {isAr ? (
+                                      <>
+                                        • تم رصد <strong>{allCoated.length} بند دهان</strong> بإجمالي <strong>{coatedBars.toLocaleString()} عود</strong> تخص التسليم (موجودة في <strong>مخزن دلمار بتدهن</strong>).<br />
+                                        • يوجد <strong>{rawLines.length} بند خام (MF)</strong> بإجمالي <strong>{rawBars.toLocaleString()} عود</strong> بالمستودع الرئيسي.<br />
+                                        • الحالة الحالية: <span style={{ color: activeCoated.length > 0 ? '#00e0a1' : '#ff4757', fontWeight: 800 }}>({activeCoated.length} بند معتمد للصرف من دلمار)</span> و <span style={{ color: 'var(--text-muted)' }}>({excludedCoated.length} بند مستبعد)</span>.
+                                      </>
+                                    ) : (
+                                      <>
+                                        Detected {allCoated.length} coated items ({coatedBars.toLocaleString()} bars) in Delmar Warehouse for delivery.<br />
+                                        Current: {activeCoated.length} approved for dispatch from Delmar | {excludedCoated.length} excluded.
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Owner Decision Buttons */}
+                                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fbbf24' }}>
+                                    {isAr ? 'قرار المالك:' : 'Owner Decision:'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelmarDecision(batch.id, 'delmar')}
+                                    className="btn btn-sm"
+                                    style={{
+                                      background: activeCoated.length === allCoated.length ? '#00e0a1' : 'rgba(0, 224, 161, 0.15)',
+                                      color: activeCoated.length === allCoated.length ? '#000' : '#00e0a1',
+                                      border: '1px solid #00e0a1',
+                                      fontWeight: 800,
+                                      padding: '0.4rem 0.85rem',
+                                      borderRadius: '8px',
+                                      fontSize: '0.82rem',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    ✅ {isAr ? 'البنود تبعنا (صرف من مخزن دلمار)' : 'Ours (Dispatch from Delmar)'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelmarDecision(batch.id, 'exclude')}
+                                    className="btn btn-sm"
+                                    style={{
+                                      background: excludedCoated.length === allCoated.length ? '#ff4757' : 'rgba(255, 71, 87, 0.15)',
+                                      color: excludedCoated.length === allCoated.length ? '#fff' : '#ff4757',
+                                      border: '1px solid #ff4757',
+                                      fontWeight: 800,
+                                      padding: '0.4rem 0.85rem',
+                                      borderRadius: '8px',
+                                      fontSize: '0.82rem',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    🚫 {isAr ? 'ليست تبعنا (استبعاد بنود دلمار)' : 'Not Ours (Exclude Delmar)'}
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })()}
+
                           {/* Line Items Table */}
                           <div style={{ overflowX: 'auto', marginBottom: '0.5rem' }}>
-                            <table style={{ minWidth: batch.movementType === 'outbound' ? '2140px' : '1950px', width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
+                            <table style={{ minWidth: batch.movementType === 'outbound' ? '2180px' : '1950px', width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
                               <colgroup>
                                 <col style={{ width: '45px' }} />
                                 <col style={{ width: '60px' }} />
                                 <col style={{ width: '150px' }} />
                                 <col style={{ width: '140px' }} />
-                                {batch.movementType === 'outbound' && <col style={{ width: '190px' }} />}
+                                {batch.movementType === 'outbound' && <col style={{ width: '225px' }} />}
                                 <col style={{ width: '550px' }} />
                                 <col style={{ width: '110px' }} />
                                 <col style={{ width: '100px' }} />
@@ -3590,7 +3737,7 @@ export default function Warehouse() {
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'كود الصنف' : 'Item'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
                                   {batch.movementType === 'outbound' && (
-                                    <th style={{ padding: '0.6rem 0.4rem', color: '#ff6b81' }}>{isAr ? '🔍 فحص الرصيد بالمخزن' : '🔍 Stock Check'}</th>
+                                    <th style={{ padding: '0.6rem 0.4rem', color: '#ff6b81' }}>{isAr ? '🔍 فحص الرصيد ومخزن دلمار' : '🔍 Stock & Delmar Check'}</th>
                                   )}
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'وصف الصنف / القطاع' : 'Description'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'التشطيب' : 'Finish'}</th>
@@ -3604,13 +3751,15 @@ export default function Warehouse() {
                                 </tr>
                               </thead>
                               <tbody>
-                                {batch.reviewLines.map((line, idx) => (
+                                {batch.reviewLines.map((line, idx) => {
+                                  const isCoated = isCoatedItem(line)
+                                  return (
                                   <tr
                                     key={line.id}
                                     style={{
                                       borderBottom: '1px solid rgba(255,255,255,0.03)',
                                       opacity: line.ignored ? 0.4 : 1,
-                                      background: line.isService ? 'rgba(255, 77, 79, 0.05)' : 'transparent',
+                                      background: line.isService ? 'rgba(255, 77, 79, 0.05)' : isCoated ? 'rgba(245, 158, 11, 0.02)' : 'transparent',
                                     }}
                                   >
                                     <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)' }}>
@@ -3641,68 +3790,130 @@ export default function Warehouse() {
                                     </td>
                                     {batch.movementType === 'outbound' && (
                                       <td style={{ padding: '0.5rem 0.4rem' }}>
-                                        {(() => {
-                                          const chk = checkStockAvailability(line, stock)
-                                          if (chk.status === 'sufficient') {
-                                            return (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-start' }}>
+                                          {/* Stock Availability Badge */}
+                                          {(() => {
+                                            const chk = checkStockAvailability(line, stock)
+                                            if (chk.status === 'sufficient') {
+                                              return (
+                                                <span
+                                                  className="badge"
+                                                  style={{
+                                                    background: 'rgba(0, 224, 161, 0.15)',
+                                                    color: '#00e0a1',
+                                                    border: '1px solid rgba(0, 224, 161, 0.3)',
+                                                    fontSize: '0.73rem',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.2rem',
+                                                    whiteSpace: 'nowrap',
+                                                  }}
+                                                  title={isAr ? `متوفر بالمخزن: ${chk.availableBar} عود (المطلوب: ${line.quantityBar || line.bars || 0})` : `Available: ${chk.availableBar}`}
+                                                >
+                                                  🟢 {isAr ? `متوفر (${chk.availableBar} عود)` : `In Stock (${chk.availableBar})`}
+                                                </span>
+                                              )
+                                            } else if (chk.status === 'shortage') {
+                                              return (
+                                                <span
+                                                  className="badge"
+                                                  style={{
+                                                    background: 'rgba(255, 71, 87, 0.18)',
+                                                    color: '#ff4757',
+                                                    border: '1px solid rgba(255, 71, 87, 0.45)',
+                                                    fontSize: '0.73rem',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.2rem',
+                                                    fontWeight: 700,
+                                                    whiteSpace: 'nowrap',
+                                                  }}
+                                                  title={isAr ? `عجز رصيد! متاح بالمخزن ${chk.availableBar} والمطلوب ${line.quantityBar || line.bars || 0}` : `Shortage!`}
+                                                >
+                                                  🔴 {isAr ? `عجز ${Math.abs(chk.diff)} (متاح ${chk.availableBar})` : `Short ${Math.abs(chk.diff)}`}
+                                                </span>
+                                              )
+                                            } else {
+                                              return (
+                                                <span
+                                                  className="badge"
+                                                  style={{
+                                                    background: 'rgba(255, 255, 255, 0.08)',
+                                                    color: '#bbb',
+                                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                    fontSize: '0.73rem',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.2rem',
+                                                    whiteSpace: 'nowrap',
+                                                  }}
+                                                >
+                                                  ⚪ {isAr ? 'غير مسجل (0)' : 'Not in Stock (0)'}
+                                                </span>
+                                              )
+                                            }
+                                          })()}
+
+                                          {/* Delmar Coating Status & Owner Toggle */}
+                                          {isCoated ? (
+                                            <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                               <span
                                                 className="badge"
                                                 style={{
-                                                  background: 'rgba(0, 224, 161, 0.15)',
-                                                  color: '#00e0a1',
-                                                  border: '1px solid rgba(0, 224, 161, 0.3)',
-                                                  fontSize: '0.75rem',
-                                                  display: 'inline-flex',
-                                                  alignItems: 'center',
-                                                  gap: '0.2rem',
-                                                  whiteSpace: 'nowrap',
+                                                  background: 'rgba(245, 158, 11, 0.15)',
+                                                  color: '#fbbf24',
+                                                  border: '1px solid rgba(245, 158, 11, 0.35)',
+                                                  fontSize: '0.7rem',
+                                                  padding: '0.1rem 0.35rem',
                                                 }}
-                                                title={isAr ? `متوفر بالمخزن: ${chk.availableBar} عود (المطلوب: ${line.quantityBar || line.bars || 0})` : `Available: ${chk.availableBar} (Requested: ${line.quantityBar || line.bars || 0})`}
+                                                title={isAr ? 'هذا البند يخص التسليم وقيد الدهان في مخزن دلمار' : 'Coating profile at Delmar warehouse'}
                                               >
-                                                🟢 {isAr ? `متوفر (${chk.availableBar} عود)` : `In Stock (${chk.availableBar})`}
+                                                🏭 دلمار (بتدهن) 🎨
                                               </span>
-                                            )
-                                          } else if (chk.status === 'shortage') {
-                                            return (
-                                              <span
-                                                className="badge"
-                                                style={{
-                                                  background: 'rgba(255, 71, 87, 0.18)',
-                                                  color: '#ff4757',
-                                                  border: '1px solid rgba(255, 71, 87, 0.45)',
-                                                  fontSize: '0.75rem',
-                                                  display: 'inline-flex',
-                                                  alignItems: 'center',
-                                                  gap: '0.2rem',
-                                                  fontWeight: 700,
-                                                  whiteSpace: 'nowrap',
-                                                }}
-                                                title={isAr ? `عجز رصيد! متاح بالمخزن ${chk.availableBar} فقط والمطلوب ${line.quantityBar || line.bars || 0}` : `Shortage! Only ${chk.availableBar} available`}
-                                              >
-                                                🔴 {isAr ? `عجز ${Math.abs(chk.diff)} (متاح ${chk.availableBar})` : `Short ${Math.abs(chk.diff)} (Has ${chk.availableBar})`}
-                                              </span>
-                                            )
-                                          } else {
-                                            return (
-                                              <span
-                                                className="badge"
-                                                style={{
-                                                  background: 'rgba(255, 255, 255, 0.08)',
-                                                  color: '#bbb',
-                                                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                                                  fontSize: '0.75rem',
-                                                  display: 'inline-flex',
-                                                  alignItems: 'center',
-                                                  gap: '0.2rem',
-                                                  whiteSpace: 'nowrap',
-                                                }}
-                                                title={isAr ? 'هذا الكود غير موجود في رصيد المخزن الحالي' : 'Not found in warehouse stock'}
-                                              >
-                                                ⚪ {isAr ? 'غير مسجل (0)' : 'Not in Stock (0)'}
-                                              </span>
-                                            )
-                                          }
-                                        })()}
+                                              {!line.ignored ? (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => updateBatchInvoiceLine(batch.id, idx, 'ignored', true)}
+                                                  style={{
+                                                    background: 'rgba(0, 224, 161, 0.15)',
+                                                    color: '#00e0a1',
+                                                    border: '1px solid #00e0a1',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.68rem',
+                                                    padding: '0.1rem 0.35rem',
+                                                    cursor: 'pointer',
+                                                    fontWeight: 700,
+                                                  }}
+                                                  title={isAr ? 'اضغط لاستبعاد هذا البند إذا لم يكن تابعاً لنا' : 'Click to exclude'}
+                                                >
+                                                  ✅ تبعنا
+                                                </button>
+                                              ) : (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => updateBatchInvoiceLine(batch.id, idx, 'ignored', false)}
+                                                  style={{
+                                                    background: 'rgba(255, 71, 87, 0.15)',
+                                                    color: '#ff4757',
+                                                    border: '1px solid #ff4757',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.68rem',
+                                                    padding: '0.1rem 0.35rem',
+                                                    cursor: 'pointer',
+                                                    fontWeight: 700,
+                                                  }}
+                                                  title={isAr ? 'اضغط لاعتماد هذا البند إذا كان تابعاً لنا' : 'Click to include'}
+                                                >
+                                                  🚫 مستبعد
+                                                </button>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                                              ⚙️ {isAr ? 'خام (بالمستودع)' : 'Raw profile'}
+                                            </span>
+                                          )}
+                                        </div>
                                       </td>
                                     )}
                                     <td style={{ padding: '0.5rem 0.4rem' }}>
@@ -3743,7 +3954,8 @@ export default function Warehouse() {
                                       {Number(line.netTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </td>
                                   </tr>
-                                ))}
+                                )
+                              })}
                               </tbody>
                             </table>
                           </div>

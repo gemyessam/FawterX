@@ -205,6 +205,7 @@ export default function ManualStockModal({
   ]
 
   const COATING_SUPPLIERS = [
+    'مصنع دلمار للألومنيوم والدهان (Delmar Industrial Coating)',
     'شركة كانكس للدهانات الحديثة (Canex Coating)',
     'الورشة الفنية للدهان الإلكتروستاتيك (Modern Electrostatic)',
     'مصنع الأهرام للطلاء والأنودايز (Al-Ahram Anodizing)',

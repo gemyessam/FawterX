@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.34',
+      version: 'v2.27.35',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'احتساب بنود دهان دلمار للتسليم ولوحة قرار المالك للصرف والاستبعاد' : 'Delmar Coating Delivery Calculation & Owner Dispatch Decision Engine',
+      highlights: [
+        {
+          icon: '🏭',
+          text: isAr
+            ? 'احتساب تلقائي لبنود الدهان التابعة لأمر التسليم (مثل 13 بند بإجمالي 834 عود) وتوثيق تواجدها في (مخزن دلمار بتدهن) وفصلها عن القطاعات الخام.'
+            : 'Automated calculation of delivery coating items (e.g. 13 items, 834 bars) allocated to Delmar coating warehouse.'
+        },
+        {
+          icon: '👑',
+          text: isAr
+            ? 'لوحة قرار المالك: أزرار تحكم سريعة (البنود تبعنا وصرفها من دلمار / ليست تبعنا واستبعاد بنود دلمار) مع تحكم فردي لكل بند بنقرة واحدة.'
+            : 'Owner Decision Engine: batch & individual 1-click controls to approve or exclude Delmar coating items from dispatch.'
+        },
+        {
+          icon: '🎨',
+          text: isAr
+            ? 'اعتماد مصنع دلمار للألومنيوم والدهان رسمياً في قائمة موردي الدهان وسجلات التدقيق والمخازن.'
+            : 'Officially registered Delmar Industrial Coating in coating supplier presets and audit records.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.34',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'دعم أذون تسليم شوكو (SD) ونظام فحص وتدقيق الرصيد التلقائي قبل الصرف' : 'Schüco SD Delivery Note Parser & Pre-Dispatch Stock Availability Checker',
       highlights: [
         {
