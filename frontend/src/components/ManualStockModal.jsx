@@ -20,17 +20,46 @@ export default function ManualStockModal({
   const [activeProjectId, setActiveProjectId] = useState(projectId)
   const [mode, setMode] = useState(initialMode) // 'inbound' | 'outbound'
   const [sourceType, setSourceType] = useState('manual') // 'manual' | 'invoice'
-  const [dispatchType, setDispatchType] = useState('coating_then_customer') // 'coating_then_customer' | 'direct_customer'
   const [submitting, setSubmitting] = useState(false)
 
-  // Dispatch / Lifecycle metadata (Only coatingSupplier is mandatory for coating)
-  const [coatingSupplier, setCoatingSupplier] = useState('شركة كانكس للدهانات الحديثة (Canex Coating)')
-  const [targetFinish, setTargetFinish] = useState('')
-  const [customerName, setCustomerName] = useState('')
-  const [projectNameOrSite, setProjectNameOrSite] = useState('')
+  // Load saved dispatch metadata from previous outbound operations
+  const savedDispatch = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('fawterx_last_dispatch_meta')
+      return raw ? JSON.parse(raw) : null
+    } catch {
+      return null
+    }
+  }, [])
+
+  const [hasRestoredDispatch, setHasRestoredDispatch] = useState(() => Boolean(savedDispatch))
+  const [dispatchType, setDispatchType] = useState(() => savedDispatch?.dispatchType || 'coating_then_customer')
+
+  // Dispatch / Lifecycle metadata (Auto-filled from previous dispatch)
+  const [coatingSupplier, setCoatingSupplier] = useState(
+    () => savedDispatch?.coatingSupplier || 'شركة كانكس للدهانات الحديثة (Canex Coating)'
+  )
+  const [targetFinish, setTargetFinish] = useState(() => savedDispatch?.targetFinish || '')
+  const [customerName, setCustomerName] = useState(() => savedDispatch?.customerName || '')
+  const [projectNameOrSite, setProjectNameOrSite] = useState(() => savedDispatch?.projectNameOrSite || '')
   const [deliveryNote, setDeliveryNote] = useState('')
   const [dispatchDate, setDispatchDate] = useState(() => new Date().toISOString().split('T')[0])
-  const [notes, setNotes] = useState('')
+  const [notes, setNotes] = useState(() => savedDispatch?.notes || '')
+
+  const handleResetDispatchMeta = () => {
+    setCoatingSupplier('شركة كانكس للدهانات الحديثة (Canex Coating)')
+    setTargetFinish('')
+    setCustomerName('')
+    setProjectNameOrSite('')
+    setNotes('')
+    setHasRestoredDispatch(false)
+    try {
+      localStorage.removeItem('fawterx_last_dispatch_meta')
+    } catch {
+      // ignore
+    }
+    toast.info(isAr ? 'تم مسح بيانات الصرف المحفوظة' : 'Cleared saved dispatch fields')
+  }
 
   // Inbound metadata
   const [inboundSupplier, setInboundSupplier] = useState('CANEX')
@@ -353,6 +382,23 @@ export default function ManualStockModal({
       const res = await processManualStockMovement(activeProjectId, payload)
       if (res && res.success) {
         const isOut = mode === 'outbound'
+        if (isOut) {
+          try {
+            localStorage.setItem(
+              'fawterx_last_dispatch_meta',
+              JSON.stringify({
+                coatingSupplier,
+                targetFinish: resolvedTargetFinish,
+                customerName: resolvedCustomerName,
+                projectNameOrSite,
+                dispatchType,
+                notes,
+              })
+            )
+          } catch {
+            // ignore
+          }
+        }
         const msgAr = isOut
           ? dispatchType === 'coating_then_customer'
             ? `✅ تم صرف ${totalBars} عود بنجاح وإرسالها لمرحلة الدهان لدى (${coatingSupplier})!`
@@ -615,8 +661,26 @@ export default function ManualStockModal({
                   marginBottom: '1.25rem',
                 }}
               >
-                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#ff6b81', marginBottom: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  🎨 {isAr ? 'حدد خط سير ومراحل صرف القطاعات:' : 'Dispatch Workflow & Lifecycle:'}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div style={{ fontWeight: 800, fontSize: '1rem', color: '#ff6b81', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    🎨 {isAr ? 'حدد خط سير ومراحل صرف القطاعات:' : 'Dispatch Workflow & Lifecycle:'}
+                  </div>
+                  {hasRestoredDispatch && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.3)', fontSize: '0.78rem' }}>
+                        ✨ {isAr ? 'تم استرجاع بيانات آخر صرف تلقائياً' : 'Auto-filled from last dispatch'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleResetDispatchMeta}
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: '0.15rem 0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}
+                        title={isAr ? 'مسح البيانات المسترجعة' : 'Clear remembered fields'}
+                      >
+                        🗑️ {isAr ? 'مسح' : 'Clear'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Workflow Selector Radios */}

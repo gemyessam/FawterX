@@ -55,6 +55,14 @@ const KNOWN_LABELS = [
   "total amount",
   "description",
   "item code",
+  "item number",
+  "external",
+  "configuration",
+  "size",
+  "color",
+  "warehouse (bars)",
+  "warehouse",
+  "customer",
   "customer code",
   "bars",
   "quantity",
@@ -500,9 +508,148 @@ function parseTextLines(text, metadata) {
 function rowValue(row, names) {
   for (const name of names) {
     const found = Object.keys(row).find(key => clean(key).toLowerCase().includes(name));
-    if (found) return row[found];
+    if (found && row[found] !== undefined && row[found] !== "") return row[found];
   }
   return "";
+}
+
+function parseSizeToLengthMm(sizeVal) {
+  const str = clean(sizeVal);
+  if (!str) return 6000;
+  // Format like "6000-101", "5800-101", "3100-101", "6000mm", "5.8m"
+  const m = str.match(/^(\d{3,5})/);
+  if (m) {
+    const n = Number(m[1]);
+    if (n >= 1000 && n <= 12000) return n;
+  }
+  const meterMatch = str.match(/^(\d+(?:\.\d+)?)\s*m\b/i);
+  if (meterMatch) {
+    return Math.round(Number(meterMatch[1]) * 1000);
+  }
+  return 6000;
+}
+
+function parseConfiguration(configVal) {
+  const str = clean(configVal);
+  const temper = str.match(/\bT[456]\b/i)?.[0]?.toUpperCase() || "T6";
+  const alloy = str.match(/\b606[03]\b/)?.[0] || "6063";
+  return { temper, alloy };
+}
+
+function scanMatrixForMetadata(matrix) {
+  const meta = {
+    salesOrder: "",
+    customerReference: "",
+    invoiceNumber: "",
+  };
+
+  const allSOCodes = [];
+  const allQCodes = [];
+  const allSPCodes = [];
+
+  const maxRows = Math.min(matrix.length, 35);
+  for (let r = 0; r < maxRows; r++) {
+    const row = matrix[r] || [];
+    for (let c = 0; c < row.length; c++) {
+      const cellVal = clean(row[c]);
+      if (!cellVal) continue;
+
+      const soMatches = cellVal.match(/\bSO-\d{3,}\b/gi);
+      if (soMatches) soMatches.forEach(m => allSOCodes.push(clean(m)));
+
+      const qMatches = cellVal.match(/\bQ-?\d{3,}[A-Za-z0-9_-]*\b/gi);
+      if (qMatches) qMatches.forEach(m => allQCodes.push(clean(m)));
+
+      const spMatches = cellVal.match(/\bSP-?\d{3,}[A-Za-z0-9_-]*\b/gi);
+      if (spMatches) spMatches.forEach(m => allSPCodes.push(clean(m)));
+
+      // 1. Check Sales Order labels
+      if (/sales\s*order|s\.o\./i.test(cellVal)) {
+        // If inline value after colon exists
+        const inline = cellVal.replace(/^.*?(?:sales\s*order|s\.o\.)[#:\s]*/i, "").trim();
+        if (inline && /^SO-/i.test(inline)) {
+          meta.salesOrder = inline;
+        } else {
+          // Check rightward cells in same row
+          for (let offset = 1; offset <= 4; offset++) {
+            const nextVal = clean(row[c + offset]);
+            if (nextVal && !isKnownLabel(nextVal)) {
+              const sanitized = sanitizeMetaValue(nextVal);
+              if (sanitized && /^SO-/i.test(sanitized)) {
+                meta.salesOrder = sanitized;
+                break;
+              }
+            }
+          }
+          // Check cell below
+          if (!meta.salesOrder && matrix[r + 1]) {
+            const belowVal = clean(matrix[r + 1][c]) || clean(matrix[r + 1][c + 1]);
+            if (belowVal && !isKnownLabel(belowVal)) {
+              const sanitized = sanitizeMetaValue(belowVal);
+              if (sanitized && /^SO-/i.test(sanitized)) {
+                meta.salesOrder = sanitized;
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Check Customer Reference labels
+      if (/customer\s*ref|cust\.?\s*ref|purchase\s*order|po\s*#/i.test(cellVal)) {
+        const inline = cellVal.replace(/^.*?(?:customer\s*ref(?:erence)?|cust\.?\s*ref|po\s*#)[#:\s]*/i, "").trim();
+        if (inline && !isKnownLabel(inline)) {
+          const sanitized = sanitizeMetaValue(inline);
+          if (sanitized) meta.customerReference = sanitized;
+        } else {
+          // Check rightward cells
+          for (let offset = 1; offset <= 4; offset++) {
+            const nextVal = clean(row[c + offset]);
+            if (nextVal && !isKnownLabel(nextVal)) {
+              const sanitized = sanitizeMetaValue(nextVal);
+              if (sanitized) {
+                meta.customerReference = sanitized;
+                break;
+              }
+            }
+          }
+          // Check cell below
+          if (!meta.customerReference && matrix[r + 1]) {
+            const belowVal = clean(matrix[r + 1][c]) || clean(matrix[r + 1][c + 1]);
+            if (belowVal && !isKnownLabel(belowVal)) {
+              const sanitized = sanitizeMetaValue(belowVal);
+              if (sanitized) {
+                meta.customerReference = sanitized;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Fallbacks:
+  if (!meta.salesOrder || !/^SO-/i.test(meta.salesOrder)) {
+    const highSO = allSOCodes.find(code => {
+      const num = parseInt(code.replace(/\D/g, ""), 10);
+      return num >= 1000;
+    }) || allSOCodes[0];
+    if (highSO) meta.salesOrder = highSO;
+  }
+
+  if (!meta.customerReference || isKnownLabel(meta.customerReference)) {
+    if (allQCodes.length > 0) {
+      meta.customerReference = allQCodes[0];
+    } else if (allSPCodes.length > 0) {
+      meta.customerReference = allSPCodes[0];
+    } else {
+      const customerSO = allSOCodes.find(code => code.toUpperCase() !== (meta.salesOrder || "").toUpperCase());
+      if (customerSO) {
+        meta.customerReference = customerSO;
+      }
+    }
+  }
+
+  return meta;
 }
 
 function parseWorkbook(filePath, fileName) {
@@ -527,41 +674,98 @@ function parseWorkbook(filePath, fileName) {
     if (/CNX/i.test(fnameNoExt)) metadata.invoiceNumber = fnameNoExt;
   }
 
+  // Scan 2D matrix for labels & codes across grid
+  const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+  const matrixMeta = scanMatrixForMetadata(matrix);
+
+  if (matrixMeta.salesOrder && (!metadata.salesOrder || !/^SO-/i.test(metadata.salesOrder))) {
+    metadata.salesOrder = matrixMeta.salesOrder;
+  }
+  if (matrixMeta.customerReference && (!metadata.customerReference || isKnownLabel(metadata.customerReference))) {
+    metadata.customerReference = matrixMeta.customerReference;
+  }
+
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
   const lines = rows
     .map((row, idx) => {
-      const description = clean(rowValue(row, ["description"]));
-      if (!description || /invoice amount|tax amount|total amount/i.test(description)) return null;
-      const attrs = extractDescriptionAttrs(description);
-      const qtyBar = parseNum(rowValue(row, ["bars"]));
-      const qtyLm = parseNum(rowValue(row, ["actual total", "qty"]));
+      // 1. Item Code: support "item number", "item code", "item", "code", "profile"
+      const itemCode = clean(rowValue(row, ["item number", "item code", "item", "code", "profile"]));
+      if (!itemCode || /invoice amount|tax amount|total amount/i.test(itemCode)) return null;
+
+      // 2. Customer Code / External: support "external", "customer code", "cust code", "schueco code"
+      const customerCode = clean(rowValue(row, ["external", "customer code", "cust code", "schueco code"]));
+
+      // 3. Bars Quantity: support "warehouse (bars)", "bars", "qty bar", "bar qty", "quantity", "qty", "أعواد"
+      const qtyBar = parseNum(rowValue(row, ["warehouse (bars)", "bars", "qty bar", "bar qty", "quantity", "qty", "أعواد"]));
+
+      // 4. Description & Attributes:
+      let description = clean(rowValue(row, ["description"]));
+      const attrs = description ? extractDescriptionAttrs(description) : {};
+
+      // Size / Length:
+      const sizeVal = rowValue(row, ["size", "length"]);
+      const lengthMm = attrs.lengthMm || parseSizeToLengthMm(sizeVal);
+
+      // Temper & Alloy:
+      const configVal = rowValue(row, ["configuration", "temper"]);
+      const parsedConfig = configVal ? parseConfiguration(configVal) : {};
+      const temper = attrs.temper || parsedConfig.temper || "T6";
+      const alloy = attrs.alloy || parsedConfig.alloy || "6063";
+
+      // Color / Finish:
+      const color = clean(rowValue(row, ["color", "surface finish", "finish"])) || attrs.finish || "MF";
+      const finish = color;
+
+      // If description was missing in tabular format, construct an informative description:
+      if (!description) {
+        description = `Canex Profile ${itemCode}${customerCode ? ' (' + customerCode + ')' : ''} - ${temper} ${alloy} ${color}`;
+      }
+
+      // Per-row SO and Customer Ref (if present in tabular sheets):
+      const rowSO = clean(rowValue(row, ["sales order", "so #", "so"]));
+      const rowRef = clean(rowValue(row, ["customer reference", "customer ref", "cust ref", "ref"]));
+
       const unitPrice = parseNum(rowValue(row, ["unit price"]));
+      const qtyLm = parseNum(rowValue(row, ["actual total", "qty lm", "total lm"])) || ((qtyBar * lengthMm) / 1000);
+
       return {
         id: `line_${idx + 1}`,
         position: idx + 1,
-        itemCode: clean(rowValue(row, ["item"])),
-        customerCode: clean(rowValue(row, ["customer code"])),
+        itemCode,
+        customerCode,
         description,
-        finish: attrs.finish || "MF",
-        color: attrs.finish || "MF",
-        lengthMm: attrs.lengthMm,
+        finish,
+        color,
+        lengthMm,
         quantityBar: qtyBar,
-        quantityLm: qtyLm || (qtyBar * attrs.lengthMm) / 1000,
+        quantityLm: Number(qtyLm.toFixed(2)),
         quantityKg: 0,
         unit: "BAR",
         priceUnit: "M",
         unitPrice,
         barPrice: parseNum(rowValue(row, ["bar price"])),
-        netTotal: parseNum(rowValue(row, ["amount"])) || (qtyLm * unitPrice),
+        netTotal: parseNum(rowValue(row, ["amount"])) || Number((qtyLm * unitPrice).toFixed(2)),
         currency: "EGP",
-        temper: attrs.temper,
-        alloy: attrs.alloy,
-        hsCode: attrs.hsCode,
+        temper,
+        alloy,
+        hsCode: attrs.hsCode || "7604.21.00",
+        salesOrder: rowSO || "",
+        customerReference: rowRef || "",
         isService: false,
         ignored: false,
       };
     })
     .filter(line => line && line.itemCode && Number(line.quantityBar) > 0);
+
+  // If document-level SO / Ref was empty or a known label, but line items contain them, populate document metadata:
+  if ((!metadata.salesOrder || isKnownLabel(metadata.salesOrder)) && lines.length > 0) {
+    const firstLineSO = lines.find(l => l.salesOrder && !isKnownLabel(l.salesOrder))?.salesOrder;
+    if (firstLineSO) metadata.salesOrder = firstLineSO;
+  }
+  if ((!metadata.customerReference || isKnownLabel(metadata.customerReference)) && lines.length > 0) {
+    const firstLineRef = lines.find(l => l.customerReference && !isKnownLabel(l.customerReference))?.customerReference;
+    if (firstLineRef) metadata.customerReference = firstLineRef;
+  }
 
   return { metadata, lines };
 }

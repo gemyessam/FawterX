@@ -1024,6 +1024,18 @@ export default function Warehouse() {
       return
     }
 
+    const soVal = String(batch.parsedMeta?.salesOrder || '').trim()
+    const crVal = String(batch.parsedMeta?.customerReference || '').trim()
+    if (!soVal || !crVal) {
+      toast.error(
+        isAr
+          ? `⚠️ يرجى إدخال ${!soVal && !crVal ? 'أمر البيع (SO) ومرجع العميل' : !soVal ? 'أمر البيع (SO #)' : 'مرجع العميل (Customer Ref)'} للفاتورة (${batch.parsedMeta?.invoiceNumber || batch.fileName}) قبل الحفظ!`
+          : `Please enter ${!soVal && !crVal ? 'Sales Order and Customer Ref' : !soVal ? 'Sales Order #' : 'Customer Ref'} for invoice (${batch.parsedMeta?.invoiceNumber || batch.fileName}) before saving!`
+      )
+      setBatchInvoices((prev) => prev.map((b) => (b.id === batchId ? { ...b, expanded: true } : b)))
+      return
+    }
+
     setBatchInvoices((prev) =>
       prev.map((item) => (item.id === batchId ? { ...item, status: 'saving', errorMessage: null } : item))
     )
@@ -1074,6 +1086,21 @@ export default function Warehouse() {
     if (pendingInvoices.length === 0) {
       toast.info(isAr ? 'جميع الفواتير في القائمة تم حفظها بالفعل' : 'All batch invoices have already been saved')
       return
+    }
+
+    // Strictly validate that each pending invoice has salesOrder and customerReference filled
+    for (const inv of pendingInvoices) {
+      const so = String(inv.parsedMeta?.salesOrder || '').trim()
+      const cr = String(inv.parsedMeta?.customerReference || '').trim()
+      if (!so || !cr) {
+        toast.error(
+          isAr
+            ? `⚠️ لا يمكن الحفظ: الفاتورة (${inv.parsedMeta?.invoiceNumber || inv.fileName}) ينقصها ${!so && !cr ? 'أمر البيع ومرجع العميل' : !so ? 'أمر البيع (SO #)' : 'مرجع العميل (Customer Ref)'}. يرجى إدخالهما أولاً!`
+            : `Cannot save: Invoice (${inv.parsedMeta?.invoiceNumber || inv.fileName}) is missing ${!so && !cr ? 'Sales Order and Customer Ref' : !so ? 'Sales Order #' : 'Customer Ref'}. Please enter them first!`
+        )
+        setBatchInvoices((prev) => prev.map((b) => (b.id === inv.id ? { ...b, expanded: true } : b)))
+        return
+      }
     }
 
     setSavingBatch(true)
@@ -3181,15 +3208,51 @@ export default function Warehouse() {
                             />
                           </div>
 
-                          {/* Editable SO # */}
+                          {/* Editable SO # with validation alert */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>SO #:</span>
+                            <span style={{ fontSize: '0.75rem', color: !batch.parsedMeta.salesOrder ? '#ff4757' : 'var(--text-muted)', fontWeight: !batch.parsedMeta.salesOrder ? 800 : 400 }}>
+                              SO #: {!batch.parsedMeta.salesOrder && <span style={{ color: '#ff4757' }}>*</span>}
+                            </span>
                             <input
                               type="text"
                               value={batch.parsedMeta.salesOrder || ''}
                               onChange={(e) => updateBatchInvoiceMeta(batch.id, 'salesOrder', e.target.value)}
                               placeholder="SO-10023"
-                              style={{ background: '#101223', border: '1px solid var(--border)', color: '#00e0a1', fontWeight: 700, padding: '0.3rem 0.6rem', borderRadius: '6px', fontSize: '0.88rem', width: '130px' }}
+                              style={{
+                                background: '#101223',
+                                border: batch.parsedMeta.salesOrder ? '1px solid var(--border)' : '1.5px solid #ff4757',
+                                color: '#00e0a1',
+                                fontWeight: 700,
+                                padding: '0.3rem 0.6rem',
+                                borderRadius: '6px',
+                                fontSize: '0.88rem',
+                                width: '130px',
+                                boxShadow: !batch.parsedMeta.salesOrder ? '0 0 8px rgba(255, 71, 87, 0.35)' : 'none',
+                              }}
+                            />
+                          </div>
+
+                          {/* Editable Customer Ref in Header with validation alert */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: !batch.parsedMeta.customerReference ? '#ff4757' : 'var(--text-muted)', fontWeight: !batch.parsedMeta.customerReference ? 800 : 400 }}>
+                              {isAr ? 'المرجع:' : 'Ref:'} {!batch.parsedMeta.customerReference && <span style={{ color: '#ff4757' }}>*</span>}
+                            </span>
+                            <input
+                              type="text"
+                              value={batch.parsedMeta.customerReference || ''}
+                              onChange={(e) => updateBatchInvoiceMeta(batch.id, 'customerReference', e.target.value)}
+                              placeholder="Q-00235 / SP-001"
+                              style={{
+                                background: '#101223',
+                                border: batch.parsedMeta.customerReference ? '1px solid var(--border)' : '1.5px solid #ff4757',
+                                color: '#ffb74d',
+                                fontWeight: 700,
+                                padding: '0.3rem 0.6rem',
+                                borderRadius: '6px',
+                                fontSize: '0.88rem',
+                                width: '130px',
+                                boxShadow: !batch.parsedMeta.customerReference ? '0 0 8px rgba(255, 71, 87, 0.35)' : 'none',
+                              }}
                             />
                           </div>
 

@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.32',
+      version: 'v2.27.33',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'دعم متقدم لكافة صيغ فواتير الإكسيل، إلزامية أوامر البيع ومراجع العملاء، والتذكر التلقائي لبيانات الصرف' : 'Robust Multi-Format Excel Parsing, Mandatory SO & Customer Ref Validation, and Auto-Fill Last Dispatch',
+      highlights: [
+        {
+          icon: '📊',
+          text: isAr
+            ? 'دعم فائق لجداول إكسيل المخازن وشحنات شوكو وكانكس بكافة مسميات الأعمدة (Item number, External, Size, Configuration, Warehouse Bars) واستخراج بنودها بنسبة 100%.'
+            : 'Comprehensive support for multi-column warehouse spreadsheets and Canex/Schueco shipments with 100% item line extraction.'
+        },
+        {
+          icon: '🔒',
+          text: isAr
+            ? 'إلزامية إدخال أمر البيع (SO #) ومرجع العميل (Customer Ref) ومنع حفظ أي فاتورة إذا كانا فارغين لتفادي الأخطاء البشرية وسد ثغرات سجل التدقيق.'
+            : 'Enforced mandatory Sales Order # and Customer Reference validation preventing incomplete invoice commits.'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'التذكر التلقائي لكافة بيانات جهة الدهان والعميل النهائي والموقع في نافذة الصرف دون الحاجة لإعادة كتابتها في كل مرة.'
+            : 'Instant auto-fill of coating supplier, customer name, site, and finish from the last dispatch operation.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.32',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'إصلاح استثناء إنشاء نقاط الحفظ اليدوية والتلقائية في المخزن' : 'Fix isAuto Parameter Exception in Manual & Auto Restore Points',
       highlights: [
         {
