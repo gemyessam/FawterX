@@ -770,6 +770,108 @@ function parseWorkbook(filePath, fileName) {
   return { metadata, lines };
 }
 
+function parseSchuecoDate(val) {
+  const m = clean(val).match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (m) {
+    return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  }
+  return "";
+}
+
+function parseSchuecoDeliveryNote(text, fileName) {
+  const isSchuecoSD = /packing\s*list/i.test(text) && (/\bSD-\d+/i.test(text) || /Delivery\s*Number/i.test(text) || /sch[uü]co/i.test(text));
+  if (!isSchuecoSD) return null;
+
+  // 1. Metadata
+  const sdNumberMatch = text.match(/\bSD-\d+\b/i)?.[0];
+  const invoiceNumber = sdNumberMatch || `SD-${Date.now().toString().slice(-6)}`;
+  const soMatch = text.match(/\bSO-\d{3,}\b/i)?.[0] || "";
+
+  const dateMatch = text.match(/\b(\d{1,2}\.\d{1,2}\.\d{4})\b/)?.[1] || "";
+  const invoiceDate = parseSchuecoDate(dateMatch);
+
+  let customerReference = "";
+  const sotaluxMatch = text.match(/\b(Sotalux|Schueco|Canex|[A-Z][a-z]{3,}\s*(?:LLC|L\.L\.C\.|SARL)?)\b/i)?.[1];
+  if (sotaluxMatch && !/packing|schueco|egypt|village/i.test(sotaluxMatch)) {
+    customerReference = sotaluxMatch;
+  }
+  if (!customerReference) {
+    customerReference = soMatch || "Schüco Client";
+  }
+
+  const metadata = {
+    invoiceNumber,
+    invoiceDate,
+    receiptDate: invoiceDate,
+    deliveryDate: invoiceDate,
+    supplier: "Schüco Egypt",
+    currency: "EGP",
+    salesOrder: soMatch,
+    customerReference,
+    invoiceAmount: 0,
+    taxAmount: 0,
+    totalAmount: 0,
+    movementType: "outbound", // Delivery notes are outbound shipments by nature
+    fileName,
+  };
+
+  // 2. Lines parsing
+  const lines = [];
+  const textLines = text.split(/\r?\n/).map(clean).filter(Boolean);
+  const lineItemRegex = /^(\d+)\s+(\d{5,8}|[A-Za-z0-9_-]{5,})\s+(.+?)\s+(\d+[\d,]*)\s*BAR\s+([\d,.]+)\s*LM\s+([\d,.]+)\s*KG\s+([\d,.]+)/i;
+
+  for (let i = 0; i < textLines.length; i++) {
+    const m = textLines[i].match(lineItemRegex);
+    if (!m) continue;
+
+    const position = Number(m[1]);
+    const itemCode = clean(m[2]);
+    const description = clean(m[3]);
+    const qtyBar = parseNum(m[4]);
+    const qtyLm = parseNum(m[5]);
+    const qtyKg = parseNum(m[6]);
+    const lengthM = parseNum(m[7]);
+    const lengthMm = Math.round(lengthM * 1000) || 5800;
+
+    let finish = "MF";
+    if (textLines[i + 1] && !textLines[i + 1].match(lineItemRegex) && !/packing|schueco|total|page/i.test(textLines[i + 1])) {
+      const candidateFinish = textLines[i + 1];
+      if (candidateFinish.length <= 25) {
+        finish = candidateFinish;
+      }
+    }
+
+    lines.push({
+      id: `line_${position}`,
+      position,
+      itemCode,
+      customerCode: itemCode,
+      description: `${description} (${finish} - ${lengthMm}mm)`,
+      finish,
+      color: finish,
+      lengthMm,
+      quantityBar: qtyBar,
+      quantityLm: qtyLm,
+      quantityKg: qtyKg,
+      unit: "BAR",
+      priceUnit: "M",
+      unitPrice: 0,
+      barPrice: 0,
+      netTotal: 0,
+      currency: "EGP",
+      temper: "T6",
+      alloy: "6063",
+      hsCode: "7604.21.00",
+      salesOrder: soMatch,
+      customerReference,
+      isService: false,
+      ignored: false,
+    });
+  }
+
+  return { metadata, lines };
+}
+
 async function readPdfText(filePath) {
   let pdfParseModule;
   try {
@@ -796,6 +898,17 @@ async function parseWarehouseInvoice(filePath, originalName = "") {
   if (ext === ".pdf") {
     const text = await readPdfText(filePath);
     if (!text.trim()) throw new Error("No readable text was found in the warehouse invoice.");
+
+    // Check if Schüco Delivery Note / Packing List
+    const schuecoResult = parseSchuecoDeliveryNote(text, originalName);
+    if (schuecoResult && schuecoResult.lines.length > 0) {
+      return {
+        ...schuecoResult,
+        warnings: [],
+        parser: "schueco-delivery-note-pdf-v1",
+      };
+    }
+
     const metadata = extractMetadata(text, originalName);
     const lines = parseTextLines(text, metadata);
     return {

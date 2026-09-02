@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.33',
+      version: 'v2.27.34',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'دعم أذون تسليم شوكو (SD) ونظام فحص وتدقيق الرصيد التلقائي قبل الصرف' : 'Schüco SD Delivery Note Parser & Pre-Dispatch Stock Availability Checker',
+      highlights: [
+        {
+          icon: '📦',
+          text: isAr
+            ? 'دعم أذون تسليم وتعبئة شوكو (Schüco Packing Lists / SD Delivery Notes) واستخراج كافة البنود الـ 16 بالأعواد والأمتار والأوزان والتشطيبات مثل RALY22778SD بنسبة 100%.'
+            : 'Full support for Schüco Delivery Notes (SD), extracting 100% of line items with bars, linear meters, weights, and finishes.'
+        },
+        {
+          icon: '🔍',
+          text: isAr
+            ? 'شريط فحص المخزون والجاهزية التلقائي: مطابقة كل بند في الفاتورة مع رصيد المخزن الحالي وتوضيح المتوفر والعجز وغير المسجل بالألوان والتفاصيل الدقيقة.'
+            : 'Automated Pre-Dispatch Stock Checker: matching every invoice line with live warehouse inventory, reporting available, shortage, and missing items.'
+        },
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'حماية أمنية وتنبيه استباقي: منع الصرف بالسالب وحظر الخصم العشوائي إلا بموافقة وتأكيد صريح من المالك عند وجود عجز.'
+            : 'Negative stock protection: safeguards against accidental dispatch when shortages exist, requiring explicit user confirmation.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.33',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'دعم متقدم لكافة صيغ فواتير الإكسيل، إلزامية أوامر البيع ومراجع العملاء، والتذكر التلقائي لبيانات الصرف' : 'Robust Multi-Format Excel Parsing, Mandatory SO & Customer Ref Validation, and Auto-Fill Last Dispatch',
       highlights: [
         {

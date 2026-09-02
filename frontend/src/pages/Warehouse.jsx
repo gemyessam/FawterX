@@ -29,6 +29,71 @@ import {
 import ManualStockModal from '../components/ManualStockModal'
 import DispatchesTrackerView from '../components/DispatchesTrackerView'
 
+function checkStockAvailability(line, stock = []) {
+  if (!line || (!line.itemCode && !line.customerCode)) {
+    return { status: 'missing', availableBar: 0, diff: 0, matchedItem: null }
+  }
+  const reqBar = Number(line.quantityBar || line.bars || 0)
+  const cleanCode = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
+  const lineItemNorm = cleanCode(line.itemCode)
+  const lineCustNorm = cleanCode(line.customerCode)
+
+  // 1. Exact match on itemCode
+  let match = stock.find((s) => cleanCode(s.itemCode) === lineItemNorm)
+
+  // 2. Match on customerCode
+  if (!match && lineCustNorm) {
+    match = stock.find(
+      (s) => cleanCode(s.customerCode) === lineCustNorm || cleanCode(s.itemCode) === lineCustNorm
+    )
+  }
+
+  // 3. Match where warehouse item has line itemCode in its customerCode
+  if (!match) {
+    match = stock.find((s) => cleanCode(s.customerCode) === lineItemNorm)
+  }
+
+  // 4. Substring / partial numeric match
+  if (!match) {
+    match = stock.find((s) => {
+      const sItem = cleanCode(s.itemCode)
+      const sCust = cleanCode(s.customerCode)
+      return (
+        (lineItemNorm && (sItem.includes(lineItemNorm) || sCust.includes(lineItemNorm))) ||
+        (lineCustNorm && (sItem.includes(lineCustNorm) || sCust.includes(lineCustNorm)))
+      )
+    })
+  }
+
+  if (!match) {
+    return {
+      status: 'missing', // ⚪ غير مسجل بالمخزن
+      availableBar: 0,
+      diff: -reqBar,
+      matchedItem: null,
+    }
+  }
+
+  const availableBar = Number(match.quantityBar || 0)
+  const diff = availableBar - reqBar
+
+  if (diff >= 0) {
+    return {
+      status: 'sufficient', // 🟢 متوفر بالكامل
+      availableBar,
+      diff,
+      matchedItem: match,
+    }
+  } else {
+    return {
+      status: 'shortage', // 🔴 عجز في الرصيد
+      availableBar,
+      diff,
+      matchedItem: match,
+    }
+  }
+}
+
 export default function Warehouse() {
   const { lang, user, isAdmin } = useContext(AppContext)
   const isAr = lang === 'ar'
@@ -902,13 +967,13 @@ export default function Warehouse() {
             invoiceAmount: res.metadata?.invoiceAmount || 0,
             taxAmount: res.metadata?.taxAmount || 0,
             fileName: file.name,
-            movementType: movementType,
+            movementType: res.metadata?.movementType || movementType,
           }
 
           newBatchItems.push({
             id: `batch_inv_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 6)}`,
             fileName: file.name,
-            movementType: movementType,
+            movementType: res.metadata?.movementType || movementType,
             parsedMeta: invoiceMeta,
             reviewLines: parsed,
             status: 'ready', // 'ready' | 'saving' | 'saved' | 'error'
@@ -1036,6 +1101,33 @@ export default function Warehouse() {
       return
     }
 
+    // Check stock availability if outbound
+    if (batch.movementType === 'outbound') {
+      const shortages = validLines
+        .map((l) => ({ line: l, chk: checkStockAvailability(l, stock) }))
+        .filter((x) => x.chk.status !== 'sufficient')
+
+      if (shortages.length > 0) {
+        const issuesSummary = shortages
+          .slice(0, 6)
+          .map(
+            (x) =>
+              `• [${x.line.itemCode}]: مطلوب ${x.line.quantityBar} عود (المتاح بالمخزن: ${x.chk.availableBar} عود)`
+          )
+          .join('\n')
+        const moreTxt = shortages.length > 6 ? `\n... وعدد (${shortages.length - 6}) بنود أخرى بها عجز` : ''
+        const confirmMsg = isAr
+          ? `⚠️ تحذير فحص المخزون قبل الصرف!\nيوجد عدد (${shortages.length}) بند غير متوفرة بالكامل في رصيد المخزن الحالي:\n\n${issuesSummary}${moreTxt}\n\nصرف هذه الفاتورة سيجعل رصيد هذه البنود سالباً!\nهل تريد المتابعة والصرف بالرغم من ذلك؟`
+          : `Warning: ${shortages.length} items have insufficient stock in the warehouse!\n\n${issuesSummary}${moreTxt}\n\nDo you still wish to proceed with dispatch?`
+
+        if (!window.confirm(confirmMsg)) {
+          toast.info(isAr ? 'تم إيقاف عملية الصرف لمراجعة الكميات' : 'Dispatch stopped for review')
+          setBatchInvoices((prev) => prev.map((b) => (b.id === batchId ? { ...b, expanded: true } : b)))
+          return
+        }
+      }
+    }
+
     setBatchInvoices((prev) =>
       prev.map((item) => (item.id === batchId ? { ...item, status: 'saving', errorMessage: null } : item))
     )
@@ -1099,6 +1191,25 @@ export default function Warehouse() {
             : `Cannot save: Invoice (${inv.parsedMeta?.invoiceNumber || inv.fileName}) is missing ${!so && !cr ? 'Sales Order and Customer Ref' : !so ? 'Sales Order #' : 'Customer Ref'}. Please enter them first!`
         )
         setBatchInvoices((prev) => prev.map((b) => (b.id === inv.id ? { ...b, expanded: true } : b)))
+        return
+      }
+    }
+
+    // Check if any pending outbound invoice has stock shortages
+    const outboundWithIssues = pendingInvoices.filter((inv) => {
+      if (inv.movementType !== 'outbound') return false
+      const valid = (inv.reviewLines || []).filter(
+        (l) => !l.ignored && !l.isService && Number(l.quantityBar || l.bars || 0) > 0
+      )
+      return valid.some((l) => checkStockAvailability(l, stock).status !== 'sufficient')
+    })
+
+    if (outboundWithIssues.length > 0) {
+      const confirmMsg = isAr
+        ? `⚠️ تنبيه فحص المخزون قبل حفظ الدفعة!\nيوجد عدد (${outboundWithIssues.length}) فاتورة صرف بها بنود غير متوفرة بالكامل في رصيد المخزن.\nصرف هذه الفواتير سيؤدي لتحويل رصيد بعض البنود إلى السالب!\n\nهل تريد بالرغم من ذلك إتمام الحفظ والصرف؟`
+        : `Warning: ${outboundWithIssues.length} outbound invoices contain items with insufficient stock! Proceed anyway?`
+      if (!window.confirm(confirmMsg)) {
+        toast.info(isAr ? 'تم إيقاف حفظ الدفعة لمراجعة الأرصدة' : 'Batch save stopped for review')
         return
       }
     }
@@ -3383,14 +3494,85 @@ export default function Warehouse() {
                             </div>
                           </div>
 
+                          {/* Outbound Stock Availability Banner */}
+                          {batch.movementType === 'outbound' && (() => {
+                            const validLines = (batch.reviewLines || []).filter(
+                              (l) => !l.ignored && !l.isService && Number(l.quantityBar || l.bars || 0) > 0
+                            )
+                            let sufficient = 0
+                            let shortage = 0
+                            let missing = 0
+                            validLines.forEach((l) => {
+                              const res = checkStockAvailability(l, stock)
+                              if (res.status === 'sufficient') sufficient++
+                              else if (res.status === 'shortage') shortage++
+                              else missing++
+                            })
+                            const hasIssues = shortage + missing > 0
+
+                            return (
+                              <div
+                                style={{
+                                  background: hasIssues ? 'rgba(255, 71, 87, 0.1)' : 'rgba(0, 224, 161, 0.1)',
+                                  border: `1px solid ${hasIssues ? 'rgba(255, 71, 87, 0.35)' : 'rgba(0, 224, 161, 0.35)'}`,
+                                  borderRadius: '10px',
+                                  padding: '0.85rem 1.15rem',
+                                  marginBottom: '1.15rem',
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  flexWrap: 'wrap',
+                                  gap: '0.75rem',
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                  <span style={{ fontSize: '1.4rem' }}>{hasIssues ? '⚠️' : '✅'}</span>
+                                  <div>
+                                    <div style={{ fontWeight: 800, fontSize: '0.95rem', color: hasIssues ? '#ff4757' : '#00e0a1' }}>
+                                      {isAr
+                                        ? hasIssues
+                                          ? `تنبيه فحص المخزون قبل الصرف: يوجد عدد (${shortage + missing}) بنود غير متوفرة بالكامل!`
+                                          : 'فحص المخزون ممتاز: كافة بنود إذن الصرف متوفرة بالمخزن وجاهزة للصرف فوراً!'
+                                        : hasIssues
+                                          ? `Stock Shortage Alert: ${shortage + missing} items are insufficient!`
+                                          : 'All items are in stock and ready for dispatch!'}
+                                    </div>
+                                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                                      {isAr
+                                        ? `🟢 متوفر بالكامل: (${sufficient}) | 🔴 عجز بالرصيد: (${shortage}) | ⚪ غير مسجل بالمخزن: (${missing}) من إجمالي (${validLines.length}) بند`
+                                        : `🟢 Sufficient: (${sufficient}) | 🔴 Shortage: (${shortage}) | ⚪ Missing: (${missing}) of (${validLines.length}) items`}
+                                    </div>
+                                  </div>
+                                </div>
+                                {hasIssues && (
+                                  <span
+                                    className="badge"
+                                    style={{
+                                      background: 'rgba(255, 71, 87, 0.2)',
+                                      color: '#ff4757',
+                                      border: '1px solid #ff4757',
+                                      fontWeight: 800,
+                                      padding: '0.4rem 0.8rem',
+                                      borderRadius: '8px',
+                                      fontSize: '0.82rem',
+                                    }}
+                                  >
+                                    ⚠️ {isAr ? 'يرجى مراجعة العجز قبل الاعتماد' : 'Review shortages before dispatch'}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })()}
+
                           {/* Line Items Table */}
                           <div style={{ overflowX: 'auto', marginBottom: '0.5rem' }}>
-                            <table style={{ minWidth: '1950px', width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
+                            <table style={{ minWidth: batch.movementType === 'outbound' ? '2140px' : '1950px', width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
                               <colgroup>
                                 <col style={{ width: '45px' }} />
                                 <col style={{ width: '60px' }} />
                                 <col style={{ width: '150px' }} />
                                 <col style={{ width: '140px' }} />
+                                {batch.movementType === 'outbound' && <col style={{ width: '190px' }} />}
                                 <col style={{ width: '550px' }} />
                                 <col style={{ width: '110px' }} />
                                 <col style={{ width: '100px' }} />
@@ -3407,6 +3589,9 @@ export default function Warehouse() {
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'تجاهل' : 'Ignore'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'كود الصنف' : 'Item'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
+                                  {batch.movementType === 'outbound' && (
+                                    <th style={{ padding: '0.6rem 0.4rem', color: '#ff6b81' }}>{isAr ? '🔍 فحص الرصيد بالمخزن' : '🔍 Stock Check'}</th>
+                                  )}
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'وصف الصنف / القطاع' : 'Description'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'التشطيب' : 'Finish'}</th>
                                   <th style={{ padding: '0.6rem 0.4rem' }}>{isAr ? 'الطول mm' : 'Length mm'}</th>
@@ -3454,6 +3639,72 @@ export default function Warehouse() {
                                         style={{ background: '#101223', border: '1px solid var(--border)', color: '#8ab4ff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }}
                                       />
                                     </td>
+                                    {batch.movementType === 'outbound' && (
+                                      <td style={{ padding: '0.5rem 0.4rem' }}>
+                                        {(() => {
+                                          const chk = checkStockAvailability(line, stock)
+                                          if (chk.status === 'sufficient') {
+                                            return (
+                                              <span
+                                                className="badge"
+                                                style={{
+                                                  background: 'rgba(0, 224, 161, 0.15)',
+                                                  color: '#00e0a1',
+                                                  border: '1px solid rgba(0, 224, 161, 0.3)',
+                                                  fontSize: '0.75rem',
+                                                  display: 'inline-flex',
+                                                  alignItems: 'center',
+                                                  gap: '0.2rem',
+                                                  whiteSpace: 'nowrap',
+                                                }}
+                                                title={isAr ? `متوفر بالمخزن: ${chk.availableBar} عود (المطلوب: ${line.quantityBar || line.bars || 0})` : `Available: ${chk.availableBar} (Requested: ${line.quantityBar || line.bars || 0})`}
+                                              >
+                                                🟢 {isAr ? `متوفر (${chk.availableBar} عود)` : `In Stock (${chk.availableBar})`}
+                                              </span>
+                                            )
+                                          } else if (chk.status === 'shortage') {
+                                            return (
+                                              <span
+                                                className="badge"
+                                                style={{
+                                                  background: 'rgba(255, 71, 87, 0.18)',
+                                                  color: '#ff4757',
+                                                  border: '1px solid rgba(255, 71, 87, 0.45)',
+                                                  fontSize: '0.75rem',
+                                                  display: 'inline-flex',
+                                                  alignItems: 'center',
+                                                  gap: '0.2rem',
+                                                  fontWeight: 700,
+                                                  whiteSpace: 'nowrap',
+                                                }}
+                                                title={isAr ? `عجز رصيد! متاح بالمخزن ${chk.availableBar} فقط والمطلوب ${line.quantityBar || line.bars || 0}` : `Shortage! Only ${chk.availableBar} available`}
+                                              >
+                                                🔴 {isAr ? `عجز ${Math.abs(chk.diff)} (متاح ${chk.availableBar})` : `Short ${Math.abs(chk.diff)} (Has ${chk.availableBar})`}
+                                              </span>
+                                            )
+                                          } else {
+                                            return (
+                                              <span
+                                                className="badge"
+                                                style={{
+                                                  background: 'rgba(255, 255, 255, 0.08)',
+                                                  color: '#bbb',
+                                                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                  fontSize: '0.75rem',
+                                                  display: 'inline-flex',
+                                                  alignItems: 'center',
+                                                  gap: '0.2rem',
+                                                  whiteSpace: 'nowrap',
+                                                }}
+                                                title={isAr ? 'هذا الكود غير موجود في رصيد المخزن الحالي' : 'Not found in warehouse stock'}
+                                              >
+                                                ⚪ {isAr ? 'غير مسجل (0)' : 'Not in Stock (0)'}
+                                              </span>
+                                            )
+                                          }
+                                        })()}
+                                      </td>
+                                    )}
                                     <td style={{ padding: '0.5rem 0.4rem' }}>
                                       <textarea
                                         value={line.description}
