@@ -1556,6 +1556,32 @@ async function createProjectRestorePoint(projectId, { name, description, isAuto 
     console.warn(`[CreateRestorePoint] Warning capturing movements for ${projectId}:`, mErr.message);
   }
 
+  // Snapshot invoices history as well
+  let invoicesSnapshot = [];
+  try {
+    const invsSnap = await db
+      .collection("warehouseProjects")
+      .doc(projectId)
+      .collection("invoices")
+      .get();
+    invoicesSnapshot = invsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  } catch (iErr) {
+    console.warn(`[CreateRestorePoint] Warning capturing invoices for ${projectId}:`, iErr.message);
+  }
+
+  // Snapshot dispatches history as well
+  let dispatchesSnapshot = [];
+  try {
+    const dispSnap = await db
+      .collection("warehouseProjects")
+      .doc(projectId)
+      .collection("dispatches")
+      .get();
+    dispatchesSnapshot = dispSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  } catch (dErr) {
+    console.warn(`[CreateRestorePoint] Warning capturing dispatches for ${projectId}:`, dErr.message);
+  }
+
   const pointName = String(name || "").trim() || `نقطة حفظ تلقائية - ${new Date().toLocaleDateString("ar-EG")}`;
   const pointDesc = String(description || "").trim();
 
@@ -1573,6 +1599,8 @@ async function createProjectRestorePoint(projectId, { name, description, isAuto 
     createdAt: new Date().toISOString(),
     stockSnapshot: stockItems,
     movementsSnapshot,
+    invoicesSnapshot,
+    dispatchesSnapshot,
   };
 
   const pointRef = await db
@@ -1727,12 +1755,18 @@ async function rollbackInvoiceTransaction(projectId, invoiceId, userUid, userEma
     const qtyLm = Number(mData.quantityLm || 0);
     const qtyKg = Number(mData.quantityKg || 0);
 
-    // If original was Inbound (+), we subtract (-). If Outbound (-), we add back (+).
-    const reverseFactorBar = isOutbound ? qtyBar : -qtyBar;
-    const reverseFactorLm = isOutbound ? qtyLm : -qtyLm;
-    const reverseFactorKg = isOutbound ? qtyKg : -qtyKg;
+    // If original was Inbound (+), we subtract (-).
+    // If Outbound (-), only add back what was ACTUALLY deducted from warehouse (exclude Delmar portion)!
+    const delmarBars = Number(mData.delmarDispatchedBars || 0);
+    const actualWhDeductBar = isOutbound ? Math.max(0, qtyBar - delmarBars) : qtyBar;
+    const actualWhDeductLm = isOutbound && qtyBar > 0 ? (actualWhDeductBar / qtyBar) * qtyLm : qtyLm;
+    const actualWhDeductKg = isOutbound && qtyBar > 0 ? (actualWhDeductBar / qtyBar) * qtyKg : qtyKg;
 
-    if (itemKey) {
+    const reverseFactorBar = isOutbound ? actualWhDeductBar : -qtyBar;
+    const reverseFactorLm = isOutbound ? actualWhDeductLm : -qtyLm;
+    const reverseFactorKg = isOutbound ? actualWhDeductKg : -qtyKg;
+
+    if (itemKey && (reverseFactorBar !== 0 || reverseFactorLm !== 0)) {
       const stockRef = projectRef.collection("stock").doc(itemKey);
       batch.set(
         stockRef,
@@ -1782,6 +1816,39 @@ async function rollbackInvoiceTransaction(projectId, invoiceId, userUid, userEma
       await commitBatchIfNeeded(false);
     } catch (dErr) {
       console.warn("[rollbackInvoiceTransaction] Dispatch cancel warning:", dErr.message);
+    }
+  }
+
+  // Reopen any Delmar dispatches that were delivered or fulfilled by this rolled-back delivery note
+  if (isOutbound) {
+    const invNumber = invData.invoiceNumber || "";
+    try {
+      const dispSnap = await projectRef.collection("dispatches").get();
+      for (const dDoc of dispSnap.docs) {
+        const d = dDoc.data() || {};
+        const dNotes = String(d.notes || "");
+        const dSupplier = String(d.coatingSupplier || "").toLowerCase();
+        const dCustomer = String(d.customerName || "").toLowerCase();
+        const invCustomer = String(invData.customerReference || invData.salesOrder || "").toLowerCase();
+
+        const isDelmar = dSupplier.includes("delmar") || dSupplier.includes("دلمار");
+        const matchesDeliv = invNumber && dNotes.includes(invNumber);
+        const matchesCustomer = invCustomer && (dCustomer.includes(invCustomer) || invCustomer.includes(dCustomer));
+
+        if (isDelmar && (matchesDeliv || matchesCustomer)) {
+          batch.update(dDoc.ref, {
+            currentStage: "in_coating",
+            isCompleted: false,
+            completedAt: null,
+            notes: dNotes.replace(new RegExp(`.*?${invNumber}.*?`, "g"), "").trim() || "تم التراجع عن إذن الصرف وإعادة فتح الأمر لقيد الدهان",
+            updatedAt: nowIso,
+          });
+          opCount++;
+          await commitBatchIfNeeded(false);
+        }
+      }
+    } catch (dReopenErr) {
+      console.warn("[rollbackInvoiceTransaction] Error reopening Delmar dispatches:", dReopenErr.message);
     }
   }
 
@@ -2005,6 +2072,80 @@ async function restoreProjectToPoint(projectId, pointId, userUid, userEmail, use
     } catch (mvtRestoreErr) {
       console.warn(`[RestoreToPoint] Error restoring movements for ${projectId}:`, mvtRestoreErr.message);
     }
+  }
+
+  // 5. Restore Invoices Snapshot or clean invoices added after this restore point
+  const invoicesSnapshot = Array.isArray(pointData.invoicesSnapshot) ? pointData.invoicesSnapshot : [];
+  try {
+    const currentInvsSnap = await db
+      .collection("warehouseProjects")
+      .doc(projectId)
+      .collection("invoices")
+      .get();
+
+    if (invoicesSnapshot.length > 0) {
+      // Full exact restore of invoices
+      for (const iDoc of currentInvsSnap.docs) {
+        await iDoc.ref.delete();
+      }
+      for (const inv of invoicesSnapshot) {
+        const { id, ...iData } = inv;
+        await db.collection("warehouseProjects").doc(projectId).collection("invoices").doc(id).set(iData);
+      }
+    } else {
+      // Legacy point: Remove any invoice that did not exist in movementsSnapshot
+      const validInvNums = new Set(movementsSnapshot.map(m => m.invoiceNumber).filter(Boolean));
+      const validInvIds = new Set(movementsSnapshot.map(m => m.invoiceId).filter(Boolean));
+
+      for (const iDoc of currentInvsSnap.docs) {
+        const inv = iDoc.data() || {};
+        if (!validInvNums.has(inv.invoiceNumber) && !validInvIds.has(iDoc.id)) {
+          await iDoc.ref.delete();
+        }
+      }
+    }
+  } catch (invRestoreErr) {
+    console.warn(`[RestoreToPoint] Error restoring invoices for ${projectId}:`, invRestoreErr.message);
+  }
+
+  // 6. Restore Dispatches Snapshot or Revert Dispatches to in_coating if their delivery note was rolled back
+  const dispatchesSnapshot = Array.isArray(pointData.dispatchesSnapshot) ? pointData.dispatchesSnapshot : [];
+  try {
+    const currentDispSnap = await db
+      .collection("warehouseProjects")
+      .doc(projectId)
+      .collection("dispatches")
+      .get();
+
+    if (dispatchesSnapshot.length > 0) {
+      // Full exact restore of dispatches
+      for (const dDoc of currentDispSnap.docs) {
+        await dDoc.ref.delete();
+      }
+      for (const disp of dispatchesSnapshot) {
+        const { id, ...dData } = disp;
+        await db.collection("warehouseProjects").doc(projectId).collection("dispatches").doc(id).set(dData);
+      }
+    } else {
+      // Legacy point: Check if active outbound deliveries exist for Delmar. If not, reopen to in_coating!
+      const validInvNums = new Set(movementsSnapshot.map(m => m.invoiceNumber).filter(Boolean));
+      for (const dDoc of currentDispSnap.docs) {
+        const d = dDoc.data() || {};
+        const dNotes = String(d.notes || "");
+        // If it was marked completed/delivered, reopen it back to in_coating!
+        if (d.isCompleted || d.currentStage === "delivered_to_customer" || d.currentStage === "closed") {
+          await dDoc.ref.update({
+            currentStage: "in_coating",
+            isCompleted: false,
+            completedAt: null,
+            notes: "تمت الاستعادة لنقطة حفظ سابقة وإعادة فتح الأمر لقيد الدهان والمعالجة",
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+    }
+  } catch (dispRestoreErr) {
+    console.warn(`[RestoreToPoint] Error restoring dispatches for ${projectId}:`, dispRestoreErr.message);
   }
 
   await logWarehouseAudit(projectId, {
@@ -2429,6 +2570,31 @@ async function getProjectDispatches(projectId, statusFilter = "all") {
     const snap = await query.orderBy("dispatchedAt", "desc").get();
     let dispatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
+    // Auto-integrity verification:
+    // If no active outbound invoices exist for this project, all Delmar dispatches must be in_coating!
+    const invSnap = await db.collection("warehouseProjects").doc(projectId).collection("invoices")
+      .where("movementType", "==", "outbound")
+      .get();
+    const activeOutboundInvoices = invSnap.docs
+      .map(doc => doc.data())
+      .filter(inv => !inv.isCancelled && inv.status !== "cancelled");
+
+    if (activeOutboundInvoices.length === 0) {
+      for (const d of dispatches) {
+        if (d.isCompleted || d.currentStage === "delivered_to_customer") {
+          d.currentStage = "in_coating";
+          d.isCompleted = false;
+          d.completedAt = null;
+          // Persist update in Firestore
+          db.collection("warehouseProjects").doc(projectId).collection("dispatches").doc(d.id).update({
+            currentStage: "in_coating",
+            isCompleted: false,
+            completedAt: null,
+          }).catch(() => {});
+        }
+      }
+    }
+
     if (statusFilter === "active" || statusFilter === "in_progress") {
       dispatches = dispatches.filter(d => !d.isCompleted && d.currentStage !== "closed");
     } else if (statusFilter === "completed" || statusFilter === "closed") {
@@ -2716,37 +2882,7 @@ async function reconcileDelmarAndCosts(projectId, targetInvoiceNumber = null, us
     }
   }
 
-  // 2. Close active Delmar dispatches delivered by SDs
-  const activeDispatchesSnap = await projectRef.collection("dispatches")
-    .where("isCompleted", "==", false)
-    .get();
-
-  for (const dDoc of activeDispatchesSnap.docs) {
-    const d = dDoc.data() || {};
-    const dSupplier = String(d.coatingSupplier || "").toLowerCase();
-    const dCustomer = String(d.customerName || "").toLowerCase();
-
-    if (dSupplier.includes("delmar") || dSupplier.includes("دلمار") || dCustomer.includes("sotalux")) {
-      await dDoc.ref.set(
-        {
-          currentStage: "delivered_to_customer",
-          isCompleted: true,
-          completedAt: nowIso,
-          customerReceivedBy: d.customerName || "Sotalux",
-          notes: (d.notes ? d.notes + " | " : "") + "تم التسليم للعميل النهائي وإغلاق الدورة بموجب إذن الصرف المعتمد",
-          stageHistory: admin.firestore.FieldValue.arrayUnion({
-            stage: "delivered_to_customer",
-            label: "المرحلة 2: تم تسليم القطاعات للعميل النهائي وإغلاق الدورة بموجب إذن الصرف",
-            timestamp: nowIso,
-            user: userName || userEmail || "النظام",
-          }),
-          updatedAt: nowIso,
-        },
-        { merge: true }
-      );
-      dispatchesClosed++;
-    }
-  }
+  // Note: Dispatches are strictly managed by actual dispatch transactions and rollback, never altered blindly!
 
   return {
     success: true,

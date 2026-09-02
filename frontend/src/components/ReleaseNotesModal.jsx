@@ -8,10 +8,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.43',
+      version: 'v2.27.44',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'ترقية جذرية لنقاط الاستعادة الكاملة (4 في 1) والتراجع المتكامل لمخزن دلمار وحركات الصرف' : 'Full 4-in-1 Complete Restore Engine & Integrated Rollback for Delmar Dispatches & Inventory',
+      highlights: [
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'استعادة شاملة 100% لكامل النظام: ترقية نقطة الاستعادة لحفظ واسترجاع كل شيء (الأرصدة + الحركات + الفواتير + أوامر دلمار)، وحذف أي فواتير أُضيفت بعد النقطة وإرجاع الأوامر لحالتها الأصلية دون أي أثر متبقي.'
+            : 'Complete 4-in-1 Snapshot Restore: Full point restore covers Stock, Movements, Invoices, and Dispatches, cleanly wiping subsequent entries.'
+        },
+        {
+          icon: '↩️',
+          text: isAr
+            ? 'تراجع ذكي عن الصرف: عند التراجع عن أي إذن صرف، يتم فوراً إعادة فتح أوامر دلمار المنصرفة وإرجاعها لمرحلة قيد الدهان والمعالجة (المرحلة 1)، وعكس رصيد المخزن الفعلي فقط.'
+            : 'Smart Outbound Rollback: Cancelling an outbound delivery note restores Delmar orders back to in_coating and safely reverses inventory.'
+        },
+        {
+          icon: '🔒',
+          text: isAr
+            ? 'حظر الإغلاق الصامت في الخلفية: إلغاء أي تعديلات صامتة على أوامر دلمار عند فتح الصفحات لضمان ثبات ودقة الأرصدة التراكمية.'
+            : 'Strict Deterministic State: Removed silent background reconciliations to guarantee inventory fidelity.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.43',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'تكبير وإبراز أرقام عدد البارات (BAR) في بطاقات التتبع وجداول الفحص' : 'Enlarged High-Visibility Bar Count Typography Across Lifecycle Tracker & Audit Tables',
       highlights: [
         {

@@ -1100,8 +1100,15 @@ export default function Warehouse() {
     try {
       const res = await restoreProjectToPoint(selectedProjectId, point.id)
       if (res.success) {
-        toast.success(isAr ? `تمت استعادة نقطة الحفظ (${point.name}) بنجاح!` : `Restored to point (${point.name}) successfully!`)
-        loadStock(selectedProjectId)
+        toast.success(isAr ? `تمت استعادة نقطة الحفظ (${point.name}) بنجاح وإرجاع كافة الحركات والأرصدة!` : `Restored to point (${point.name}) successfully!`)
+        await loadStock(selectedProjectId)
+        await loadInvoices(selectedProjectId)
+        try {
+          const dRes = await getWarehouseDispatches(selectedProjectId)
+          if (dRes && dRes.success && Array.isArray(dRes.dispatches)) {
+            setActiveDispatches(dRes.dispatches)
+          }
+        } catch (e) {}
       }
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل استعادة نقطة الحفظ' : 'Failed to restore point'))
@@ -1141,9 +1148,15 @@ export default function Warehouse() {
     try {
       const res = await rollbackWarehouseInvoice(selectedProjectId, inv.id)
       if (res.success) {
-        toast.success(isAr ? `تم التراجع عن الفاتورة (${inv.invoiceNumber}) وعكس أرصدة المخزن بنجاح!` : `Invoice (${inv.invoiceNumber}) rolled back successfully!`)
-        loadStock(selectedProjectId)
-        loadInvoices(selectedProjectId)
+        toast.success(isAr ? `تم التراجع عن الفاتورة (${inv.invoiceNumber}) وإعادة الأرصدة وفتح أوامر دلمار بنجاح!` : `Invoice (${inv.invoiceNumber}) rolled back successfully!`)
+        await loadStock(selectedProjectId)
+        await loadInvoices(selectedProjectId)
+        try {
+          const dRes = await getWarehouseDispatches(selectedProjectId)
+          if (dRes && dRes.success && Array.isArray(dRes.dispatches)) {
+            setActiveDispatches(dRes.dispatches)
+          }
+        } catch (e) {}
       }
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل التراجع عن الفاتورة' : 'Failed to rollback invoice'))
@@ -1245,14 +1258,9 @@ export default function Warehouse() {
     }
   }
 
-  async function loadInvoices(projectId, silentReconcile = true) {
+  async function loadInvoices(projectId) {
     setLoadingInvoices(true)
     try {
-      if (silentReconcile && projectId) {
-        try {
-          await reconcileWarehouseDelmarAndCosts(projectId)
-        } catch (e) {}
-      }
       const res = await getWarehouseInvoices(projectId)
       if (res.success && res.invoices) {
         setInvoices(res.invoices)
@@ -3156,27 +3164,6 @@ export default function Warehouse() {
                   color: '#fff',
                 }}
               />
-              <button
-                type="button"
-                className="btn"
-                onClick={handleManualReconcileCosts}
-                style={{
-                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '0.55rem 1.1rem',
-                  borderRadius: '8px',
-                  fontWeight: 700,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
-                }}
-                title={isAr ? 'تدقيق تكاليف الصرف من فواتير التوريد المخزنية ومطابقة أوامر دلمار المنتهية' : 'Reconcile dispatch costs and Delmar'}
-              >
-                🔄 {isAr ? 'تدقيق تكاليف الصرف ودلمار' : 'Reconcile Costs & Delmar'}
-              </button>
               <button
                 className="btn"
                 onClick={handleExportHistoryToExcel}
