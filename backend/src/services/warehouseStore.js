@@ -1004,16 +1004,92 @@ async function getProjectMovements(projectId, invoiceId) {
 
   const fetchMovementsFromProj = async (pid) => {
     try {
-      let query = db.collection("warehouseProjects").doc(pid).collection("movements");
-      if (invoiceId) {
-        query = query.where("invoiceId", "==", invoiceId);
+      if (!invoiceId) {
+        const snapshot = await db.collection("warehouseProjects").doc(pid).collection("movements").get();
+        snapshot.docs.forEach((doc) => {
+          if (!mvtMap.has(doc.id)) {
+            mvtMap.set(doc.id, { id: doc.id, ...doc.data() });
+          }
+        });
+        return;
       }
-      const snapshot = await query.get();
-      snapshot.docs.forEach((doc) => {
-        if (!mvtMap.has(doc.id)) {
-          mvtMap.set(doc.id, { id: doc.id, ...doc.data() });
+
+      const trimmedInvId = String(invoiceId).trim();
+      const targetInvoiceIds = new Set([trimmedInvId]);
+      const targetInvoiceNumbers = new Set([trimmedInvId]);
+
+      // 1. Resolve invoice document metadata if invoiceId is a doc ID
+      try {
+        const invDoc = await db.collection("warehouseProjects").doc(pid).collection("invoices").doc(trimmedInvId).get();
+        if (invDoc.exists) {
+          const invData = invDoc.data() || {};
+          if (invData.invoiceNumber) {
+            targetInvoiceNumbers.add(String(invData.invoiceNumber).trim());
+          }
         }
-      });
+      } catch (err) {
+        // ignore
+      }
+
+      // 2. Discover any duplicate / sibling invoice documents sharing the same invoiceNumber
+      for (const num of Array.from(targetInvoiceNumbers)) {
+        if (!num) continue;
+        try {
+          const matchingInvs = await db
+            .collection("warehouseProjects")
+            .doc(pid)
+            .collection("invoices")
+            .where("invoiceNumber", "==", num)
+            .get();
+          matchingInvs.docs.forEach((d) => {
+            targetInvoiceIds.add(d.id);
+            const dData = d.data() || {};
+            if (dData.invoiceNumber) targetInvoiceNumbers.add(String(dData.invoiceNumber).trim());
+          });
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // 3. Query movements matching invoiceId
+      for (const id of targetInvoiceIds) {
+        if (!id) continue;
+        try {
+          const snap = await db
+            .collection("warehouseProjects")
+            .doc(pid)
+            .collection("movements")
+            .where("invoiceId", "==", id)
+            .get();
+          snap.docs.forEach((doc) => {
+            if (!mvtMap.has(doc.id)) {
+              mvtMap.set(doc.id, { id: doc.id, ...doc.data() });
+            }
+          });
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // 4. Query movements matching invoiceNumber directly
+      for (const num of targetInvoiceNumbers) {
+        if (!num) continue;
+        try {
+          const snap = await db
+            .collection("warehouseProjects")
+            .doc(pid)
+            .collection("movements")
+            .where("invoiceNumber", "==", num)
+            .get();
+          snap.docs.forEach((doc) => {
+            if (!mvtMap.has(doc.id)) {
+              mvtMap.set(doc.id, { id: doc.id, ...doc.data() });
+            }
+          });
+        } catch (e) {
+          // ignore
+        }
+      }
     } catch (e) {
       console.warn(`Error fetching project movements for ${pid}:`, e.message);
     }
@@ -1021,9 +1097,8 @@ async function getProjectMovements(projectId, invoiceId) {
 
   await fetchMovementsFromProj(projectId);
 
-  // Return movements scoped strictly to current project
-
-  return Array.from(mvtMap.values());
+  // Return non-deleted movements scoped strictly to current project
+  return Array.from(mvtMap.values()).filter((m) => !m.isDeleted);
 }
 
 /**

@@ -7,10 +7,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.29',
-      date: isAr ? '1 سبتمبر 2026' : 'Sep 1, 2026',
+      version: 'v2.27.30',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إظهار والبحث بكود العميل (Customer Code) وضمان استيراد كافة بنود الفواتير كاملة 100%' : 'Customer Code Display & Search with Complete 100% Invoice Line Retrieval',
+      highlights: [
+        {
+          icon: '🏷️',
+          text: isAr
+            ? 'إظهار كود العميل (Customer Code) في عمود مخصص بجدول الصرف والبحث السريع به وبكود الصنف والبيان.'
+            : 'Dedicated Customer Code column in dispatch table with real-time search & filter by customer code, item code, or description.'
+        },
+        {
+          icon: '🔍',
+          text: isAr
+            ? 'استيراد بنود الفواتير الواردة كاملة 100% بدون نقص عبر البحث المزدوج برقم الفاتورة ومعرف الوثيقة والمطابقة مع رصيد المخزن.'
+            : 'Complete 100% invoice line items retrieval by multi-index invoiceId & invoiceNumber lookup and stock reconciliation.'
+        },
+        {
+          icon: '➕',
+          text: isAr
+            ? 'إتاحة إضافة بنود وقطاعات إضافية من المخزن مع إظهار كود العميل داخل خيارات قائمة الأصناف.'
+            : 'Allow adding extra profiles directly from stock with customer codes visible in profile dropdown.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.29',
+      date: isAr ? '1 سبتمبر 2026' : 'Sep 1, 2026',
+      badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
+      badgeColor: 'rgba(255, 255, 255, 0.1)',
       title: isAr ? 'صرف الفواتير الواردة بالكامل أو أجزاء منها، تحديد المستودع، وتخصيص صلاحيات الصرف والتوريد' : 'Invoice-Based Bulk/Partial Outbound, Warehouse Picker & Granular Permissions',
       highlights: [
         {
@@ -756,7 +783,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
                 fontWeight: 700
               }}
             >
-              v2.27.29 {isAr ? 'النسخة الحالية' : 'Active'}
+              v2.27.30 {isAr ? 'النسخة الحالية' : 'Active'}
             </span>
             <button
               onClick={onClose}

@@ -1906,7 +1906,7 @@ export default function Warehouse() {
             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <input
                 type="search"
-                placeholder={isAr ? 'ابحث برقم الصنف، الوصف، أو الدهان...' : 'Search item code, description, finish...'}
+                placeholder={isAr ? 'ابحث بكود الصنف، كود العميل، الوصف، الدهان، أو الفاتورة...' : 'Search by item code, customer code, description, finish, or invoice...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
