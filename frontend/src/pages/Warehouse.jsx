@@ -201,8 +201,9 @@ function resolveCanonicalItemPrice(line, stock = [], activeDispatches = [], alia
 
   // Target codes to match, including known synonyms (515750 <=> 515756)
   const targetCodes = [lItem, lCust].filter(Boolean)
-  if (lItem === '515750' || lCust === '515750') targetCodes.push('515756')
-  if (lItem === '515756' || lCust === '515756') targetCodes.push('515750')
+  if (lItem === '515750' || lCust === '515750') targetCodes.push('515756', '301201404', '301-201404')
+  if (lItem === '515756' || lCust === '515756') targetCodes.push('515750', '301201404', '301-201404')
+  if (lItem.includes('201404') || lCust.includes('201404')) targetCodes.push('515750', '515756')
 
   if (aliasesMap && typeof aliasesMap === 'object') {
     for (const c of [...targetCodes]) {
@@ -278,8 +279,9 @@ function findDelmarPoolMatches(line, delmarPool = [], aliasesMap = {}) {
   let lCust = clean(line.customerCode)
 
   const targetCodes = [lItem, lCust].filter(Boolean)
-  if (lItem === '515750' || lCust === '515750') targetCodes.push('515756')
-  if (lItem === '515756' || lCust === '515756') targetCodes.push('515750')
+  if (lItem === '515750' || lCust === '515750') targetCodes.push('515756', '301201404', '301-201404')
+  if (lItem === '515756' || lCust === '515756') targetCodes.push('515750', '301201404', '301-201404')
+  if (lItem.includes('201404') || lCust.includes('201404')) targetCodes.push('515750', '515756')
 
   if (aliasesMap && typeof aliasesMap === 'object') {
     for (const c of [...targetCodes]) {
@@ -530,8 +532,9 @@ function checkStockAvailability(line, stock = [], aliasesMap = {}, activeDispatc
   }
 
   const stockTargetCodes = [lineItemNorm, lineCustNorm].filter(Boolean)
-  if (lineItemNorm === '515750' || lineCustNorm === '515750') stockTargetCodes.push('515756')
-  if (lineItemNorm === '515756' || lineCustNorm === '515756') stockTargetCodes.push('515750')
+  if (lineItemNorm === '515750' || lineCustNorm === '515750') stockTargetCodes.push('515756', '301201404', '301-201404')
+  if (lineItemNorm === '515756' || lineCustNorm === '515756') stockTargetCodes.push('515750', '301201404', '301-201404')
+  if (lineItemNorm.includes('201404') || lineCustNorm.includes('201404')) stockTargetCodes.push('515750', '515756')
 
   // 1. Exact match or Synonym match across warehouse stock
   let match = stock.find((s) => {

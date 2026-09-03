@@ -791,7 +791,25 @@ async function resolveCanonicalItemCost(projectRef, { itemKey, itemCode, custome
     }
   } catch (e) {}
 
-  // 5. Level 5: Fuzzy match fallback (1 digit difference on 6+ char codes e.g. 515750 vs 515756)
+  // 5. Level 5: Known cross-reference (301-201404 <=> 515756 <=> 515750) & Fuzzy match fallback
+  if (normItem === "515750" || normItem === "515756" || normItem.includes("201404") || normCust.includes("201404")) {
+    try {
+      const sSnap = await projectRef.collection("stock").get();
+      for (const doc of sSnap.docs) {
+        const s = doc.data() || {};
+        const sItem = clean(s.itemCode);
+        const sCust = clean(s.customerCode);
+        if (sItem === "515756" || sItem === "515750" || sItem.includes("201404") || sCust.includes("201404")) {
+          const b = Number(s.lastBarCost || s.barPrice || 0);
+          const u = Number(s.lastUnitCost || s.unitPrice || 0);
+          if (b > 0 || u > 0) {
+            return makeResult(b, u, "stock_canonical_201404");
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
   if (normItem && normItem.length >= 6) {
     try {
       const sSnap = await projectRef.collection("stock").get();

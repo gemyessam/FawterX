@@ -8,10 +8,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.56',
+      version: 'v2.27.57',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'توثيق وربط كود الداي 301-201404 مع كانكس 515756 وشوكو 515750 بالكامل' : 'Comprehensive Die Mapping: 301-201404 <=> Canex 515756 <=> Schüco 515750',
+      highlights: [
+        {
+          icon: '📜',
+          text: isAr
+            ? 'تطابق ثلاثي دائم: ربط كود العميل والداي (301-201404) مع كود كانكس (515756) وكود شوكو (515750) في محرك المخزون والتسعير ودلمار.'
+            : 'Tripartite Mapping: Unified 301-201404 with Canex 515756 and Schüco 515750 across warehouse, Delmar, and pricing engines.'
+        },
+        {
+          icon: '🎯',
+          text: isAr
+            ? 'التعرف الفوري: يتعرف النظام تلقائياً على الصنف ورصيده وتكلفته بأي من الأكواد الثلاثة بدون أي تضارب.'
+            : 'Instant Identification: Full interoperability across all three profile identifiers.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.56',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
       title: isAr ? 'تسعير تلقائي فوري لبند شوكو 515750 وربطه الحصري بكانكس 515756 والمحرك الشامل' : 'Instant Automatic Pricing & Canonical Resolution for Schüco Item 515750 (Mapped to 515756)',
       highlights: [
         {
