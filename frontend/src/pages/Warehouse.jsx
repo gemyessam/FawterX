@@ -6448,6 +6448,7 @@ export default function Warehouse() {
         projects={projects}
         onSelectProject={handleSelectProject}
         stock={stock}
+        aliasesMap={aliasesMap}
         preselectedItems={manualPreselectedItems}
         isAr={isAr}
         onSuccess={() => {

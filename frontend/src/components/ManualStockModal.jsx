@@ -12,6 +12,7 @@ export default function ManualStockModal({
   onSelectProject,
   stock = [],
   preselectedItems = [],
+  aliasesMap = {},
   onSuccess,
   isAr = true,
 }) {
@@ -149,13 +150,45 @@ export default function ManualStockModal({
         return
       }
 
-      // Map invoice movements to lines with available stock check
+      // Canonical valuation helper for inbound invoice movements
       const mappedLines = movements.map((m) => {
         const foundStock = stock.find((s) => s.itemKey === m.itemKey || (s.itemCode === m.itemCode && s.finish === m.finish))
         const avail = foundStock ? Number(foundStock.quantityBar || 0) : 0
         const invQty = Number(m.quantityBar || m.quantity || 1)
         const len = Number(m.lengthMm || 6000)
+        const lenM = len / 1000
         const defaultQty = Math.max(1, avail > 0 ? Math.min(invQty, avail) : invQty)
+
+        let uPrice = Number(m.unitPrice || 0)
+        let bPrice = Number(m.barPrice || 0)
+
+        // Strict mathematical consistency: barPrice = unitPrice * lengthM
+        if (bPrice === 0 && uPrice > 0 && lenM > 0) {
+          bPrice = Number((uPrice * lenM).toFixed(4))
+        } else if (uPrice === 0 && bPrice > 0 && lenM > 0) {
+          uPrice = Number((bPrice / lenM).toFixed(4))
+        }
+
+        // If both 0, check aliases (e.g. 515750 <=> 515756) and stock master
+        if (bPrice === 0 && uPrice === 0) {
+          const aliasCode = aliasesMap ? (aliasesMap[m.itemCode] || aliasesMap[m.customerCode]) : null
+          const matchedStock = stock.find(
+            (s) =>
+              s.itemKey === m.itemKey ||
+              s.itemCode === m.itemCode ||
+              s.customerCode === m.customerCode ||
+              (aliasCode && (s.itemCode === aliasCode || s.customerCode === aliasCode))
+          )
+          if (matchedStock) {
+            bPrice = Number(matchedStock.lastBarCost || matchedStock.barPrice || 0)
+            uPrice = Number(matchedStock.lastUnitCost || matchedStock.unitPrice || 0)
+            if (bPrice === 0 && uPrice > 0 && lenM > 0) bPrice = Number((uPrice * lenM).toFixed(4))
+            if (uPrice === 0 && bPrice > 0 && lenM > 0) uPrice = Number((bPrice / lenM).toFixed(4))
+          }
+        }
+
+        const effectiveBarPrice = bPrice > 0 ? bPrice : (uPrice > 0 && lenM > 0 ? uPrice * lenM : 0)
+        const lineNet = Number((defaultQty * effectiveBarPrice).toFixed(2))
 
         return {
           selected: true,
@@ -170,7 +203,9 @@ export default function ManualStockModal({
           quantityBar: defaultQty,
           quantityLm: (defaultQty * len) / 1000,
           quantityKg: m.quantityKg || 0,
-          unitPrice: m.unitPrice || 0,
+          unitPrice: uPrice,
+          barPrice: bPrice,
+          netTotal: lineNet,
           supplier: m.supplier || 'CANEX',
         }
       })
@@ -229,7 +264,14 @@ export default function ManualStockModal({
     setLines((prev) => {
       const copy = [...prev]
       const len = found.lengthMm || 6000
+      const lenM = len / 1000
       const currentBar = copy[index].quantityBar || 1
+
+      let bPrice = Number(found.lastBarCost || found.barPrice || 0)
+      let uPrice = Number(found.lastUnitCost || found.unitPrice || 0)
+      if (bPrice === 0 && uPrice > 0 && lenM > 0) bPrice = Number((uPrice * lenM).toFixed(4))
+      if (uPrice === 0 && bPrice > 0 && lenM > 0) uPrice = Number((bPrice / lenM).toFixed(4))
+
       copy[index] = {
         ...copy[index],
         itemKey: found.itemKey,
@@ -242,7 +284,9 @@ export default function ManualStockModal({
         quantityBar: currentBar,
         quantityLm: (currentBar * len) / 1000,
         quantityKg: found.quantityKg || 0,
-        unitPrice: found.lastUnitCost || 0,
+        unitPrice: uPrice,
+        barPrice: bPrice,
+        netTotal: Number((currentBar * (bPrice > 0 ? bPrice : (uPrice * lenM))).toFixed(2)),
         supplier: found.supplier || 'CANEX',
       }
       return copy
@@ -255,10 +299,24 @@ export default function ManualStockModal({
       copy[index] = { ...copy[index], [field]: value }
 
       const len = Number(copy[index].lengthMm || 6000)
+      const lenM = len / 1000
       const bar = Number(copy[index].quantityBar || 0)
 
-      if (field === 'quantityBar' || field === 'lengthMm') {
+      if (field === 'quantityBar' || field === 'lengthMm' || field === 'barPrice' || field === 'unitPrice') {
         copy[index].quantityLm = (bar * len) / 1000
+        let bp = Number(copy[index].barPrice || 0)
+        let up = Number(copy[index].unitPrice || 0)
+
+        if (field === 'unitPrice' && up > 0 && lenM > 0) {
+          bp = Number((up * lenM).toFixed(4))
+          copy[index].barPrice = bp
+        } else if (field === 'barPrice' && bp > 0 && lenM > 0) {
+          up = Number((bp / lenM).toFixed(4))
+          copy[index].unitPrice = up
+        }
+
+        const effectiveBarPrice = bp > 0 ? bp : (up > 0 && lenM > 0 ? up * lenM : 0)
+        copy[index].netTotal = Number((bar * effectiveBarPrice).toFixed(2))
       }
       return copy
     })
@@ -314,7 +372,26 @@ export default function ManualStockModal({
   }, [activeSelectedLines])
 
   const totalEstimatedCost = useMemo(() => {
-    return activeSelectedLines.reduce((acc, curr) => acc + Number(curr.quantityBar || 0) * Number(curr.unitPrice || 0), 0)
+    return activeSelectedLines.reduce((acc, curr) => {
+      const lineNet = Number(curr.netTotal || 0)
+      if (lineNet > 0) return acc + lineNet
+      const bar = Number(curr.quantityBar || 0)
+      const len = Number(curr.lengthMm || 6000)
+      const lenM = len / 1000
+      const bp = Number(curr.barPrice || 0)
+      const up = Number(curr.unitPrice || 0)
+      const effectiveBarPrice = bp > 0 ? bp : (up > 0 && lenM > 0 ? up * lenM : 0)
+      return acc + (bar * effectiveBarPrice)
+    }, 0)
+  }, [activeSelectedLines])
+
+  const hasZeroCostLines = useMemo(() => {
+    return activeSelectedLines.some((l) => {
+      const net = Number(l.netTotal || 0)
+      const bp = Number(l.barPrice || 0)
+      const up = Number(l.unitPrice || 0)
+      return net === 0 && bp === 0 && up === 0
+    })
   }, [activeSelectedLines])
 
   const allSelected = useMemo(() => {
@@ -1055,9 +1132,8 @@ export default function ManualStockModal({
                       {mode === 'outbound' ? (isAr ? 'المنصرف (BAR)' : 'Dispensed (BAR)') : (isAr ? 'الوارد (BAR)' : 'Inbound (BAR)')}
                     </th>
                     <th style={{ padding: '0.65rem 0.5rem', width: '80px' }}>{isAr ? 'الأمتار (LM)' : 'Meters'}</th>
-                    {mode === 'inbound' && (
-                      <th style={{ padding: '0.65rem 0.5rem', width: '90px' }}>{isAr ? 'سعر الوحدة' : 'Unit Cost'}</th>
-                    )}
+                    <th style={{ padding: '0.65rem 0.5rem', width: '105px' }}>{isAr ? 'سعر العود' : 'Bar Cost'}</th>
+                    <th style={{ padding: '0.65rem 0.5rem', width: '115px', color: '#00e0a1' }}>{isAr ? 'إجمالي القيمة' : 'Total'}</th>
                     <th style={{ padding: '0.65rem 0.5rem', width: '40px', textAlign: 'center' }}>-</th>
                   </tr>
                 </thead>
@@ -1257,26 +1333,40 @@ export default function ManualStockModal({
                           <span dir="ltr">{(Number(line.quantityLm) || 0).toFixed(1)} m</span>
                         </td>
 
-                        {/* Unit Price (for Inbound) */}
-                        {mode === 'inbound' && (
-                          <td style={{ padding: '0.5rem' }}>
+                        {/* Bar Cost (Unit Price / Bar) */}
+                        <td style={{ padding: '0.5rem' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                             <input
                               type="number"
                               step="0.01"
-                              value={line.unitPrice}
-                              onChange={(e) => handleUpdateLine(idx, 'unitPrice', Number(e.target.value))}
+                              value={line.barPrice || ''}
+                              placeholder="0.00"
+                              onChange={(e) => handleUpdateLine(idx, 'barPrice', Number(e.target.value))}
                               style={{
                                 width: '100%',
                                 background: '#101223',
-                                border: '1px solid var(--border)',
-                                color: '#fff',
-                                padding: '0.4rem 0.5rem',
+                                border: Number(line.barPrice || 0) === 0 ? '1px solid #f59e0b' : '1px solid var(--border)',
+                                color: Number(line.barPrice || 0) === 0 ? '#fbbf24' : '#fff',
+                                padding: '0.35rem 0.45rem',
                                 borderRadius: '6px',
                                 textAlign: 'center',
+                                fontSize: '0.85rem',
+                                fontWeight: 700,
                               }}
+                              title={isAr ? 'سعر العود الواحد بالجنيه' : 'Cost per Bar'}
                             />
-                          </td>
-                        )}
+                            {Number(line.barPrice || 0) === 0 && (
+                              <span style={{ fontSize: '0.7rem', color: '#fbbf24', textAlign: 'center' }}>⚠️ {isAr ? 'تكلفة 0' : '0 EGP'}</span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Line Net Total */}
+                        <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontWeight: 800, color: '#00e0a1' }}>
+                          <span dir="ltr">
+                            {Number(line.netTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </td>
 
                         {/* Actions */}
                         <td style={{ padding: '0.5rem', textAlign: 'center' }}>
@@ -1342,12 +1432,16 @@ export default function ManualStockModal({
                     {totalLm.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} m
                   </strong>
                 </div>
-                {mode === 'inbound' && totalEstimatedCost > 0 && (
-                  <div style={{ fontSize: '0.9rem' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'إجمالي القيمة التقديرية:' : 'Est. Total Value:'} </span>
-                    <strong style={{ color: '#FFD700' }}>
-                      {totalEstimatedCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP
-                    </strong>
+                <div style={{ fontSize: '0.9rem', background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.35)', padding: '0.4rem 0.8rem', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ color: '#c7d2fe', fontSize: '0.82rem' }}>💰 {isAr ? 'إجمالي قيمة الحركة:' : 'Total Movement Value:'} </span>
+                  <strong style={{ color: '#a5b4fc', fontSize: '1.05rem', fontWeight: 900 }}>
+                    {totalEstimatedCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP
+                  </strong>
+                </div>
+
+                {hasZeroCostLines && (
+                  <div style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', padding: '0.35rem 0.75rem', borderRadius: '8px', color: '#fbbf24', fontSize: '0.8rem', fontWeight: 700 }}>
+                    ⚠️ {isAr ? 'تنبيه: يوجد بند أو أكثر بدون تكلفة مسجلة (0 ج).' : 'Warning: some items have 0 cost.'}
                   </div>
                 )}
               </div>

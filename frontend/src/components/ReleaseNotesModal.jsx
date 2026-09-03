@@ -8,10 +8,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.50',
+      version: 'v2.27.51',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'تأسيس المحرك الموحد للتسعير (Single Source of Truth) وتصحيح تكلفة الصرف وكود 515750' : 'Canonical Single Source of Truth Valuation Engine & Cross-Reference Pricing',
+      highlights: [
+        {
+          icon: '🏛️',
+          text: isAr
+            ? 'المصدر الموحد للتسعير والتكلفة: اعتماد هيكل هرمي موحد (فاتورة التوريد الأصلية ⬅️ قاموس المترادفات ⬅️ المخزن الفعلي ⬅️ حركات التوريد) لمنع أي تضارب أو أخطاء في حساب التكلفة.'
+            : 'Canonical Cost Engine: Unified 4-tier hierarchy for pricing and valuation across all dispatch and review workflows.'
+        },
+        {
+          icon: '📐',
+          text: isAr
+            ? 'تصحيح معادلة التكلفة للأعواد والأمتار: القضاء نهائياً على خطأ قسمة السعر على طول العود، وتوحيد معادلة القيمة (الأعواد × سعر العود = الأمتار × سعر المتر) ومطابقة قيمة SD التامة.'
+            : 'Fixed Profile Valuation Math: Eliminated per-meter vs per-bar unit price discrepancy, aligning dispatch values precisely with delivery notes.'
+        },
+        {
+          icon: '🔁',
+          text: isAr
+            ? 'حل تصفير بند شوكو 515750: ربط ذكي وتلقائي مع كود كانكس المقابل (515756) عبر قاموس الأكواد المترادفة، مع إظهار التكلفة والإنذار بالصفر في نافذة الصرف ومطابقة التكاليف التاريخية.'
+            : 'Resolved 515750 Zero-Cost: Automatic cross-referencing to Canex 515756 with real-time zero-cost alerting and retroactive reconciliation.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.50',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
       title: isAr ? 'ربط وإظهار ريفرنس الفاتورة المصروف منها في سجل الحركات وتتبع مراحل الصرف والدهان' : 'Source Inbound Invoice Reference Tracking in Audit Trail & Dispatches View',
       highlights: [
         {

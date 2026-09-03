@@ -632,73 +632,181 @@ async function getWarehouseAuditLogs(projectId, limit = 150) {
  * Resolves the original inbound acquisition cost (bar price & meter price) for an item
  * from project stock or past inbound movements history.
  */
-async function resolveItemInboundCost(projectRef, itemKey, itemCode, customerCode, lengthMm = 6000) {
+/**
+ * Canonical Single Source of Truth for item valuation and cost resolution.
+ * Hierarchy:
+ * 1. Specific Source Inbound Invoice movements (if sourceInvoiceId provided)
+ * 2. Cross-Reference Aliases Dictionary (e.g. 515750 <=> 515756)
+ * 3. Warehouse Stock Master (stock collection: lastBarCost / lastUnitCost)
+ * 4. Inbound Movements Audit Trail (movements collection: movementType == 'inbound')
+ * 5. Fuzzy Match fallback (1 digit difference on 6+ character extrusion codes)
+ */
+async function resolveCanonicalItemCost(projectRef, { itemKey, itemCode, customerCode, lengthMm = 6000, sourceInvoiceId = null }) {
   const clean = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]/gi, "");
+  const len = Number(lengthMm) > 0 ? Number(lengthMm) : 6000;
+  const lenM = len / 1000;
+
   const normItem = clean(itemCode);
   const normCust = clean(customerCode);
 
-  // 1. Check stock document by exact itemKey
-  if (itemKey) {
+  const makeResult = (barPrice, unitPrice, source) => {
+    let bPrice = Number(barPrice || 0);
+    let uPrice = Number(unitPrice || 0);
+    if (bPrice === 0 && uPrice > 0 && lenM > 0) bPrice = Number((uPrice * lenM).toFixed(4));
+    if (uPrice === 0 && bPrice > 0 && lenM > 0) uPrice = Number((bPrice / lenM).toFixed(4));
+    return {
+      barPrice: bPrice,
+      unitPrice: uPrice,
+      priceUnit: "M",
+      source: source || "unknown",
+      hasCost: bPrice > 0 || uPrice > 0,
+    };
+  };
+
+  // 1. Level 1: Specific Source Inbound Invoice movements (Direct Match)
+  if (sourceInvoiceId) {
     try {
-      const sDoc = await projectRef.collection("stock").doc(itemKey).get();
-      if (sDoc.exists) {
-        const s = sDoc.data() || {};
-        const bCost = Number(s.lastBarCost || s.barPrice || 0);
-        const uCost = Number(s.lastUnitCost || s.unitPrice || 0);
-        if (bCost > 0 || uCost > 0) {
-          return {
-            barPrice: bCost || (lengthMm > 0 ? (uCost * lengthMm) / 1000 : 0),
-            unitPrice: uCost || (lengthMm > 0 ? (bCost * 1000) / lengthMm : 0),
-          };
+      const srcSnap = await projectRef.collection("movements")
+        .where("invoiceId", "==", sourceInvoiceId)
+        .get();
+      for (const doc of srcSnap.docs) {
+        const m = doc.data() || {};
+        const mItem = clean(m.itemCode);
+        const mCust = clean(m.customerCode);
+        if ((normItem && (mItem === normItem || mCust === normItem)) ||
+            (normCust && (mItem === normCust || mCust === normCust))) {
+          const b = Number(m.barPrice || (m.quantityBar > 0 && m.netTotal ? m.netTotal / m.quantityBar : 0));
+          const u = Number(m.unitPrice || (m.quantityLm > 0 && m.netTotal ? m.netTotal / m.quantityLm : 0));
+          if (b > 0 || u > 0) {
+            return makeResult(b, u, `source_invoice_${sourceInvoiceId}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[resolveCanonicalItemCost] Error checking source invoice movements:", e.message);
+    }
+  }
+
+  // Collect candidate codes: direct codes + cross-reference aliases
+  const candidateCodes = new Set();
+  if (normItem) candidateCodes.add(normItem);
+  if (normCust) candidateCodes.add(normCust);
+
+  // 2. Level 2: Query itemAliases dictionary (e.g. 515750 <=> 515756)
+  try {
+    const aliasSnap = await projectRef.collection("itemAliases").get();
+    for (const aDoc of aliasSnap.docs) {
+      const a = aDoc.data() || {};
+      const aCode = clean(a.aliasCode);
+      const tCode = clean(a.targetItemCode);
+      if (normItem && (aCode === normItem || tCode === normItem)) {
+        if (aCode) candidateCodes.add(aCode);
+        if (tCode) candidateCodes.add(tCode);
+      }
+      if (normCust && (aCode === normCust || tCode === normCust)) {
+        if (aCode) candidateCodes.add(aCode);
+        if (tCode) candidateCodes.add(tCode);
+      }
+    }
+  } catch (e) {}
+
+  // 2.1 Also check if source invoice has matching item via aliases
+  if (sourceInvoiceId && candidateCodes.size > 0) {
+    try {
+      const srcSnap = await projectRef.collection("movements")
+        .where("invoiceId", "==", sourceInvoiceId)
+        .get();
+      for (const doc of srcSnap.docs) {
+        const m = doc.data() || {};
+        const mItem = clean(m.itemCode);
+        const mCust = clean(m.customerCode);
+        if (Array.from(candidateCodes).some((c) => mItem === c || mCust === c)) {
+          const b = Number(m.barPrice || (m.quantityBar > 0 && m.netTotal ? m.netTotal / m.quantityBar : 0));
+          const u = Number(m.unitPrice || (m.quantityLm > 0 && m.netTotal ? m.netTotal / m.quantityLm : 0));
+          if (b > 0 || u > 0) {
+            return makeResult(b, u, `source_invoice_alias_${sourceInvoiceId}`);
+          }
         }
       }
     } catch (e) {}
   }
 
-  // 2. Scan stock collection for matching itemCode or customerCode
+  // 3. Level 3: Stock snapshot (check exact itemKey first, then candidate codes in stock)
+  if (itemKey) {
+    try {
+      const sDoc = await projectRef.collection("stock").doc(itemKey).get();
+      if (sDoc.exists) {
+        const s = sDoc.data() || {};
+        const b = Number(s.lastBarCost || s.barPrice || 0);
+        const u = Number(s.lastUnitCost || s.unitPrice || 0);
+        if (b > 0 || u > 0) {
+          return makeResult(b, u, "stock_itemKey");
+        }
+      }
+    } catch (e) {}
+  }
+
   try {
     const sSnap = await projectRef.collection("stock").get();
     for (const doc of sSnap.docs) {
       const s = doc.data() || {};
       const sItem = clean(s.itemCode);
       const sCust = clean(s.customerCode);
-      if ((normItem && (sItem === normItem || sCust === normItem)) || (normCust && (sItem === normCust || sCust === normCust))) {
-        const bCost = Number(s.lastBarCost || s.barPrice || 0);
-        const uCost = Number(s.lastUnitCost || s.unitPrice || 0);
-        if (bCost > 0 || uCost > 0) {
-          return {
-            barPrice: bCost || (lengthMm > 0 ? (uCost * lengthMm) / 1000 : 0),
-            unitPrice: uCost || (lengthMm > 0 ? (bCost * 1000) / lengthMm : 0),
-          };
+      const sAliases = Array.isArray(s.aliases) ? s.aliases.map(clean) : [];
+      if (Array.from(candidateCodes).some((c) => sItem === c || sCust === c || sAliases.includes(c))) {
+        const b = Number(s.lastBarCost || s.barPrice || 0);
+        const u = Number(s.lastUnitCost || s.unitPrice || 0);
+        if (b > 0 || u > 0) {
+          return makeResult(b, u, "stock_candidate");
         }
       }
     }
   } catch (e) {}
 
-  // 3. Scan movements for matching inbound movement
+  // 4. Level 4: Scan Inbound Movements across project
   try {
     const mSnap = await projectRef.collection("movements")
       .where("movementType", "==", "inbound")
-      .limit(60)
+      .limit(120)
       .get();
     for (const doc of mSnap.docs) {
       const m = doc.data() || {};
       const mItem = clean(m.itemCode);
       const mCust = clean(m.customerCode);
-      if ((normItem && (mItem === normItem || mCust === normItem)) || (normCust && (mItem === normCust || mCust === normCust))) {
-        const bCost = Number(m.barPrice || (m.quantityBar > 0 ? m.netTotal / m.quantityBar : 0));
-        const uCost = Number(m.unitPrice || (m.quantityLm > 0 ? m.netTotal / m.quantityLm : 0));
-        if (bCost > 0 || uCost > 0) {
-          return {
-            barPrice: bCost || (lengthMm > 0 ? (uCost * lengthMm) / 1000 : 0),
-            unitPrice: uCost || (lengthMm > 0 ? (bCost * 1000) / lengthMm : 0),
-          };
+      if (Array.from(candidateCodes).some((c) => mItem === c || mCust === c)) {
+        const b = Number(m.barPrice || (m.quantityBar > 0 && m.netTotal ? m.netTotal / m.quantityBar : 0));
+        const u = Number(m.unitPrice || (m.quantityLm > 0 && m.netTotal ? m.netTotal / m.quantityLm : 0));
+        if (b > 0 || u > 0) {
+          return makeResult(b, u, "inbound_movements");
         }
       }
     }
   } catch (e) {}
 
-  return { barPrice: 0, unitPrice: 0 };
+  // 5. Level 5: Fuzzy match fallback (1 digit difference on 6+ char codes e.g. 515750 vs 515756)
+  if (normItem && normItem.length >= 6) {
+    try {
+      const sSnap = await projectRef.collection("stock").get();
+      for (const doc of sSnap.docs) {
+        const s = doc.data() || {};
+        const sItem = clean(s.itemCode);
+        if (sItem && sItem.length === normItem.length && sItem.slice(0, 5) === normItem.slice(0, 5)) {
+          const b = Number(s.lastBarCost || s.barPrice || 0);
+          const u = Number(s.lastUnitCost || s.unitPrice || 0);
+          if (b > 0 || u > 0) {
+            return makeResult(b, u, `stock_fuzzy_${sItem}`);
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  return makeResult(0, 0, "not_found");
+}
+
+// Backward compatibility alias
+async function resolveItemInboundCost(projectRef, itemKey, itemCode, customerCode, lengthMm = 6000, sourceInvoiceId = null) {
+  return resolveCanonicalItemCost(projectRef, { itemKey, itemCode, customerCode, lengthMm, sourceInvoiceId });
 }
 
 function isCoatedItem(line) {
@@ -2497,16 +2605,90 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
   const manualInvoiceId = manualInvoiceRef.id;
   const docNo = meta?.docNumber || dispatchNumber || (isOutbound ? `MAN-OUT-${Date.now()}` : `MAN-IN-${Date.now()}`);
 
-  const totalBarsManual = lines.reduce((acc, l) => acc + Number(l.quantityBar || l.quantity || l.bars || 0), 0);
-  const totalLmManual = lines.reduce((acc, l) => {
-    const qLm = Number(l.quantityLm || 0);
-    if (qLm > 0) return acc + qLm;
-    const qBar = Number(l.quantityBar || l.quantity || l.bars || 0);
-    const lenMm = Number(l.lengthMm || 6000);
-    return acc + (qBar * lenMm) / 1000;
-  }, 0);
-  const totalKgManual = lines.reduce((acc, l) => acc + Number(l.quantityKg || l.weightKg || 0), 0);
-  const totalAmountManual = lines.reduce((acc, l) => acc + Number(l.netTotal || (Number(l.quantityBar || 0) * Number(l.unitPrice || 0))), 0);
+  let totalBarsManual = 0;
+  let totalLmManual = 0;
+  let totalKgManual = 0;
+  let totalAmountManual = 0;
+
+  const processedLines = [];
+
+  for (const line of lines) {
+    const supplier = line.supplier || meta?.supplier || "CANEX";
+    const itemCode = line.itemCode || line.internalCode || "CODE";
+    const customerCode = line.customerCode || "";
+    const finish = line.finish || line.color || "STD";
+    const lengthMm = Number(line.lengthMm || line.length || 6000);
+    const lenM = lengthMm / 1000;
+    const itemKey = line.itemKey || generateItemKey(supplier, itemCode, finish, lengthMm);
+
+    const qtyBar = Number(line.quantityBar || line.quantity || line.bars || 0);
+    const qtyLm = Number(line.quantityLm || (qtyBar * lengthMm) / 1000);
+    const qtyKg = Number(line.quantityKg || line.weightKg || 0);
+
+    let unitPrice = Number(line.unitPrice || 0);
+    let barPrice = Number(line.barPrice || 0);
+    let netTotal = Number(line.netTotal || 0);
+
+    // Canonical valuation: if cost is 0 or if netTotal was mistakenly calculated as qtyBar * unitPrice (divided by length)
+    const isMismatched = netTotal > 0 && unitPrice > 0 && lenM > 1.5 && Math.abs(netTotal - (qtyBar * unitPrice)) < 1;
+
+    if (netTotal === 0 || (barPrice === 0 && unitPrice === 0) || isMismatched) {
+      const canonical = await resolveCanonicalItemCost(projectRef, {
+        itemKey,
+        itemCode,
+        customerCode,
+        lengthMm,
+        sourceInvoiceId,
+      });
+      if (canonical.hasCost) {
+        barPrice = canonical.barPrice;
+        unitPrice = canonical.unitPrice;
+      }
+    }
+
+    // Strict mathematical consistency: barPrice = unitPrice * (lengthMm / 1000)
+    if (barPrice === 0 && unitPrice > 0 && lenM > 0) {
+      barPrice = Number((unitPrice * lenM).toFixed(4));
+    } else if (unitPrice === 0 && barPrice > 0 && lenM > 0) {
+      unitPrice = Number((barPrice / lenM).toFixed(4));
+    }
+
+    // Strict Golden Valuation Rule: netTotal = qtyBar * barPrice == qtyLm * unitPrice
+    if (barPrice > 0 && qtyBar > 0) {
+      netTotal = Number((qtyBar * barPrice).toFixed(2));
+    } else if (unitPrice > 0 && qtyLm > 0) {
+      netTotal = Number((qtyLm * unitPrice).toFixed(2));
+    } else if (line.netTotal > 0 && !isMismatched) {
+      netTotal = Number(line.netTotal);
+    } else {
+      netTotal = 0;
+    }
+
+    totalBarsManual += qtyBar;
+    totalLmManual += qtyLm;
+    totalKgManual += qtyKg;
+    totalAmountManual += netTotal;
+
+    processedLines.push({
+      ...line,
+      supplier,
+      itemCode,
+      customerCode,
+      finish,
+      lengthMm,
+      itemKey,
+      qtyBar,
+      qtyLm,
+      qtyKg,
+      unitPrice,
+      barPrice,
+      netTotal,
+    });
+  }
+
+  totalAmountManual = Number(totalAmountManual.toFixed(2));
+  totalLmManual = Number(totalLmManual.toFixed(2));
+  totalKgManual = Number(totalKgManual.toFixed(2));
 
   const manualInvoiceDoc = {
     id: manualInvoiceId,
@@ -2520,10 +2702,10 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
     supplier: isOutbound ? (dispatchDetails?.coatingSupplier || "صرف خارجي") : (meta?.supplier || "توريد يدوي"),
     fileName: isOutbound ? "إذن صرف يدوي" : "إذن توريد يدوي",
     sourceType: "manual",
-    lineItemsCount: lines.length,
+    lineItemsCount: processedLines.length,
     totalQuantityBar: totalBarsManual,
-    totalQuantityLm: Number(totalLmManual.toFixed(2)),
-    totalQuantityKg: Number(totalKgManual.toFixed(2)),
+    totalQuantityLm: totalLmManual,
+    totalQuantityKg: totalKgManual,
     totalAmount: totalAmountManual,
     currency: meta?.currency || "EGP",
     dispatchId: dispatchId || null,
@@ -2537,19 +2719,8 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
   batch.set(manualInvoiceRef, manualInvoiceDoc);
   opCount++;
 
-  for (const line of lines) {
-    const supplier = line.supplier || meta?.supplier || "CANEX";
-    const itemCode = line.itemCode || line.internalCode || "CODE";
-    const customerCode = line.customerCode || "";
-    const finish = line.finish || line.color || "STD";
-    const lengthMm = Number(line.lengthMm || line.length || 6000);
-    const itemKey = line.itemKey || generateItemKey(supplier, itemCode, finish, lengthMm);
-
-    const qtyBar = Number(line.quantityBar || line.quantity || line.bars || 0);
-    const qtyLm = Number(line.quantityLm || (qtyBar * lengthMm) / 1000);
-    const qtyKg = Number(line.quantityKg || line.weightKg || 0);
-    const unitPrice = Number(line.unitPrice || 0);
-    const netTotal = Number(line.netTotal || qtyBar * unitPrice);
+  for (const line of processedLines) {
+    const { supplier, itemCode, customerCode, finish, lengthMm, itemKey, qtyBar, qtyLm, qtyKg, unitPrice, barPrice, netTotal } = line;
 
     const factorBar = isOutbound ? -qtyBar : qtyBar;
     const factorLm = isOutbound ? -qtyLm : qtyLm;
@@ -2970,50 +3141,75 @@ async function reconcileDelmarAndCosts(projectId, targetInvoiceNumber = null, us
       continue;
     }
 
-    // If totalAmount is 0 or target specified
-    if (Number(invData.totalAmount || 0) === 0 || targetInvoiceNumber) {
-      const mvtSnap = await projectRef.collection("movements")
-        .where("invoiceId", "==", invDoc.id)
-        .get();
+    // Reconcile and heal all outbound movements with canonical pricing
+    const mvtSnap = await projectRef.collection("movements")
+      .where("invoiceId", "==", invDoc.id)
+      .get();
 
-      let invTotal = 0;
-      let batch = db.batch();
-      let bCount = 0;
+    let invTotal = 0;
+    let batch = db.batch();
+    let bCount = 0;
 
-      for (const mDoc of mvtSnap.docs) {
-        const m = mDoc.data() || {};
-        let bPrice = Number(m.barPrice || 0);
-        let uPrice = Number(m.unitPrice || 0);
-        let nTotal = Number(m.netTotal || 0);
+    for (const mDoc of mvtSnap.docs) {
+      const m = mDoc.data() || {};
+      const len = Number(m.lengthMm || 6000);
+      const lenM = len / 1000;
+      const qtyBar = Number(m.quantityBar || m.quantity || 0);
+      const qtyLm = Number(m.quantityLm || (qtyBar * len) / 1000);
 
-        if (nTotal === 0 || (bPrice === 0 && uPrice === 0)) {
-          const resolved = await resolveItemInboundCost(projectRef, m.itemKey, m.itemCode, m.customerCode, m.lengthMm);
-          bPrice = resolved.barPrice || 0;
-          uPrice = resolved.unitPrice || 0;
-          nTotal = (m.quantityBar > 0 && bPrice > 0) ? (m.quantityBar * bPrice) : (m.quantityLm * uPrice);
+      let bPrice = Number(m.barPrice || 0);
+      let uPrice = Number(m.unitPrice || 0);
+      let nTotal = Number(m.netTotal || 0);
 
-          batch.update(mDoc.ref, {
-            barPrice: bPrice,
-            unitPrice: uPrice,
-            netTotal: nTotal,
-            updatedAt: nowIso,
-          });
-          bCount++;
-        }
-        invTotal += nTotal;
-      }
+      // Check if price was 0 OR mistakenly computed as qtyBar * unitPrice where unitPrice was per meter
+      const isDividedByLength = nTotal > 0 && uPrice > 0 && lenM > 1.5 && Math.abs(nTotal - (qtyBar * uPrice)) < 1;
 
-      if (bCount > 0) {
-        await batch.commit();
-      }
-
-      if (invTotal > 0 || Number(invData.totalAmount || 0) === 0) {
-        await invDoc.ref.update({
-          totalAmount: invTotal,
-          updatedAt: nowIso,
+      if (nTotal === 0 || (bPrice === 0 && uPrice === 0) || isDividedByLength || targetInvoiceNumber) {
+        const canonical = await resolveCanonicalItemCost(projectRef, {
+          itemKey: m.itemKey,
+          itemCode: m.itemCode,
+          customerCode: m.customerCode,
+          lengthMm: len,
+          sourceInvoiceId: invData.sourceInvoiceId || m.sourceInvoiceId || null,
         });
-        invoicesUpdated++;
+
+        if (canonical.hasCost) {
+          bPrice = canonical.barPrice;
+          uPrice = canonical.unitPrice;
+          nTotal = Number((qtyBar * bPrice).toFixed(2));
+        } else if (uPrice > 0 && lenM > 0) {
+          bPrice = Number((uPrice * lenM).toFixed(4));
+          nTotal = Number((qtyBar * bPrice).toFixed(2));
+        }
       }
+
+      batch.update(mDoc.ref, {
+        barPrice: bPrice,
+        unitPrice: uPrice,
+        netTotal: nTotal,
+        updatedAt: nowIso,
+      });
+      bCount++;
+      invTotal += nTotal;
+
+      if (bCount >= 400) {
+        await batch.commit();
+        batch = db.batch();
+        bCount = 0;
+      }
+    }
+
+    if (bCount > 0) {
+      await batch.commit();
+    }
+
+    invTotal = Number(invTotal.toFixed(2));
+    if (invTotal !== Number(invData.totalAmount || 0)) {
+      await invDoc.ref.update({
+        totalAmount: invTotal,
+        updatedAt: nowIso,
+      });
+      invoicesUpdated++;
     }
   }
 
