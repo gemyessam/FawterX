@@ -8,10 +8,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.54',
+      version: 'v2.27.55',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إصلاح فوري لشاشة مراجعة شوكو ومنع الشاشة الفارغة وتأمين نطاق المتغيرات' : 'Instant Fix for Schüco Review Screen Scope Reference Error & Blank Screen Prevention',
+      highlights: [
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'إصلاح الشاشة الفارغة: تصحيح نطاق المتغيرات ومصفوفة أذون دلمار النشطة في كارت الدفعة الموسع لمنع أي خطأ برمجي عند رفع ملفات شوكو.'
+            : 'Blank Screen Resolution: Corrected variable scope for active Delmar dispatches in expanded batch card.'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'استقرار كامل: ضمان عمل مزامنة الأسعار وتفاصيل المقاييس بسلاسة تامة وفورية.'
+            : 'Bulletproof Stability: Ensured seamless price reconciliation and metric calculations.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.54',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
       title: isAr ? 'توحيد مصدر ومحرك التسعير بين أذون دلمار وبيان شوكو وربط الرصيد المتبقي بدقة' : 'Unified Pricing Engine & Single Source of Truth Between Delmar Dispatches & Schüco SD',
       highlights: [
         {

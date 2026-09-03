@@ -4560,8 +4560,13 @@ export default function Warehouse() {
                         const totalSdBars = validLines.reduce((acc, l) => acc + Number(l.quantityBar || l.bars || 0), 0)
                         const totalSdLm = validLines.reduce((acc, l) => acc + Number(l.quantityLm || 0), 0)
                         const totalSdKg = validLines.reduce((acc, l) => acc + Number(l.quantityKg || 0), 0)
+
+                        const activeDelmarDispatches = (activeDispatches || []).filter(
+                          (d) => !d.isCompleted && d.currentStage !== 'closed' && d.currentStage !== 'delivered_to_customer'
+                        )
+                        const delmarActualBars = activeDelmarDispatches.reduce((acc, d) => acc + Number(d.totalQuantityBar || 0), 0)
                         const delmarPool = getDelmarPool(activeDispatches)
-                        const delmarTotalCost = (activeDelmarDispatches || []).reduce((acc, d) => {
+                        const delmarTotalCost = activeDelmarDispatches.reduce((acc, d) => {
                           const t = Number(d.totalAmount || 0)
                           if (t > 0) return acc + t
                           if (Array.isArray(d.items)) {
@@ -4672,10 +4677,6 @@ export default function Warehouse() {
                             const activeCoated = allCoated.filter((l) => !l.ignored)
                             const excludedCoated = allCoated.filter((l) => l.ignored)
 
-                            const activeDelmarDispatches = (activeDispatches || []).filter(
-                              (d) => !d.isCompleted && d.currentStage !== 'closed' && d.currentStage !== 'delivered_to_customer'
-                            )
-                            const delmarActualBars = activeDelmarDispatches.reduce((acc, d) => acc + Number(d.totalQuantityBar || 0), 0)
                             const diffBars = Math.max(0, totalSdBars - delmarActualBars)
                             const hasVariance = totalSdBars > delmarActualBars && delmarActualBars > 0
 
