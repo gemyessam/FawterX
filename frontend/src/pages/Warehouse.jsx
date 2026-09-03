@@ -812,7 +812,7 @@ export default function Warehouse() {
             delmarMode: priority === 'delmar' ? 'full' : (priority === 'warehouse' ? 'shortage' : null),
           }
         })
-        return { ...batch, reviewLines: updated }
+        return { ...batch, delmarBatchPriority: priority, reviewLines: updated }
       })
     )
     toast.success(
@@ -4545,42 +4545,55 @@ export default function Warehouse() {
 
                                   {/* Action Controls: Priority & Scope Toggles */}
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                                    <div style={{ display: 'flex', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', padding: '2px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleApplyBatchPriority(batch.id, 'delmar')}
-                                        style={{
-                                          background: '#00e0a1',
-                                          color: '#000',
-                                          border: 'none',
-                                          fontWeight: 800,
-                                          padding: '0.35rem 0.7rem',
-                                          borderRadius: '6px',
-                                          fontSize: '0.78rem',
-                                          cursor: 'pointer',
-                                        }}
-                                        title={isAr ? 'صرف دلمار أولاً لكافة البنود وحفظ رصيد المستودع' : 'Delmar first'}
-                                      >
-                                        🏭 {isAr ? 'دلمار أولاً' : 'Delmar'}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleApplyBatchPriority(batch.id, 'warehouse')}
-                                        style={{
-                                          background: 'transparent',
-                                          color: '#38bdf8',
-                                          border: 'none',
-                                          fontWeight: 700,
-                                          padding: '0.35rem 0.7rem',
-                                          borderRadius: '6px',
-                                          fontSize: '0.78rem',
-                                          cursor: 'pointer',
-                                        }}
-                                        title={isAr ? 'صرف المستودع أولاً وتغطية الفارق من دلمار' : 'Warehouse first'}
-                                      >
-                                        📦 {isAr ? 'المستودع أولاً' : 'Wh First'}
-                                      </button>
-                                    </div>
+                                    {(() => {
+                                      const activeBatchPriority = batch.delmarBatchPriority || (
+                                        (batch.reviewLines || []).some((l) => !l.ignored && !l.isService && l.delmarPriority === 'warehouse') ? 'warehouse' : 'delmar'
+                                      )
+                                      const isDelmarSelected = activeBatchPriority === 'delmar'
+
+                                      return (
+                                        <div style={{ display: 'flex', background: 'rgba(0,0,0,0.5)', borderRadius: '8px', padding: '3px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleApplyBatchPriority(batch.id, 'delmar')}
+                                            style={{
+                                              background: isDelmarSelected ? '#00e0a1' : 'transparent',
+                                              color: isDelmarSelected ? '#000' : '#94a3b8',
+                                              border: isDelmarSelected ? '1px solid #00e0a1' : '1px solid transparent',
+                                              fontWeight: isDelmarSelected ? 900 : 600,
+                                              padding: '0.35rem 0.75rem',
+                                              borderRadius: '6px',
+                                              fontSize: '0.78rem',
+                                              cursor: 'pointer',
+                                              boxShadow: isDelmarSelected ? '0 0 10px rgba(0, 224, 161, 0.4)' : 'none',
+                                              transition: 'all 0.2s ease',
+                                            }}
+                                            title={isAr ? 'صرف دلمار أولاً لكافة البنود وحفظ رصيد المستودع' : 'Delmar first'}
+                                          >
+                                            🏭 {isAr ? 'دلمار أولاً' : 'Delmar'}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleApplyBatchPriority(batch.id, 'warehouse')}
+                                            style={{
+                                              background: !isDelmarSelected ? '#38bdf8' : 'transparent',
+                                              color: !isDelmarSelected ? '#000' : '#94a3b8',
+                                              border: !isDelmarSelected ? '1px solid #38bdf8' : '1px solid transparent',
+                                              fontWeight: !isDelmarSelected ? 900 : 600,
+                                              padding: '0.35rem 0.75rem',
+                                              borderRadius: '6px',
+                                              fontSize: '0.78rem',
+                                              cursor: 'pointer',
+                                              boxShadow: !isDelmarSelected ? '0 0 10px rgba(56, 189, 248, 0.4)' : 'none',
+                                              transition: 'all 0.2s ease',
+                                            }}
+                                            title={isAr ? 'صرف المستودع أولاً وتغطية الفارق من دلمار' : 'Warehouse first'}
+                                          >
+                                            📦 {isAr ? 'المستودع أولاً' : 'Wh First'}
+                                          </button>
+                                        </div>
+                                      )
+                                    })()}
 
                                     {/* Delmar Item Scope Toggle */}
                                     {allCoated.length > 0 && (
@@ -4668,7 +4681,7 @@ export default function Warehouse() {
 
                           {/* Line Items Table */}
                           <div style={{ overflowX: 'auto', marginBottom: '0.5rem' }}>
-                            <table style={{ minWidth: batch.movementType === 'outbound' ? '2250px' : '1850px', width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', tableLayout: 'fixed' }}>
+                            <table style={{ minWidth: batch.movementType === 'outbound' ? '2400px' : '1950px', width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', tableLayout: 'fixed' }}>
                               <colgroup>
                                 <col style={{ width: '40px' }} /> {/* # */}
                                 <col style={{ width: '45px' }} /> {/* Ignore */}
@@ -4683,7 +4696,7 @@ export default function Warehouse() {
                                     <col style={{ width: '180px' }} /> {/* Remaining Balance */}
                                   </>
                                 )}
-                                <col style={{ width: '350px' }} /> {/* Description */}
+                                <col style={{ width: '480px' }} /> {/* Description */}
                                 <col style={{ width: '85px' }} />  {/* Bars */}
                                 <col style={{ width: '95px' }} />  {/* Finish */}
                                 <col style={{ width: '80px' }} />  {/* Length */}
@@ -4720,7 +4733,7 @@ export default function Warehouse() {
                                       </th>
                                     </>
                                   )}
-                                  <th style={{ padding: '0.75rem 0.5rem' }}>{isAr ? 'وصف الصنف / القطاع' : 'Description'}</th>
+                                  <th style={{ padding: '0.75rem 0.5rem', minWidth: '450px' }}>{isAr ? 'وصف الصنف / القطاع' : 'Description'}</th>
                                   <th style={{ padding: '0.75rem 0.4rem', color: '#00e0a1', fontWeight: 800 }}>{isAr ? 'الأعواد (Bars)' : 'Bars'}</th>
                                   <th style={{ padding: '0.75rem 0.4rem' }}>{isAr ? 'التشطيب' : 'Finish'}</th>
                                   <th style={{ padding: '0.75rem 0.4rem' }}>{isAr ? 'الطول mm' : 'Length mm'}</th>
@@ -5165,12 +5178,24 @@ export default function Warehouse() {
                                     )}
 
                                     {/* Description */}
-                                    <td style={{ padding: '0.5rem 0.4rem' }}>
+                                    <td style={{ padding: '0.5rem 0.4rem', minWidth: '450px' }}>
                                       <textarea
                                         value={line.description}
-                                        rows={Math.max(1, Math.ceil(String(line.description || '').length / 65))}
+                                        rows={Math.max(1, Math.ceil(String(line.description || '').length / 55))}
                                         onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'description', e.target.value)}
-                                        style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%', resize: 'vertical', lineHeight: 1.35 }}
+                                        style={{
+                                          background: '#101223',
+                                          border: '1px solid var(--border)',
+                                          color: '#fff',
+                                          padding: '0.4rem 0.6rem',
+                                          borderRadius: '4px',
+                                          width: '100%',
+                                          minWidth: '100%',
+                                          boxSizing: 'border-box',
+                                          resize: 'vertical',
+                                          lineHeight: 1.4,
+                                          fontSize: '0.88rem',
+                                        }}
                                       />
                                     </td>
 

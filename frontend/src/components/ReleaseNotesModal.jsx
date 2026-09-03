@@ -8,10 +8,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.47',
+      version: 'v2.27.48',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'تأثير بصري تفاعلي لأزرار الأولوية وتمدد كامل (Stretch) لعمود وصف القطاعات' : 'Interactive Priority Toggle Visual State & Full Stretch for Profile Descriptions',
+      highlights: [
+        {
+          icon: '🎨',
+          text: isAr
+            ? 'تفاعل بصري فوري لأزرار الأولوية: عند الضغط على (دلمار أولاً) يضيء الزر باللون الأخضر الزمردي المتوهج مع تعتيم زر المستودع، وعند الضغط على (المستودع أولاً) يضيء باللون السماوي المتوهج فوراً لتأكيد الاختيار بصرياً.'
+            : 'Interactive Dynamic Priority Toggles: Distinct visual glow and color inversion confirming Delmar First (Emerald Green) vs Warehouse First (Sky Blue).'
+        },
+        {
+          icon: '📐',
+          text: isAr
+            ? 'تمدد كامل لعمود وصف القطاع (Full Stretch): توسيع عرض العمود إلى 480-500px مع تمدد حقل النص (100% Full Width) لعرض الوصف الفني للقطاع بالكامل دون أي ضغط أو اقتطاع.'
+            : 'Profile Description Full Stretch: Expanded column width to 480-500px with full 100% width textarea for comfortable readability.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.47',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
       title: isAr ? 'إعادة هيكلة واجهة المراجعة: أرقام تنظيمية مدمجة وإنذار التعارض بالأحمر وتنبيه الفارق بالبرتقالي' : 'Invoice Review UI Streamlining: Compact Metrics, Red Conflict Alarms & Orange Variance Alerts',
       highlights: [
         {
