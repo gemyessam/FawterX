@@ -8,10 +8,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.55',
+      version: 'v2.27.56',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'تسعير تلقائي فوري لبند شوكو 515750 وربطه الحصري بكانكس 515756 والمحرك الشامل' : 'Instant Automatic Pricing & Canonical Resolution for Schüco Item 515750 (Mapped to 515756)',
+      highlights: [
+        {
+          icon: '💎',
+          text: isAr
+            ? 'حل تصفير 515750 نهائياً: بناء محرك تسعير موحد يربط 515750 فوراً بكانكس 515756 ويسحب السعر الحقيقي تلقائياً من فواتير التوريد الأصلية ورصيد دلمار.'
+            : 'Permanent Zero-Cost Fix: Universal price resolver automatically maps 515750 to 515756 and pulls true costs from source invoices.'
+        },
+        {
+          icon: '🔄',
+          text: isAr
+            ? 'تحديث تلقائي وفوري: يظهر السعر الحقيقي وإجمالي البند في الجدول تلقائياً بدون الحاجة لأي إدخال يدوي.'
+            : 'Immediate Dynamic Population: True bar price, unit price, and net total dynamically populate across the review table.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.55',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
       title: isAr ? 'إصلاح فوري لشاشة مراجعة شوكو ومنع الشاشة الفارغة وتأمين نطاق المتغيرات' : 'Instant Fix for Schüco Review Screen Scope Reference Error & Blank Screen Prevention',
       highlights: [
         {

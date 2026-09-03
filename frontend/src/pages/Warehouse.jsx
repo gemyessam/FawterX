@@ -185,28 +185,127 @@ function getDelmarPool(activeDispatches = []) {
   return pool
 }
 
+function resolveCanonicalItemPrice(line, stock = [], activeDispatches = [], aliasesMap = {}, invoices = []) {
+  const clean = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
+  const lItem = clean(line.itemCode)
+  const lCust = clean(line.customerCode)
+  const lengthMm = Number(line.lengthMm || 6000)
+  const lenM = lengthMm / 1000
+
+  // Existing valid price check
+  let bPrice = Number(line.barPrice || 0)
+  let uPrice = Number(line.unitPrice || 0)
+  if (bPrice > 0 && uPrice === 0 && lenM > 0) uPrice = Number((bPrice / lenM).toFixed(4))
+  if (uPrice > 0 && bPrice === 0 && lenM > 0) bPrice = Number((uPrice * lenM).toFixed(4))
+  if (bPrice > 0 && uPrice > 0) return { barPrice: bPrice, unitPrice: uPrice }
+
+  // Target codes to match, including known synonyms (515750 <=> 515756)
+  const targetCodes = [lItem, lCust].filter(Boolean)
+  if (lItem === '515750' || lCust === '515750') targetCodes.push('515756')
+  if (lItem === '515756' || lCust === '515756') targetCodes.push('515750')
+
+  if (aliasesMap && typeof aliasesMap === 'object') {
+    for (const c of [...targetCodes]) {
+      if (aliasesMap[c] && aliasesMap[c].targetItemCode) {
+        targetCodes.push(clean(aliasesMap[c].targetItemCode))
+      }
+    }
+  }
+
+  // A. Search Delmar Pool
+  const pool = getDelmarPool(activeDispatches)
+  for (const code of targetCodes) {
+    const pMatch = pool.find((p) => {
+      const pItem = clean(p.itemCode)
+      const pCust = clean(p.customerCode)
+      return pItem === code || pCust === code || (code.length >= 5 && (pItem.startsWith(code.slice(0, 5)) || (pCust && pCust.startsWith(code.slice(0, 5)))))
+    })
+    if (pMatch && (pMatch.barPrice > 0 || pMatch.unitPrice > 0)) {
+      let bp = pMatch.barPrice || (pMatch.unitPrice * lenM)
+      let up = pMatch.unitPrice || (lenM > 0 ? bp / lenM : 0)
+      return { barPrice: Number(bp.toFixed(4)), unitPrice: Number(up.toFixed(4)) }
+    }
+  }
+
+  // B. Search Warehouse Stock
+  for (const code of targetCodes) {
+    const sMatch = stock.find((s) => {
+      const sItem = clean(s.itemCode)
+      const sCust = clean(s.customerCode)
+      return sItem === code || sCust === code || (code.length >= 5 && (sItem.startsWith(code.slice(0, 5)) || (sCust && sCust.startsWith(code.slice(0, 5)))))
+    })
+    if (sMatch) {
+      let bp = Number(sMatch.barPrice || sMatch.lastBarCost || 0)
+      let up = Number(sMatch.unitPrice || sMatch.lastUnitCost || 0)
+      if (bp === 0 && up === 0 && sMatch.quantityBar > 0 && sMatch.netTotal > 0) bp = sMatch.netTotal / sMatch.quantityBar
+      if (bp === 0 && up > 0 && lenM > 0) bp = up * lenM
+      if (up === 0 && bp > 0 && lenM > 0) up = bp / lenM
+      if (bp > 0 || up > 0) {
+        return { barPrice: Number(bp.toFixed(4)), unitPrice: Number(up.toFixed(4)) }
+      }
+    }
+  }
+
+  // C. Search Loaded Invoices (Canex Source Invoices)
+  for (const inv of (invoices || [])) {
+    if (inv.isCancelled || inv.status === 'cancelled') continue
+    const linesList = inv.items || inv.lineItems || inv.lines || []
+    for (const l of linesList) {
+      const itCode = clean(l.itemCode)
+      const itCust = clean(l.customerCode)
+      for (const code of targetCodes) {
+        if (itCode === code || itCust === code || (code.length >= 5 && itCode.startsWith(code.slice(0, 5)))) {
+          let bp = Number(l.barPrice || 0)
+          let up = Number(l.unitPrice || 0)
+          if (bp === 0 && up === 0 && l.quantityBar > 0 && l.netTotal > 0) bp = l.netTotal / l.quantityBar
+          if (bp === 0 && up === 0 && l.quantityLm > 0 && l.netTotal > 0) up = l.netTotal / l.quantityLm
+          if (bp === 0 && up > 0 && lenM > 0) bp = up * lenM
+          if (up === 0 && bp > 0 && lenM > 0) up = bp / lenM
+          if (bp > 0 || up > 0) {
+            return { barPrice: Number(bp.toFixed(4)), unitPrice: Number(up.toFixed(4)) }
+          }
+        }
+      }
+    }
+  }
+
+  return { barPrice: 0, unitPrice: 0 }
+}
+
 function findDelmarPoolMatches(line, delmarPool = [], aliasesMap = {}) {
   const clean = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
   let lItem = clean(line.itemCode)
   let lCust = clean(line.customerCode)
 
+  const targetCodes = [lItem, lCust].filter(Boolean)
+  if (lItem === '515750' || lCust === '515750') targetCodes.push('515756')
+  if (lItem === '515756' || lCust === '515756') targetCodes.push('515750')
+
   if (aliasesMap && typeof aliasesMap === 'object') {
-    const aliasMatch = aliasesMap[lItem] || (lCust && aliasesMap[lCust])
-    if (aliasMatch && aliasMatch.targetItemCode) {
-      lItem = clean(aliasMatch.targetItemCode)
+    for (const c of [...targetCodes]) {
+      if (aliasesMap[c] && aliasesMap[c].targetItemCode) {
+        targetCodes.push(clean(aliasesMap[c].targetItemCode))
+      }
     }
   }
 
-  // 1. Exact match on itemCode or customerCode
+  // 1. Exact or Synonym match
   const exactMatches = delmarPool.filter((p) => {
     const iCode = clean(p.itemCode)
     const cCode = clean(p.customerCode)
-    return (lItem && (iCode === lItem || cCode === lItem)) ||
-           (lCust && (iCode === lCust || cCode === lCust))
+    return targetCodes.some((tc) => iCode === tc || cCode === tc)
   })
   if (exactMatches.length > 0) return exactMatches
 
-  // 2. Substring match (min 4 characters)
+  // 2. 5-digit prefix match (e.g. 515750 vs 515756)
+  const prefixMatches = delmarPool.filter((p) => {
+    const iCode = clean(p.itemCode)
+    const cCode = clean(p.customerCode)
+    return targetCodes.some((tc) => tc.length >= 5 && (iCode.startsWith(tc.slice(0, 5)) || (cCode && cCode.startsWith(tc.slice(0, 5)))))
+  })
+  if (prefixMatches.length > 0) return prefixMatches
+
+  // 3. Substring match (min 4 characters)
   const subMatches = delmarPool.filter((p) => {
     const iCode = clean(p.itemCode)
     const cCode = clean(p.customerCode)
@@ -430,14 +529,25 @@ function checkStockAvailability(line, stock = [], aliasesMap = {}, activeDispatc
     }
   }
 
-  // 1. Exact match on itemCode OR customerCode across warehouse stock
+  const stockTargetCodes = [lineItemNorm, lineCustNorm].filter(Boolean)
+  if (lineItemNorm === '515750' || lineCustNorm === '515750') stockTargetCodes.push('515756')
+  if (lineItemNorm === '515756' || lineCustNorm === '515756') stockTargetCodes.push('515750')
+
+  // 1. Exact match or Synonym match across warehouse stock
   let match = stock.find((s) => {
     const sItem = cleanCode(s.itemCode)
     const sCust = cleanCode(s.customerCode)
-    if (lineItemNorm && (sItem === lineItemNorm || sCust === lineItemNorm)) return true
-    if (lineCustNorm && (sItem === lineCustNorm || sCust === lineCustNorm)) return true
-    return false
+    return stockTargetCodes.some((tc) => sItem === tc || sCust === tc)
   })
+
+  // 1.1 Prefix match (5 characters e.g. 515750 vs 515756)
+  if (!match) {
+    match = stock.find((s) => {
+      const sItem = cleanCode(s.itemCode)
+      const sCust = cleanCode(s.customerCode)
+      return stockTargetCodes.some((tc) => tc.length >= 5 && (sItem.startsWith(tc.slice(0, 5)) || (sCust && sCust.startsWith(tc.slice(0, 5)))))
+    })
+  }
 
   // 2. Match where warehouse item has this code in its aliases array
   if (!match) {
@@ -1725,18 +1835,12 @@ export default function Warehouse() {
             const qLm = Number(line.quantityLm || 0);
             const lMm = Number(line.lengthMm || 6000);
 
-            if (isOutboundBatch && (uPrice === 0 && bPrice === 0)) {
-              const cItem = cleanCode(line.itemCode);
-              const cCust = cleanCode(line.customerCode);
-              const match = stock.find((s) => {
-                const sItem = cleanCode(s.itemCode);
-                const sCust = cleanCode(s.customerCode);
-                return (cItem && (sItem === cItem || sCust === cItem)) || (cCust && (sItem === cCust || sCust === cCust));
-              });
-              if (match) {
-                bPrice = Number(match.barPrice || match.lastBarCost || (match.quantityBar > 0 ? match.netTotal / match.quantityBar : 0) || 0);
-                uPrice = Number(match.unitPrice || match.lastUnitCost || (lMm > 0 ? (bPrice * 1000) / lMm : 0) || 0);
-                nTotal = qBar > 0 && bPrice > 0 ? (qBar * bPrice) : (qLm * uPrice);
+            if (isOutboundBatch && (uPrice === 0 || bPrice === 0)) {
+              const canonical = resolveCanonicalItemPrice(line, stock, activeDispatches, aliasesMap, invoices)
+              if (canonical.barPrice > 0 || canonical.unitPrice > 0) {
+                bPrice = canonical.barPrice
+                uPrice = canonical.unitPrice
+                nTotal = qBar > 0 && bPrice > 0 ? Number((qBar * bPrice).toFixed(2)) : Number((qLm * uPrice).toFixed(2))
               }
             }
 
@@ -1900,25 +2004,9 @@ export default function Warehouse() {
 
     const updatedLines = (batch.reviewLines || []).map((l) => {
       if (l.ignored || l.isService) return l
-      const len = Number(l.lengthMm || 6000)
-      const lenM = len / 1000
-      const matches = findDelmarPoolMatches(l, pool, aliasesMap)
-      let bp = Number(l.barPrice || 0)
-      let up = Number(l.unitPrice || 0)
-
-      if (matches.length > 0 && matches[0].barPrice > 0) {
-        bp = matches[0].barPrice
-        up = matches[0].unitPrice || (lenM > 0 ? Number((bp / lenM).toFixed(4)) : 0)
-      } else {
-        const chk = checkStockAvailability(l, stock, aliasesMap, [])
-        if (chk.matchedItem) {
-          bp = Number(chk.matchedItem.lastBarCost || chk.matchedItem.barPrice || 0)
-          up = Number(chk.matchedItem.lastUnitCost || chk.matchedItem.unitPrice || 0)
-          if (bp === 0 && up > 0 && lenM > 0) bp = Number((up * lenM).toFixed(4))
-          if (up === 0 && bp > 0 && lenM > 0) up = Number((bp / lenM).toFixed(4))
-        }
-      }
-
+      const canonical = resolveCanonicalItemPrice(l, stock, activeDispatches, aliasesMap, invoices)
+      let bp = canonical.barPrice > 0 ? canonical.barPrice : Number(l.barPrice || 0)
+      let up = canonical.unitPrice > 0 ? canonical.unitPrice : Number(l.unitPrice || 0)
       const qBar = Number(l.quantityBar || l.bars || 0)
       const netTotal = Number((qBar * bp).toFixed(2))
 
@@ -5464,17 +5552,73 @@ export default function Warehouse() {
 
                                     {/* Unit Price */}
                                     <td style={{ padding: '0.5rem 0.4rem' }}>
-                                      <input type="number" step="0.0001" value={line.unitPrice} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'unitPrice', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }} />
+                                      {(() => {
+                                        const effPrice = (Number(line.unitPrice || 0) === 0 && Number(line.barPrice || 0) === 0)
+                                          ? resolveCanonicalItemPrice(line, stock, activeDispatches, aliasesMap, invoices)
+                                          : { unitPrice: line.unitPrice, barPrice: line.barPrice }
+                                        const displayUp = Number(line.unitPrice || effPrice.unitPrice || 0)
+                                        return (
+                                          <input
+                                            type="number"
+                                            step="0.0001"
+                                            value={displayUp > 0 ? displayUp : ''}
+                                            placeholder="0.00"
+                                            onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'unitPrice', e.target.value)}
+                                            style={{
+                                              background: '#101223',
+                                              border: displayUp > 0 ? '1px solid var(--border)' : '1.5px solid #ff4757',
+                                              color: displayUp > 0 ? '#fff' : '#ff7875',
+                                              padding: '0.35rem 0.45rem',
+                                              borderRadius: '4px',
+                                              width: '100%',
+                                              fontWeight: 700,
+                                            }}
+                                          />
+                                        )
+                                      })()}
                                     </td>
 
                                     {/* Bar Price */}
                                     <td style={{ padding: '0.5rem 0.4rem' }}>
-                                      <input type="number" step="0.0001" value={line.barPrice || ''} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'barPrice', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }} />
+                                      {(() => {
+                                        const effPrice = (Number(line.unitPrice || 0) === 0 && Number(line.barPrice || 0) === 0)
+                                          ? resolveCanonicalItemPrice(line, stock, activeDispatches, aliasesMap, invoices)
+                                          : { unitPrice: line.unitPrice, barPrice: line.barPrice }
+                                        const displayBp = Number(line.barPrice || effPrice.barPrice || 0)
+                                        return (
+                                          <input
+                                            type="number"
+                                            step="0.0001"
+                                            value={displayBp > 0 ? displayBp : ''}
+                                            placeholder="0.00"
+                                            onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'barPrice', e.target.value)}
+                                            style={{
+                                              background: '#101223',
+                                              border: displayBp > 0 ? '1px solid var(--border)' : '1.5px solid #ff4757',
+                                              color: displayBp > 0 ? '#fff' : '#ff7875',
+                                              padding: '0.35rem 0.45rem',
+                                              borderRadius: '4px',
+                                              width: '100%',
+                                              fontWeight: 700,
+                                            }}
+                                          />
+                                        )
+                                      })()}
                                     </td>
 
                                     {/* Total */}
                                     <td style={{ padding: '0.5rem 0.4rem', fontWeight: 700, color: '#64b5f6', whiteSpace: 'nowrap' }}>
-                                      {Number(line.netTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      {(() => {
+                                        let effNet = Number(line.netTotal || 0)
+                                        if (effNet === 0) {
+                                          const effPrice = resolveCanonicalItemPrice(line, stock, activeDispatches, aliasesMap, invoices)
+                                          const qBar = Number(line.quantityBar || line.bars || 0)
+                                          if (qBar > 0 && effPrice.barPrice > 0) {
+                                            effNet = qBar * effPrice.barPrice
+                                          }
+                                        }
+                                        return Number(effNet || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                      })()}
                                     </td>
                                   </tr>
                                 )
