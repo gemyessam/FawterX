@@ -426,6 +426,7 @@ function Layout({ children }) {
         isOpen={showReleaseNotesModal}
         onClose={() => setShowReleaseNotesModal(false)}
         lang={lang}
+        hasWarehouseAccess={hasWarehouseAccess || isAdmin}
       />
 
       {/* Step Guide Modal (Global Access) */}

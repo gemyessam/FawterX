@@ -1,17 +1,54 @@
-import React from 'react'
+import React, { useState, useContext, useMemo } from 'react'
 import packageInfo from '../../package.json'
+import { AppContext } from '../App'
 
-export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
+export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWarehouseAccess: propHasWarehouseAccess }) {
   if (!isOpen) return null
 
+  const appContext = useContext(AppContext) || {}
+  const canViewWarehouse = Boolean(propHasWarehouseAccess ?? (appContext.hasWarehouseAccess || appContext.isAdmin))
+
   const isAr = lang === 'ar'
+  const [activeTab, setActiveTab] = useState('invoicing')
+  const [searchQuery, setSearchQuery] = useState('')
 
   const releaseHistory = [
     {
-      version: 'v2.27.57',
+      version: 'v2.27.58',
+      category: 'invoicing',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr
+        ? 'الفصل الأمني الشامل لسجل التحديثات: عزل سري لتحديثات المخزون وتخصيص سجل مستقل لرفع الفواتير'
+        : 'Enterprise Security Partitioning: Confidential Warehouse Isolation & Dedicated Invoicing Hub',
+      highlights: [
+        {
+          icon: '🔒',
+          text: isAr
+            ? 'عزل وحماية سرية بيانات المخزون: حجب تام لكافة تفاصيل ومصطلحات المستودع (شوكو، دلمار، كانكس، الداي، تكاليف الصرف، الأرصدة) عن غير المصرح لهم منعاً لأي تسريب.'
+            : 'Zero-Leak Confidential Isolation: Strictly concealed all warehouse operations, stock dispatches, and die/item valuations away from non-warehouse users.'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'تبويب تفاعلي ذكي للمصرح لهم: إضافة شريط تبويب فاخر يتيح للمسؤولين الانتقال الفوري بين (رفع الفواتير والمنظومة) و(المخزون السري) و(السجل الشامل) مع شارات تصنيف مميزة.'
+            : 'Role-Based Tabbed Navigation: Sleek segmented switcher allowing authorized staff to toggle seamlessly between Invoicing, Secret Warehouse, and All Releases.'
+        },
+        {
+          icon: '🔍',
+          text: isAr
+            ? 'بحث سريع وفلترة ذكية: إمكانية البحث الفوري برقم الإصدار أو الكلمات المفتاحية للوصول السريع لأي ميزة أو إصلاح مع العدادات الدقيقة لكل قسم.'
+            : 'Instant Release Search: Real-time search by version number or keywords across relevant release history with precise item counts.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.57',
+      category: 'warehouse',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
       title: isAr ? 'توثيق وربط كود الداي 301-201404 مع كانكس 515756 وشوكو 515750 بالكامل' : 'Comprehensive Die Mapping: 301-201404 <=> Canex 515756 <=> Schüco 515750',
       highlights: [
         {
@@ -30,6 +67,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.56',
+      category: 'warehouse',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#64748b',
@@ -51,6 +89,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.55',
+      category: 'warehouse',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#64748b',
@@ -72,6 +111,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.54',
+      category: 'warehouse',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#64748b',
@@ -93,6 +133,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.53',
+      category: 'warehouse',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#64748b',
@@ -114,6 +155,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.52',
+      category: 'warehouse',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#64748b',
@@ -135,6 +177,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.51',
+      category: 'warehouse',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#64748b',
@@ -162,6 +205,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.50',
+      category: 'warehouse',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#64748b',
@@ -183,6 +227,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.49',
+      category: 'warehouse',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#64748b',
@@ -204,6 +249,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.48',
+      category: 'warehouse',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#64748b',
@@ -225,6 +271,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.47',
+      category: 'warehouse',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#64748b',
@@ -252,6 +299,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.46',
+      category: 'warehouse',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#64748b',
@@ -279,6 +327,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.45',
+      category: 'warehouse',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#64748b',
@@ -306,6 +355,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.44',
+      category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#64748b',
@@ -333,6 +383,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.43',
+      category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -354,6 +405,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.42',
+      category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -381,6 +433,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.41',
+      category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -402,6 +455,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.40',
+      category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -429,6 +483,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.39',
+      category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -456,6 +511,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.38',
+      category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -483,6 +539,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.37',
+      category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -510,6 +567,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.36',
+      category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -537,6 +595,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.35',
+      category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -564,6 +623,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.34',
+      category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -591,6 +651,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.33',
+      category: 'invoicing',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -618,6 +679,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.32',
+      category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -639,6 +701,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.31',
+      category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -666,6 +729,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.29',
+      category: 'warehouse',
       date: isAr ? '1 سبتمبر 2026' : 'Sep 1, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -693,6 +757,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.28',
+      category: 'warehouse',
       date: isAr ? '1 سبتمبر 2026' : 'Sep 1, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -720,6 +785,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.27',
+      category: 'invoicing',
       date: isAr ? '31 أغسطس 2026' : 'Aug 31, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -741,6 +807,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.26',
+      category: 'invoicing',
       date: isAr ? '31 أغسطس 2026' : 'Aug 31, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -762,6 +829,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.22',
+      category: 'invoicing',
       date: isAr ? '19 أغسطس 2026' : 'Aug 19, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -789,6 +857,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.21',
+      category: 'invoicing',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -816,6 +885,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.20',
+      category: 'invoicing',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -843,6 +913,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.19',
+      category: 'invoicing',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -870,6 +941,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.18',
+      category: 'invoicing',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -897,6 +969,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.17',
+      category: 'warehouse',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -924,6 +997,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.16',
+      category: 'invoicing',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -945,6 +1019,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.15',
+      category: 'invoicing',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -972,6 +1047,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.14',
+      category: 'invoicing',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -999,6 +1075,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.8',
+      category: 'invoicing',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -1020,6 +1097,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.7',
+      category: 'warehouse',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -1041,6 +1119,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.6',
+      category: 'warehouse',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -1056,6 +1135,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.5',
+      category: 'invoicing',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -1071,6 +1151,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.4',
+      category: 'warehouse',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -1086,6 +1167,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.3',
+      category: 'invoicing',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -1101,6 +1183,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.3',
+      category: 'invoicing',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -1116,6 +1199,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.2',
+      category: 'invoicing',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -1131,6 +1215,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.1',
+      category: 'invoicing',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -1158,6 +1243,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.27.0',
+      category: 'warehouse',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -1179,6 +1265,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.26.6',
+      category: 'invoicing',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -1200,6 +1287,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.26.5',
+      category: 'invoicing',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       badge: isAr ? 'سابق' : 'Previous',
       badgeColor: '#8ab4ff',
@@ -1221,6 +1309,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.26.3',
+      category: 'invoicing',
       date: isAr ? '11 أغسطس 2026' : 'Aug 11, 2026',
       title: isAr ? 'تأمين الحساب المؤسس وحصانة الصلاحيات الإدارية' : 'Super Admin Protection & Role Management Flexibility',
       highlights: [
@@ -1246,6 +1335,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.26.2',
+      category: 'invoicing',
       date: isAr ? '10 أغسطس 2026' : 'Aug 10, 2026',
       title: isAr ? 'نظام صلاحيات المشاريع ودعم معادلات إكسيل التفاعلية' : 'Granular Warehouse Permissions & Dynamic Excel Subtotals',
       highlights: [
@@ -1277,6 +1367,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.26.1',
+      category: 'invoicing',
       date: isAr ? '9 أغسطس 2026' : 'Aug 9, 2026',
       title: isAr ? 'طابور معالجة الفواتير الجماعية المستقر' : 'Batch Invoice Processing Queue & Parity',
       highlights: [
@@ -1296,6 +1387,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.26.0',
+      category: 'warehouse',
       date: isAr ? '5 أغسطس 2026' : 'Aug 5, 2026',
       title: isAr ? 'إدارة حركة الخصم والإضافة للمخزون' : 'Inbound & Outbound Stock Movement Management',
       highlights: [
@@ -1315,6 +1407,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     },
     {
       version: 'v2.25.0',
+      category: 'invoicing',
       date: isAr ? '28 يوليو 2026' : 'Aug 28, 2026',
       title: isAr ? 'محرك تصفية ملخصات الإكسيل والضرائب' : 'Smart Excel Summary Row Filter & Tax Recalculator',
       highlights: [
@@ -1328,22 +1421,52 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
     }
   ]
 
+  
+  // Calculate counts
+  const invoicingCount = useMemo(() => releaseHistory.filter(r => r.category === 'invoicing').length, [releaseHistory])
+  const warehouseCount = useMemo(() => releaseHistory.filter(r => r.category === 'warehouse').length, [releaseHistory])
+  const totalCount = releaseHistory.length
+
+  // Filter releases safely with zero-leak gate
+  const filteredReleases = useMemo(() => {
+    let list = releaseHistory
+
+    // Strict security gate: if not authorized, completely strip warehouse releases
+    if (!canViewWarehouse) {
+      list = list.filter(r => r.category === 'invoicing')
+    } else {
+      if (activeTab === 'invoicing') {
+        list = list.filter(r => r.category === 'invoicing')
+      } else if (activeTab === 'warehouse') {
+        list = list.filter(r => r.category === 'warehouse')
+      }
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim()
+      list = list.filter(r =>
+        r.version.toLowerCase().includes(q) ||
+        (r.title && r.title.toLowerCase().includes(q)) ||
+        (r.highlights && r.highlights.some(h => h.text.toLowerCase().includes(q)))
+      )
+    }
+
+    return list
+  }, [releaseHistory, canViewWarehouse, activeTab, searchQuery])
+
   return (
     <div
       style={{
         position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(5, 7, 15, 0.85)',
-        backdropFilter: 'blur(8px)',
-        zIndex: 999999,
+        inset: 0,
+        backgroundColor: 'rgba(5, 7, 15, 0.82)',
+        backdropFilter: 'blur(10px)',
         display: 'flex',
         alignItems: 'center',
-        justify: 'center',
-        padding: '1.5rem',
-        animation: 'fadeIn 0.25s ease-out'
+        justifyContent: 'center',
+        zIndex: 9999,
+        padding: '1rem',
+        animation: 'fadeIn 0.2s ease-out'
       }}
       onClick={onClose}
     >
@@ -1354,8 +1477,8 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
           boxShadow: '0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(0, 224, 161, 0.1)',
           borderRadius: '20px',
           width: '100%',
-          maxWidth: '750px',
-          maxHeight: '85vh',
+          maxWidth: '780px',
+          maxHeight: '88vh',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -1367,7 +1490,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
         {/* Modal Header */}
         <div
           style={{
-            padding: '1.25rem 1.5rem',
+            padding: '1.15rem 1.5rem',
             borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
             display: 'flex',
             alignItems: 'center',
@@ -1442,137 +1565,414 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
         {/* Modal Slogan Banner */}
         <div
           style={{
-            margin: '1.25rem 1.5rem 0.5rem 1.5rem',
-            padding: '1rem 1.25rem',
+            margin: '1rem 1.5rem 0.5rem 1.5rem',
+            padding: '0.9rem 1.25rem',
             borderRadius: '14px',
-            background: 'linear-gradient(90deg, rgba(0, 224, 161, 0.08) 0%, rgba(66, 133, 244, 0.08) 100%)',
-            border: '1px solid rgba(0, 224, 161, 0.2)',
+            background: activeTab === 'warehouse' && canViewWarehouse
+              ? 'linear-gradient(90deg, rgba(245, 158, 11, 0.12) 0%, rgba(139, 92, 246, 0.12) 100%)'
+              : 'linear-gradient(90deg, rgba(0, 224, 161, 0.08) 0%, rgba(66, 133, 244, 0.08) 100%)',
+            border: activeTab === 'warehouse' && canViewWarehouse
+              ? '1px solid rgba(245, 158, 11, 0.3)'
+              : '1px solid rgba(0, 224, 161, 0.2)',
             display: 'flex',
             alignItems: 'center',
             gap: '1rem'
           }}
         >
-          <div style={{ fontSize: '1.6rem' }}>⚡</div>
+          <div style={{ fontSize: '1.6rem' }}>{activeTab === 'warehouse' && canViewWarehouse ? '🔒' : '⚡'}</div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#00e0a1' }}>
-              {isAr ? 'منصة رفع الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Automation Platform'}
+            <div style={{ fontWeight: 800, fontSize: '0.95rem', color: activeTab === 'warehouse' && canViewWarehouse ? '#fbbf24' : '#00e0a1' }}>
+              {activeTab === 'warehouse' && canViewWarehouse
+                ? (isAr ? 'إدارة وحركات المخزون والمستودع (قسم سري ومحمي)' : 'Confidential Warehouse & Inventory Operations')
+                : (isAr ? 'منصة رفع الفواتير الرقمية والامتثال الضريبي' : 'Certified ETA Invoice Automation Platform')}
             </div>
-            <div style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.7)', marginTop: '0.15rem' }}>
-              {isAr
-                ? 'تحديثات مستمرة وتطوير متواصل لبنية فاوتر إكس لتحقيق الامتثال الضريبي الكامل بأعلى كفاءة.'
-                : 'Continuous development and enterprise security for 100% tax compliance automation.'}
+            <div style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.75)', marginTop: '0.15rem' }}>
+              {activeTab === 'warehouse' && canViewWarehouse
+                ? (isAr
+                    ? 'سجل التحديثات الهندسية ومحركات التسعير، مطابقة الأرصدة، أذون الصرف والتوريد، والربط التلقائي للأكواد والداي.'
+                    : 'Internal engineering releases, pricing engines, dispatch audits, and tripartite die mapping.')
+                : (isAr
+                    ? 'تحديثات مستمرة وتطوير متواصل لبنية فاوتر إكس لتحقيق الامتثال الضريبي الكامل وتسهيل رفع ملفات الإكسيل بأعلى كفاءة.'
+                    : 'Continuous development and enterprise security for 100% tax compliance automation.')}
             </div>
           </div>
+        </div>
+
+        {/* Role-Based Tabs & Search Bar */}
+        <div style={{ padding: '0.5rem 1.5rem 0.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+            {canViewWarehouse ? (
+              <div
+                style={{
+                  display: 'inline-flex',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  padding: '4px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('invoicing')}
+                  style={{
+                    border: 'none',
+                    background: activeTab === 'invoicing' ? 'linear-gradient(135deg, #00e0a1 0%, #00b380 100%)' : 'transparent',
+                    color: activeTab === 'invoicing' ? '#000000' : '#ffffff',
+                    fontWeight: activeTab === 'invoicing' ? 800 : 600,
+                    padding: '0.35rem 0.8rem',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <span>⚡ {isAr ? 'رفع الفواتير والمنظومة' : 'ETA Invoicing'}</span>
+                  <span
+                    style={{
+                      background: activeTab === 'invoicing' ? 'rgba(0,0,0,0.2)' : 'rgba(255, 255, 255, 0.12)',
+                      color: activeTab === 'invoicing' ? '#000000' : '#8ab4ff',
+                      padding: '0.1rem 0.4rem',
+                      borderRadius: '10px',
+                      fontSize: '0.72rem',
+                      fontWeight: 800
+                    }}
+                  >
+                    {invoicingCount}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('warehouse')}
+                  style={{
+                    border: 'none',
+                    background: activeTab === 'warehouse' ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : 'transparent',
+                    color: activeTab === 'warehouse' ? '#000000' : '#ffffff',
+                    fontWeight: activeTab === 'warehouse' ? 800 : 600,
+                    padding: '0.35rem 0.8rem',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <span>🔒 📦 {isAr ? 'المخزون والمستودع (سري)' : 'Warehouse (Secret)'}</span>
+                  <span
+                    style={{
+                      background: activeTab === 'warehouse' ? 'rgba(0,0,0,0.2)' : 'rgba(255, 255, 255, 0.12)',
+                      color: activeTab === 'warehouse' ? '#000000' : '#f59e0b',
+                      padding: '0.1rem 0.4rem',
+                      borderRadius: '10px',
+                      fontSize: '0.72rem',
+                      fontWeight: 800
+                    }}
+                  >
+                    {warehouseCount}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('all')}
+                  style={{
+                    border: 'none',
+                    background: activeTab === 'all' ? 'linear-gradient(135deg, #4285f4 0%, #1a73e8 100%)' : 'transparent',
+                    color: activeTab === 'all' ? '#ffffff' : 'rgba(255, 255, 255, 0.8)',
+                    fontWeight: activeTab === 'all' ? 800 : 600,
+                    padding: '0.35rem 0.8rem',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <span>🌟 {isAr ? 'كافة التحديثات' : 'All Updates'}</span>
+                  <span
+                    style={{
+                      background: activeTab === 'all' ? 'rgba(0,0,0,0.25)' : 'rgba(255, 255, 255, 0.12)',
+                      color: '#ffffff',
+                      padding: '0.1rem 0.4rem',
+                      borderRadius: '10px',
+                      fontSize: '0.72rem',
+                      fontWeight: 800
+                    }}
+                  >
+                    {totalCount}
+                  </span>
+                </button>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  background: 'rgba(0, 224, 161, 0.08)',
+                  border: '1px solid rgba(0, 224, 161, 0.25)',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '10px',
+                  color: '#00e0a1',
+                  fontSize: '0.82rem',
+                  fontWeight: 700
+                }}
+              >
+                <span>⚡ {isAr ? 'سجل تحديثات منظومة رفع الفواتير والامتثال الضريبي' : 'ETA Invoicing & Compliance Changelog'}</span>
+                <span style={{ background: 'rgba(0, 224, 161, 0.2)', padding: '0.1rem 0.45rem', borderRadius: '8px', fontSize: '0.74rem' }}>
+                  {invoicingCount}
+                </span>
+              </div>
+            )}
+
+            {/* Quick Search Bar */}
+            <div style={{ position: 'relative', minWidth: '190px', flex: '1', maxWidth: '270px' }}>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={isAr ? '🔍 ابحث بالإصدار أو الميزة...' : '🔍 Search version or feature...'}
+                style={{
+                  width: '100%',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '8px',
+                  padding: '0.4rem 0.75rem',
+                  color: '#ffffff',
+                  fontSize: '0.8rem',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  style={{
+                    position: 'absolute',
+                    left: isAr ? '8px' : 'auto',
+                    right: isAr ? 'auto' : '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255, 255, 255, 0.5)',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Confidential Notice for Warehouse Tab */}
+          {canViewWarehouse && activeTab === 'warehouse' && (
+            <div
+              style={{
+                padding: '0.65rem 0.9rem',
+                borderRadius: '10px',
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.6rem',
+                color: '#fbbf24',
+                fontSize: '0.8rem'
+              }}
+            >
+              <span style={{ fontSize: '1.15rem' }}>🔒</span>
+              <div>
+                <strong>{isAr ? 'تنبيه سرية وخصوصية بيانات المخزون:' : 'Confidential Warehouse Notice:'}</strong>{' '}
+                {isAr
+                  ? 'هذا القسم سري تماماً ومخصص لمسؤولي المستودع وإدارة التكاليف وحركات الصرف، ومحجوب كلياً عن غير المصرح لهم منعاً لأي تسريب.'
+                  : 'This section contains sensitive internal valuations and stock movement data. Strictly isolated from standard portal users.'}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Modal Body Scroll List */}
         <div
           style={{
-            padding: '1rem 1.5rem 1.5rem 1.5rem',
+            padding: '0.75rem 1.5rem 1.5rem 1.5rem',
             overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
             gap: '1rem'
           }}
         >
-          {releaseHistory.map((rel, idx) => (
-            <div
-              key={rel.version}
-              style={{
-                background: 'rgba(255, 255, 255, 0.02)',
-                border: rel.badgeColor
-                  ? `1px solid ${rel.badgeColor}40`
-                  : '1px solid rgba(255, 255, 255, 0.06)',
-                borderRadius: '14px',
-                padding: '1.15rem',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <div
+          {filteredReleases.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'rgba(255, 255, 255, 0.6)' }}>
+              <div style={{ fontSize: '2.2rem', marginBottom: '0.5rem' }}>🔍</div>
+              <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                {isAr ? 'لا توجد إصدارات مطابقة لمعايير البحث' : 'No releases match your search query'}
+              </div>
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(''); setActiveTab('invoicing'); }}
                 style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '0.75rem',
-                  flexWrap: 'wrap',
-                  gap: '0.5rem'
+                  marginTop: '0.75rem',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#8ab4ff',
+                  padding: '0.35rem 0.85rem',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <span
-                    style={{
-                      background: rel.badgeColor || 'rgba(138, 180, 255, 0.15)',
-                      color: rel.badgeColor ? '#000000' : '#8ab4ff',
-                      fontWeight: 800,
-                      padding: '0.2rem 0.6rem',
-                      borderRadius: '8px',
-                      fontSize: '0.85rem'
-                    }}
-                  >
-                    {rel.version}
-                  </span>
-                  {rel.badge && (
+                {isAr ? 'إعادة ضبط الفلتر والبحث' : 'Reset search & filters'}
+              </button>
+            </div>
+          ) : (
+            filteredReleases.map((rel) => (
+              <div
+                key={rel.version}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: rel.badgeColor
+                    ? `1px solid ${rel.badgeColor}40`
+                    : '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: '14px',
+                  padding: '1.15rem',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '0.75rem',
+                    flexWrap: 'wrap',
+                    gap: '0.5rem'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                     <span
                       style={{
-                        background: 'rgba(0, 224, 161, 0.15)',
-                        color: '#00e0a1',
-                        border: '1px solid rgba(0, 224, 161, 0.3)',
-                        padding: '0.15rem 0.5rem',
-                        borderRadius: '6px',
-                        fontSize: '0.72rem',
-                        fontWeight: 700
+                        background: rel.badgeColor || 'rgba(138, 180, 255, 0.15)',
+                        color: rel.badgeColor ? '#000000' : '#8ab4ff',
+                        fontWeight: 800,
+                        padding: '0.2rem 0.6rem',
+                        borderRadius: '8px',
+                        fontSize: '0.85rem'
                       }}
                     >
-                      {rel.badge}
+                      {rel.version}
                     </span>
-                  )}
-                  <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#ffffff' }}>
-                    {rel.title}
-                  </span>
-                </div>
 
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted, #8ab4ff)' }}>
-                  🗓️ {rel.date}
-                </div>
-              </div>
+                    {rel.badge && (
+                      <span
+                        style={{
+                          background: 'rgba(0, 224, 161, 0.15)',
+                          color: '#00e0a1',
+                          border: '1px solid rgba(0, 224, 161, 0.3)',
+                          padding: '0.15rem 0.5rem',
+                          borderRadius: '6px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700
+                        }}
+                      >
+                        {rel.badge}
+                      </span>
+                    )}
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
-                {rel.highlights.map((h, hIdx) => (
-                  <div
-                    key={hIdx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '0.6rem',
-                      fontSize: '0.83rem',
-                      lineHeight: '1.45',
-                      color: 'rgba(255, 255, 255, 0.88)'
-                    }}
-                  >
-                    <span style={{ fontSize: '0.9rem', marginTop: '0.1rem' }}>{h.icon}</span>
-                    <span>{h.text}</span>
+                    {/* Category Identifier Pill */}
+                    {rel.category === 'warehouse' ? (
+                      <span
+                        style={{
+                          background: 'rgba(245, 158, 11, 0.15)',
+                          color: '#f59e0b',
+                          border: '1px solid rgba(245, 158, 11, 0.35)',
+                          padding: '0.15rem 0.55rem',
+                          borderRadius: '6px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.25rem'
+                        }}
+                      >
+                        🔒 {isAr ? 'المخزون والتشغيل' : 'Warehouse Ops'}
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          background: 'rgba(66, 133, 244, 0.15)',
+                          color: '#8ab4ff',
+                          border: '1px solid rgba(66, 133, 244, 0.35)',
+                          padding: '0.15rem 0.55rem',
+                          borderRadius: '6px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.25rem'
+                        }}
+                      >
+                        ⚡ {isAr ? 'رفع الفواتير والمنظومة' : 'Invoicing & Core'}
+                      </span>
+                    )}
+
+                    <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#ffffff' }}>
+                      {rel.title}
+                    </span>
                   </div>
-                ))}
+
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted, #8ab4ff)' }}>
+                    🗓️ {rel.date}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  {rel.highlights.map((h, hIdx) => (
+                    <div
+                      key={hIdx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.6rem',
+                        fontSize: '0.83rem',
+                        lineHeight: '1.45',
+                        color: 'rgba(255, 255, 255, 0.88)'
+                      }}
+                    >
+                      <span style={{ fontSize: '0.9rem', marginTop: '0.1rem' }}>{h.icon}</span>
+                      <span>{h.text}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
 
         {/* Modal Footer */}
         <div
           style={{
-            padding: '0.9rem 1.5rem',
+            padding: '0.85rem 1.5rem',
             borderTop: '1px solid rgba(255, 255, 255, 0.08)',
             background: 'rgba(0, 0, 0, 0.2)',
             display: 'flex',
-            justify: 'space-between',
+            justifyContent: 'space-between',
             alignItems: 'center'
           }}
         >
           <span style={{ fontSize: '0.78rem', color: 'var(--text-muted, #8ab4ff)' }}>
-            {isAr ? 'نظام فاوتر إكس المعتمد للرفع الضريبية' : 'FawterX Certified Automation System'}
+            {isAr ? 'نظام فاوتر إكس المعتمد للرفع والامتثال الضريبي' : 'FawterX Certified Automation System'}
           </span>
           <button
+            type="button"
             onClick={onClose}
             className="btn btn-primary"
             style={{
