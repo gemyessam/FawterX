@@ -154,14 +154,25 @@ function getDelmarPool(activeDispatches = []) {
           const it = d.items[iIdx]
           const q = Number(it.quantityBar || it.bars || 0)
           if (q > 0) {
+            const len = Number(it.lengthMm || 6000)
+            let bp = Number(it.barPrice || 0)
+            let up = Number(it.unitPrice || 0)
+            if (bp === 0 && up > 0 && len > 0) bp = Number(((up * len) / 1000).toFixed(4))
+            if (up === 0 && bp > 0 && len > 0) up = Number(((bp * 1000) / len).toFixed(4))
+
             pool.push({
               key: `${d.id || dIdx}_${iIdx}`,
               dispatchId: d.id,
+              dispatchNumber: d.dispatchNumber || '',
               deliveryNote: d.deliveryNote || '',
               customerName: d.customerName || '',
               itemCode: it.itemCode || '',
               customerCode: it.customerCode || '',
               color: it.color || it.finish || '',
+              lengthMm: len,
+              barPrice: bp,
+              unitPrice: up,
+              netTotal: Number((q * bp).toFixed(2)),
               totalBars: q,
               remainingBars: q,
               allocatedLines: [],
@@ -1880,6 +1891,49 @@ export default function Warehouse() {
 
   function removeBatchInvoice(batchId) {
     setBatchInvoices((prev) => prev.filter((item) => item.id !== batchId))
+  }
+
+  function handleSyncBatchPrices(batchId) {
+    const batch = batchInvoices.find((b) => b.id === batchId)
+    if (!batch) return
+    const pool = getDelmarPool(activeDispatches)
+
+    const updatedLines = (batch.reviewLines || []).map((l) => {
+      if (l.ignored || l.isService) return l
+      const len = Number(l.lengthMm || 6000)
+      const lenM = len / 1000
+      const matches = findDelmarPoolMatches(l, pool, aliasesMap)
+      let bp = Number(l.barPrice || 0)
+      let up = Number(l.unitPrice || 0)
+
+      if (matches.length > 0 && matches[0].barPrice > 0) {
+        bp = matches[0].barPrice
+        up = matches[0].unitPrice || (lenM > 0 ? Number((bp / lenM).toFixed(4)) : 0)
+      } else {
+        const chk = checkStockAvailability(l, stock, aliasesMap, [])
+        if (chk.matchedItem) {
+          bp = Number(chk.matchedItem.lastBarCost || chk.matchedItem.barPrice || 0)
+          up = Number(chk.matchedItem.lastUnitCost || chk.matchedItem.unitPrice || 0)
+          if (bp === 0 && up > 0 && lenM > 0) bp = Number((up * lenM).toFixed(4))
+          if (up === 0 && bp > 0 && lenM > 0) up = Number((bp / lenM).toFixed(4))
+        }
+      }
+
+      const qBar = Number(l.quantityBar || l.bars || 0)
+      const netTotal = Number((qBar * bp).toFixed(2))
+
+      return {
+        ...l,
+        barPrice: bp,
+        unitPrice: up,
+        netTotal,
+      }
+    })
+
+    setBatchInvoices((prev) =>
+      prev.map((b) => (b.id === batchId ? { ...b, reviewLines: updatedLines } : b))
+    )
+    toast.success(isAr ? 'تمت مزامنة وتوحيد الأسعار مع أذون دلمار الأصلية بنجاح!' : 'Prices synchronized with Delmar dispatches!')
   }
 
   function updateBatchInvoiceLine(batchId, index, field, value) {
@@ -4506,19 +4560,48 @@ export default function Warehouse() {
                         const totalSdBars = validLines.reduce((acc, l) => acc + Number(l.quantityBar || l.bars || 0), 0)
                         const totalSdLm = validLines.reduce((acc, l) => acc + Number(l.quantityLm || 0), 0)
                         const totalSdKg = validLines.reduce((acc, l) => acc + Number(l.quantityKg || 0), 0)
-                        const totalSdCost = validLines.reduce((acc, l) => {
-                          const lineNet = Number(l.netTotal || 0)
-                          if (lineNet > 0) return acc + lineNet
-                          const qBar = Number(l.quantityBar || l.bars || 0)
-                          const bPrice = Number(l.barPrice || 0)
-                          if (qBar > 0 && bPrice > 0) return acc + (qBar * bPrice)
-                          const qLm = Number(l.quantityLm || 0)
-                          const uPrice = Number(l.unitPrice || 0)
-                          if (qLm > 0 && uPrice > 0) return acc + (qLm * uPrice)
+                        const delmarPool = getDelmarPool(activeDispatches)
+                        const delmarTotalCost = (activeDelmarDispatches || []).reduce((acc, d) => {
+                          const t = Number(d.totalAmount || 0)
+                          if (t > 0) return acc + t
+                          if (Array.isArray(d.items)) {
+                            return acc + d.items.reduce((iAcc, it) => iAcc + Number(it.netTotal || (Number(it.quantityBar || 0) * Number(it.barPrice || 0))), 0)
+                          }
                           return acc
                         }, 0)
+
+                        const totalSdCost = validLines.reduce((acc, l) => {
+                          const qBar = Number(l.quantityBar || l.bars || 0)
+                          const len = Number(l.lengthMm || 6000)
+                          const lenM = len / 1000
+                          // Canonical resolution: check Delmar pool match first, then stock
+                          const poolMatches = findDelmarPoolMatches(l, delmarPool, aliasesMap)
+                          let bp = Number(l.barPrice || 0)
+                          let up = Number(l.unitPrice || 0)
+
+                          if (poolMatches.length > 0 && poolMatches[0].barPrice > 0) {
+                            bp = poolMatches[0].barPrice
+                            up = poolMatches[0].unitPrice || (lenM > 0 ? bp / lenM : 0)
+                          } else if (bp === 0 && up === 0) {
+                            const chk = checkStockAvailability(l, stock, aliasesMap, [])
+                            if (chk.matchedItem) {
+                              bp = Number(chk.matchedItem.lastBarCost || chk.matchedItem.barPrice || 0)
+                              up = Number(chk.matchedItem.lastUnitCost || chk.matchedItem.unitPrice || 0)
+                              if (bp === 0 && up > 0 && lenM > 0) bp = up * lenM
+                              if (up === 0 && bp > 0 && lenM > 0) up = bp / lenM
+                            }
+                          }
+
+                          if (qBar > 0 && bp > 0) return acc + (qBar * bp)
+                          const lineNet = Number(l.netTotal || 0)
+                          if (lineNet > 0) return acc + lineNet
+                          return acc
+                        }, 0)
+
                         const finalCost = totalSdCost > 0 ? totalSdCost : Number(batch.parsedMeta?.totalAmount || batch.parsedMeta?.invoiceAmount || 0)
                         const currency = batch.parsedMeta?.currency || 'EGP'
+                        const delmarRemainingBars = Math.max(0, delmarActualBars - totalSdBars)
+                        const delmarRemainingCost = Math.max(0, delmarTotalCost - finalCost)
 
                         return (
                           <div style={{ padding: '1.25rem' }}>
@@ -4646,12 +4729,45 @@ export default function Warehouse() {
 
                                     {/* Total Cost / Value Metric */}
                                     <div style={{ background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.35)', borderRadius: '8px', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isAr ? '💰 مجموع التكلفة:' : 'Total Cost:'}</span>
+                                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isAr ? '💰 تكلفة شوكو:' : 'SD Cost:'}</span>
                                       <strong style={{ fontSize: '1.05rem', color: '#a5b4fc', fontWeight: 900 }}>
                                         {finalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                       </strong>
                                       <span style={{ fontSize: '0.72rem', color: '#818cf8', fontWeight: 700 }}>{currency}</span>
                                     </div>
+
+                                    {/* Delmar Total Dispatched & Remaining Metric */}
+                                    {delmarTotalCost > 0 && (
+                                      <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isAr ? '⚖️ متبقي بدلمار:' : 'Delmar Rem:'}</span>
+                                        <strong style={{ fontSize: '0.95rem', color: '#fbbf24', fontWeight: 800 }}>
+                                          {delmarRemainingBars} عود ({delmarRemainingCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency})
+                                        </strong>
+                                      </div>
+                                    )}
+
+                                    {/* Sync Pricing Button */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSyncBatchPrices(batch.id)}
+                                      className="btn btn-sm"
+                                      style={{
+                                        background: 'rgba(0, 224, 161, 0.12)',
+                                        border: '1px solid rgba(0, 224, 161, 0.35)',
+                                        color: '#00e0a1',
+                                        padding: '0.35rem 0.7rem',
+                                        borderRadius: '6px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 800,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.3rem',
+                                        cursor: 'pointer',
+                                      }}
+                                      title={isAr ? 'مزامنة وتوحيد أسعار جميع البنود فوراً مع أذون دلمار وفواتير التوريد الأصلية' : 'Sync prices with Delmar dispatches'}
+                                    >
+                                      🔄 {isAr ? 'مزامنة وتوحيد الأسعار' : 'Sync Prices'}
+                                    </button>
                                   </div>
 
                                   {/* Action Controls: Priority & Scope Toggles */}

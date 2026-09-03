@@ -3219,6 +3219,34 @@ async function reconcileDelmarAndCosts(projectId, targetInvoiceNumber = null, us
       });
       invoicesUpdated++;
     }
+
+    // Also update dispatch.items with reconciled barPrice and netTotal
+    if (invData.dispatchId) {
+      try {
+        const dRef = projectRef.collection("dispatches").doc(invData.dispatchId);
+        const dDoc = await dRef.get();
+        if (dDoc.exists) {
+          const dData = dDoc.data() || {};
+          const currentItems = Array.isArray(dData.items) ? dData.items : [];
+          const mvtList = mvtSnap.docs.map((d) => d.data());
+          const updatedItems = currentItems.map((it) => {
+            const matchedM = mvtList.find((m) => m.itemKey === it.itemKey || m.itemCode === it.itemCode);
+            if (matchedM) {
+              return {
+                ...it,
+                barPrice: matchedM.barPrice || it.barPrice || 0,
+                unitPrice: matchedM.unitPrice || it.unitPrice || 0,
+                netTotal: matchedM.netTotal || it.netTotal || 0,
+              };
+            }
+            return it;
+          });
+          await dRef.update({ items: updatedItems, totalAmount: invTotal, updatedAt: nowIso });
+        }
+      } catch (e) {
+        console.warn("[reconcileDelmarAndCosts] Error updating dispatch items with reconciled costs:", e.message);
+      }
+    }
   }
 
   // 2. Fulfill and close active Delmar dispatches for matching outbound invoices

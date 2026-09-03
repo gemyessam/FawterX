@@ -8,10 +8,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.53',
+      version: 'v2.27.54',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'توحيد مصدر ومحرك التسعير بين أذون دلمار وبيان شوكو وربط الرصيد المتبقي بدقة' : 'Unified Pricing Engine & Single Source of Truth Between Delmar Dispatches & Schüco SD',
+      highlights: [
+        {
+          icon: '🎯',
+          text: isAr
+            ? 'مصدر تسعير موحد 100%: ربط تسعير بيان شوكو مباشرة بأذون دلمار المنصرفة وفواتير التوريد الأصلية بدلاً من التقديرات القديمة.'
+            : 'Single Source of Truth: Directly mapped Schüco SD pricing to active Delmar dispatches and original Canex source invoices.'
+        },
+        {
+          icon: '⚖️',
+          text: isAr
+            ? 'تطابق رياضي تام: إظهار تكلفة شوكو (928 عود) + قيمة الرصيد المتبقي بدلمار (5 أعواد) = إجمالي أذون دلمار (1,323,034.51 ج) مع زر مزامنة فوري.'
+            : 'Exact Balance Reconciliation: Schüco Cost + Remaining Delmar Stock = Total Dispatched Amount with instant 1-click sync.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.53',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
       title: isAr ? 'تثبيت أبعاد وتنسيق أعمدة جدول الحركات والقضاء على التفاف الأعواد ونوع الحركة' : 'Table Layout Stabilization & Fixed Dimensions for Movement and Bars Columns',
       highlights: [
         {
