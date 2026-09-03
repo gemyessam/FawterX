@@ -4412,6 +4412,26 @@ export default function Warehouse() {
                         const batchAllocations = computeBatchDelmarAllocations(batch.reviewLines, activeDispatches, aliasesMap, stock)
                         const sharedAlerts = batchAllocations.filter((a) => a.isShared && a.sharingDetails)
 
+                        const validLines = (batch.reviewLines || []).filter(
+                          (l) => !l.ignored && !l.isService && Number(l.quantityBar || l.bars || 0) > 0
+                        )
+                        const totalSdBars = validLines.reduce((acc, l) => acc + Number(l.quantityBar || l.bars || 0), 0)
+                        const totalSdLm = validLines.reduce((acc, l) => acc + Number(l.quantityLm || 0), 0)
+                        const totalSdKg = validLines.reduce((acc, l) => acc + Number(l.quantityKg || 0), 0)
+                        const totalSdCost = validLines.reduce((acc, l) => {
+                          const lineNet = Number(l.netTotal || 0)
+                          if (lineNet > 0) return acc + lineNet
+                          const qBar = Number(l.quantityBar || l.bars || 0)
+                          const bPrice = Number(l.barPrice || 0)
+                          if (qBar > 0 && bPrice > 0) return acc + (qBar * bPrice)
+                          const qLm = Number(l.quantityLm || 0)
+                          const uPrice = Number(l.unitPrice || 0)
+                          if (qLm > 0 && uPrice > 0) return acc + (qLm * uPrice)
+                          return acc
+                        }, 0)
+                        const finalCost = totalSdCost > 0 ? totalSdCost : Number(batch.parsedMeta?.totalAmount || batch.parsedMeta?.invoiceAmount || 0)
+                        const currency = batch.parsedMeta?.currency || 'EGP'
+
                         return (
                           <div style={{ padding: '1.25rem' }}>
                           {/* Invoice Metadata Row */}
@@ -4467,9 +4487,6 @@ export default function Warehouse() {
 
                           {/* ─── COMPACT METRICS & ALERT NOTIFICATIONS STRIP ─── */}
                           {batch.movementType === 'outbound' && (() => {
-                            const validLines = (batch.reviewLines || []).filter(
-                              (l) => !l.ignored && !l.isService && Number(l.quantityBar || l.bars || 0) > 0
-                            )
                             let sufficient = 0
                             let shortage = 0
                             let missing = 0
@@ -4479,9 +4496,6 @@ export default function Warehouse() {
                               else if (res.status === 'shortage') shortage++
                               else missing++
                             })
-
-                            const totalSdBars = validLines.reduce((acc, l) => acc + Number(l.quantityBar || l.bars || 0), 0)
-                            const totalSdLm = validLines.reduce((acc, l) => acc + Number(l.quantityLm || 0), 0)
 
                             const allCoated = (batch.reviewLines || []).filter((l) => !l.isService && isCoatedItem(l))
                             const activeCoated = allCoated.filter((l) => !l.ignored)
@@ -4540,6 +4554,15 @@ export default function Warehouse() {
                                       <strong style={{ fontSize: '0.95rem', color: shortage > 0 ? '#f87171' : '#00e0a1', fontWeight: 800 }}>
                                         {shortage > 0 ? `عجز ${shortage} صنف` : `${sufficient} متوفر`}
                                       </strong>
+                                    </div>
+
+                                    {/* Total Cost / Value Metric */}
+                                    <div style={{ background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.35)', borderRadius: '8px', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isAr ? '💰 مجموع التكلفة:' : 'Total Cost:'}</span>
+                                      <strong style={{ fontSize: '1.05rem', color: '#a5b4fc', fontWeight: 900 }}>
+                                        {finalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </strong>
+                                      <span style={{ fontSize: '0.72rem', color: '#818cf8', fontWeight: 700 }}>{currency}</span>
                                     </div>
                                   </div>
 
@@ -5252,6 +5275,33 @@ export default function Warehouse() {
                                 )
                               })}
                               </tbody>
+                              <tfoot>
+                                <tr style={{ background: 'rgba(15, 23, 42, 0.95)', borderTop: '2px solid rgba(255, 255, 255, 0.15)', fontWeight: 800 }}>
+                                  <td colSpan={batch.movementType === 'outbound' ? 9 : 4} style={{ padding: '0.75rem 0.6rem', textAlign: isAr ? 'left' : 'right', color: '#00e0a1', fontSize: '0.92rem' }}>
+                                    {isAr ? 'المجموع الكلي للإذن:' : 'Grand Total:'}
+                                  </td>
+                                  <td style={{ padding: '0.75rem 0.5rem' }}>
+                                    {/* Description column */}
+                                  </td>
+                                  <td style={{ padding: '0.75rem 0.4rem', color: '#00e0a1', fontSize: '1rem', fontWeight: 900 }}>
+                                    {totalSdBars.toLocaleString()} <span style={{ fontSize: '0.72rem' }}>{isAr ? 'عود' : 'b'}</span>
+                                  </td>
+                                  <td style={{ padding: '0.75rem 0.4rem' }}></td>
+                                  <td style={{ padding: '0.75rem 0.4rem' }}></td>
+                                  <td style={{ padding: '0.75rem 0.4rem', color: '#93c5fd', fontSize: '0.9rem', fontWeight: 800 }}>
+                                    {totalSdLm.toFixed(1)} <span style={{ fontSize: '0.72rem' }}>م</span>
+                                  </td>
+                                  <td style={{ padding: '0.75rem 0.4rem', color: '#fbbf24', fontSize: '0.9rem', fontWeight: 800 }}>
+                                    {totalSdKg.toFixed(2)} <span style={{ fontSize: '0.72rem' }}>كجم</span>
+                                  </td>
+                                  <td style={{ padding: '0.75rem 0.4rem' }}></td>
+                                  <td style={{ padding: '0.75rem 0.4rem' }}></td>
+                                  <td style={{ padding: '0.75rem 0.4rem', color: '#64b5f6', fontSize: '1.05rem', fontWeight: 900, whiteSpace: 'nowrap' }}>
+                                    {finalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    <span style={{ fontSize: '0.75rem', color: '#93c5fd', marginRight: '0.2rem' }}> {currency}</span>
+                                  </td>
+                                </tr>
+                              </tfoot>
                             </table>
                           </div>
                         </div>

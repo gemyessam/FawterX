@@ -8,10 +8,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.48',
+      version: 'v2.27.49',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إظهار مجموع تكلفة وقيمة إذن الصرف (SD) في شريط المقاييس وتذييل الجدول الإجمالي' : 'Total SD / Outbound Cost Metric Pill & Grand Totals Table Footer',
+      highlights: [
+        {
+          icon: '💰',
+          text: isAr
+            ? 'كبسولة مجموع التكلفة: إضافة مقياس إجمالي التكلفة والقيمة المالية لإذن الصرف (SD) أو المواد الخارجة مباشرة في شريط القيادة التنفيذي بالعملة المعتمدة.'
+            : 'Total Cost Metric Pill: Prominently displays the total outbound cost/value of the delivery order in the header metric strip.'
+        },
+        {
+          icon: '📊',
+          text: isAr
+            ? 'تذييل المجموع الكلي للجدول (Grand Total Footer): إضافة سطر تذييل ختامي أسفل جدول البنود يجمع تلقائياً إجمالي الأعواد، الأمتار، الوزن بالكيلوجرام، وإجمالي القيمة المالية.'
+            : 'Comprehensive Table Footer: Summary row compiling total bars, total linear meters, total weight in kg, and total net amount.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.48',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
       title: isAr ? 'تأثير بصري تفاعلي لأزرار الأولوية وتمدد كامل (Stretch) لعمود وصف القطاعات' : 'Interactive Priority Toggle Visual State & Full Stretch for Profile Descriptions',
       highlights: [
         {
