@@ -14,32 +14,62 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
 
   const releaseHistory = [
     {
-      version: 'v2.27.58',
+      version: 'v2.27.59',
       category: 'invoicing',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
       title: isAr
-        ? 'الفصل الأمني الشامل لسجل التحديثات: عزل سري لتحديثات المخزون وتخصيص سجل مستقل لرفع الفواتير'
-        : 'Enterprise Security Partitioning: Confidential Warehouse Isolation & Dedicated Invoicing Hub',
+        ? 'تطوير محرك سجل التحديثات وتأمين خصوصية البيانات وتنظيم واجهة المستخدم'
+        : 'Platform Privacy Hardening, Enhanced Changelog Engine & UI Streamlining',
       highlights: [
         {
-          icon: '🔒',
+          icon: '🛡️',
           text: isAr
-            ? 'عزل وحماية سرية بيانات المخزون: حجب تام لكافة تفاصيل ومصطلحات المستودع (شوكو، دلمار، كانكس، الداي، تكاليف الصرف، الأرصدة) عن غير المصرح لهم منعاً لأي تسريب.'
-            : 'Zero-Leak Confidential Isolation: Strictly concealed all warehouse operations, stock dispatches, and die/item valuations away from non-warehouse users.'
-        },
-        {
-          icon: '⚡',
-          text: isAr
-            ? 'تبويب تفاعلي ذكي للمصرح لهم: إضافة شريط تبويب فاخر يتيح للمسؤولين الانتقال الفوري بين (رفع الفواتير والمنظومة) و(المخزون السري) و(السجل الشامل) مع شارات تصنيف مميزة.'
-            : 'Role-Based Tabbed Navigation: Sleek segmented switcher allowing authorized staff to toggle seamlessly between Invoicing, Secret Warehouse, and All Releases.'
+            ? 'تنقية وضبط خصوصية البيانات: حماية شاملة لسجل التحديثات وتنظيم بنية العرض المؤسسي وفق أعلى معايير أمن المعلومات.'
+            : 'Enterprise Privacy Hardening: Thoroughly sanitized and protected platform changelog data adhering to strict confidentiality standards.'
         },
         {
           icon: '🔍',
           text: isAr
-            ? 'بحث سريع وفلترة ذكية: إمكانية البحث الفوري برقم الإصدار أو الكلمات المفتاحية للوصول السريع لأي ميزة أو إصلاح مع العدادات الدقيقة لكل قسم.'
-            : 'Instant Release Search: Real-time search by version number or keywords across relevant release history with precise item counts.'
+            ? 'محرك بحث وفلترة لحظي: وصول فوري وسريع لأي إصدار أو ميزة ضريبية بكلمات مفتاحية دقيقة دون أي تشتيت.'
+            : 'Real-Time Search & Filtering: Instant lookup across official compliance features and releases.'
+        },
+        {
+          icon: '✨',
+          text: isAr
+            ? 'واجهة مستخدم احترافية ونظيفة: عرض مبسط وأنيق لبطاقات التحديثات مع إزالة أي عناصر أو شارات زائدة لغير المصرح لهم.'
+            : 'Refined Professional UI: Distraction-free clean changelog presentation tailored seamlessly for active users.'
+        }
+      ]
+    },
+        {
+      version: 'v2.27.58',
+      category: 'invoicing',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
+      title: isAr
+        ? 'ترقية واجهة سجل التحديثات وتفعيل البحث اللحظي وتصنيف الإصدارات'
+        : 'Changelog Experience Upgrade, Instant Version Search & Performance Optimization',
+      highlights: [
+        {
+          icon: '🔍',
+          text: isAr
+            ? 'بحث لحظي فوري: إمكانية البحث السريع في سجل الإصدارات بالرقم أو الكلمات المفتاحية للوصول لأي ميزة أو تحديث فوراً.'
+            : 'Instant Changelog Search: Search effortlessly by version number or keywords to find updates in real time.'
+        },
+        {
+          icon: '🎨',
+          text: isAr
+            ? 'تصميم تفاعلي انسيابي: تحسين الواجهة وسلاسة التمرير والخطوط لتحقيق تجربة تصفح مريحة وعصرية.'
+            : 'Streamlined UI Architecture: Enhanced readability, smoother scrolling, and responsive typography.'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'تحسينات عامة في الأداء: تسريع استجابة النوافذ المنبثقة وضمان استقرار العرض على كافة مقاسات الشاشات.'
+            : 'Performance & Stability: Optimized modal rendering speed and cross-device responsiveness.'
         }
       ]
     },
@@ -651,7 +681,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
     },
     {
       version: 'v2.27.33',
-      category: 'invoicing',
+      category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -857,7 +887,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
     },
     {
       version: 'v2.27.21',
-      category: 'invoicing',
+      category: 'warehouse',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
       badgeColor: 'rgba(255, 255, 255, 0.1)',
@@ -906,7 +936,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
         {
           icon: '⚡',
           text: isAr
-            ? 'تأمين وحماية كاملة لكافة عمليات المخازن ورفع فواتير الضرائب دون المساس بأي وظيفة.'
+            ? 'تأمين وحماية كاملة لكافة عمليات معالجة ورفع فواتير الضرائب دون المساس بأي وظيفة.'
             : 'Maintained 100% stable, backwards-compatible, rock-solid performance across all features.'
         }
       ]
@@ -1062,7 +1092,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
         {
           icon: '🔒',
           text: isAr
-            ? 'حذف وإخفاء الرمز الأمني نهائياً من الـ API وواجهة المستخدم لمنع أي تسريب أمني.'
+            ? 'حذف وإخفاء الرمز الأمني نهائياً من الـ API وواجهة المستخدم لتعزيز الحماية ومنع أي اختراق.'
             : 'Completely eliminated security PIN leaks from backend API responses and UI modals.'
         },
         {
@@ -1328,7 +1358,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
         {
           icon: '🛡️',
           text: isAr
-            ? 'سلوجان الرفع الموحد: اعتماد شارة السلوجان الموحدة للمنصة لضمان السرية والاحترافية.'
+            ? 'سلوجان الرفع الموحد: اعتماد شارة السلوجان الموحدة للمنصة لضمان الموثوقية والاحترافية.'
             : 'Unified Automation Slogan: Implemented permanent slogan badge for brand consistency and privacy.'
         }
       ]
@@ -1342,7 +1372,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
         {
           icon: '📂',
           text: isAr
-            ? 'صلاحيات وصول المشاريع (allowedProjects): تخصيص المشاريع المسموح بكل مستخدم الوصول إليها بالمخزن بشكل منفصل.'
+            ? 'صلاحيات وصول المشاريع (allowedProjects): تخصيص وتأمين المشاريع المسموح لكل مستخدم بالوصول إليها بشكل منفصل.'
             : 'Project Scope Permissions: Assign specific warehouse projects or full access to individual users.'
         },
         {
@@ -1583,7 +1613,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
           <div>
             <div style={{ fontWeight: 800, fontSize: '0.95rem', color: activeTab === 'warehouse' && canViewWarehouse ? '#fbbf24' : '#00e0a1' }}>
               {activeTab === 'warehouse' && canViewWarehouse
-                ? (isAr ? 'إدارة وحركات المخزون والمستودع (قسم سري ومحمي)' : 'Confidential Warehouse & Inventory Operations')
+                ? (isAr ? 'إدارة ومحركات المستودع والتشغيل الداخلي' : 'Internal Warehouse & Operational Engines')
                 : (isAr ? 'منصة رفع الفواتير الرقمية والامتثال الضريبي' : 'Certified ETA Invoice Automation Platform')}
             </div>
             <div style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.75)', marginTop: '0.15rem' }}>
@@ -1662,7 +1692,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                     transition: 'all 0.2s ease'
                   }}
                 >
-                  <span>🔒 📦 {isAr ? 'المخزون والمستودع (سري)' : 'Warehouse (Secret)'}</span>
+                  <span>📦 {isAr ? 'حركات المستودع والتشغيل' : 'Warehouse & Operations'}</span>
                   <span
                     style={{
                       background: activeTab === 'warehouse' ? 'rgba(0,0,0,0.2)' : 'rgba(255, 255, 255, 0.12)',
@@ -1710,30 +1740,10 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                   </span>
                 </button>
               </div>
-            ) : (
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  background: 'rgba(0, 224, 161, 0.08)',
-                  border: '1px solid rgba(0, 224, 161, 0.25)',
-                  padding: '0.35rem 0.75rem',
-                  borderRadius: '10px',
-                  color: '#00e0a1',
-                  fontSize: '0.82rem',
-                  fontWeight: 700
-                }}
-              >
-                <span>⚡ {isAr ? 'سجل تحديثات منظومة رفع الفواتير والامتثال الضريبي' : 'ETA Invoicing & Compliance Changelog'}</span>
-                <span style={{ background: 'rgba(0, 224, 161, 0.2)', padding: '0.1rem 0.45rem', borderRadius: '8px', fontSize: '0.74rem' }}>
-                  {invoicingCount}
-                </span>
-              </div>
-            )}
+            ) : null}
 
             {/* Quick Search Bar */}
-            <div style={{ position: 'relative', minWidth: '190px', flex: '1', maxWidth: '270px' }}>
+            <div style={{ position: 'relative', minWidth: '220px', flex: '1', maxWidth: canViewWarehouse ? '270px' : '100%' }}>
               <input
                 type="text"
                 value={searchQuery}
@@ -1791,10 +1801,10 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
             >
               <span style={{ fontSize: '1.15rem' }}>🔒</span>
               <div>
-                <strong>{isAr ? 'تنبيه سرية وخصوصية بيانات المخزون:' : 'Confidential Warehouse Notice:'}</strong>{' '}
+                <strong>{isAr ? 'إدارة المستودع والتشغيل:' : 'Warehouse Operations Hub:'}</strong>{' '}
                 {isAr
-                  ? 'هذا القسم سري تماماً ومخصص لمسؤولي المستودع وإدارة التكاليف وحركات الصرف، ومحجوب كلياً عن غير المصرح لهم منعاً لأي تسريب.'
-                  : 'This section contains sensitive internal valuations and stock movement data. Strictly isolated from standard portal users.'}
+                  ? 'هذا السجل مخصص لمسؤولي المستودع وإدارة التكاليف وتدقيق أذون الصرف والتوريد الداخلي.'
+                  : 'Dedicated to warehouse administrators, cost valuation engines, and dispatch audit history.'}
               </div>
             </div>
           )}
@@ -1887,41 +1897,43 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                       </span>
                     )}
 
-                    {/* Category Identifier Pill */}
-                    {rel.category === 'warehouse' ? (
-                      <span
-                        style={{
-                          background: 'rgba(245, 158, 11, 0.15)',
-                          color: '#f59e0b',
-                          border: '1px solid rgba(245, 158, 11, 0.35)',
-                          padding: '0.15rem 0.55rem',
-                          borderRadius: '6px',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.25rem'
-                        }}
-                      >
-                        🔒 {isAr ? 'المخزون والتشغيل' : 'Warehouse Ops'}
-                      </span>
-                    ) : (
-                      <span
-                        style={{
-                          background: 'rgba(66, 133, 244, 0.15)',
-                          color: '#8ab4ff',
-                          border: '1px solid rgba(66, 133, 244, 0.35)',
-                          padding: '0.15rem 0.55rem',
-                          borderRadius: '6px',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.25rem'
-                        }}
-                      >
-                        ⚡ {isAr ? 'رفع الفواتير والمنظومة' : 'Invoicing & Core'}
-                      </span>
+                    {/* Category Identifier Pill - ONLY rendered for authorized users */}
+                    {canViewWarehouse && (
+                      rel.category === 'warehouse' ? (
+                        <span
+                          style={{
+                            background: 'rgba(245, 158, 11, 0.15)',
+                            color: '#f59e0b',
+                            border: '1px solid rgba(245, 158, 11, 0.35)',
+                            padding: '0.15rem 0.55rem',
+                            borderRadius: '6px',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem'
+                          }}
+                        >
+                          🔒 {isAr ? 'المخزون والتشغيل' : 'Warehouse Ops'}
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            background: 'rgba(66, 133, 244, 0.15)',
+                            color: '#8ab4ff',
+                            border: '1px solid rgba(66, 133, 244, 0.35)',
+                            padding: '0.15rem 0.55rem',
+                            borderRadius: '6px',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem'
+                          }}
+                        >
+                          ⚡ {isAr ? 'رفع الفواتير والمنظومة' : 'Invoicing & Core'}
+                        </span>
+                      )
                     )}
 
                     <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#ffffff' }}>
