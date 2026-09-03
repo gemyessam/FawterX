@@ -663,22 +663,30 @@ async function resolveCanonicalItemCost(projectRef, { itemKey, itemCode, custome
     };
   };
 
-  // 1. Level 1: Specific Source Inbound Invoice movements (Direct Match)
+  // 1. Level 1: Specific Source Inbound Invoice movements (Direct & Fuzzy Match)
   if (sourceInvoiceId) {
     try {
-      const srcSnap = await projectRef.collection("movements")
+      let srcSnap = await projectRef.collection("movements")
         .where("invoiceId", "==", sourceInvoiceId)
         .get();
+      if (srcSnap.empty) {
+        srcSnap = await projectRef.collection("movements")
+          .where("invoiceNumber", "==", sourceInvoiceId)
+          .get();
+      }
       for (const doc of srcSnap.docs) {
         const m = doc.data() || {};
         const mItem = clean(m.itemCode);
         const mCust = clean(m.customerCode);
-        if ((normItem && (mItem === normItem || mCust === normItem)) ||
-            (normCust && (mItem === normCust || mCust === normCust))) {
+        const isDirectMatch = (normItem && (mItem === normItem || mCust === normItem)) ||
+                              (normCust && (mItem === normCust || mCust === normCust));
+        const isPrefixMatch = normItem && normItem.length >= 5 && mItem && mItem.slice(0, 5) === normItem.slice(0, 5);
+
+        if (isDirectMatch || isPrefixMatch) {
           const b = Number(m.barPrice || (m.quantityBar > 0 && m.netTotal ? m.netTotal / m.quantityBar : 0));
           const u = Number(m.unitPrice || (m.quantityLm > 0 && m.netTotal ? m.netTotal / m.quantityLm : 0));
           if (b > 0 || u > 0) {
-            return makeResult(b, u, `source_invoice_${sourceInvoiceId}`);
+            return makeResult(b, u, `source_invoice_${sourceInvoiceId}_${mItem}`);
           }
         }
       }
@@ -3170,7 +3178,7 @@ async function reconcileDelmarAndCosts(projectId, targetInvoiceNumber = null, us
           itemCode: m.itemCode,
           customerCode: m.customerCode,
           lengthMm: len,
-          sourceInvoiceId: invData.sourceInvoiceId || m.sourceInvoiceId || null,
+          sourceInvoiceId: invData.sourceInvoiceId || invData.sourceInvoiceNumber || m.sourceInvoiceId || m.sourceInvoiceNumber || null,
         });
 
         if (canonical.hasCost) {

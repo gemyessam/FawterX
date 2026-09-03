@@ -1520,13 +1520,14 @@ export default function Warehouse() {
     }
   }
 
-  const handleManualReconcileCosts = async () => {
+  const handleManualReconcileCosts = async (targetInvoiceNumber = null) => {
     if (!selectedProjectId) return
-    const toastId = toast.loading(isAr ? 'جاري تدقيق تكاليف الصرف ومطابقة مخزن دلمار...' : 'Reconciling costs & Delmar...')
+    const toastId = toast.loading(isAr ? 'جاري تدقيق التكاليف وتحديث القيمة من الفاتورة الأصلية...' : 'Reconciling costs from source invoice...')
     try {
-      const res = await reconcileWarehouseDelmarAndCosts(selectedProjectId)
+      const payload = targetInvoiceNumber ? { invoiceNumber: targetInvoiceNumber } : {}
+      const res = await reconcileWarehouseDelmarAndCosts(selectedProjectId, payload)
       toast.dismiss(toastId)
-      toast.success(isAr ? (res.message || 'تم تدقيق التكاليف وتحديث أوامر دلمار بنجاح!') : 'Reconciled successfully!')
+      toast.success(isAr ? (res.message || 'تم تدقيق وتحديث التكاليف بنجاح!') : 'Reconciled successfully!')
       await loadInvoices(selectedProjectId, false)
       await loadStock(selectedProjectId)
       try {
@@ -3560,23 +3561,23 @@ export default function Warehouse() {
               </button>
               <button
                 className="btn"
-                onClick={handleManualReconcileCosts}
+                onClick={() => handleManualReconcileCosts()}
                 style={{
-                  background: 'rgba(245, 158, 11, 0.15)',
-                  color: '#fbbf24',
-                  border: '1.5px solid #fbbf24',
-                  padding: '0.55rem 1.1rem',
+                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(139, 92, 246, 0.25) 100%)',
+                  color: '#a5b4fc',
+                  border: '1.5px solid #818cf8',
+                  padding: '0.55rem 1.25rem',
                   borderRadius: '8px',
-                  fontWeight: 700,
+                  fontWeight: 800,
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '0.5rem',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.2)',
+                  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.25)',
                 }}
-                title={isAr ? 'مطابقة وإغلاق أوامر دلمار المنصرفة وتدقيق التكاليف' : 'Reconcile Delmar & Costs'}
+                title={isAr ? 'إعادة احتساب وتحديث تكلفة الصرف لجميع الفواتير بالاعتماد على الفاتورة الأصلية (لتطابق القيمة الحقيقية 1.29M)' : 'Recalculate All Outbound Costs From Source Invoices'}
               >
-                ⚡ {isAr ? 'مطابقة وتحديث مخزن دلمار' : 'Sync Delmar Dispatches'}
+                💰 {isAr ? '⚡ تحديث التكلفة الحقيقية (1.29M)' : '⚡ Update True Costs (1.29M)'}
               </button>
             </div>
           </div>
@@ -3724,6 +3725,16 @@ export default function Warehouse() {
                             >
                               👁️ {isAr ? 'عرض' : 'View'}
                             </button>
+                            {isOut && !isCancelled && (
+                              <button
+                                className="btn btn-sm"
+                                onClick={() => handleManualReconcileCosts(inv.invoiceNumber)}
+                                style={{ background: 'rgba(99, 102, 241, 0.18)', color: '#a5b4fc', border: '1px solid rgba(99, 102, 241, 0.4)', padding: '0.25rem 0.55rem', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 700 }}
+                                title={isAr ? 'إعادة احتساب وتحديث تكلفة هذه الفاتورة وفقاً للفاتورة الأصلية' : 'Recalculate Cost'}
+                              >
+                                ⚡ {isAr ? 'تصحيح التكلفة' : 'Fix Cost'}
+                              </button>
+                            )}
                             {isAdmin && !isCancelled && (
                               <button
                                 className="btn btn-sm"

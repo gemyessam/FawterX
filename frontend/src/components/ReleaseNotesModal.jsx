@@ -8,10 +8,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.51',
+      version: 'v2.27.52',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'أدوات فورية لإعادة احتساب وتصحيح تكلفة أذون الصرف من الفواتير الأصلية (1.29M)' : 'Instant Actions for Retroactive Outbound Cost Reconciliation from Source Invoices',
+      highlights: [
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'زر تصحيح التكلفة في كل سطر: إضافة زر فوري (تصحيح التكلفة) بجانب كل إذن صرف في جدول الحركات لإعادة تدقيق بنوده وسحب قيمته الحقيقية فوراً.'
+            : 'Per-Row Cost Fix Action: Added instant "Fix Cost" button to each outbound row in transaction history to recalculate item valuations on demand.'
+        },
+        {
+          icon: '💰',
+          text: isAr
+            ? 'تحديث شامل لكافة أذون الصرف: زر رئيسي أعلى الجدول لتصحيح جميع الحركات السابقة ومطابقتها مع فواتير التوريد الأصلية (لتصل إلى قيمتها الحقيقية 1.29M).'
+            : 'Global Bulk Cost Re-Evaluation: One-click header action to recalculate all historical outbound movements against source invoices.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.51',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
       title: isAr ? 'تأسيس المحرك الموحد للتسعير (Single Source of Truth) وتصحيح تكلفة الصرف وكود 515750' : 'Canonical Single Source of Truth Valuation Engine & Cross-Reference Pricing',
       highlights: [
         {
