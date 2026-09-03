@@ -8,10 +8,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.46',
+      version: 'v2.27.47',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'إعادة هيكلة واجهة المراجعة: أرقام تنظيمية مدمجة وإنذار التعارض بالأحمر وتنبيه الفارق بالبرتقالي' : 'Invoice Review UI Streamlining: Compact Metrics, Red Conflict Alarms & Orange Variance Alerts',
+      highlights: [
+        {
+          icon: '📊',
+          text: isAr
+            ? 'كبسولات أرقام تنظيمية مدمجة: إلغاء كافة الفقرات الإنشائية والكروت الضخمة المتداخلة، وتوحيد إجمالي أعواد شوكو، ورصيد دلمار، ومطلوب المستودع، وفحص الأصناف في شريط قيادة نحيف ومريح للعين بنسبة 100%.'
+            : 'Compact Metric Pills: Eliminated discursive text and bulky nested cards in favor of clean, executive metric badges.'
+        },
+        {
+          icon: '🚨',
+          text: isAr
+            ? 'نوتفكيشن الإنذار بالأحمر فقط: تخصيص اللون الأحمر حصراً لإنذارات تعارض الأصناف ونفاد الرصيد والتحويل التلقائي للمستودع لإبراز الأثر الفعلي دون تشتيت.'
+            : 'Dedicated Red Conflict Alarm: High-priority alerts reserved exclusively for competing items, stock exhaustion, and automatic warehouse rerouting.'
+        },
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'تنبيه الفارق بالأصفر البرتقالي: شريط تنبيهي أنيق بلون كهرماني/برتقالي عند وجود فارق أعواد بين شوكو ودلمار يوضح الإجراء المالي والكمي بدقة وسطر واحد.'
+            : 'Clean Amber Variance Notice: Streamlined single-line notice for requested SD bars exceeding Delmar inventory.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.46',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
       title: isAr ? 'نظام التخصيص التتابعي التراكمي لأوامر دلمار وتنبيه الأكواد المشتركة والمكررة (Sequential Delmar Allocation & Duplicate Code Alerting)' : 'Sequential Delmar Allocation Engine & Duplicate/Shared Code Detection & Real-time Alerting',
       highlights: [
         {

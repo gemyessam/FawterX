@@ -4465,7 +4465,7 @@ export default function Warehouse() {
                             </div>
                           </div>
 
-                          {/* Outbound Stock Availability Banner */}
+                          {/* ─── COMPACT METRICS & ALERT NOTIFICATIONS STRIP ─── */}
                           {batch.movementType === 'outbound' && (() => {
                             const validLines = (batch.reviewLines || []).filter(
                               (l) => !l.ignored && !l.isService && Number(l.quantityBar || l.bars || 0) > 0
@@ -4479,117 +4479,11 @@ export default function Warehouse() {
                               else if (res.status === 'shortage') shortage++
                               else missing++
                             })
-                            const hasIssues = shortage + missing > 0
 
-                            return (
-                              <div
-                                style={{
-                                  background: hasIssues ? 'rgba(255, 71, 87, 0.1)' : 'rgba(0, 224, 161, 0.1)',
-                                  border: `1px solid ${hasIssues ? 'rgba(255, 71, 87, 0.35)' : 'rgba(0, 224, 161, 0.35)'}`,
-                                  borderRadius: '10px',
-                                  padding: '0.85rem 1.15rem',
-                                  marginBottom: '1.15rem',
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center',
-                                  flexWrap: 'wrap',
-                                  gap: '0.75rem',
-                                }}
-                              >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                  <span style={{ fontSize: '1.4rem' }}>{hasIssues ? '⚠️' : '✅'}</span>
-                                  <div>
-                                    <div style={{ fontWeight: 800, fontSize: '0.95rem', color: hasIssues ? '#ff4757' : '#00e0a1' }}>
-                                      {isAr
-                                        ? hasIssues
-                                          ? `تنبيه فحص المخزون قبل الصرف: يوجد عدد (${shortage + missing}) بنود غير متوفرة بالكامل!`
-                                          : 'فحص المخزون ممتاز: كافة بنود إذن الصرف متوفرة بالمخزن وجاهزة للصرف فوراً!'
-                                        : hasIssues
-                                          ? `Stock Shortage Alert: ${shortage + missing} items are insufficient!`
-                                          : 'All items are in stock and ready for dispatch!'}
-                                    </div>
-                                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                                      {isAr
-                                        ? `🟢 متوفر بالكامل: (${sufficient}) | 🔴 عجز بالرصيد: (${shortage}) | ⚪ غير مسجل بالمخزن: (${missing}) من إجمالي (${validLines.length}) بند`
-                                        : `🟢 Sufficient: (${sufficient}) | 🔴 Shortage: (${shortage}) | ⚪ Missing: (${missing}) of (${validLines.length}) items`}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fbbf24' }}>
-                                    {isAr ? '⚡ أولوية الصرف الجماعي:' : 'Batch Priority:'}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleApplyBatchPriority(batch.id, 'delmar')}
-                                    className="btn btn-sm"
-                                    style={{
-                                      background: '#00e0a1',
-                                      color: '#000',
-                                      border: 'none',
-                                      fontWeight: 800,
-                                      padding: '0.4rem 0.85rem',
-                                      borderRadius: '8px',
-                                      fontSize: '0.82rem',
-                                      cursor: 'pointer',
-                                    }}
-                                    title={isAr ? 'صرف المطلوب بالكامل من مخزن دلمار لكافة البنود وحفظ رصيد المستودع' : 'Delmar first for all items'}
-                                  >
-                                    🏭 {isAr ? 'أولوية دلمار أولاً (لكافة البنود)' : 'Delmar First (All)'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleApplyBatchPriority(batch.id, 'warehouse')}
-                                    className="btn btn-sm"
-                                    style={{
-                                      background: 'rgba(245, 158, 11, 0.2)',
-                                      color: '#fbbf24',
-                                      border: '1px solid #fbbf24',
-                                      fontWeight: 800,
-                                      padding: '0.4rem 0.85rem',
-                                      borderRadius: '8px',
-                                      fontSize: '0.82rem',
-                                      cursor: 'pointer',
-                                    }}
-                                    title={isAr ? 'صرف المتاح بالمستودع أولاً وتغطية الفروق والعجز من دلمار' : 'Warehouse first, cover short from Delmar'}
-                                  >
-                                    📦 {isAr ? 'أولوية المستودع أولاً (والعجز من دلمار)' : 'Warehouse First'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleApplyBatchPriority(batch.id, 'none')}
-                                    className="btn btn-sm"
-                                    style={{
-                                      background: 'rgba(255, 255, 255, 0.08)',
-                                      color: '#aaa',
-                                      border: '1px solid rgba(255, 255, 255, 0.15)',
-                                      fontWeight: 600,
-                                      padding: '0.4rem 0.75rem',
-                                      borderRadius: '8px',
-                                      fontSize: '0.8rem',
-                                      cursor: 'pointer',
-                                    }}
-                                    title={isAr ? 'إعادة تعيين للصرف من المستودع الرئيسي فقط' : 'Reset to main warehouse'}
-                                  >
-                                    🔄 {isAr ? 'المستودع فقط' : 'Wh Only'}
-                                  </button>
-                                </div>
-                              </div>
-                            )
-                          })()}
-
-                          {/* Delmar Coating Decision & Allocation Card */}
-                          {batch.movementType === 'outbound' && (() => {
-                            const validNonService = (batch.reviewLines || []).filter((l) => !l.isService && !l.ignored)
-                            const totalSdBars = validNonService.reduce((acc, l) => acc + Number(l.quantityBar || l.bars || 0), 0)
-                            const totalSdLm = validNonService.reduce((acc, l) => acc + Number(l.quantityLm || 0), 0)
+                            const totalSdBars = validLines.reduce((acc, l) => acc + Number(l.quantityBar || l.bars || 0), 0)
+                            const totalSdLm = validLines.reduce((acc, l) => acc + Number(l.quantityLm || 0), 0)
 
                             const allCoated = (batch.reviewLines || []).filter((l) => !l.isService && isCoatedItem(l))
-                            if (allCoated.length === 0 && totalSdBars === 0) return null
-
-                            const rawLines = (batch.reviewLines || []).filter((l) => !l.isService && !isCoatedItem(l))
-                            const coatedBars = allCoated.reduce((acc, l) => acc + Number(l.quantityBar || l.bars || 0), 0)
-                            const rawBars = rawLines.reduce((acc, l) => acc + Number(l.quantityBar || l.bars || 0), 0)
                             const activeCoated = allCoated.filter((l) => !l.ignored)
                             const excludedCoated = allCoated.filter((l) => l.ignored)
 
@@ -4601,141 +4495,167 @@ export default function Warehouse() {
                             const hasVariance = totalSdBars > delmarActualBars && delmarActualBars > 0
 
                             return (
-                              <div
-                                style={{
-                                  background: 'rgba(245, 158, 11, 0.08)',
-                                  border: '1px solid rgba(245, 158, 11, 0.35)',
-                                  borderRadius: '10px',
-                                  padding: '1rem 1.25rem',
-                                  marginBottom: '1.25rem',
-                                }}
-                              >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '0.85rem' }}>
-                                  <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                                      <span style={{ fontSize: '1.2rem' }}>🏭</span>
-                                      <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#fbbf24' }}>
-                                        {isAr ? 'بيان كميات أمر التسليم ومخزن دلمar (مقارنة الأعواد المطلوبة بالفارقة):' : 'Delivery & Delmar Balance Overview:'}
-                                      </span>
-                                      <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', border: '1px solid #fbbf24', fontSize: '0.75rem' }}>
-                                        {allCoated.length} {isAr ? 'بند دهان' : 'coated items'}
-                                      </span>
+                              <div style={{ marginBottom: '1rem' }}>
+                                {/* Row 1: Organizational Numbers & Action Controls */}
+                                <div
+                                  style={{
+                                    background: 'rgba(15, 23, 42, 0.65)',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    borderRadius: '10px',
+                                    padding: '0.75rem 1rem',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    gap: '0.85rem',
+                                  }}
+                                >
+                                  {/* Clean Metric Badges */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                    {/* Schüco Metric */}
+                                    <div style={{ background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isAr ? 'مطلوب شوكو:' : 'SD Req:'}</span>
+                                      <strong style={{ fontSize: '1.05rem', color: '#38bdf8', fontWeight: 900 }}>{totalSdBars.toLocaleString()} عود</strong>
+                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>({totalSdLm.toFixed(1)} م)</span>
                                     </div>
-                                    <div style={{ fontSize: '0.84rem', color: '#e2e8f0', lineHeight: 1.5 }}>
-                                      {isAr ? (
-                                        <>
-                                          • تم رصد <strong>{allCoated.length} بند دهان</strong> بإجمالي <strong>{coatedBars.toLocaleString()} عود</strong> تخص التسليم.<br />
-                                          • يوجد <strong>{rawLines.length} بند خام (MF)</strong> بإجمالي <strong>{rawBars.toLocaleString()} عود</strong>.<br />
-                                          • الحالة الحالية: <span style={{ color: activeCoated.length > 0 ? '#00e0a1' : '#ff4757', fontWeight: 800 }}>({activeCoated.length} بند معتمد للصرف من دلمار)</span> و <span style={{ color: 'var(--text-muted)' }}>({excludedCoated.length} بند مستبعد)</span>.
-                                        </>
-                                      ) : (
-                                        <>
-                                          Detected {allCoated.length} coated items ({coatedBars.toLocaleString()} bars) in Delmar Warehouse for delivery.<br />
-                                          Current: {activeCoated.length} approved for dispatch from Delmar | {excludedCoated.length} excluded.
-                                        </>
-                                      )}
+
+                                    {/* Delmar Stock Metric */}
+                                    <div style={{ background: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)', borderRadius: '8px', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isAr ? 'رصيد دلمار:' : 'Delmar:'}</span>
+                                      <strong style={{ fontSize: '1.05rem', color: '#fbbf24', fontWeight: 900 }}>{delmarActualBars.toLocaleString()} عود</strong>
+                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>({activeDelmarDispatches.length} أمر)</span>
+                                    </div>
+
+                                    {/* Warehouse Shortage / Coverage Metric */}
+                                    <div style={{ background: diffBars > 0 ? 'rgba(56, 189, 248, 0.08)' : 'rgba(0, 224, 161, 0.08)', border: `1px solid ${diffBars > 0 ? 'rgba(56, 189, 248, 0.3)' : 'rgba(0, 224, 161, 0.3)'}`, borderRadius: '8px', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isAr ? 'المطلوب من المستودع:' : 'Warehouse:'}</span>
+                                      <strong style={{ fontSize: '1.05rem', color: diffBars > 0 ? '#38bdf8' : '#00e0a1', fontWeight: 900 }}>
+                                        {diffBars > 0 ? `+${diffBars.toLocaleString()} عود` : (isAr ? 'مغطى 100%' : '100%')}
+                                      </strong>
+                                    </div>
+
+                                    {/* Stock Check Metric */}
+                                    <div style={{ background: shortage > 0 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(0, 224, 161, 0.08)', border: `1px solid ${shortage > 0 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(0, 224, 161, 0.25)'}`, borderRadius: '8px', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isAr ? 'فحص المخزن:' : 'Stock:'}</span>
+                                      <strong style={{ fontSize: '0.95rem', color: shortage > 0 ? '#f87171' : '#00e0a1', fontWeight: 800 }}>
+                                        {shortage > 0 ? `عجز ${shortage} صنف` : `${sufficient} متوفر`}
+                                      </strong>
                                     </div>
                                   </div>
 
-                                  {/* Owner Decision Buttons */}
-                                  <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fbbf24' }}>
-                                      {isAr ? 'قرار المالك:' : 'Owner Decision:'}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDelmarDecision(batch.id, 'delmar')}
-                                      className="btn btn-sm"
-                                      style={{
-                                        background: activeCoated.length === allCoated.length ? '#00e0a1' : 'rgba(0, 224, 161, 0.15)',
-                                        color: activeCoated.length === allCoated.length ? '#000' : '#00e0a1',
-                                        border: '1px solid #00e0a1',
-                                        fontWeight: 800,
-                                        padding: '0.4rem 0.85rem',
-                                        borderRadius: '8px',
-                                        fontSize: '0.82rem',
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      ✅ {isAr ? 'البنود تبعنا (صرف من مخزن دلمار)' : 'Ours (Dispatch from Delmar)'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDelmarDecision(batch.id, 'exclude')}
-                                      className="btn btn-sm"
-                                      style={{
-                                        background: excludedCoated.length === allCoated.length ? '#ff4757' : 'rgba(255, 71, 87, 0.15)',
-                                        color: excludedCoated.length === allCoated.length ? '#fff' : '#ff4757',
-                                        border: '1px solid #ff4757',
-                                        fontWeight: 800,
-                                        padding: '0.4rem 0.85rem',
-                                        borderRadius: '8px',
-                                        fontSize: '0.82rem',
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      🚫 {isAr ? 'ليست تبعنا (استبعاد بنود دلمار)' : 'Not Ours (Exclude Delmar)'}
-                                    </button>
+                                  {/* Action Controls: Priority & Scope Toggles */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', padding: '2px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleApplyBatchPriority(batch.id, 'delmar')}
+                                        style={{
+                                          background: '#00e0a1',
+                                          color: '#000',
+                                          border: 'none',
+                                          fontWeight: 800,
+                                          padding: '0.35rem 0.7rem',
+                                          borderRadius: '6px',
+                                          fontSize: '0.78rem',
+                                          cursor: 'pointer',
+                                        }}
+                                        title={isAr ? 'صرف دلمار أولاً لكافة البنود وحفظ رصيد المستودع' : 'Delmar first'}
+                                      >
+                                        🏭 {isAr ? 'دلمار أولاً' : 'Delmar'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleApplyBatchPriority(batch.id, 'warehouse')}
+                                        style={{
+                                          background: 'transparent',
+                                          color: '#38bdf8',
+                                          border: 'none',
+                                          fontWeight: 700,
+                                          padding: '0.35rem 0.7rem',
+                                          borderRadius: '6px',
+                                          fontSize: '0.78rem',
+                                          cursor: 'pointer',
+                                        }}
+                                        title={isAr ? 'صرف المستودع أولاً وتغطية الفارق من دلمار' : 'Warehouse first'}
+                                      >
+                                        📦 {isAr ? 'المستودع أولاً' : 'Wh First'}
+                                      </button>
+                                    </div>
+
+                                    {/* Delmar Item Scope Toggle */}
+                                    {allCoated.length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDelmarDecision(batch.id, activeCoated.length === allCoated.length ? 'exclude' : 'delmar')}
+                                        style={{
+                                          background: activeCoated.length === allCoated.length ? 'rgba(0, 224, 161, 0.15)' : 'rgba(255, 71, 87, 0.15)',
+                                          color: activeCoated.length === allCoated.length ? '#00e0a1' : '#ff4757',
+                                          border: `1px solid ${activeCoated.length === allCoated.length ? 'rgba(0, 224, 161, 0.35)' : 'rgba(255, 71, 87, 0.35)'}`,
+                                          fontWeight: 800,
+                                          padding: '0.35rem 0.7rem',
+                                          borderRadius: '6px',
+                                          fontSize: '0.78rem',
+                                          cursor: 'pointer',
+                                        }}
+                                        title={isAr ? 'التبديل بين اعتماد بنود دلمار أو استبعادها' : 'Toggle Delmar items'}
+                                      >
+                                        {activeCoated.length === allCoated.length
+                                          ? (isAr ? `✅ معتمد لدلمار (${allCoated.length})` : `Delmar (${allCoated.length})`)
+                                          : (isAr ? '🚫 مستبعد من دلمار' : 'Excluded')}
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
 
-                                {/* 3-Metric Summary Grid */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginTop: '0.85rem' }}>
-                                  <div style={{ background: 'rgba(56, 189, 248, 0.12)', border: '1.5px solid #38bdf8', padding: '0.6rem 0.85rem', borderRadius: '8px', textAlign: 'center' }}>
-                                    <span style={{ fontSize: '0.75rem', color: '#38bdf8', display: 'block', fontWeight: 800 }}>📋 {isAr ? 'مجموع أعواد بيان شوكو المطلوبة:' : 'Total Requested in SD:'}</span>
-                                    <strong style={{ fontSize: '1.35rem', color: '#fff', display: 'block', marginTop: '0.15rem' }}>{totalSdBars.toLocaleString()} BAR</strong>
-                                    <span style={{ fontSize: '0.75rem', color: '#93c5fd' }}>({totalSdLm.toFixed(1)} m)</span>
-                                  </div>
-
-                                  <div style={{ background: 'rgba(251, 191, 36, 0.12)', border: '1.5px solid #fbbf24', padding: '0.6rem 0.85rem', borderRadius: '8px', textAlign: 'center' }}>
-                                    <span style={{ fontSize: '0.75rem', color: '#fbbf24', display: 'block', fontWeight: 800 }}>🏭 {isAr ? 'الرصيد الفعلي في مخزن دلمار:' : 'Actual Delmar Stock:'}</span>
-                                    <strong style={{ fontSize: '1.35rem', color: '#fbbf24', display: 'block', marginTop: '0.15rem' }}>{delmarActualBars.toLocaleString()} BAR</strong>
-                                    <span style={{ fontSize: '0.75rem', color: '#fde68a' }}>({activeDelmarDispatches.length} {isAr ? 'أمر جاري تحت الدهان' : 'active orders'})</span>
-                                  </div>
-
-                                  <div style={{ background: diffBars > 0 ? 'rgba(255, 71, 87, 0.15)' : 'rgba(0, 224, 161, 0.12)', border: `1.5px solid ${diffBars > 0 ? '#ff4757' : '#00e0a1'}`, padding: '0.6rem 0.85rem', borderRadius: '8px', textAlign: 'center' }}>
-                                    <span style={{ fontSize: '0.75rem', color: diffBars > 0 ? '#ff4757' : '#00e0a1', display: 'block', fontWeight: 800 }}>
-                                      {diffBars > 0 ? (isAr ? '⚠️ الفارق المطلوب من المستودع:' : '⚠️ Warehouse Variance:') : (isAr ? '✅ تغطية دلمار للإذن:' : '✅ Delmar Coverage:')}
-                                    </span>
-                                    <strong style={{ fontSize: '1.35rem', color: diffBars > 0 ? '#ff4757' : '#00e0a1', display: 'block', marginTop: '0.15rem' }}>
-                                      {diffBars > 0 ? `+${diffBars.toLocaleString()} BAR` : (isAr ? '100% مغطى' : '100% Covered')}
-                                    </strong>
-                                    <span style={{ fontSize: '0.75rem', color: diffBars > 0 ? '#fca5a5' : '#86efac' }}>
-                                      {diffBars > 0 ? (isAr ? 'عجز على دلمار يُسحب من الخام' : 'Deducted from raw stock') : (isAr ? 'كامل الكمية لدى دلمار' : 'All available at Delmar')}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {/* Variance Warning Alert */}
+                                {/* Row 2: Orange/Amber Alert Notification (ONLY IF VARIANCE EXISTS) */}
                                 {hasVariance && (
-                                  <div style={{ background: 'rgba(255, 71, 87, 0.12)', border: '1px solid #ff4757', padding: '0.65rem 0.95rem', borderRadius: '8px', marginTop: '0.75rem', color: '#ffcdd2', fontSize: '0.84rem', lineHeight: 1.5 }}>
-                                    ⚠️ <strong>{isAr ? 'تنبيه الفارق بين بيان شوكو ومخزن دلمار:' : 'Delmar Variance Alert:'}</strong> {isAr
-                                      ? `إذن صرف شوكو يطلب (${totalSdBars.toLocaleString()} عود)، في حين أن الرصيد الفعلي المتوفر بمخزن دلمار هو (${delmarActualBars.toLocaleString()} عود) فقط! سيقوم النظام بصرف كامل رصيد دلمار (${delmarActualBars.toLocaleString()} عود) وإغلاق أوامرها، وخصم الفارق المتبقي (${diffBars.toLocaleString()} عود) من رصيد المستودع الرئيسي.`
-                                      : `SD requests ${totalSdBars} bars while Delmar has ${delmarActualBars} bars! System will deduct all ${delmarActualBars} bars from Delmar and the remaining ${diffBars} bars from main warehouse.`}
+                                  <div
+                                    style={{
+                                      background: 'rgba(245, 158, 11, 0.12)',
+                                      border: '1px solid #f59e0b',
+                                      borderRadius: '8px',
+                                      padding: '0.55rem 0.85rem',
+                                      marginTop: '0.5rem',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.5rem',
+                                      color: '#fef3c7',
+                                      fontSize: '0.84rem',
+                                    }}
+                                  >
+                                    <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+                                    <div>
+                                      <strong style={{ color: '#fbbf24' }}>
+                                        {isAr ? 'تنبيه الفارق:' : 'Variance Notice:'}
+                                      </strong>{' '}
+                                      {isAr
+                                        ? `إذن شوكو يطلب (${totalSdBars.toLocaleString()} عود) ورصيد دلمار (${delmarActualBars.toLocaleString()} عود) — سيتم صرف كامل رصيد دلمار وإغلاق أوامرها، وخصم الفارق (+${diffBars.toLocaleString()} عود) من المستودع الرئيسي.`
+                                        : `SD requests ${totalSdBars} bars vs Delmar ${delmarActualBars} bars — Delmar orders will be fully fulfilled and closed, and remaining +${diffBars} bars deducted from warehouse.`}
+                                    </div>
                                   </div>
                                 )}
 
-                                {/* Shared / Duplicate Items Alert */}
+                                {/* Row 3: Red Alarm Notification (ONLY IF DUPLICATE/CONFLICT ITEMS EXIST) */}
                                 {sharedAlerts.length > 0 && (
                                   <div
                                     style={{
                                       background: 'rgba(239, 68, 68, 0.12)',
                                       border: '1.5px solid #ef4444',
-                                      padding: '0.75rem 1rem',
                                       borderRadius: '8px',
-                                      marginTop: '0.75rem',
+                                      padding: '0.6rem 0.95rem',
+                                      marginTop: '0.5rem',
                                       color: '#fee2e2',
                                     }}
                                   >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                                      <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-                                      <strong style={{ color: '#f87171', fontSize: '0.92rem' }}>
-                                        {isAr ? 'تنبيه تشابه وتنافس أصناف على نفس رصيد دلمار (توزيع تتابعي بحسب ترتيب السطور):' : 'Shared / Competing Delmar Items Alert (Sequential FIFO):'}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                                      <span style={{ fontSize: '1.1rem' }}>🚨</span>
+                                      <strong style={{ color: '#f87171', fontSize: '0.88rem' }}>
+                                        {isAr ? 'إنذار تعارض أصناف وأكواد مشتركة (توزيع تتابعي بحسب الترتيب):' : 'Item Conflict Alarm (Sequential Order):'}
                                       </strong>
                                     </div>
-                                    <div style={{ fontSize: '0.84rem', lineHeight: 1.6 }}>
+                                    <div style={{ fontSize: '0.82rem', lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
                                       {sharedAlerts.map((sa, sIdx) => (
-                                        <div key={sIdx} style={{ marginTop: '0.2rem' }}>
+                                        <div key={sIdx}>
                                           • السطر رقم <strong>#{sa.lineIndex + 1}</strong>: {sa.sharingDetails.message}
                                         </div>
                                       ))}
