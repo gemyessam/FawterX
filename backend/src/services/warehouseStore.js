@@ -701,6 +701,26 @@ async function resolveItemInboundCost(projectRef, itemKey, itemCode, customerCod
   return { barPrice: 0, unitPrice: 0 };
 }
 
+function isCoatedItem(line) {
+  if (!line) return false;
+  const finish = String(line.finish || line.color || "").trim().toUpperCase();
+  const desc = String(line.description || "").toUpperCase();
+
+  if (/^(MF|MILL|RAW|خام|MILL\s*FINISH)$/i.test(finish)) {
+    return false;
+  }
+
+  if (/RAL|ANODIZ|SD|POWDER|COAT|دهان|الوان/i.test(finish) || /RAL|ANODIZ|دهان/i.test(desc)) {
+    return true;
+  }
+
+  if (finish && finish !== "MF" && finish !== "MILL" && finish !== "RAW") {
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Fulfills/closes active Delmar dispatches when an outbound delivery invoice is dispatched from Delmar.
  */
@@ -710,45 +730,96 @@ async function fulfillDelmarDispatches(projectRef, invoiceDoc, lines, userUid, u
       .where("isCompleted", "==", false)
       .get();
 
-    if (activeDispatchesSnap.empty) return;
+    if (activeDispatchesSnap.empty) return 0;
 
     const clean = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]/gi, "");
     const nowIso = new Date().toISOString();
-    const invCustomer = clean(invoiceDoc.customerReference || invoiceDoc.salesOrder || "");
     const invNumber = invoiceDoc.invoiceNumber || "—";
+    const invCustomer = clean(invoiceDoc.customerReference || invoiceDoc.salesOrder || "");
 
+    const delmarDispatches = [];
     for (const dDoc of activeDispatchesSnap.docs) {
       const d = dDoc.data() || {};
       const dSupplier = clean(d.coatingSupplier || "");
-      const dCustomer = clean(d.customerName || "");
-
-      // Check if this dispatch belongs to Delmar
-      const isDelmarDispatch = dSupplier.includes("delmar") || dSupplier.includes("دلمار");
-      const customerMatches = invCustomer && (dCustomer.includes(invCustomer) || invCustomer.includes(dCustomer));
-
-      if (isDelmarDispatch || customerMatches) {
-        await dDoc.ref.set(
-          {
-            currentStage: "delivered_to_customer",
-            isCompleted: true,
-            completedAt: nowIso,
-            customerReceivedBy: invoiceDoc.customerReference || invoiceDoc.salesOrder || d.customerName || "العميل النهائي",
-            notes: (d.notes ? d.notes + " | " : "") + `تم تسليم كامل الكمية للعميل النهائي بموجب إذن صرف رقم (${invNumber})`,
-            stageHistory: admin.firestore.FieldValue.arrayUnion({
-              stage: "delivered_to_customer",
-              label: `المرحلة 2: تم تسليم القطاعات للعميل النهائي وإغلاق الدورة بموجب إذن الصرف (${invNumber})`,
-              timestamp: nowIso,
-              user: userName || userEmail || "النظام",
-            }),
-            updatedAt: nowIso,
-            updatedBy: userUid || "system",
-          },
-          { merge: true }
-        );
+      const isDelmar = dSupplier.includes("delmar") || dSupplier.includes("دلمار") || d.dispatchType === "coating_then_customer";
+      if (isDelmar && !d.isCompleted && d.currentStage !== "delivered_to_customer" && d.currentStage !== "closed") {
+        delmarDispatches.push({ ref: dDoc.ref, id: dDoc.id, ...d });
       }
     }
+
+    if (delmarDispatches.length === 0) return 0;
+
+    // Calculate total bars to fulfill from Delmar
+    let totalDelmarBarsInInvoice = 0;
+    if (Array.isArray(lines) && lines.length > 0) {
+      for (const l of lines) {
+        if (l.delmarCovered) {
+          const bars = l.delmarBars !== undefined && l.delmarBars !== null && l.delmarBars !== ""
+            ? Number(l.delmarBars)
+            : (l.delmarMode === "full" ? Number(l.quantityBar || l.bars || 0) : Number(l.delmarShortage || 0));
+          totalDelmarBarsInInvoice += (isNaN(bars) ? 0 : bars);
+        } else if (isCoatedItem(l)) {
+          totalDelmarBarsInInvoice += Number(l.quantityBar || l.bars || 0);
+        }
+      }
+    }
+    if (totalDelmarBarsInInvoice === 0) {
+      totalDelmarBarsInInvoice = Number(invoiceDoc.totalQuantityBar || invoiceDoc.totalBars || 0);
+    }
+
+    // Match priority: 1) Customer/SO match, 2) All active Delmar in project
+    let candidateDispatches = delmarDispatches.filter(d => {
+      const dCust = clean(d.customerName || "");
+      const dProj = clean(d.projectNameOrSite || "");
+      const dNote = clean(d.deliveryNote || "");
+      return invCustomer && (dCust.includes(invCustomer) || invCustomer.includes(dCust) ||
+                             dProj.includes(invCustomer) || invCustomer.includes(dProj) ||
+                             dNote.includes(invCustomer) || invCustomer.includes(dNote));
+    });
+
+    if (candidateDispatches.length === 0) {
+      candidateDispatches = delmarDispatches;
+    }
+
+    let closedCount = 0;
+    let remainingBarsToFulfill = totalDelmarBarsInInvoice;
+
+    for (const disp of candidateDispatches) {
+      const dispTotalBars = Number(disp.totalQuantityBar || 0);
+      const willFullyClose = remainingBarsToFulfill >= dispTotalBars || dispTotalBars === 0;
+
+      const stageLabel = `المرحلة 2: تم تسليم القطاعات للعميل النهائي وإغلاق الدورة بموجب إذن الصرف (${invNumber})`;
+      const stageNote = `تم تسليم ${willFullyClose ? dispTotalBars : remainingBarsToFulfill} عود للعميل النهائي بموجب إذن صرف رقم (${invNumber})`;
+
+      await disp.ref.set(
+        {
+          currentStage: "delivered_to_customer",
+          isCompleted: true,
+          completedAt: nowIso,
+          deliveryInvoiceNumber: invNumber,
+          customerReceivedBy: invoiceDoc.customerReference || invoiceDoc.salesOrder || disp.customerName || "العميل النهائي",
+          notes: (disp.notes ? disp.notes + " | " : "") + stageNote,
+          stageHistory: admin.firestore.FieldValue.arrayUnion({
+            stage: "delivered_to_customer",
+            label: stageLabel,
+            timestamp: nowIso,
+            user: userName || userEmail || "النظام",
+          }),
+          updatedAt: nowIso,
+          updatedBy: userUid || "system",
+        },
+        { merge: true }
+      );
+
+      closedCount++;
+      remainingBarsToFulfill -= dispTotalBars;
+      if (remainingBarsToFulfill <= 0) break;
+    }
+
+    return closedCount;
   } catch (err) {
     console.error("Error fulfilling Delmar dispatches:", err.message);
+    return 0;
   }
 }
 
@@ -1070,6 +1141,15 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
   }
 
   await commitBatchIfNeeded(true);
+
+  // If Outbound delivery invoice, fulfill matching active Delmar dispatches
+  if (isOutbound) {
+    try {
+      await fulfillDelmarDispatches(projectRef, invoiceDoc, lines, userUid, userEmail, userName);
+    } catch (fulfillErr) {
+      console.error("[processInboundInvoice] Error fulfilling Delmar dispatches:", fulfillErr.message);
+    }
+  }
 
   await logWarehouseAudit(projectId, {
     action: "PROCESS_INVOICE",
@@ -2593,6 +2673,29 @@ async function getProjectDispatches(projectId, statusFilter = "all") {
           }).catch(() => {});
         }
       }
+    } else {
+      // Auto-integrity verification: If active Delmar dispatches exist and matching outbound invoices exist, auto-fulfill them!
+      const hasActiveDelmar = dispatches.some(
+        (d) => !d.isCompleted && d.currentStage !== "delivered_to_customer" && (String(d.coatingSupplier || "").toLowerCase().includes("delmar") || String(d.coatingSupplier || "").includes("دلمار"))
+      );
+      if (hasActiveDelmar) {
+        const projectRef = db.collection("warehouseProjects").doc(projectId);
+        let anyClosed = false;
+        for (const inv of activeOutboundInvoices) {
+          const isDelmarInv = Boolean(inv.delmarAllocated) ||
+            String(inv.coatingSupplier || "").toLowerCase().includes("delmar") ||
+            String(inv.coatingSupplier || "").includes("دلمار") ||
+            (inv.invoiceNumber && inv.invoiceNumber.startsWith("SD-"));
+          if (isDelmarInv) {
+            const closed = await fulfillDelmarDispatches(projectRef, inv, null, "system", "auto@fawterx.com", "فحص النزاهة التلقائي");
+            if (closed > 0) anyClosed = true;
+          }
+        }
+        if (anyClosed) {
+          const updatedSnap = await query.orderBy("dispatchedAt", "desc").get();
+          dispatches = updatedSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+      }
     }
 
     if (statusFilter === "active" || statusFilter === "in_progress") {
@@ -2882,13 +2985,72 @@ async function reconcileDelmarAndCosts(projectId, targetInvoiceNumber = null, us
     }
   }
 
-  // Note: Dispatches are strictly managed by actual dispatch transactions and rollback, never altered blindly!
+  // 2. Fulfill and close active Delmar dispatches for matching outbound invoices
+  const activeDispatchesSnap = await projectRef.collection("dispatches")
+    .where("isCompleted", "==", false)
+    .get();
+
+  if (!activeDispatchesSnap.empty) {
+    for (const invDoc of invSnap.docs) {
+      const invData = invDoc.data() || {};
+      if (invData.isCancelled || invData.status === "cancelled") continue;
+      if (targetInvoiceNumber && invData.invoiceNumber !== targetInvoiceNumber && !invData.invoiceNumber.includes(targetInvoiceNumber)) {
+        continue;
+      }
+
+      const isDelmarOut = Boolean(invData.delmarAllocated) ||
+        String(invData.coatingSupplier || "").toLowerCase().includes("delmar") ||
+        String(invData.coatingSupplier || "").includes("دلمار") ||
+        (invData.invoiceNumber && invData.invoiceNumber.startsWith("SD-"));
+
+      if (isDelmarOut) {
+        const mvtSnap = await projectRef.collection("movements")
+          .where("invoiceId", "==", invDoc.id)
+          .get();
+        const lines = mvtSnap.docs.map(d => d.data());
+
+        const closed = await fulfillDelmarDispatches(projectRef, invData, lines, userUid, userEmail, userName);
+        dispatchesClosed += closed;
+
+        // Auto-correct warehouse deduction for Delmar portion if it was wrongly deducted from main warehouse
+        if (closed > 0) {
+          let restoreBatch = db.batch();
+          let rCount = 0;
+          for (const mDoc of mvtSnap.docs) {
+            const m = mDoc.data() || {};
+            const qBar = Number(m.quantityBar || 0);
+            const dBars = Number(m.delmarDispatchedBars || 0);
+            if (dBars === 0 && qBar > 0) {
+              const stockRef = projectRef.collection("stock").doc(m.itemKey);
+              restoreBatch.set(stockRef, {
+                quantityBar: admin.firestore.FieldValue.increment(qBar),
+                quantityLm: admin.firestore.FieldValue.increment(Number(m.quantityLm || 0)),
+                updatedAt: nowIso,
+              }, { merge: true });
+              rCount++;
+
+              restoreBatch.update(mDoc.ref, {
+                delmarCovered: true,
+                delmarMode: "full",
+                delmarDispatchedBars: qBar,
+                updatedAt: nowIso,
+              });
+              rCount++;
+            }
+          }
+          if (rCount > 0) {
+            await restoreBatch.commit();
+          }
+        }
+      }
+    }
+  }
 
   return {
     success: true,
     invoicesUpdated,
     dispatchesClosed,
-    message: `تم تحديث تكلفة عدد (${invoicesUpdated}) فواتير صرف، وإغلاق وتسليم عدد (${dispatchesClosed}) أوامر دلمار بنجاح!`,
+    message: `تم تدقيق التكاليف وتحديث عدد (${invoicesUpdated}) فواتير صرف، وإغلاق وتسليم عدد (${dispatchesClosed}) أوامر دلمار بنجاح!`,
   };
 }
 

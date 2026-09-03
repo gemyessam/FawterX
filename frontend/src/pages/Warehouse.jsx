@@ -34,13 +34,21 @@ import {
 import ManualStockModal from '../components/ManualStockModal'
 import DispatchesTrackerView from '../components/DispatchesTrackerView'
 
-function getDelmarAvailableBars(line, activeDispatches = []) {
+function getDelmarAvailableBars(line, activeDispatches = [], aliasesMap = {}) {
   if (line.delmarAvailableBars !== undefined && line.delmarAvailableBars !== null && line.delmarAvailableBars !== '') {
     return Number(line.delmarAvailableBars)
   }
   const clean = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
-  const lItem = clean(line.itemCode)
-  const lCust = clean(line.customerCode)
+  let lItem = clean(line.itemCode)
+  let lCust = clean(line.customerCode)
+
+  // Check aliases dictionary for mapped target item code
+  if (aliasesMap && typeof aliasesMap === 'object') {
+    const aliasMatch = aliasesMap[lItem] || (lCust && aliasesMap[lCust])
+    if (aliasMatch && aliasMatch.targetItemCode) {
+      lItem = clean(aliasMatch.targetItemCode)
+    }
+  }
 
   let sum = 0
   if (Array.isArray(activeDispatches) && activeDispatches.length > 0) {
@@ -50,7 +58,10 @@ function getDelmarAvailableBars(line, activeDispatches = []) {
         for (const it of d.items) {
           const iCode = clean(it.itemCode)
           const cCode = clean(it.customerCode)
-          if ((lItem && (iCode === lItem || cCode === lItem)) || (lCust && (iCode === lCust || cCode === lCust))) {
+          if (
+            (lItem && (iCode === lItem || cCode === lItem || (lItem.length >= 4 && (iCode.includes(lItem) || lItem.includes(iCode))))) ||
+            (lCust && (iCode === lCust || cCode === lCust || (lCust.length >= 4 && (cCode.includes(lCust) || lCust.includes(cCode)))))
+          ) {
             sum += Number(it.quantityBar || it.bars || 0)
           }
         }
@@ -60,17 +71,23 @@ function getDelmarAvailableBars(line, activeDispatches = []) {
 
   if (sum > 0) return sum
 
-  // If item is coated (RAL/ANODIZED), Delmar naturally holds the painted delivery batch
-  if (isCoatedItem(line)) {
-    return Number(line.quantityBar || line.bars || line.quantity || 0)
+  // If item is coated (RAL/ANODIZED), check total active bars actually available at Delmar
+  if (isCoatedItem(line) && Array.isArray(activeDispatches) && activeDispatches.length > 0) {
+    const delmarTotalActive = activeDispatches
+      .filter((d) => !d.isCompleted && d.currentStage !== 'closed' && d.currentStage !== 'delivered_to_customer')
+      .reduce((acc, d) => acc + Number(d.totalQuantityBar || 0), 0)
+
+    if (delmarTotalActive > 0) {
+      return Math.min(Number(line.quantityBar || line.bars || line.quantity || 0), delmarTotalActive)
+    }
   }
 
   return 0
 }
 
-function buildStockCheckResult(matchedItem, availableBar, reqBar, diff, viaAlias, aliasInfo, line, activeDispatches = []) {
+function buildStockCheckResult(matchedItem, availableBar, reqBar, diff, viaAlias, aliasInfo, line, activeDispatches = [], aliasesMap = {}) {
   const availableWarehouse = Number(availableBar || 0)
-  const availableDelmar = getDelmarAvailableBars(line, activeDispatches)
+  const availableDelmar = getDelmarAvailableBars(line, activeDispatches, aliasesMap)
 
   // Priority can be 'delmar', 'warehouse', or 'none' (default 'warehouse')
   const priority = line.delmarPriority || (line.delmarCovered ? (line.delmarMode === 'full' ? 'delmar' : 'warehouse') : 'warehouse')
@@ -163,7 +180,7 @@ function checkStockAvailability(line, stock = [], aliasesMap = {}, activeDispatc
       if (matchKey) {
         const availableBar = Number(matchKey.quantityBar || 0)
         const diff = availableBar - reqBar
-        return buildStockCheckResult(matchKey, availableBar, reqBar, diff, true, aliasInfo, line, activeDispatches)
+        return buildStockCheckResult(matchKey, availableBar, reqBar, diff, true, aliasInfo, line, activeDispatches, aliasesMap)
       }
     }
     if (mappedAlias.targetItemCode) {
@@ -210,7 +227,7 @@ function checkStockAvailability(line, stock = [], aliasesMap = {}, activeDispatc
   const availableBar = match ? Number(match.quantityBar || 0) : 0
   const diff = availableBar - reqBar
 
-  return buildStockCheckResult(match, availableBar, reqBar, diff, viaAlias, aliasInfo, line, activeDispatches)
+  return buildStockCheckResult(match, availableBar, reqBar, diff, viaAlias, aliasInfo, line, activeDispatches, aliasesMap)
 }
 
 function findSmartFuzzyMatch(line, stock = [], aliasesMap = {}) {
@@ -1593,7 +1610,25 @@ export default function Warehouse() {
         if (batch.id !== batchId) return batch
         const updatedLines = (batch.reviewLines || []).map((l) => {
           if (isCoatedItem(l)) {
-            return { ...l, ignored: decision === 'exclude' }
+            if (decision === 'delmar') {
+              return {
+                ...l,
+                ignored: false,
+                delmarPriority: 'delmar',
+                delmarCovered: true,
+                delmarMode: 'full',
+                delmarBars: '',
+              }
+            } else {
+              return {
+                ...l,
+                ignored: true,
+                delmarPriority: 'none',
+                delmarCovered: false,
+                delmarMode: null,
+                delmarBars: '',
+              }
+            }
           }
           return l
         })
@@ -1605,7 +1640,7 @@ export default function Warehouse() {
       })
     )
     if (decision === 'delmar') {
-      toast.success(isAr ? '✅ تم اعتماد كافة بنود دهان دلمار للصرف' : 'Coated items approved for Delmar dispatch')
+      toast.success(isAr ? '✅ تم اعتماد كافة بنود دهان دلمار للصرف من مخزن دلمار' : 'Coated items approved for Delmar dispatch')
     } else {
       toast.info(isAr ? '🚫 تم استبعاد كافة بنود دهان دلمار من الصرف' : 'Coated items excluded from dispatch')
     }
@@ -1706,7 +1741,27 @@ export default function Warehouse() {
     )
 
     try {
-      const hasDelmarActive = batch.movementType === 'outbound' && validLines.some((l) => isCoatedItem(l))
+      const preparedLines = validLines.map((l) => {
+        const chk = checkStockAvailability(l, stock, aliasesMap, activeDispatches)
+        const isDelmarLine = l.delmarCovered || l.delmarPriority === 'delmar' || batch.delmarDecision === 'delmar' || (batch.movementType === 'outbound' && isCoatedItem(l))
+        const delmarBarsVal = l.delmarBars !== undefined && l.delmarBars !== null && l.delmarBars !== ''
+          ? Number(l.delmarBars)
+          : (isDelmarLine ? (chk.delmarDispatched || Number(l.quantityBar || l.bars || 0)) : (chk.delmarDispatched || 0))
+        return {
+          ...l,
+          delmarCovered: isDelmarLine ? true : Boolean(chk.delmarCovered),
+          delmarMode: l.delmarMode || (isDelmarLine ? (chk.delmarMode || 'full') : chk.delmarMode),
+          delmarPriority: l.delmarPriority || (isDelmarLine ? 'delmar' : chk.delmarPriority),
+          delmarBars: delmarBarsVal,
+          delmarDispatched: delmarBarsVal,
+          warehouseDispatched: chk.warehouseDispatched,
+        }
+      })
+
+      const hasDelmarActive = batch.movementType === 'outbound' && (
+        batch.delmarDecision === 'delmar' ||
+        preparedLines.some((l) => l.delmarCovered || isCoatedItem(l))
+      )
       const payloadMeta = {
         ...batch.parsedMeta,
         movementType: batch.movementType,
@@ -1717,7 +1772,7 @@ export default function Warehouse() {
         forceSave: options.forceSave !== undefined ? options.forceSave : true,
       }
       console.log('[BatchSingleSave] Processing invoice:', payloadMeta.invoiceNumber, payloadMeta)
-      const res = await processWarehouseInvoice(selectedProjectId, payloadMeta, validLines)
+      const res = await processWarehouseInvoice(selectedProjectId, payloadMeta, preparedLines)
       if (res.success) {
         if (res.isDuplicate) {
           toast.info(res.message || (isAr ? 'تم تحديث بيانات الفاتورة المسجلة سابقاً' : 'Updated duplicate invoice metadata'))
@@ -1734,7 +1789,13 @@ export default function Warehouse() {
             item.id === batchId ? { ...item, status: 'saved', isDuplicate: res.isDuplicate } : item
           )
         )
-        loadStock(selectedProjectId)
+        await loadStock(selectedProjectId)
+        try {
+          const dRes = await getWarehouseDispatches(selectedProjectId)
+          if (dRes && dRes.success && Array.isArray(dRes.dispatches)) {
+            setActiveDispatches(dRes.dispatches)
+          }
+        } catch (e) {}
       }
     } catch (err) {
       const errMsg = err.response?.data?.message || err.message || (isAr ? 'فشل الحفظ' : 'Failed to save')
@@ -1825,8 +1886,37 @@ export default function Warehouse() {
       }
 
       try {
-        const payloadMeta = { ...inv.parsedMeta, movementType: inv.movementType, forceSave }
-        const res = await processWarehouseInvoice(selectedProjectId, payloadMeta, validLines)
+        const preparedLines = validLines.map((l) => {
+          const chk = checkStockAvailability(l, stock, aliasesMap, activeDispatches)
+          const isDelmarLine = l.delmarCovered || l.delmarPriority === 'delmar' || inv.delmarDecision === 'delmar' || (inv.movementType === 'outbound' && isCoatedItem(l))
+          const delmarBarsVal = l.delmarBars !== undefined && l.delmarBars !== null && l.delmarBars !== ''
+            ? Number(l.delmarBars)
+            : (isDelmarLine ? (chk.delmarDispatched || Number(l.quantityBar || l.bars || 0)) : (chk.delmarDispatched || 0))
+          return {
+            ...l,
+            delmarCovered: isDelmarLine ? true : Boolean(chk.delmarCovered),
+            delmarMode: l.delmarMode || (isDelmarLine ? (chk.delmarMode || 'full') : chk.delmarMode),
+            delmarPriority: l.delmarPriority || (isDelmarLine ? 'delmar' : chk.delmarPriority),
+            delmarBars: delmarBarsVal,
+            delmarDispatched: delmarBarsVal,
+            warehouseDispatched: chk.warehouseDispatched,
+          }
+        })
+
+        const hasDelmarActive = inv.movementType === 'outbound' && (
+          inv.delmarDecision === 'delmar' ||
+          preparedLines.some((l) => l.delmarCovered || isCoatedItem(l))
+        )
+        const payloadMeta = {
+          ...inv.parsedMeta,
+          movementType: inv.movementType,
+          coatingSupplier: hasDelmarActive
+            ? 'مصنع دلمار للألومنيوم والدهان (Delmar Industrial Coating)'
+            : inv.parsedMeta.supplier || 'المستودع',
+          delmarAllocated: hasDelmarActive,
+          forceSave,
+        }
+        const res = await processWarehouseInvoice(selectedProjectId, payloadMeta, preparedLines)
         console.log(`[BatchSave Response ${inv.parsedMeta?.invoiceNumber}]:`, res)
         if (res.success) {
           if (res.isDuplicate) {
@@ -1861,6 +1951,12 @@ export default function Warehouse() {
 
     setSavingBatch(false)
     await loadStock(selectedProjectId)
+    try {
+      const dRes = await getWarehouseDispatches(selectedProjectId)
+      if (dRes && dRes.success && Array.isArray(dRes.dispatches)) {
+        setActiveDispatches(dRes.dispatches)
+      }
+    } catch (e) {}
 
     const totalProcessed = newSavedCount + duplicateCount
     if (errorCount === 0) {
@@ -3183,6 +3279,26 @@ export default function Warehouse() {
               >
                 📊 {isAr ? 'تصدير سجل الحركات إلى Excel' : 'Export History to Excel'}
               </button>
+              <button
+                className="btn"
+                onClick={handleManualReconcileCosts}
+                style={{
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  color: '#fbbf24',
+                  border: '1.5px solid #fbbf24',
+                  padding: '0.55rem 1.1rem',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.2)',
+                }}
+                title={isAr ? 'مطابقة وإغلاق أوامر دلمار المنصرفة وتدقيق التكاليف' : 'Reconcile Delmar & Costs'}
+              >
+                ⚡ {isAr ? 'مطابقة وتحديث مخزن دلمار' : 'Sync Delmar Dispatches'}
+              </button>
             </div>
           </div>
 
@@ -3973,9 +4089,35 @@ export default function Warehouse() {
                           <span className="badge" style={{ background: 'rgba(255, 215, 0, 0.1)', color: '#FFD700', border: '1px solid rgba(255, 215, 0, 0.3)', fontSize: '0.8rem' }}>
                             {validLinesCount} {isAr ? 'بنود صالحة' : 'valid lines'}
                           </span>
-                          <span className="badge" style={{ background: 'rgba(100, 181, 246, 0.1)', color: '#64b5f6', border: '1px solid rgba(100, 181, 246, 0.3)', fontSize: '0.8rem' }}>
-                            {totalBars} BAR
+                          <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1.5px solid #38bdf8', fontSize: '0.85rem', fontWeight: 800 }}>
+                            📋 {isAr ? 'مجموع أعواد شوكو المطلوبة:' : 'SD Req:'} {totalBars} BAR
                           </span>
+                          {batch.movementType === 'outbound' && (() => {
+                            const activeDelmarDispatches = (activeDispatches || []).filter(
+                              (d) => !d.isCompleted && d.currentStage !== 'closed' && d.currentStage !== 'delivered_to_customer'
+                            )
+                            const delmarBars = activeDelmarDispatches.reduce((acc, d) => acc + Number(d.totalQuantityBar || 0), 0)
+                            const diffBars = totalBars - delmarBars
+                            if (delmarBars > 0) {
+                              return (
+                                <>
+                                  <span className="badge" style={{ background: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24', border: '1.5px solid #fbbf24', fontSize: '0.85rem', fontWeight: 800 }}>
+                                    🏭 {isAr ? 'رصيد دلمار الفعلي:' : 'Delmar:'} {delmarBars} BAR
+                                  </span>
+                                  {diffBars > 0 ? (
+                                    <span className="badge" style={{ background: 'rgba(255, 71, 87, 0.25)', color: '#ff4757', border: '1.5px solid #ff4757', fontSize: '0.85rem', fontWeight: 900 }}>
+                                      ⚠️ {isAr ? `فارق على المستودع: +${diffBars} عود` : `Variance: +${diffBars} b`}
+                                    </span>
+                                  ) : (
+                                    <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1.5px solid #00e0a1', fontSize: '0.85rem', fontWeight: 800 }}>
+                                      ✅ {isAr ? 'مغطى بالكامل من دلمار' : 'Fully Covered'}
+                                    </span>
+                                  )}
+                                </>
+                              )
+                            }
+                            return null
+                          })()}
                         </div>
 
                         {/* Status & Single Save/Remove controls */}
@@ -4189,14 +4331,25 @@ export default function Warehouse() {
 
                           {/* Delmar Coating Decision & Allocation Card */}
                           {batch.movementType === 'outbound' && (() => {
+                            const validNonService = (batch.reviewLines || []).filter((l) => !l.isService && !l.ignored)
+                            const totalSdBars = validNonService.reduce((acc, l) => acc + Number(l.quantityBar || l.bars || 0), 0)
+                            const totalSdLm = validNonService.reduce((acc, l) => acc + Number(l.quantityLm || 0), 0)
+
                             const allCoated = (batch.reviewLines || []).filter((l) => !l.isService && isCoatedItem(l))
-                            if (allCoated.length === 0) return null
+                            if (allCoated.length === 0 && totalSdBars === 0) return null
 
                             const rawLines = (batch.reviewLines || []).filter((l) => !l.isService && !isCoatedItem(l))
                             const coatedBars = allCoated.reduce((acc, l) => acc + Number(l.quantityBar || l.bars || 0), 0)
                             const rawBars = rawLines.reduce((acc, l) => acc + Number(l.quantityBar || l.bars || 0), 0)
                             const activeCoated = allCoated.filter((l) => !l.ignored)
                             const excludedCoated = allCoated.filter((l) => l.ignored)
+
+                            const activeDelmarDispatches = (activeDispatches || []).filter(
+                              (d) => !d.isCompleted && d.currentStage !== 'closed' && d.currentStage !== 'delivered_to_customer'
+                            )
+                            const delmarActualBars = activeDelmarDispatches.reduce((acc, d) => acc + Number(d.totalQuantityBar || 0), 0)
+                            const diffBars = Math.max(0, totalSdBars - delmarActualBars)
+                            const hasVariance = totalSdBars > delmarActualBars && delmarActualBars > 0
 
                             return (
                               <div
@@ -4206,79 +4359,112 @@ export default function Warehouse() {
                                   borderRadius: '10px',
                                   padding: '1rem 1.25rem',
                                   marginBottom: '1.25rem',
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center',
-                                  flexWrap: 'wrap',
-                                  gap: '1rem',
                                 }}
                               >
-                                <div style={{ flex: '1 1 350px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                                    <span style={{ fontSize: '1.2rem' }}>🏭</span>
-                                    <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#fbbf24' }}>
-                                      {isAr ? 'بنود الدهان الخاصة بأمر التسليم (مخزن دلمار - بتدهن):' : 'Coating Items for Delivery (Delmar Warehouse):'}
-                                    </span>
-                                    <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', border: '1px solid #fbbf24', fontSize: '0.75rem' }}>
-                                      {allCoated.length} {isAr ? 'بند دهان' : 'coated items'}
-                                    </span>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '0.85rem' }}>
+                                  <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                                      <span style={{ fontSize: '1.2rem' }}>🏭</span>
+                                      <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#fbbf24' }}>
+                                        {isAr ? 'بيان كميات أمر التسليم ومخزن دلمar (مقارنة الأعواد المطلوبة بالفارقة):' : 'Delivery & Delmar Balance Overview:'}
+                                      </span>
+                                      <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', border: '1px solid #fbbf24', fontSize: '0.75rem' }}>
+                                        {allCoated.length} {isAr ? 'بند دهان' : 'coated items'}
+                                      </span>
+                                    </div>
+                                    <div style={{ fontSize: '0.84rem', color: '#e2e8f0', lineHeight: 1.5 }}>
+                                      {isAr ? (
+                                        <>
+                                          • تم رصد <strong>{allCoated.length} بند دهان</strong> بإجمالي <strong>{coatedBars.toLocaleString()} عود</strong> تخص التسليم.<br />
+                                          • يوجد <strong>{rawLines.length} بند خام (MF)</strong> بإجمالي <strong>{rawBars.toLocaleString()} عود</strong>.<br />
+                                          • الحالة الحالية: <span style={{ color: activeCoated.length > 0 ? '#00e0a1' : '#ff4757', fontWeight: 800 }}>({activeCoated.length} بند معتمد للصرف من دلمار)</span> و <span style={{ color: 'var(--text-muted)' }}>({excludedCoated.length} بند مستبعد)</span>.
+                                        </>
+                                      ) : (
+                                        <>
+                                          Detected {allCoated.length} coated items ({coatedBars.toLocaleString()} bars) in Delmar Warehouse for delivery.<br />
+                                          Current: {activeCoated.length} approved for dispatch from Delmar | {excludedCoated.length} excluded.
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
-                                  <div style={{ fontSize: '0.84rem', color: '#e2e8f0', lineHeight: 1.5 }}>
-                                    {isAr ? (
-                                      <>
-                                        • تم رصد <strong>{allCoated.length} بند دهان</strong> بإجمالي <strong>{coatedBars.toLocaleString()} عود</strong> تخص التسليم (موجودة في <strong>مخزن دلمار بتدهن</strong>).<br />
-                                        • يوجد <strong>{rawLines.length} بند خام (MF)</strong> بالمستودع الرئيسي.<br />
-                                        • الحالة الحالية: <span style={{ color: activeCoated.length > 0 ? '#00e0a1' : '#ff4757', fontWeight: 800 }}>({activeCoated.length} بند معتمد للصرف من دلمار)</span> و <span style={{ color: 'var(--text-muted)' }}>({excludedCoated.length} بند مستبعد)</span>.
-                                      </>
-                                    ) : (
-                                      <>
-                                        Detected {allCoated.length} coated items ({coatedBars.toLocaleString()} bars) in Delmar Warehouse for delivery.<br />
-                                        Current: {activeCoated.length} approved for dispatch from Delmar | {excludedCoated.length} excluded.
-                                      </>
-                                    )}
+
+                                  {/* Owner Decision Buttons */}
+                                  <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fbbf24' }}>
+                                      {isAr ? 'قرار المالك:' : 'Owner Decision:'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDelmarDecision(batch.id, 'delmar')}
+                                      className="btn btn-sm"
+                                      style={{
+                                        background: activeCoated.length === allCoated.length ? '#00e0a1' : 'rgba(0, 224, 161, 0.15)',
+                                        color: activeCoated.length === allCoated.length ? '#000' : '#00e0a1',
+                                        border: '1px solid #00e0a1',
+                                        fontWeight: 800,
+                                        padding: '0.4rem 0.85rem',
+                                        borderRadius: '8px',
+                                        fontSize: '0.82rem',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      ✅ {isAr ? 'البنود تبعنا (صرف من مخزن دلمار)' : 'Ours (Dispatch from Delmar)'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDelmarDecision(batch.id, 'exclude')}
+                                      className="btn btn-sm"
+                                      style={{
+                                        background: excludedCoated.length === allCoated.length ? '#ff4757' : 'rgba(255, 71, 87, 0.15)',
+                                        color: excludedCoated.length === allCoated.length ? '#fff' : '#ff4757',
+                                        border: '1px solid #ff4757',
+                                        fontWeight: 800,
+                                        padding: '0.4rem 0.85rem',
+                                        borderRadius: '8px',
+                                        fontSize: '0.82rem',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      🚫 {isAr ? 'ليست تبعنا (استبعاد بنود دلمار)' : 'Not Ours (Exclude Delmar)'}
+                                    </button>
                                   </div>
                                 </div>
 
-                                {/* Owner Decision Buttons */}
-                                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fbbf24' }}>
-                                    {isAr ? 'قرار المالك:' : 'Owner Decision:'}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDelmarDecision(batch.id, 'delmar')}
-                                    className="btn btn-sm"
-                                    style={{
-                                      background: activeCoated.length === allCoated.length ? '#00e0a1' : 'rgba(0, 224, 161, 0.15)',
-                                      color: activeCoated.length === allCoated.length ? '#000' : '#00e0a1',
-                                      border: '1px solid #00e0a1',
-                                      fontWeight: 800,
-                                      padding: '0.4rem 0.85rem',
-                                      borderRadius: '8px',
-                                      fontSize: '0.82rem',
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    ✅ {isAr ? 'البنود تبعنا (صرف من مخزن دلمار)' : 'Ours (Dispatch from Delmar)'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDelmarDecision(batch.id, 'exclude')}
-                                    className="btn btn-sm"
-                                    style={{
-                                      background: excludedCoated.length === allCoated.length ? '#ff4757' : 'rgba(255, 71, 87, 0.15)',
-                                      color: excludedCoated.length === allCoated.length ? '#fff' : '#ff4757',
-                                      border: '1px solid #ff4757',
-                                      fontWeight: 800,
-                                      padding: '0.4rem 0.85rem',
-                                      borderRadius: '8px',
-                                      fontSize: '0.82rem',
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    🚫 {isAr ? 'ليست تبعنا (استبعاد بنود دلمار)' : 'Not Ours (Exclude Delmar)'}
-                                  </button>
+                                {/* 3-Metric Summary Grid */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginTop: '0.85rem' }}>
+                                  <div style={{ background: 'rgba(56, 189, 248, 0.12)', border: '1.5px solid #38bdf8', padding: '0.6rem 0.85rem', borderRadius: '8px', textAlign: 'center' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#38bdf8', display: 'block', fontWeight: 800 }}>📋 {isAr ? 'مجموع أعواد بيان شوكو المطلوبة:' : 'Total Requested in SD:'}</span>
+                                    <strong style={{ fontSize: '1.35rem', color: '#fff', display: 'block', marginTop: '0.15rem' }}>{totalSdBars.toLocaleString()} BAR</strong>
+                                    <span style={{ fontSize: '0.75rem', color: '#93c5fd' }}>({totalSdLm.toFixed(1)} m)</span>
+                                  </div>
+
+                                  <div style={{ background: 'rgba(251, 191, 36, 0.12)', border: '1.5px solid #fbbf24', padding: '0.6rem 0.85rem', borderRadius: '8px', textAlign: 'center' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#fbbf24', display: 'block', fontWeight: 800 }}>🏭 {isAr ? 'الرصيد الفعلي في مخزن دلمار:' : 'Actual Delmar Stock:'}</span>
+                                    <strong style={{ fontSize: '1.35rem', color: '#fbbf24', display: 'block', marginTop: '0.15rem' }}>{delmarActualBars.toLocaleString()} BAR</strong>
+                                    <span style={{ fontSize: '0.75rem', color: '#fde68a' }}>({activeDelmarDispatches.length} {isAr ? 'أمر جاري تحت الدهان' : 'active orders'})</span>
+                                  </div>
+
+                                  <div style={{ background: diffBars > 0 ? 'rgba(255, 71, 87, 0.15)' : 'rgba(0, 224, 161, 0.12)', border: `1.5px solid ${diffBars > 0 ? '#ff4757' : '#00e0a1'}`, padding: '0.6rem 0.85rem', borderRadius: '8px', textAlign: 'center' }}>
+                                    <span style={{ fontSize: '0.75rem', color: diffBars > 0 ? '#ff4757' : '#00e0a1', display: 'block', fontWeight: 800 }}>
+                                      {diffBars > 0 ? (isAr ? '⚠️ الفارق المطلوب من المستودع:' : '⚠️ Warehouse Variance:') : (isAr ? '✅ تغطية دلمار للإذن:' : '✅ Delmar Coverage:')}
+                                    </span>
+                                    <strong style={{ fontSize: '1.35rem', color: diffBars > 0 ? '#ff4757' : '#00e0a1', display: 'block', marginTop: '0.15rem' }}>
+                                      {diffBars > 0 ? `+${diffBars.toLocaleString()} BAR` : (isAr ? '100% مغطى' : '100% Covered')}
+                                    </strong>
+                                    <span style={{ fontSize: '0.75rem', color: diffBars > 0 ? '#fca5a5' : '#86efac' }}>
+                                      {diffBars > 0 ? (isAr ? 'عجز على دلمار يُسحب من الخام' : 'Deducted from raw stock') : (isAr ? 'كامل الكمية لدى دلمار' : 'All available at Delmar')}
+                                    </span>
+                                  </div>
                                 </div>
+
+                                {/* Variance Warning Alert */}
+                                {hasVariance && (
+                                  <div style={{ background: 'rgba(255, 71, 87, 0.12)', border: '1px solid #ff4757', padding: '0.65rem 0.95rem', borderRadius: '8px', marginTop: '0.75rem', color: '#ffcdd2', fontSize: '0.84rem', lineHeight: 1.5 }}>
+                                    ⚠️ <strong>{isAr ? 'تنبيه الفارق بين بيان شوكو ومخزن دلمار:' : 'Delmar Variance Alert:'}</strong> {isAr
+                                      ? `إذن صرف شوكو يطلب (${totalSdBars.toLocaleString()} عود)، في حين أن الرصيد الفعلي المتوفر بمخزن دلمار هو (${delmarActualBars.toLocaleString()} عود) فقط! سيقوم النظام بصرف كامل رصيد دلمار (${delmarActualBars.toLocaleString()} عود) وإغلاق أوامرها، وخصم الفارق المتبقي (${diffBars.toLocaleString()} عود) من رصيد المستودع الرئيسي.`
+                                      : `SD requests ${totalSdBars} bars while Delmar has ${delmarActualBars} bars! System will deduct all ${delmarActualBars} bars from Delmar and the remaining ${diffBars} bars from main warehouse.`}
+                                  </div>
+                                )}
                               </div>
                             )
                           })()}

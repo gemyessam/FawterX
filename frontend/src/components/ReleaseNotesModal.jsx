@@ -8,10 +8,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.44',
-      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      version: 'v2.27.45',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'معالجة صرف وإغلاق أوامر مخزن الوسيط (دلمار) وإظهار إجمالي أعواد شوكو ورصد الفارق بدقة' : 'Automated Delmar Intermediate Warehouse Fulfillment & Precise Schüco Requested Bars & Variance Tracking',
+      highlights: [
+        {
+          icon: '⚡',
+          text: isAr
+            ? 'خصم وإغلاق أوامر دلمار تلقائياً: ربط استدعاء fulfillDelmarDispatches عند حفظ إذن الصرف الخارجي مع تحديث مراحل الأوامر الجارية إلى (المرحلة 2: تم التسليم للعميل النهائي ومكتمل)، وخصم رصيد دلمار بدقة متناهية.'
+            : 'Automated Delmar Dispatches Fulfillment: Outbound delivery notes automatically complete and fulfill in-coating dispatches with full lifecycle audit.'
+        },
+        {
+          icon: '📋',
+          text: isAr
+            ? 'لوحة بيان أعواد شوكو ومخزن دلمار: كارت تحليلي ثلاثي يوضح مجموع الأعواد المطلوبة في إذن شوكو (958 عود)، والرصيد الفعلي في مخزن دلمار (933 عود)، والفارق الواجب سحبه من المستودع الرئيسي (25 عود).'
+            : 'Schüco Requested Bars & Delmar Balance Overview: Comprehensive 3-metric KPI board detailing requested SD bars, actual Delmar stock, and warehouse shortage.'
+        },
+        {
+          icon: '🔄',
+          text: isAr
+            ? 'أزرار مطابقة وتحديث لحظية: إضافة زر (مطابقة وإغلاق أوامر دلمار) في شاشة تتبع المراحل وسجل الحركات لمعالجة أي أذونات سابقة بضغطة زر وتصحيح رصيد المستودع للفارق.'
+            : 'One-Click Delmar Reconcile Buttons: Instant synchronization and fulfillment for existing dispatches directly from Lifecycle Tracker and Audit Trail.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.44',
+      date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
       title: isAr ? 'ترقية جذرية لنقاط الاستعادة الكاملة (4 في 1) والتراجع المتكامل لمخزن دلمار وحركات الصرف' : 'Full 4-in-1 Complete Restore Engine & Integrated Rollback for Delmar Dispatches & Inventory',
       highlights: [
         {

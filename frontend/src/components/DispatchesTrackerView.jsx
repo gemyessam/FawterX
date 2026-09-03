@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'react-hot-toast'
-import { getWarehouseDispatches, updateDispatchStage, deleteWarehouseDispatch } from '../services/warehouseApi'
+import { getWarehouseDispatches, updateDispatchStage, deleteWarehouseDispatch, reconcileWarehouseDelmarAndCosts } from '../services/warehouseApi'
 
 export default function DispatchesTrackerView({
   projectId,
@@ -11,6 +11,7 @@ export default function DispatchesTrackerView({
 }) {
   const [dispatches, setDispatches] = useState([])
   const [loading, setLoading] = useState(false)
+  const [reconciling, setReconciling] = useState(false)
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'active' | 'completed'
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedDispatchId, setExpandedDispatchId] = useState(null)
@@ -37,6 +38,23 @@ export default function DispatchesTrackerView({
       setDispatches([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleReconcileDelmar = async () => {
+    if (!projectId) return
+    setReconciling(true)
+    const toastId = toast.loading(isAr ? 'جاري مطابقة وإغلاق أوامر دلمار المنصرفة...' : 'Syncing Delmar dispatches...')
+    try {
+      const res = await reconcileWarehouseDelmarAndCosts(projectId)
+      toast.dismiss(toastId)
+      toast.success(isAr ? (res.message || 'تمت مطابقة وإغلاق أوامر دلمار بنجاح!') : 'Delmar dispatches reconciled successfully!')
+      loadDispatches()
+    } catch (err) {
+      toast.dismiss(toastId)
+      toast.error(isAr ? 'فشل المطابقة: ' + err.message : 'Reconciliation failed')
+    } finally {
+      setReconciling(false)
     }
   }
 
@@ -175,10 +193,32 @@ export default function DispatchesTrackerView({
           <button
             className="btn btn-secondary"
             onClick={loadDispatches}
-            disabled={loading}
+            disabled={loading || reconciling}
             style={{ borderRadius: '8px', padding: '0.5rem 1rem', fontSize: '0.85rem' }}
           >
             🔄 {isAr ? 'تحديث' : 'Refresh'}
+          </button>
+
+          <button
+            className="btn"
+            onClick={handleReconcileDelmar}
+            disabled={loading || reconciling}
+            style={{
+              background: 'rgba(251, 191, 36, 0.15)',
+              color: '#fbbf24',
+              border: '1.5px solid #fbbf24',
+              borderRadius: '8px',
+              padding: '0.5rem 1rem',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              cursor: 'pointer',
+            }}
+            title={isAr ? 'مطابقة وإغلاق أوامر دلمار المنصرفة بأذونات التسليم وتدقيق التكاليف' : 'Reconcile Delmar Dispatches'}
+          >
+            ⚡ {isAr ? 'مطابقة وإغلاق أوامر دلمار' : 'Sync Delmar'}
           </button>
 
           {onOpenManualModal && (
