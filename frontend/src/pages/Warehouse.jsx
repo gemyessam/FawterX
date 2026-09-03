@@ -143,6 +143,237 @@ function buildStockCheckResult(matchedItem, availableBar, reqBar, diff, viaAlias
   }
 }
 
+function getDelmarPool(activeDispatches = []) {
+  const pool = []
+  if (Array.isArray(activeDispatches) && activeDispatches.length > 0) {
+    for (let dIdx = 0; dIdx < activeDispatches.length; dIdx++) {
+      const d = activeDispatches[dIdx]
+      if (d.isCompleted || d.currentStage === 'closed' || d.currentStage === 'delivered_to_customer') continue
+      if (Array.isArray(d.items)) {
+        for (let iIdx = 0; iIdx < d.items.length; iIdx++) {
+          const it = d.items[iIdx]
+          const q = Number(it.quantityBar || it.bars || 0)
+          if (q > 0) {
+            pool.push({
+              key: `${d.id || dIdx}_${iIdx}`,
+              dispatchId: d.id,
+              deliveryNote: d.deliveryNote || '',
+              customerName: d.customerName || '',
+              itemCode: it.itemCode || '',
+              customerCode: it.customerCode || '',
+              color: it.color || it.finish || '',
+              totalBars: q,
+              remainingBars: q,
+              allocatedLines: [],
+            })
+          }
+        }
+      }
+    }
+  }
+  return pool
+}
+
+function findDelmarPoolMatches(line, delmarPool = [], aliasesMap = {}) {
+  const clean = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
+  let lItem = clean(line.itemCode)
+  let lCust = clean(line.customerCode)
+
+  if (aliasesMap && typeof aliasesMap === 'object') {
+    const aliasMatch = aliasesMap[lItem] || (lCust && aliasesMap[lCust])
+    if (aliasMatch && aliasMatch.targetItemCode) {
+      lItem = clean(aliasMatch.targetItemCode)
+    }
+  }
+
+  // 1. Exact match on itemCode or customerCode
+  const exactMatches = delmarPool.filter((p) => {
+    const iCode = clean(p.itemCode)
+    const cCode = clean(p.customerCode)
+    return (lItem && (iCode === lItem || cCode === lItem)) ||
+           (lCust && (iCode === lCust || cCode === lCust))
+  })
+  if (exactMatches.length > 0) return exactMatches
+
+  // 2. Substring match (min 4 characters)
+  const subMatches = delmarPool.filter((p) => {
+    const iCode = clean(p.itemCode)
+    const cCode = clean(p.customerCode)
+    return (lItem && lItem.length >= 4 && (iCode.includes(lItem) || lItem.includes(iCode))) ||
+           (lCust && lCust.length >= 4 && (cCode.includes(lCust) || lCust.includes(cCode)))
+  })
+  if (subMatches.length > 0) return subMatches
+
+  return []
+}
+
+function computeBatchDelmarAllocations(reviewLines = [], activeDispatches = [], aliasesMap = {}, stock = []) {
+  const pool = getDelmarPool(activeDispatches)
+
+  // Step 1: Detect matching pool items for each line
+  const lineMatches = reviewLines.map((line, idx) => {
+    if (line.ignored || line.isService) return { idx, matches: [] }
+    return { idx, matches: findDelmarPoolMatches(line, pool, aliasesMap) }
+  })
+
+  // Map each pool item key to all matching line indices
+  const poolItemToLineIndices = {}
+  lineMatches.forEach(({ idx, matches }) => {
+    matches.forEach((p) => {
+      if (!poolItemToLineIndices[p.key]) poolItemToLineIndices[p.key] = []
+      poolItemToLineIndices[p.key].push(idx)
+    })
+  })
+
+  // Step 2: Sequential allocation pass (FIFO by invoice row order)
+  const allocations = []
+  for (let idx = 0; idx < reviewLines.length; idx++) {
+    const line = reviewLines[idx]
+    const reqBar = Number(line.quantityBar || line.bars || line.quantity || 0)
+
+    if (line.ignored || line.isService || reqBar <= 0) {
+      allocations.push({
+        lineIndex: idx,
+        delmarAvailable: 0,
+        delmarDispatched: 0,
+        warehouseDispatched: 0,
+        remainingWarehouse: 0,
+        remainingDelmar: 0,
+        availableWarehouse: 0,
+        reqBar: 0,
+        delmarPriority: 'none',
+        delmarCovered: false,
+        delmarMode: null,
+        isShared: false,
+        sharingDetails: null,
+      })
+      continue
+    }
+
+    // Warehouse availability
+    const whChk = checkStockAvailability(line, stock, aliasesMap, [])
+    const availableWarehouse = Number(whChk.availableBar || 0)
+
+    let availableDelmar = 0
+    let isShared = false
+    let sharingDetails = null
+
+    if (line.delmarAvailableBars !== undefined && line.delmarAvailableBars !== null && line.delmarAvailableBars !== '') {
+      availableDelmar = Number(line.delmarAvailableBars)
+    } else {
+      const matches = lineMatches[idx]?.matches || []
+      if (matches.length > 0) {
+        for (const p of matches) {
+          const sharingIndices = poolItemToLineIndices[p.key] || []
+          if (sharingIndices.length > 1) {
+            isShared = true
+            const orderIndex = sharingIndices.indexOf(idx) + 1
+            const previousSharer = orderIndex > 1 ? sharingIndices[0] : null
+
+            sharingDetails = {
+              poolKey: p.key,
+              matchedItemCode: p.itemCode,
+              totalSharingLines: sharingIndices.length,
+              orderIndex,
+              allSharingIndices: sharingIndices,
+              originalPoolBars: p.totalBars,
+              remainingPoolBeforeLine: p.remainingBars,
+              exhaustedByPrevious: orderIndex > 1 && p.remainingBars <= 0,
+              previousLineIndex: previousSharer !== null ? previousSharer + 1 : null,
+            }
+
+            if (orderIndex === 1) {
+              sharingDetails.message = `صنف مشترك (1 من ${sharingIndices.length}) - أخذ الأولوية بالترتيب`
+            } else if (p.remainingBars <= 0) {
+              sharingDetails.message = `نَفَد رصيد دلمار (${p.totalBars} عود) في السطر السابق #${sharingDetails.previousLineIndex}، تم تحويل الصرف بالكامل للمستودع`
+            } else {
+              sharingDetails.message = `صنف مشترك (${orderIndex} من ${sharingIndices.length}) - يأخذ المتبقي (${p.remainingBars} عود) من دلمار والباقي من المستودع`
+            }
+            break
+          }
+        }
+
+        availableDelmar = matches.reduce((acc, p) => acc + Math.max(0, p.remainingBars), 0)
+      } else if (isCoatedItem(line)) {
+        const totalRemainingInPool = pool.reduce((acc, p) => acc + Math.max(0, p.remainingBars), 0)
+        availableDelmar = Math.min(reqBar, totalRemainingInPool)
+      }
+    }
+
+    // Determine priority
+    let priority = line.delmarPriority || (line.delmarCovered ? (line.delmarMode === 'full' ? 'delmar' : 'warehouse') : 'delmar')
+    if (isShared && sharingDetails?.exhaustedByPrevious) {
+      priority = 'warehouse'
+    }
+
+    let delmarDispatched = 0
+    let warehouseDispatched = 0
+
+    if (line.delmarBars !== undefined && line.delmarBars !== null && line.delmarBars !== '') {
+      const custom = Number(line.delmarBars)
+      delmarDispatched = isNaN(custom) ? 0 : Math.min(reqBar, Math.max(0, custom))
+      warehouseDispatched = Math.max(0, reqBar - delmarDispatched)
+    } else if (priority === 'delmar') {
+      delmarDispatched = Math.min(availableDelmar, reqBar)
+      warehouseDispatched = Math.max(0, reqBar - delmarDispatched)
+    } else if (priority === 'warehouse') {
+      warehouseDispatched = reqBar
+      delmarDispatched = 0
+      if (availableDelmar > 0 && availableWarehouse < reqBar) {
+        delmarDispatched = Math.min(availableDelmar, reqBar - Math.max(0, availableWarehouse))
+        warehouseDispatched = reqBar - delmarDispatched
+      }
+    } else {
+      warehouseDispatched = reqBar
+      delmarDispatched = 0
+    }
+
+    // Deduct taken delmarDispatched from matched pool items
+    if (delmarDispatched > 0) {
+      let needed = delmarDispatched
+      const matches = lineMatches[idx]?.matches || []
+      for (const p of matches) {
+        if (p.remainingBars > 0 && needed > 0) {
+          const take = Math.min(p.remainingBars, needed)
+          p.remainingBars -= take
+          needed -= take
+          p.allocatedLines.push({ lineIdx: idx, bars: take })
+        }
+      }
+      if (needed > 0) {
+        for (const p of pool) {
+          if (p.remainingBars > 0 && needed > 0) {
+            const take = Math.min(p.remainingBars, needed)
+            p.remainingBars -= take
+            needed -= take
+          }
+        }
+      }
+    }
+
+    const remainingWarehouse = availableWarehouse - warehouseDispatched
+    const remainingDelmar = Math.max(0, availableDelmar - delmarDispatched)
+
+    allocations.push({
+      lineIndex: idx,
+      delmarAvailable: availableDelmar,
+      delmarDispatched,
+      warehouseDispatched,
+      remainingWarehouse,
+      remainingDelmar,
+      availableWarehouse,
+      reqBar,
+      delmarPriority: priority,
+      delmarCovered: delmarDispatched > 0,
+      delmarMode: delmarDispatched >= reqBar ? 'full' : (delmarDispatched > 0 ? 'shortage' : null),
+      isShared,
+      sharingDetails,
+    })
+  }
+
+  return allocations
+}
+
 function checkStockAvailability(line, stock = [], aliasesMap = {}, activeDispatches = []) {
   if (!line || (!line.itemCode && !line.customerCode)) {
     return {
@@ -1741,20 +1972,27 @@ export default function Warehouse() {
     )
 
     try {
+      const batchAllocations = computeBatchDelmarAllocations(batch.reviewLines, activeDispatches, aliasesMap, stock)
       const preparedLines = validLines.map((l) => {
-        const chk = checkStockAvailability(l, stock, aliasesMap, activeDispatches)
-        const isDelmarLine = l.delmarCovered || l.delmarPriority === 'delmar' || batch.delmarDecision === 'delmar' || (batch.movementType === 'outbound' && isCoatedItem(l))
+        const origIdx = (batch.reviewLines || []).indexOf(l)
+        const alloc = (origIdx >= 0 && batchAllocations[origIdx])
+          ? batchAllocations[origIdx]
+          : checkStockAvailability(l, stock, aliasesMap, activeDispatches)
+
+        const isDelmarLine = alloc.delmarCovered || l.delmarCovered || l.delmarPriority === 'delmar' || batch.delmarDecision === 'delmar' || (batch.movementType === 'outbound' && isCoatedItem(l))
         const delmarBarsVal = l.delmarBars !== undefined && l.delmarBars !== null && l.delmarBars !== ''
           ? Number(l.delmarBars)
-          : (isDelmarLine ? (chk.delmarDispatched || Number(l.quantityBar || l.bars || 0)) : (chk.delmarDispatched || 0))
+          : (alloc.delmarDispatched !== undefined ? alloc.delmarDispatched : (isDelmarLine ? Number(l.quantityBar || l.bars || 0) : 0))
+        const whBarsVal = alloc.warehouseDispatched !== undefined ? alloc.warehouseDispatched : Math.max(0, Number(l.quantityBar || l.bars || 0) - delmarBarsVal)
+
         return {
           ...l,
-          delmarCovered: isDelmarLine ? true : Boolean(chk.delmarCovered),
-          delmarMode: l.delmarMode || (isDelmarLine ? (chk.delmarMode || 'full') : chk.delmarMode),
-          delmarPriority: l.delmarPriority || (isDelmarLine ? 'delmar' : chk.delmarPriority),
+          delmarCovered: delmarBarsVal > 0,
+          delmarMode: delmarBarsVal >= Number(l.quantityBar || l.bars || 0) ? 'full' : (delmarBarsVal > 0 ? 'shortage' : null),
+          delmarPriority: l.delmarPriority || alloc.delmarPriority || 'delmar',
           delmarBars: delmarBarsVal,
           delmarDispatched: delmarBarsVal,
-          warehouseDispatched: chk.warehouseDispatched,
+          warehouseDispatched: whBarsVal,
         }
       })
 
@@ -1886,20 +2124,27 @@ export default function Warehouse() {
       }
 
       try {
+        const batchAllocations = computeBatchDelmarAllocations(inv.reviewLines, activeDispatches, aliasesMap, stock)
         const preparedLines = validLines.map((l) => {
-          const chk = checkStockAvailability(l, stock, aliasesMap, activeDispatches)
-          const isDelmarLine = l.delmarCovered || l.delmarPriority === 'delmar' || inv.delmarDecision === 'delmar' || (inv.movementType === 'outbound' && isCoatedItem(l))
+          const origIdx = (inv.reviewLines || []).indexOf(l)
+          const alloc = (origIdx >= 0 && batchAllocations[origIdx])
+            ? batchAllocations[origIdx]
+            : checkStockAvailability(l, stock, aliasesMap, activeDispatches)
+
+          const isDelmarLine = alloc.delmarCovered || l.delmarCovered || l.delmarPriority === 'delmar' || inv.delmarDecision === 'delmar' || (inv.movementType === 'outbound' && isCoatedItem(l))
           const delmarBarsVal = l.delmarBars !== undefined && l.delmarBars !== null && l.delmarBars !== ''
             ? Number(l.delmarBars)
-            : (isDelmarLine ? (chk.delmarDispatched || Number(l.quantityBar || l.bars || 0)) : (chk.delmarDispatched || 0))
+            : (alloc.delmarDispatched !== undefined ? alloc.delmarDispatched : (isDelmarLine ? Number(l.quantityBar || l.bars || 0) : 0))
+          const whBarsVal = alloc.warehouseDispatched !== undefined ? alloc.warehouseDispatched : Math.max(0, Number(l.quantityBar || l.bars || 0) - delmarBarsVal)
+
           return {
             ...l,
-            delmarCovered: isDelmarLine ? true : Boolean(chk.delmarCovered),
-            delmarMode: l.delmarMode || (isDelmarLine ? (chk.delmarMode || 'full') : chk.delmarMode),
-            delmarPriority: l.delmarPriority || (isDelmarLine ? 'delmar' : chk.delmarPriority),
+            delmarCovered: delmarBarsVal > 0,
+            delmarMode: delmarBarsVal >= Number(l.quantityBar || l.bars || 0) ? 'full' : (delmarBarsVal > 0 ? 'shortage' : null),
+            delmarPriority: l.delmarPriority || alloc.delmarPriority || 'delmar',
             delmarBars: delmarBarsVal,
             delmarDispatched: delmarBarsVal,
-            warehouseDispatched: chk.warehouseDispatched,
+            warehouseDispatched: whBarsVal,
           }
         })
 
@@ -4163,8 +4408,12 @@ export default function Warehouse() {
                       </div>
 
                       {/* Card Expanded Content: Editable Fields & Line Items */}
-                      {batch.expanded && (
-                        <div style={{ padding: '1.25rem' }}>
+                      {batch.expanded && (() => {
+                        const batchAllocations = computeBatchDelmarAllocations(batch.reviewLines, activeDispatches, aliasesMap, stock)
+                        const sharedAlerts = batchAllocations.filter((a) => a.isShared && a.sharingDetails)
+
+                        return (
+                          <div style={{ padding: '1.25rem' }}>
                           {/* Invoice Metadata Row */}
                           <div
                             style={{
@@ -4465,6 +4714,34 @@ export default function Warehouse() {
                                       : `SD requests ${totalSdBars} bars while Delmar has ${delmarActualBars} bars! System will deduct all ${delmarActualBars} bars from Delmar and the remaining ${diffBars} bars from main warehouse.`}
                                   </div>
                                 )}
+
+                                {/* Shared / Duplicate Items Alert */}
+                                {sharedAlerts.length > 0 && (
+                                  <div
+                                    style={{
+                                      background: 'rgba(239, 68, 68, 0.12)',
+                                      border: '1.5px solid #ef4444',
+                                      padding: '0.75rem 1rem',
+                                      borderRadius: '8px',
+                                      marginTop: '0.75rem',
+                                      color: '#fee2e2',
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                                      <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                                      <strong style={{ color: '#f87171', fontSize: '0.92rem' }}>
+                                        {isAr ? 'تنبيه تشابه وتنافس أصناف على نفس رصيد دلمار (توزيع تتابعي بحسب ترتيب السطور):' : 'Shared / Competing Delmar Items Alert (Sequential FIFO):'}
+                                      </strong>
+                                    </div>
+                                    <div style={{ fontSize: '0.84rem', lineHeight: 1.6 }}>
+                                      {sharedAlerts.map((sa, sIdx) => (
+                                        <div key={sIdx} style={{ marginTop: '0.2rem' }}>
+                                          • السطر رقم <strong>#{sa.lineIndex + 1}</strong>: {sa.sharingDetails.message}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )
                           })()}
@@ -4537,6 +4814,9 @@ export default function Warehouse() {
                               <tbody>
                                 {batch.reviewLines.map((line, idx) => {
                                   const isCoated = isCoatedItem(line)
+                                  const alloc = (batchAllocations && batchAllocations[idx])
+                                    ? batchAllocations[idx]
+                                    : checkStockAvailability(line, stock, aliasesMap, activeDispatches)
                                   return (
                                   <tr
                                     key={line.id}
@@ -4800,32 +5080,58 @@ export default function Warehouse() {
                                     {/* ─── COLUMN 2: DELMAR AVAILABLE STOCK ─── */}
                                     {batch.movementType === 'outbound' && (
                                       <td style={{ padding: '0.6rem 0.4rem', textAlign: 'center', verticalAlign: 'middle' }}>
-                                        {(() => {
-                                          const chk = checkStockAvailability(line, stock, aliasesMap, activeDispatches)
-                                          return (
-                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
-                                              <input
-                                                type="number"
-                                                min="0"
-                                                value={line.delmarAvailableBars !== undefined ? line.delmarAvailableBars : chk.availableDelmar}
-                                                onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'delmarAvailableBars', e.target.value)}
-                                                style={{
-                                                  width: '72px',
-                                                  background: '#111827',
-                                                  border: '1.5px solid #fbbf24',
-                                                  color: '#fbbf24',
-                                                  fontSize: '1.15rem',
-                                                  fontWeight: 900,
-                                                  padding: '0.3rem 0.35rem',
-                                                  borderRadius: '6px',
-                                                  textAlign: 'center',
-                                                }}
-                                                title={isAr ? 'المتاح في مخزن دلمار (اضغط لتعديل الرصيد)' : 'Available in Delmar'}
-                                              />
-                                              <span style={{ fontSize: '0.8rem', color: '#fbbf24', fontWeight: 800 }}>{isAr ? 'عود' : 'b'}</span>
-                                            </div>
-                                          )
-                                        })()}
+                                        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem', justifyContent: 'center' }}>
+                                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              value={line.delmarAvailableBars !== undefined ? line.delmarAvailableBars : alloc.delmarAvailable}
+                                              onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'delmarAvailableBars', e.target.value)}
+                                              style={{
+                                                width: '72px',
+                                                background: '#111827',
+                                                border: `1.5px solid ${alloc.isShared && alloc.sharingDetails?.exhaustedByPrevious ? '#ff4757' : '#fbbf24'}`,
+                                                color: alloc.isShared && alloc.sharingDetails?.exhaustedByPrevious ? '#ff4757' : '#fbbf24',
+                                                fontSize: '1.15rem',
+                                                fontWeight: 900,
+                                                padding: '0.3rem 0.35rem',
+                                                borderRadius: '6px',
+                                                textAlign: 'center',
+                                              }}
+                                              title={isAr ? 'المتاح في مخزن دلمار (اضغط لتعديل الرصيد)' : 'Available in Delmar'}
+                                            />
+                                            <span style={{ fontSize: '0.8rem', color: alloc.isShared && alloc.sharingDetails?.exhaustedByPrevious ? '#ff4757' : '#fbbf24', fontWeight: 800 }}>{isAr ? 'عود' : 'b'}</span>
+                                          </div>
+
+                                          {/* Shared Item Badge */}
+                                          {alloc.isShared && alloc.sharingDetails && (
+                                            alloc.sharingDetails.orderIndex === 1 ? (
+                                              <span
+                                                className="badge"
+                                                style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid #00e0a1', fontSize: '0.68rem', fontWeight: 800, padding: '0.15rem 0.35rem' }}
+                                                title={alloc.sharingDetails.message}
+                                              >
+                                                🏷️ مشترك (1 من {alloc.sharingDetails.totalSharingLines})
+                                              </span>
+                                            ) : alloc.sharingDetails.exhaustedByPrevious ? (
+                                              <span
+                                                className="badge"
+                                                style={{ background: 'rgba(255, 71, 87, 0.2)', color: '#ff4757', border: '1px solid #ff4757', fontSize: '0.68rem', fontWeight: 900, padding: '0.15rem 0.35rem' }}
+                                                title={alloc.sharingDetails.message}
+                                              >
+                                                ⚠️ نَفَد بسطر #{alloc.sharingDetails.previousLineIndex}
+                                              </span>
+                                            ) : (
+                                              <span
+                                                className="badge"
+                                                style={{ background: 'rgba(251, 191, 36, 0.2)', color: '#fbbf24', border: '1px solid #fbbf24', fontSize: '0.68rem', fontWeight: 800, padding: '0.15rem 0.35rem' }}
+                                                title={alloc.sharingDetails.message}
+                                              >
+                                                ⚠️ أخذ الباقي ({alloc.sharingDetails.orderIndex} من {alloc.sharingDetails.totalSharingLines})
+                                              </span>
+                                            )
+                                          )}
+                                        </div>
                                       </td>
                                     )}
 
@@ -4852,8 +5158,8 @@ export default function Warehouse() {
                                     {batch.movementType === 'outbound' && (
                                       <td style={{ padding: '0.5rem 0.4rem', verticalAlign: 'middle' }}>
                                         {(() => {
-                                          const chk = checkStockAvailability(line, stock, aliasesMap, activeDispatches)
-                                          const isDelmarPrio = chk.delmarPriority === 'delmar'
+                                          const isDelmarPrio = alloc.delmarPriority === 'delmar'
+                                          const isExhausted = alloc.isShared && alloc.sharingDetails?.exhaustedByPrevious
 
                                           return (
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', alignItems: 'center' }}>
@@ -4862,19 +5168,21 @@ export default function Warehouse() {
                                                 <button
                                                   type="button"
                                                   onClick={() => handleApplyLinePriority(batch.id, idx, 'delmar')}
+                                                  disabled={isExhausted}
                                                   style={{
-                                                    background: isDelmarPrio ? '#00e0a1' : 'rgba(0, 224, 161, 0.12)',
-                                                    color: isDelmarPrio ? '#000' : '#00e0a1',
+                                                    background: isDelmarPrio && !isExhausted ? '#00e0a1' : 'rgba(0, 224, 161, 0.12)',
+                                                    color: isDelmarPrio && !isExhausted ? '#000' : '#00e0a1',
                                                     border: '1.5px solid #00e0a1',
                                                     borderRadius: '6px',
                                                     padding: '0.35rem 0.5rem',
                                                     fontSize: '0.8rem',
                                                     fontWeight: 800,
-                                                    cursor: 'pointer',
+                                                    cursor: isExhausted ? 'not-allowed' : 'pointer',
+                                                    opacity: isExhausted ? 0.35 : 1,
                                                     flex: '1 1 50%',
                                                     textAlign: 'center',
                                                   }}
-                                                  title={isAr ? 'الصرف من دلمار أولاً وحفظ رصيد المستودع' : 'Delmar first'}
+                                                  title={isExhausted ? (isAr ? 'نَفَد رصيد دلمار في سطر سابق - تم التحويل للمستودع' : 'Delmar stock exhausted in previous line') : (isAr ? 'الصرف من دلمار أولاً وحفظ رصيد المستودع' : 'Delmar first')}
                                                 >
                                                   🏭 {isAr ? 'دلمار أولاً' : 'Delmar'}
                                                 </button>
@@ -4882,8 +5190,8 @@ export default function Warehouse() {
                                                   type="button"
                                                   onClick={() => handleApplyLinePriority(batch.id, idx, 'warehouse')}
                                                   style={{
-                                                    background: !isDelmarPrio ? '#38bdf8' : 'rgba(56, 189, 248, 0.12)',
-                                                    color: !isDelmarPrio ? '#000' : '#38bdf8',
+                                                    background: (!isDelmarPrio || isExhausted) ? '#38bdf8' : 'rgba(56, 189, 248, 0.12)',
+                                                    color: (!isDelmarPrio || isExhausted) ? '#000' : '#38bdf8',
                                                     border: '1.5px solid #38bdf8',
                                                     borderRadius: '6px',
                                                     padding: '0.35rem 0.5rem',
@@ -4900,9 +5208,9 @@ export default function Warehouse() {
                                               </div>
                                               {/* Allocation Split Summary */}
                                               <div style={{ fontSize: '0.78rem', color: '#e2e8f0', display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
-                                                <span>دلمار: <strong style={{ color: '#fbbf24', fontSize: '0.85rem' }}>{chk.delmarDispatched}</strong></span>
+                                                <span>دلمار: <strong style={{ color: alloc.delmarDispatched > 0 ? '#fbbf24' : '#64748b', fontSize: '0.85rem' }}>{alloc.delmarDispatched}</strong></span>
                                                 <span>|</span>
-                                                <span>المخزن: <strong style={{ color: '#38bdf8', fontSize: '0.85rem' }}>{chk.warehouseDispatched}</strong></span>
+                                                <span>المخزن: <strong style={{ color: alloc.warehouseDispatched > 0 ? '#38bdf8' : '#64748b', fontSize: '0.85rem' }}>{alloc.warehouseDispatched}</strong></span>
                                               </div>
                                             </div>
                                           )
@@ -4913,29 +5221,26 @@ export default function Warehouse() {
                                     {/* ─── COLUMN 5: REMAINING BALANCE (WAREHOUSE & DELMAR) ─── */}
                                     {batch.movementType === 'outbound' && (
                                       <td style={{ padding: '0.5rem 0.4rem', verticalAlign: 'middle' }}>
-                                        {(() => {
-                                          const chk = checkStockAvailability(line, stock, aliasesMap, activeDispatches)
-                                          return (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '0.4rem 0.55rem' }}>
-                                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                                                <span style={{ color: '#94a3b8' }}>{isAr ? 'متبقي المخزن:' : 'Wh Rem:'}</span>
-                                                {chk.remainingWarehouse >= 0 ? (
-                                                  <strong style={{ color: '#00e0a1', fontSize: '0.85rem' }}>🟢 {chk.remainingWarehouse} عود</strong>
-                                                ) : (
-                                                  <strong style={{ color: '#ff4757', fontSize: '0.85rem' }}>🔴 عجز {Math.abs(chk.remainingWarehouse)} عود</strong>
-                                                )}
-                                              </div>
-                                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', borderTop: '1px dashed rgba(255,255,255,0.08)', paddingTop: '0.25rem' }}>
-                                                <span style={{ color: '#94a3b8' }}>{isAr ? 'متبقي دلمار:' : 'Delmar Rem:'}</span>
-                                                {chk.remainingDelmar >= 0 ? (
-                                                  <strong style={{ color: '#fbbf24', fontSize: '0.85rem' }}>🟢 {chk.remainingDelmar} عود</strong>
-                                                ) : (
-                                                  <strong style={{ color: '#ff4757', fontSize: '0.85rem' }}>🔴 عجز {Math.abs(chk.remainingDelmar)} عود</strong>
-                                                )}
-                                              </div>
-                                            </div>
-                                          )
-                                        })()}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '0.4rem 0.55rem' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                                            <span style={{ color: '#94a3b8' }}>{isAr ? 'متبقي المخزن:' : 'Wh Rem:'}</span>
+                                            {alloc.remainingWarehouse >= 0 ? (
+                                              <strong style={{ color: '#00e0a1', fontSize: '0.85rem' }}>🟢 {alloc.remainingWarehouse} عود</strong>
+                                            ) : (
+                                              <strong style={{ color: '#ff4757', fontSize: '0.85rem' }}>🔴 عجز {Math.abs(alloc.remainingWarehouse)} عود</strong>
+                                            )}
+                                          </div>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', borderTop: '1px dashed rgba(255,255,255,0.08)', paddingTop: '0.25rem' }}>
+                                            <span style={{ color: '#94a3b8' }}>{isAr ? 'متبقي دلمار:' : 'Delmar Rem:'}</span>
+                                            {alloc.isShared && alloc.sharingDetails?.exhaustedByPrevious ? (
+                                              <strong style={{ color: '#ff4757', fontSize: '0.78rem' }}>0 (نَفَد بسطر #{alloc.sharingDetails.previousLineIndex})</strong>
+                                            ) : alloc.remainingDelmar >= 0 ? (
+                                              <strong style={{ color: '#fbbf24', fontSize: '0.85rem' }}>🟢 {alloc.remainingDelmar} عود</strong>
+                                            ) : (
+                                              <strong style={{ color: '#ff4757', fontSize: '0.85rem' }}>🔴 عجز {Math.abs(alloc.remainingDelmar)} عود</strong>
+                                            )}
+                                          </div>
+                                        </div>
                                       </td>
                                     )}
 
@@ -5005,7 +5310,8 @@ export default function Warehouse() {
                             </table>
                           </div>
                         </div>
-                      )}
+                      )
+                    })()}
                     </div>
                   )
                 })}

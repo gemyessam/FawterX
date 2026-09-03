@@ -8,10 +8,37 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.45',
+      version: 'v2.27.46',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'نظام التخصيص التتابعي التراكمي لأوامر دلمار وتنبيه الأكواد المشتركة والمكررة (Sequential Delmar Allocation & Duplicate Code Alerting)' : 'Sequential Delmar Allocation Engine & Duplicate/Shared Code Detection & Real-time Alerting',
+      highlights: [
+        {
+          icon: '🔢',
+          text: isAr
+            ? 'التخصيص التتابعي التراكمي (Sequential FIFO Allocation): عند تكرار أو تشابه الصنف بين عدة سطور في الفاتورة، يُعطى السطر الأول في الترتيب الأولوية الكاملة من رصيد دلمار، ويأخذ السطر التالي المتبقي إن وُجد، أو يُصرف بالكامل من المستودع الرئيسي عند نفاد رصيد دلمار.'
+            : 'Sequential FIFO Allocation: First line in order receives full priority from Delmar stock. Successive matching lines consume remaining balance or route 100% to warehouse upon exhaustion.'
+        },
+        {
+          icon: '⚠️',
+          text: isAr
+            ? 'تنبيهات فورية للأكواد المتشابهة والمشتركة: بانر تحذيري بارز في كارت الفاتورة وبادجات واضحة في الجدول لكل سطر توضح حالة الصنف (مشترك 1 من 2، أخذ الباقي، أو نَفَد الرصيد بسطر سابق وتم تحويل الصرف للمستودع).'
+            : 'Smart Shared/Duplicate Code Alerting: Prominent conflict banners and per-row badges clarifying shared order ranking, exhaustion points, and automatic warehouse fallbacks.'
+        },
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'منع الازدواجية والحساب الوهمي: القضاء التام على ازدواجية رصيد دلمار بين السطور المتعددة وضمان مطابقة الأرصدة المصروفة والمحفوظة مع قاعدة البيانات.'
+            : 'Zero Phantom Balance Guarantee: Complete elimination of duplicate stock allocation across concurrent lines with verified database persistence.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.45',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
       title: isAr ? 'معالجة صرف وإغلاق أوامر مخزن الوسيط (دلمار) وإظهار إجمالي أعواد شوكو ورصد الفارق بدقة' : 'Automated Delmar Intermediate Warehouse Fulfillment & Precise Schüco Requested Bars & Variance Tracking',
       highlights: [
         {
