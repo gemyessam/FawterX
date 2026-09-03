@@ -8,10 +8,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.52',
+      version: 'v2.27.53',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'تثبيت أبعاد وتنسيق أعمدة جدول الحركات والقضاء على التفاف الأعواد ونوع الحركة' : 'Table Layout Stabilization & Fixed Dimensions for Movement and Bars Columns',
+      highlights: [
+        {
+          icon: '📏',
+          text: isAr
+            ? 'تثبيت أحجام الأعمدة: تخصيص عرض ثابت ومستقر لكل من عمود (نوع الحركة) وعمود (الأعواد / القطاعات) ومنع انكسار الكلمات أو تذبذب العرض نهائياً.'
+            : 'Fixed Column Widths: Guaranteed stable dimensions for Movement and Bars columns, preventing text wrapping or layout jitter.'
+        },
+        {
+          icon: '✨',
+          text: isAr
+            ? 'تنسيق أنيق لكبسولة الأعواد: إظهار عدد الأعواد ووحدة BAR على سطر أفقي واحد عريض ومريح للعين، وإزالة أزرار تصحيح التكلفة المؤقتة لاعتماد الحساب التلقائي.'
+            : 'Streamlined Bar Badge & UI Cleanup: Unified BAR badges on single horizontal lines and removed temporary reconciliation buttons.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.52',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
       title: isAr ? 'أدوات فورية لإعادة احتساب وتصحيح تكلفة أذون الصرف من الفواتير الأصلية (1.29M)' : 'Instant Actions for Retroactive Outbound Cost Reconciliation from Source Invoices',
       highlights: [
         {

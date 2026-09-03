@@ -3559,26 +3559,7 @@ export default function Warehouse() {
               >
                 📊 {isAr ? 'تصدير سجل الحركات إلى Excel' : 'Export History to Excel'}
               </button>
-              <button
-                className="btn"
-                onClick={() => handleManualReconcileCosts()}
-                style={{
-                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(139, 92, 246, 0.25) 100%)',
-                  color: '#a5b4fc',
-                  border: '1.5px solid #818cf8',
-                  padding: '0.55rem 1.25rem',
-                  borderRadius: '8px',
-                  fontWeight: 800,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.25)',
-                }}
-                title={isAr ? 'إعادة احتساب وتحديث تكلفة الصرف لجميع الفواتير بالاعتماد على الفاتورة الأصلية (لتطابق القيمة الحقيقية 1.29M)' : 'Recalculate All Outbound Costs From Source Invoices'}
-              >
-                💰 {isAr ? '⚡ تحديث التكلفة الحقيقية (1.29M)' : '⚡ Update True Costs (1.29M)'}
-              </button>
+
             </div>
           </div>
 
@@ -3595,19 +3576,19 @@ export default function Warehouse() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                 <thead>
                   <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
-                    <th style={{ padding: '0.75rem 1rem', width: '45px' }}>#</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'رقم الفاتورة' : 'Invoice No'}</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'أمر البيع (SO)' : 'Sales Order #'}</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'مرجع العميل' : 'Customer Ref'}</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'نوع الحركة' : 'Movement'}</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'المورد / الجهة' : 'Supplier'}</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'اسم الملف المرفوع' : 'File Name'}</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'عدد البنود' : 'Line Items'}</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأعواد / القطاعات' : 'Bars / Profiles'}</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'إجمالي الأمتار' : 'Total Meters'}</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'إجمالي القيمة' : 'Total Amount'}</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'تاريخ التسجيل' : 'Date & Time'}</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>{isAr ? 'الإجراءات' : 'Actions'}</th>
+                    <th style={{ padding: '0.75rem 0.75rem', width: '45px', textAlign: 'center' }}>#</th>
+                    <th style={{ padding: '0.75rem 1rem', minWidth: '170px', whiteSpace: 'nowrap' }}>{isAr ? 'رقم الفاتورة' : 'Invoice No'}</th>
+                    <th style={{ padding: '0.75rem 1rem', minWidth: '120px', whiteSpace: 'nowrap' }}>{isAr ? 'أمر البيع (SO)' : 'Sales Order #'}</th>
+                    <th style={{ padding: '0.75rem 1rem', minWidth: '130px', whiteSpace: 'nowrap' }}>{isAr ? 'مرجع العميل' : 'Customer Ref'}</th>
+                    <th style={{ padding: '0.75rem 0.75rem', width: '130px', minWidth: '130px', textAlign: 'center', whiteSpace: 'nowrap' }}>{isAr ? 'نوع الحركة' : 'Movement'}</th>
+                    <th style={{ padding: '0.75rem 1rem', minWidth: '110px', whiteSpace: 'nowrap' }}>{isAr ? 'المورد / الجهة' : 'Supplier'}</th>
+                    <th style={{ padding: '0.75rem 1rem', minWidth: '130px', whiteSpace: 'nowrap' }}>{isAr ? 'اسم الملف المرفوع' : 'File Name'}</th>
+                    <th style={{ padding: '0.75rem 0.75rem', width: '95px', minWidth: '95px', textAlign: 'center', whiteSpace: 'nowrap' }}>{isAr ? 'عدد البنود' : 'Line Items'}</th>
+                    <th style={{ padding: '0.75rem 0.75rem', width: '145px', minWidth: '145px', textAlign: 'center', whiteSpace: 'nowrap' }}>{isAr ? 'الأعواد / القطاعات' : 'Bars / Profiles'}</th>
+                    <th style={{ padding: '0.75rem 0.75rem', width: '125px', minWidth: '125px', textAlign: 'center', whiteSpace: 'nowrap' }}>{isAr ? 'إجمالي الأمتار' : 'Total Meters'}</th>
+                    <th style={{ padding: '0.75rem 1rem', width: '150px', minWidth: '150px', textAlign: 'center', whiteSpace: 'nowrap' }}>{isAr ? 'إجمالي القيمة' : 'Total Amount'}</th>
+                    <th style={{ padding: '0.75rem 0.75rem', width: '150px', minWidth: '150px', whiteSpace: 'nowrap' }}>{isAr ? 'تاريخ التسجيل' : 'Date & Time'}</th>
+                    <th style={{ padding: '0.75rem 0.75rem', width: '120px', minWidth: '120px', textAlign: 'center', whiteSpace: 'nowrap' }}>{isAr ? 'الإجراءات' : 'Actions'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3682,41 +3663,66 @@ export default function Warehouse() {
                             )
                           })()}
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>{inv.salesOrder || '—'}</td>
-                        <td style={{ padding: '0.75rem 1rem', color: '#ffb74d' }}>{inv.customerReference || '—'}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
+                        <td style={{ padding: '0.75rem 1rem', minWidth: '120px', whiteSpace: 'nowrap', fontWeight: 700, color: '#00e0a1' }}>{inv.salesOrder || '—'}</td>
+                        <td style={{ padding: '0.75rem 1rem', minWidth: '130px', whiteSpace: 'nowrap', color: '#ffb74d' }}>{inv.customerReference || '—'}</td>
+                        <td style={{ padding: '0.75rem 0.75rem', width: '130px', minWidth: '130px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                           <span
                             className="badge"
                             style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              minWidth: '105px',
+                              padding: '0.35rem 0.65rem',
                               background: isOut ? 'rgba(255,71,87,0.15)' : 'rgba(0,224,161,0.15)',
                               color: isOut ? '#ff4757' : '#00e0a1',
                               border: `1px solid ${isOut ? 'rgba(255,71,87,0.3)' : 'rgba(0,224,161,0.3)'}`,
-                              fontWeight: 700,
+                              fontWeight: 800,
+                              fontSize: '0.82rem',
+                              whiteSpace: 'nowrap',
                             }}
                           >
                             {isOut ? (isAr ? '📤 صرف (-)' : 'Outbound (-)') : (isAr ? '📥 توريد (+)' : 'Inbound (+)')}
                           </span>
                         </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{inv.supplier || 'Canex'}</td>
-                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{inv.fileName || 'يدوي'}</td>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#FFD700' }}>
+                        <td style={{ padding: '0.75rem 1rem', minWidth: '110px', whiteSpace: 'nowrap' }}>{inv.supplier || 'Canex'}</td>
+                        <td style={{ padding: '0.75rem 1rem', minWidth: '130px', color: 'var(--text-muted)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{inv.fileName || 'يدوي'}</td>
+                        <td style={{ padding: '0.75rem 0.75rem', width: '95px', minWidth: '95px', textAlign: 'center', whiteSpace: 'nowrap', fontWeight: 700, color: '#FFD700' }}>
                           {inv.lineItemsCount || 0} {isAr ? 'بند' : 'items'}
                         </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <span dir="ltr" style={{ fontSize: '1.15rem', fontWeight: 900, color: '#64b5f6', background: 'rgba(100, 181, 246, 0.1)', padding: '0.25rem 0.6rem', borderRadius: '6px' }}>
-                            {(inv.totalQuantityBar || 0).toLocaleString()} BAR
+                        <td style={{ padding: '0.75rem 0.75rem', width: '145px', minWidth: '145px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          <span
+                            dir="ltr"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.35rem',
+                              fontSize: '0.98rem',
+                              fontWeight: 900,
+                              color: '#64b5f6',
+                              background: 'rgba(100, 181, 246, 0.12)',
+                              border: '1px solid rgba(100, 181, 246, 0.25)',
+                              padding: '0.35rem 0.75rem',
+                              borderRadius: '8px',
+                              whiteSpace: 'nowrap',
+                              minWidth: '105px',
+                            }}
+                          >
+                            <span>{(inv.totalQuantityBar || 0).toLocaleString()}</span>
+                            <span style={{ fontSize: '0.75rem', color: 'rgba(100, 181, 246, 0.85)', fontWeight: 800 }}>BAR</span>
                           </span>
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#a29bfe' }}>
+                        <td style={{ padding: '0.75rem 0.75rem', width: '125px', minWidth: '125px', textAlign: 'center', whiteSpace: 'nowrap', fontWeight: 700, color: '#a29bfe' }}>
                           <span dir="ltr">{(inv.totalQuantityLm || 0).toFixed(1)} m</span>
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>
+                        <td style={{ padding: '0.75rem 1rem', width: '150px', minWidth: '150px', textAlign: 'center', whiteSpace: 'nowrap', fontWeight: 800, color: '#00e0a1' }}>
                           <span dir="ltr">{(inv.totalAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} EGP</span>
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        <td style={{ padding: '0.75rem 0.75rem', width: '150px', minWidth: '150px', fontSize: '0.82rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                           {inv.createdAt ? new Date(inv.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US') : '—'}
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <td style={{ padding: '0.75rem 0.75rem', width: '120px', minWidth: '120px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                           <div style={{ display: 'inline-flex', gap: '0.4rem', alignItems: 'center' }}>
                             <button
                               className="btn btn-sm"
@@ -3725,16 +3731,6 @@ export default function Warehouse() {
                             >
                               👁️ {isAr ? 'عرض' : 'View'}
                             </button>
-                            {isOut && !isCancelled && (
-                              <button
-                                className="btn btn-sm"
-                                onClick={() => handleManualReconcileCosts(inv.invoiceNumber)}
-                                style={{ background: 'rgba(99, 102, 241, 0.18)', color: '#a5b4fc', border: '1px solid rgba(99, 102, 241, 0.4)', padding: '0.25rem 0.55rem', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 700 }}
-                                title={isAr ? 'إعادة احتساب وتحديث تكلفة هذه الفاتورة وفقاً للفاتورة الأصلية' : 'Recalculate Cost'}
-                              >
-                                ⚡ {isAr ? 'تصحيح التكلفة' : 'Fix Cost'}
-                              </button>
-                            )}
                             {isAdmin && !isCancelled && (
                               <button
                                 className="btn btn-sm"
