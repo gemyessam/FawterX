@@ -175,10 +175,17 @@ export default function ManualStockModal({
         }
       })
 
+      const chosenInv = inboundInvoicesList.find((i) => i.id === invId || i._id === invId)
+      if (chosenInv) {
+        if (!salesOrder && chosenInv.salesOrder) setSalesOrder(chosenInv.salesOrder)
+        if (!customerRef && chosenInv.customerReference) setCustomerRef(chosenInv.customerReference)
+        if (!customerName && chosenInv.customerReference) setCustomerName(chosenInv.customerReference)
+      }
+
       setLines(mappedLines)
       toast.success(
         isAr
-          ? `تم استيراد ${mappedLines.length} بند من الفاتورة. يمكنك صرفها كاملة أو تحديد بنود معينة.`
+          ? `تم استيراد ${mappedLines.length} بند من الفاتورة (${chosenInv?.invoiceNumber || ''}). يمكنك صرفها كاملة أو تحديد بنود معينة.`
           : `Loaded ${mappedLines.length} invoice items. You can dispense all or select specific items.`
       )
     } catch (err) {
@@ -355,14 +362,21 @@ export default function ManualStockModal({
       const resolvedCustomerName = customerName.trim() || (isAr ? 'عميل عام / قيد التحديد' : 'General Customer / TBD')
       const resolvedTargetFinish = targetFinish.trim() || (isAr ? 'حسب أمر التشغيل / قياسي' : 'Standard / As per Order')
 
+      const selectedInv = inboundInvoicesList.find((i) => i.id === selectedInvoiceId || i._id === selectedInvoiceId)
+      const srcInvNumber = selectedInv?.invoiceNumber || ''
+      const srcInvRef = selectedInv?.customerReference || selectedInv?.salesOrder || ''
+
       const payload = {
         movementType: mode,
         lines: validLines,
         meta: {
-          supplier: mode === 'inbound' ? inboundSupplier : 'CANEX',
-          salesOrder,
-          customerReference: customerRef,
-          docNumber: deliveryNote || docNumber || (selectedInvoiceId ? `FROM-INV-${selectedInvoiceId}` : ''),
+          supplier: mode === 'inbound' ? inboundSupplier : (selectedInv?.supplier || 'CANEX'),
+          salesOrder: salesOrder || selectedInv?.salesOrder || '',
+          customerReference: customerRef || selectedInv?.customerReference || '',
+          docNumber: deliveryNote || docNumber || (srcInvNumber ? `صرف من: ${srcInvNumber}` : (selectedInvoiceId ? `FROM-INV-${selectedInvoiceId}` : '')),
+          sourceInvoiceId: selectedInvoiceId || null,
+          sourceInvoiceNumber: srcInvNumber || null,
+          sourceInvoiceReference: srcInvRef || null,
           notes,
         },
         dispatchDetails:
@@ -373,8 +387,11 @@ export default function ManualStockModal({
               targetFinish: dispatchType === 'coating_then_customer' ? resolvedTargetFinish : 'تسليم فوري',
               customerName: resolvedCustomerName,
               projectNameOrSite: projectNameOrSite || (isAr ? 'الموقع العام' : 'General Site'),
-              deliveryNote: deliveryNote || `DSP-${Date.now().toString().slice(-6)}`,
+              deliveryNote: deliveryNote || (srcInvNumber ? `DSP-من-${srcInvNumber}` : `DSP-${Date.now().toString().slice(-6)}`),
               dispatchDate,
+              sourceInvoiceId: selectedInvoiceId || null,
+              sourceInvoiceNumber: srcInvNumber || null,
+              sourceInvoiceReference: srcInvRef || null,
               notes,
             }
             : null,

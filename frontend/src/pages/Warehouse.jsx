@@ -2355,6 +2355,36 @@ export default function Warehouse() {
     })
   }, [stock, searchQuery])
 
+  // Helper to resolve human-readable source invoice reference when an outbound was dispatched from an invoice
+  const resolveInvoiceSource = (inv, allInvoices) => {
+    if (!inv) return null
+    if (inv.sourceInvoiceNumber) {
+      return {
+        invoiceNumber: inv.sourceInvoiceNumber,
+        customerReference: inv.sourceInvoiceReference || '',
+        salesOrder: inv.salesOrder || '',
+        supplier: inv.supplier || '',
+      }
+    }
+    const rawId = inv.sourceInvoiceId || (inv.invoiceNumber && inv.invoiceNumber.startsWith('FROM-INV-') ? inv.invoiceNumber.replace('FROM-INV-', '').trim() : null)
+    if (rawId && Array.isArray(allInvoices)) {
+      const found = allInvoices.find((i) => i.id === rawId || i._id === rawId || i.invoiceNumber === rawId)
+      if (found) {
+        return {
+          invoiceNumber: found.invoiceNumber || rawId,
+          customerReference: found.customerReference || '',
+          salesOrder: found.salesOrder || '',
+          supplier: found.supplier || '',
+        }
+      }
+      return {
+        invoiceNumber: rawId,
+        customerReference: '',
+      }
+    }
+    return null
+  }
+
   // Filter Transaction History List
   const filteredInvoices = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -2369,8 +2399,11 @@ export default function Warehouse() {
             .join(' ')
         : ''
 
+      const src = resolveInvoiceSource(inv, invoices)
       const fullInvText = [
         inv.invoiceNumber,
+        src?.invoiceNumber,
+        src?.customerReference,
         inv.salesOrder,
         inv.customerReference,
         inv.supplier,
@@ -2685,9 +2718,10 @@ export default function Warehouse() {
       }
 
       filteredInvoices.forEach((inv, idx) => {
+        const src = resolveInvoiceSource(inv, invoices)
         const row = worksheet.addRow({
           idx: idx + 1,
-          invoiceNo: inv.invoiceNumber || '—',
+          invoiceNo: src ? `${inv.invoiceNumber || ''} (صرف من: ${src.invoiceNumber})` : (inv.invoiceNumber || '—'),
           salesOrder: inv.salesOrder || '—',
           customerReference: inv.customerReference || '—',
           movementType: inv.movementType === 'outbound' ? (isAr ? 'صرف (خصم من المخزن)' : 'Outbound') : (isAr ? 'توريد (إضافة للمخزن)' : 'Inbound'),
@@ -3590,24 +3624,62 @@ export default function Warehouse() {
                       >
                         <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600 }}>{idx + 1}</td>
                         <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#64b5f6' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                            <span>{inv.invoiceNumber || '—'}</span>
-                            {isCancelled && (
-                              <span
-                                className="badge"
-                                style={{
-                                  background: 'rgba(255, 71, 87, 0.2)',
-                                  color: '#ff4757',
-                                  border: '1px solid rgba(255, 71, 87, 0.4)',
-                                  fontSize: '0.75rem',
-                                  padding: '1px 6px',
-                                  fontWeight: 700,
-                                }}
-                              >
-                                ⚠️ {isAr ? 'ملغاة (تم التراجع)' : 'Cancelled'}
-                              </span>
-                            )}
-                          </div>
+                          {(() => {
+                            const src = resolveInvoiceSource(inv, invoices)
+                            return (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                {src ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                    <span
+                                      className="badge"
+                                      style={{
+                                        background: 'rgba(56, 189, 248, 0.15)',
+                                        color: '#38bdf8',
+                                        border: '1.5px solid rgba(56, 189, 248, 0.4)',
+                                        fontWeight: 800,
+                                        fontSize: '0.82rem',
+                                        padding: '3px 8px',
+                                        borderRadius: '6px',
+                                      }}
+                                      title={isAr ? `صرف من الفاتورة الواردة: ${src.invoiceNumber}` : `Dispatched from: ${src.invoiceNumber}`}
+                                    >
+                                      🔗 {isAr ? 'صرف من فاتورة:' : 'From Inv:'} <strong>{src.invoiceNumber}</strong>
+                                    </span>
+                                    {src.customerReference && (
+                                      <span style={{ fontSize: '0.75rem', color: '#ffb74d', fontWeight: 600 }}>
+                                        ({isAr ? 'مرجع:' : 'Ref:'} {src.customerReference})
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span>{inv.invoiceNumber || '—'}</span>
+                                )}
+
+                                {inv.invoiceNumber && !inv.invoiceNumber.startsWith('FROM-INV-') && src && (
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                    {inv.invoiceNumber}
+                                  </span>
+                                )}
+
+                                {isCancelled && (
+                                  <span
+                                    className="badge"
+                                    style={{
+                                      background: 'rgba(255, 71, 87, 0.2)',
+                                      color: '#ff4757',
+                                      border: '1px solid rgba(255, 71, 87, 0.4)',
+                                      fontSize: '0.75rem',
+                                      padding: '1px 6px',
+                                      fontWeight: 700,
+                                      width: 'fit-content',
+                                    }}
+                                  >
+                                    ⚠️ {isAr ? 'ملغاة (تم التراجع)' : 'Cancelled'}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })()}
                         </td>
                         <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>{inv.salesOrder || '—'}</td>
                         <td style={{ padding: '0.75rem 1rem', color: '#ffb74d' }}>{inv.customerReference || '—'}</td>
@@ -3706,6 +3778,15 @@ export default function Warehouse() {
                   <span className="badge" style={{ background: 'rgba(255, 183, 77, 0.15)', color: '#ffb74d', border: '1px solid rgba(255, 183, 77, 0.3)', fontSize: '0.8rem' }}>
                     Ref: {selectedInvoice.customerReference || '—'}
                   </span>
+                  {(() => {
+                    const src = resolveInvoiceSource(selectedInvoice, invoices)
+                    if (!src) return null
+                    return (
+                      <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1.5px solid rgba(56, 189, 248, 0.4)', fontSize: '0.8rem', fontWeight: 800 }}>
+                        🔗 {isAr ? 'صرف من فاتورة:' : 'Source Inv:'} {src.invoiceNumber} {src.customerReference ? `(${src.customerReference})` : ''}
+                      </span>
+                    )
+                  })()}
                   {isAdmin && (
                     <button
                       className="btn btn-sm"
@@ -5323,6 +5404,7 @@ export default function Warehouse() {
           projectName={selectedProject?.name}
           isAdmin={isAdmin}
           isAr={isAr}
+          invoices={invoices}
           onOpenManualModal={handleOpenManualModal}
         />
       )}

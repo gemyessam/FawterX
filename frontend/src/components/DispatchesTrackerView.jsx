@@ -1,14 +1,58 @@
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'react-hot-toast'
-import { getWarehouseDispatches, updateDispatchStage, deleteWarehouseDispatch, reconcileWarehouseDelmarAndCosts } from '../services/warehouseApi'
+import { getWarehouseDispatches, updateDispatchStage, deleteWarehouseDispatch, reconcileWarehouseDelmarAndCosts, getWarehouseInvoices } from '../services/warehouseApi'
 
 export default function DispatchesTrackerView({
   projectId,
   projectName,
   isAdmin = false,
   isAr = true,
+  invoices: initialInvoices = [],
   onOpenManualModal,
 }) {
+  const [invoices, setInvoices] = useState(initialInvoices)
+
+  useEffect(() => {
+    if (initialInvoices && initialInvoices.length > 0) {
+      setInvoices(initialInvoices)
+    } else if (projectId) {
+      getWarehouseInvoices(projectId)
+        .then((res) => {
+          if (res && Array.isArray(res.invoices)) setInvoices(res.invoices)
+        })
+        .catch(() => {})
+    }
+  }, [initialInvoices, projectId])
+
+  const resolveDispatchSourceInvoice = (disp) => {
+    if (!disp) return null
+    if (disp.sourceInvoiceNumber) {
+      return {
+        invoiceNumber: disp.sourceInvoiceNumber,
+        customerReference: disp.sourceInvoiceReference || '',
+      }
+    }
+    const note = String(disp.deliveryNote || disp.dispatchNumber || '')
+    let rawInvId = disp.sourceInvoiceId || null
+    if (!rawInvId && note.includes('FROM-INV-')) {
+      rawInvId = note.replace(/.*FROM-INV-/, '').trim()
+    }
+    if (rawInvId && Array.isArray(invoices)) {
+      const found = invoices.find((i) => i.id === rawInvId || i._id === rawInvId || i.invoiceNumber === rawInvId)
+      if (found) {
+        return {
+          invoiceNumber: found.invoiceNumber || rawInvId,
+          customerReference: found.customerReference || '',
+          salesOrder: found.salesOrder || '',
+        }
+      }
+      return {
+        invoiceNumber: rawInvId,
+        customerReference: '',
+      }
+    }
+    return null
+  }
   const [dispatches, setDispatches] = useState([])
   const [loading, setLoading] = useState(false)
   const [reconciling, setReconciling] = useState(false)
@@ -84,6 +128,10 @@ export default function DispatchesTrackerView({
           d.customerName,
           d.projectNameOrSite,
           d.notes,
+          d.sourceInvoiceNumber,
+          d.sourceInvoiceReference,
+          resolveDispatchSourceInvoice(d)?.invoiceNumber,
+          resolveDispatchSourceInvoice(d)?.customerReference,
           d.dispatchedByName,
           d.currentStage,
           ...(Array.isArray(d.items) ? d.items.map((i) => `${i.itemCode} ${i.description} ${i.finish}`) : []),
@@ -416,9 +464,33 @@ export default function DispatchesTrackerView({
                     </span>
 
                     <div>
-                      <strong style={{ fontSize: '1rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        📄 {disp.dispatchNumber || disp.deliveryNote || disp.id}
-                      </strong>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <strong style={{ fontSize: '1rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          📄 {disp.dispatchNumber || disp.deliveryNote || disp.id}
+                        </strong>
+                        {(() => {
+                          const src = resolveDispatchSourceInvoice(disp)
+                          if (!src) return null
+                          return (
+                            <span
+                              className="badge"
+                              style={{
+                                background: 'rgba(56, 189, 248, 0.15)',
+                                color: '#38bdf8',
+                                border: '1.5px solid rgba(56, 189, 248, 0.4)',
+                                fontSize: '0.8rem',
+                                fontWeight: 800,
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                              }}
+                              title={isAr ? `تم الصرف استناداً للفاتورة الواردة: ${src.invoiceNumber}` : `From Invoice: ${src.invoiceNumber}`}
+                            >
+                              🔗 {isAr ? 'من فاتورة:' : 'From Inv:'} <strong>{src.invoiceNumber}</strong>
+                              {src.customerReference ? ` (${src.customerReference})` : ''}
+                            </span>
+                          )
+                        })()}
+                      </div>
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                         {isAr ? 'تاريخ الصرف:' : 'Date:'} {dateFormatted} | {isAr ? 'المسؤول:' : 'By:'} {disp.dispatchedByName || 'مستخدم'}
                       </span>
@@ -480,6 +552,19 @@ export default function DispatchesTrackerView({
 
                 {/* Details Section */}
                 <div style={{ padding: '0.85rem 1.25rem', borderTop: '1px solid rgba(255,255,255,0.04)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', fontSize: '0.85rem' }}>
+                  {(() => {
+                    const src = resolveDispatchSourceInvoice(disp)
+                    if (!src) return null
+                    return (
+                      <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '0.4rem 0.75rem', borderRadius: '8px' }}>
+                        <span style={{ color: '#38bdf8', fontWeight: 800 }}>🔗 {isAr ? 'الفاتورة المرجعية المصروف منها:' : 'Source Inbound Invoice:'} </span>
+                        <strong style={{ color: '#fff' }}>{src.invoiceNumber}</strong>
+                        {src.customerReference && (
+                          <span style={{ color: '#ffb74d', marginRight: '0.3rem', fontSize: '0.82rem' }}>({src.customerReference})</span>
+                        )}
+                      </div>
+                    )
+                  })()}
                   <div>
                     <span style={{ color: 'var(--text-muted)' }}>🏭 {isAr ? 'مورد الدهان / الورشة:' : 'Coating Supplier:'} </span>
                     <strong style={{ color: '#FFD700' }}>{disp.coatingSupplier || '—'}</strong>

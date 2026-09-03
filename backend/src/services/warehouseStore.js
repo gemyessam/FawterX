@@ -2393,6 +2393,29 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
   const isCoatingStage = isOutbound && (dispatchDetails?.dispatchType === "coating_then_customer" || dispatchDetails?.dispatchType === "coating_only");
   const initialStage = isCoatingStage ? "in_coating" : "delivered_to_customer";
 
+  // Resolve source invoice details if this movement is dispatched from an existing invoice
+  let sourceInvoiceId = meta?.sourceInvoiceId || dispatchDetails?.sourceInvoiceId || null;
+  let sourceInvoiceNumber = meta?.sourceInvoiceNumber || dispatchDetails?.sourceInvoiceNumber || null;
+  let sourceInvoiceReference = meta?.sourceInvoiceReference || dispatchDetails?.sourceInvoiceReference || null;
+
+  const rawDocNumber = String(meta?.docNumber || dispatchDetails?.deliveryNote || "");
+  if (!sourceInvoiceNumber && rawDocNumber.startsWith("FROM-INV-")) {
+    const rawInvId = rawDocNumber.replace("FROM-INV-", "").trim();
+    if (rawInvId) {
+      try {
+        const sSnap = await projectRef.collection("invoices").doc(rawInvId).get();
+        if (sSnap.exists) {
+          const sData = sSnap.data();
+          sourceInvoiceId = rawInvId;
+          sourceInvoiceNumber = sData.invoiceNumber || rawInvId;
+          sourceInvoiceReference = sData.customerReference || sData.salesOrder || "";
+        }
+      } catch (e) {
+        console.warn("Could not resolve source invoice from ID:", rawInvId, e.message);
+      }
+    }
+  }
+
   if (isOutbound && dispatchDetails) {
     const dRef = projectRef.collection("dispatches").doc();
     dispatchId = dRef.id;
@@ -2413,6 +2436,9 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
       id: dispatchId,
       dispatchNumber,
       deliveryNote: dispatchDetails.deliveryNote || dispatchNumber,
+      sourceInvoiceId,
+      sourceInvoiceNumber,
+      sourceInvoiceReference,
       dispatchType: dispatchDetails.dispatchType || (isCoatingStage ? "coating_then_customer" : "direct_customer"),
       currentStage: initialStage,
       coatingSupplier: dispatchDetails.coatingSupplier || "ورشة / مورد الدهان",
@@ -2485,6 +2511,9 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
   const manualInvoiceDoc = {
     id: manualInvoiceId,
     invoiceNumber: docNo,
+    sourceInvoiceId,
+    sourceInvoiceNumber,
+    sourceInvoiceReference,
     movementType: isOutbound ? "outbound" : "inbound",
     salesOrder: meta?.salesOrder || (dispatchDetails?.customerName ? `طلب: ${dispatchDetails.customerName}` : "يدوي"),
     customerReference: meta?.customerReference || (dispatchDetails?.projectNameOrSite ? `موقع: ${dispatchDetails.projectNameOrSite}` : "إذن يدوي"),
@@ -2531,6 +2560,9 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
     const movementData = {
       sourceType: "manual",
       invoiceId: manualInvoiceId,
+      sourceInvoiceId,
+      sourceInvoiceNumber,
+      sourceInvoiceReference,
       movementType: isOutbound ? "outbound" : "inbound",
       invoiceNumber: docNo,
       salesOrder: meta?.salesOrder || line.salesOrder || (dispatchDetails?.customerName ? `طلب: ${dispatchDetails.customerName}` : "يدوي"),

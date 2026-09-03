@@ -8,10 +8,31 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar' }) {
 
   const releaseHistory = [
     {
-      version: 'v2.27.49',
+      version: 'v2.27.50',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr ? 'ربط وإظهار ريفرنس الفاتورة المصروف منها في سجل الحركات وتتبع مراحل الصرف والدهان' : 'Source Inbound Invoice Reference Tracking in Audit Trail & Dispatches View',
+      highlights: [
+        {
+          icon: '🔗',
+          text: isAr
+            ? 'إظهار ريفرنس الفاتورة المصروف منها: استبدال الأكواد الداخلية التلقائية (FROM-INV-ID) ببادج أنيق وواضح يوضح رقم الفاتورة الأصلية ومرجع العميل في جدول الحركات والتوريدات وتفاصيل الفاتورة.'
+            : 'Human-Readable Source Invoice Reference: Resolves raw internal IDs into clean source invoice badges with customer reference in transaction audit trail.'
+        },
+        {
+          icon: '🎨',
+          text: isAr
+            ? 'تتبع مراحل الصرف والدهان: إظهار الفاتورة المرجعية المصروف منها مباشرة في كروت أوامر الصرف وقسم التفاصيل مع دعم البحث الفوري برقم الفاتورة الأصلية.'
+            : 'Dispatches Lifecycle Integration: Displays source inbound invoice reference on dispatch cards and detail sections with search filtering.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.49',
+      date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64748b',
       title: isAr ? 'إظهار مجموع تكلفة وقيمة إذن الصرف (SD) في شريط المقاييس وتذييل الجدول الإجمالي' : 'Total SD / Outbound Cost Metric Pill & Grand Totals Table Footer',
       highlights: [
         {
