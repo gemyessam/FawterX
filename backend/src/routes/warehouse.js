@@ -5,6 +5,7 @@ const fs = require("fs");
 const authMiddleware = require("../middleware/auth");
 const { parseWarehouseInvoice } = require("../utils/warehouseCanexParser");
 const {
+  resolveProject,
   getUserWarehouseAccess,
   listWarehouseUsers,
   updateWarehouseUserAccess,
@@ -87,16 +88,24 @@ async function requireWarehouse(req, res, next) {
     req.warehouseRole = access.role;
     req.warehouseAccess = access;
 
-    // Check project permission if projectId is specified in the route
-    if (req.params.projectId && !access.isAdmin) {
-      const allowedProjects = Array.isArray(access.allowedProjects) ? access.allowedProjects : ["*"];
+    // Resolve project ID and check project permission if projectId is in route
+    if (req.params.projectId) {
       const requestedProj = String(req.params.projectId);
-      const isAllowed = allowedProjects.includes("*") || allowedProjects.includes(requestedProj) || (requestedProj === "default_canex" && allowedProjects.includes("default_canex"));
-      if (!isAllowed) {
-        return res.status(403).json({
-          success: false,
-          message: "Forbidden: You do not have permission to access this warehouse project.",
-        });
+      const resolvedProj = await resolveProject(requestedProj);
+      req.resolvedProjectId = resolvedProj;
+
+      if (!access.isAdmin) {
+        const allowedProjects = Array.isArray(access.allowedProjects) ? access.allowedProjects : ["*"];
+        const isAllowed =
+          allowedProjects.includes("*") ||
+          allowedProjects.includes(resolvedProj) ||
+          allowedProjects.includes(requestedProj);
+        if (!isAllowed) {
+          return res.status(403).json({
+            success: false,
+            message: "Forbidden: You do not have permission to access this warehouse project.",
+          });
+        }
       }
     }
 
@@ -111,6 +120,10 @@ async function requireWarehouse(req, res, next) {
  */
 async function requireAdmin(req, res, next) {
   try {
+    if (req.params.projectId) {
+      req.resolvedProjectId = await resolveProject(String(req.params.projectId));
+    }
+
     if (req.user && req.user.isAdmin) {
       req.warehouseRole = "admin";
       return next();
@@ -204,7 +217,7 @@ router.post("/projects", requireAdmin, async (req, res) => {
  */
 router.delete("/projects/:projectId", requireAdmin, async (req, res) => {
   try {
-    const { projectId } = req.params;
+    const projectId = req.resolvedProjectId || req.params.projectId;
     const result = await deleteProject(projectId, req.user.uid);
     return res.json({ success: true, ...result });
   } catch (error) {
@@ -218,7 +231,7 @@ router.delete("/projects/:projectId", requireAdmin, async (req, res) => {
  */
 router.get("/projects/:projectId/stock", requireWarehouse, async (req, res) => {
   try {
-    const stock = await getProjectStock(req.params.projectId);
+    const stock = await getProjectStock(req.resolvedProjectId || req.params.projectId);
     return res.json({ success: true, stock });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -265,9 +278,12 @@ router.post("/invoices/parse", requireWarehouse, upload.single("file"), async (r
  */
 router.post("/projects/:projectId/reconcile-delmar-and-costs", requireWarehouse, async (req, res) => {
   try {
+    if (req.warehouseRole === "warehouse_viewer" || req.warehouseAccess?.canEdit === false) {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have permissions to reconcile costs." });
+    }
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await reconcileDelmarAndCosts(
-      req.params.projectId,
+      req.resolvedProjectId || req.params.projectId,
       req.body?.invoiceNumber,
       req.user.uid,
       req.user.email,
@@ -284,15 +300,25 @@ router.post("/projects/:projectId/invoices/process", requireWarehouse, async (re
     if (req.warehouseAccess?.canUpload === false || req.warehouseRole === "warehouse_viewer") {
       return res.status(403).json({ success: false, message: "Forbidden: You do not have upload/process permissions." });
     }
-    const { invoiceMeta, lines } = req.body;
+    const invoiceMeta = req.body.invoiceMeta && typeof req.body.invoiceMeta === "object" ? req.body.invoiceMeta : {};
+    req.body.invoiceMeta = invoiceMeta;
+
+    const normalizedType = String(invoiceMeta.movementType || "inbound").trim().toLowerCase();
+    invoiceMeta.movementType = normalizedType;
+
+    if (normalizedType === "outbound" && req.warehouseAccess?.canDispatch === false) {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have permissions to dispatch stock items." });
+    }
+
+    const { lines } = req.body;
     if (!lines || !Array.isArray(lines) || lines.length === 0) {
       return res.status(400).json({ success: false, message: "At least one valid line is required." });
     }
 
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await processInboundInvoice(
-      req.params.projectId,
-      invoiceMeta || {},
+      req.resolvedProjectId || req.params.projectId,
+      invoiceMeta,
       lines,
       req.user.uid,
       req.user.email,
@@ -313,18 +339,21 @@ router.post("/projects/:projectId/manual-movement", requireWarehouse, async (req
     if (req.warehouseRole === "warehouse_viewer" || req.warehouseAccess?.canManual === false) {
       return res.status(403).json({ success: false, message: "Forbidden: You do not have permissions to perform manual warehouse movements." });
     }
-    const { movementType, lines, meta, dispatchDetails } = req.body;
-    if (movementType === "outbound" && req.warehouseAccess?.canDispatch === false) {
+    const normalizedType = String(req.body.movementType || "").trim().toLowerCase();
+    req.body.movementType = normalizedType;
+
+    if (normalizedType === "outbound" && req.warehouseAccess?.canDispatch === false) {
       return res.status(403).json({ success: false, message: "Forbidden: You do not have permissions to dispatch stock items." });
     }
+    const { lines, meta, dispatchDetails } = req.body;
     if (!lines || !Array.isArray(lines) || lines.length === 0) {
       return res.status(400).json({ success: false, message: "يجب تحديد بند واحد على الأقل." });
     }
 
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await processManualStockMovement(
-      req.params.projectId,
-      { movementType, lines, meta, dispatchDetails },
+      req.resolvedProjectId || req.params.projectId,
+      { movementType: normalizedType, lines, meta, dispatchDetails },
       req.user.uid,
       req.user.email,
       userName
@@ -342,7 +371,7 @@ router.post("/projects/:projectId/manual-movement", requireWarehouse, async (req
 router.get("/projects/:projectId/dispatches", requireWarehouse, async (req, res) => {
   try {
     const { status } = req.query;
-    const dispatches = await getProjectDispatches(req.params.projectId, status);
+    const dispatches = await getProjectDispatches(req.resolvedProjectId || req.params.projectId, status);
     return res.json({ success: true, dispatches });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -361,7 +390,7 @@ router.patch("/projects/:projectId/dispatches/:dispatchId/stage", requireWarehou
     const { stage, notes, completionDate, customerReceivedBy } = req.body;
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await updateDispatchStage(
-      req.params.projectId,
+      req.resolvedProjectId || req.params.projectId,
       req.params.dispatchId,
       { stage, notes, completionDate, customerReceivedBy },
       req.user.uid,
@@ -382,7 +411,7 @@ router.delete("/projects/:projectId/dispatches/:dispatchId", requireAdmin, async
   try {
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await deleteProjectDispatch(
-      req.params.projectId,
+      req.resolvedProjectId || req.params.projectId,
       req.params.dispatchId,
       req.user.uid,
       req.user.email,
@@ -400,7 +429,7 @@ router.delete("/projects/:projectId/dispatches/:dispatchId", requireAdmin, async
  */
 router.get("/projects/:projectId/invoices", requireWarehouse, async (req, res) => {
   try {
-    const invoices = await getProjectInvoices(req.params.projectId);
+    const invoices = await getProjectInvoices(req.resolvedProjectId || req.params.projectId);
     return res.json({ success: true, invoices });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -413,7 +442,7 @@ router.get("/projects/:projectId/invoices", requireWarehouse, async (req, res) =
  */
 router.get("/projects/:projectId/audit-logs", requireAdmin, async (req, res) => {
   try {
-    const logs = await getWarehouseAuditLogs(req.params.projectId);
+    const logs = await getWarehouseAuditLogs(req.resolvedProjectId || req.params.projectId);
     return res.json({ success: true, logs });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -426,7 +455,7 @@ router.get("/projects/:projectId/audit-logs", requireAdmin, async (req, res) => 
  */
 router.get("/projects/:projectId/invoices/:invoiceId/movements", requireWarehouse, async (req, res) => {
   try {
-    const movements = await getProjectMovements(req.params.projectId, req.params.invoiceId);
+    const movements = await getProjectMovements(req.resolvedProjectId || req.params.projectId, req.params.invoiceId);
     return res.json({ success: true, movements });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -440,7 +469,7 @@ router.get("/projects/:projectId/invoices/:invoiceId/movements", requireWarehous
 router.get("/projects/:projectId/stock/:itemKey/movements", requireWarehouse, async (req, res) => {
   try {
     const { itemCode } = req.query;
-    const movements = await getItemMovementsHistory(req.params.projectId, req.params.itemKey, itemCode);
+    const movements = await getItemMovementsHistory(req.resolvedProjectId || req.params.projectId, req.params.itemKey, itemCode);
     return res.json({ success: true, movements });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -455,7 +484,7 @@ router.put("/projects/:projectId/stock/:itemKey", requireAdmin, async (req, res)
   try {
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await updateStockItem(
-      req.params.projectId,
+      req.resolvedProjectId || req.params.projectId,
       req.params.itemKey,
       req.body,
       req.user.uid,
@@ -476,7 +505,7 @@ router.delete("/projects/:projectId/stock/:itemKey", requireAdmin, async (req, r
   try {
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await deleteStockItem(
-      req.params.projectId,
+      req.resolvedProjectId || req.params.projectId,
       req.params.itemKey,
       req.user.uid,
       req.user.email,
@@ -500,7 +529,7 @@ router.patch("/projects/:projectId/invoices/:invoiceId", requireWarehouse, async
     const { salesOrder, customerReference } = req.body;
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await updateInvoiceMetadata(
-      req.params.projectId,
+      req.resolvedProjectId || req.params.projectId,
       req.params.invoiceId,
       { salesOrder, customerReference },
       req.user.uid,
@@ -521,7 +550,7 @@ router.post("/projects/:projectId/invoices/:invoiceId/rollback", requireAdmin, a
   try {
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await rollbackInvoiceTransaction(
-      req.params.projectId,
+      req.resolvedProjectId || req.params.projectId,
       req.params.invoiceId,
       req.user.uid,
       req.user.email,
@@ -539,7 +568,7 @@ router.post("/projects/:projectId/invoices/:invoiceId/rollback", requireAdmin, a
  */
 router.get("/projects/:projectId/restore-points", requireWarehouse, async (req, res) => {
   try {
-    const points = await listProjectRestorePoints(req.params.projectId);
+    const points = await listProjectRestorePoints(req.resolvedProjectId || req.params.projectId);
     return res.json({ success: true, points });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -558,7 +587,7 @@ router.post("/projects/:projectId/restore-points", requireWarehouse, async (req,
     const { name, description } = req.body;
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await createProjectRestorePoint(
-      req.params.projectId,
+      req.resolvedProjectId || req.params.projectId,
       { name, description },
       req.user.uid,
       req.user.email,
@@ -581,7 +610,7 @@ router.post("/projects/:projectId/restore-points/:pointId/restore", requireWareh
     }
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await restoreProjectToPoint(
-      req.params.projectId,
+      req.resolvedProjectId || req.params.projectId,
       req.params.pointId,
       req.user.uid,
       req.user.email,
@@ -604,7 +633,7 @@ router.delete("/projects/:projectId/restore-points/:pointId", requireWarehouse, 
     }
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await deleteProjectRestorePoint(
-      req.params.projectId,
+      req.resolvedProjectId || req.params.projectId,
       req.params.pointId,
       req.user.uid,
       req.user.email,
@@ -622,7 +651,7 @@ router.delete("/projects/:projectId/restore-points/:pointId", requireWarehouse, 
  */
 router.get("/projects/:projectId/aliases", requireWarehouse, async (req, res) => {
   try {
-    const aliases = await getProjectItemAliases(req.params.projectId);
+    const aliases = await getProjectItemAliases(req.resolvedProjectId || req.params.projectId);
     return res.json({ success: true, aliases });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -639,7 +668,7 @@ router.post("/projects/:projectId/aliases", requireWarehouse, async (req, res) =
       return res.status(403).json({ success: false, message: "Forbidden: You do not have edit permissions in warehouse." });
     }
     const userName = req.user.name || req.user.displayName || req.user.email;
-    const result = await saveProjectItemAlias(req.params.projectId, {
+    const result = await saveProjectItemAlias(req.resolvedProjectId || req.params.projectId, {
       ...req.body,
       userUid: req.user.uid,
       userEmail: req.user.email,
@@ -662,7 +691,7 @@ router.delete("/projects/:projectId/aliases/:aliasDocId", requireWarehouse, asyn
     }
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await deleteProjectItemAlias(
-      req.params.projectId,
+      req.resolvedProjectId || req.params.projectId,
       req.params.aliasDocId,
       req.user.uid,
       req.user.email,

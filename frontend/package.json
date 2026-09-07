@@ -1,6 +1,6 @@
 {
   "name": "frontend",
-  "version": "2.27.59",
+  "version": "2.27.60",
   "private": true,
   "scripts": {
     "dev": "vite",

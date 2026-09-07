@@ -300,6 +300,14 @@ async function resolveProjectId(db, projectId) {
 }
 
 /**
+ * Public resolver to resolve project ID or legacy alias using active database
+ */
+async function resolveProject(projectId) {
+  const db = getDb();
+  return resolveProjectId(db, projectId);
+}
+
+/**
  * List warehouse projects (creates default Canex Stock if empty)
  */
 async function listProjects() {
@@ -3338,6 +3346,7 @@ async function reconcileDelmarAndCosts(projectId, targetInvoiceNumber = null, us
 
 
 module.exports = {
+  resolveProject,
   reconcileDelmarAndCosts,
   getUserWarehouseAccess,
   listWarehouseUsers,
