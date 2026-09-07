@@ -9,8 +9,11 @@ It takes precedence over generic delegation instructions that assign implementat
 - Codex only reviews plans and changes, inspects files/diffs, and independently verifies results. Codex must not implement application changes, fix tests, commit, push, or deploy.
 - Codex may write review reports and maintain the explicitly requested communication setup. Build/test output is permitted for verification; tests must not mutate production services or use real customer credentials.
 - The user can change this agreement explicitly. Do not assume a generic request to continue changes these roles.
+- **Task Complexity & Review Requirement (Updated per User Direction):**
+  - **Simple & Routine Tasks:** UI tweaks, metadata/SEO tags, text changes, static assets, straightforward component formatting, and localized fixes are executed directly by Antigravity (plan, implement, test, and deploy) without requiring Codex review overhead.
+  - **Complex & High-Risk Tasks:** Core architectural changes, complex tax/financial calculation logic, digital signing/security modules, and sensitive multi-layer backend refactoring require the full Codex review cycle (`PLAN_APPROVED` and `REVIEW_PASSED`).
 
-## Required review cycle
+## Required review cycle (For Complex Tasks)
 
 1. Antigravity inspects the relevant current code and writes a concrete plan before changing application code. Include the task, reproduction/evidence, scope, files, proposed behavior, compatibility concerns, tests, and rollback approach where relevant.
 2. Antigravity sends that plan to Codex for read-only review. Include the complete plan in the brief, the repository path, current HEAD and dirty-file baseline. Do not rely on either agent having the other conversation's history.
