@@ -14,11 +14,41 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
 
   const releaseHistory = [
     {
+      version: 'v2.27.61',
+      category: 'invoicing',
+      date: isAr ? '7 سبتمبر 2026' : 'Sep 7, 2026',
+      badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
+      badgeColor: '#00e0a1',
+      title: isAr
+        ? 'إثبات ملكية Google Search Console وتفعيل محركات السيو والفهرسة الرسمية'
+        : 'Google Search Console Verification & Technical SEO Engine Integration',
+      highlights: [
+        {
+          icon: '🔍',
+          text: isAr
+            ? 'تضمين ملف إثبات ملكية محرك بحث جوجل (GSC HTML Verification) لإتمام توثيق النطاق وربطه رسمياً بلوحة تحكم Google Search Console.'
+            : 'Integrated Google Search Console HTML verification file for official domain ownership confirmation.'
+        },
+        {
+          icon: '🗺️',
+          text: isAr
+            ? 'إطلاق ملفات الفهرسة القياسية robots.txt وخريطة الموقع الرسمية sitemap.xml لتوجيه عناكب الفهرسة والأرشفة الفورية.'
+            : 'Deployed standardized robots.txt and sitemap.xml to streamline search engine crawling and indexing.'
+        },
+        {
+          icon: '🏷️',
+          text: isAr
+            ? 'تعزيز وسوم السيو التعريفية (Open Graph & Canonical Tags) وتحديث عنوان المنصة ليتصدر نتائج البحث باللغتين العربية والإنجليزية.'
+            : 'Enhanced Open Graph metadata, canonical references, and bilingual brand title indexing for FawterX.'
+        }
+      ]
+    },
+    {
       version: 'v2.27.59',
       category: 'invoicing',
       date: isAr ? '3 سبتمبر 2026' : 'Sep 3, 2026',
-      badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
-      badgeColor: '#00e0a1',
+      badge: isAr ? 'مستقر' : 'Stable',
+      badgeColor: '#6c757d',
       title: isAr
         ? 'تطوير محرك سجل التحديثات وتأمين خصوصية البيانات وتنظيم واجهة المستخدم'
         : 'Platform Privacy Hardening, Enhanced Changelog Engine & UI Streamlining',
