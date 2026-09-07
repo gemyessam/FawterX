@@ -14,11 +14,29 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
 
   const releaseHistory = [
     {
-      version: 'v2.27.61',
+      version: 'v2.27.62',
       category: 'invoicing',
       date: isAr ? '7 سبتمبر 2026' : 'Sep 7, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr
+        ? 'إضافة وسم الميتا المباشر لإثبات ملكية Google Search Console'
+        : 'Google Search Console Verification HTML Meta Tag Integration',
+      highlights: [
+        {
+          icon: '🏷️',
+          text: isAr
+            ? 'تضمين علامة الميتا الرسمية google-site-verification في رأس الصفحة لدعم التحقق الثنائي التلقائي في Google Search Console.'
+            : 'Added official google-site-verification meta tag in HTML head for dual automated Search Console verification.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.61',
+      category: 'invoicing',
+      date: isAr ? '7 سبتمبر 2026' : 'Sep 7, 2026',
+      badge: isAr ? 'مستقر' : 'Stable',
+      badgeColor: '#6c757d',
       title: isAr
         ? 'إثبات ملكية Google Search Console وتفعيل محركات السيو والفهرسة الرسمية'
         : 'Google Search Console Verification & Technical SEO Engine Integration',
