@@ -103,6 +103,11 @@ function Layout({ children }) {
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [showUserDropdown, setShowUserDropdown] = useState(false)
   const [showReleaseNotesModal, setShowReleaseNotesModal] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  useEffect(() => {
+    setMobileMenuOpen(false)
+  }, [location.pathname])
 
   // Settings State
   const [settings, setSettings] = useState({
@@ -216,7 +221,7 @@ function Layout({ children }) {
 
   return (
     <div className={`app-wrapper ${lang === 'en' ? 'ltr-layout' : ''}`}>
-      {/* ─── Modern Premium Header ─── */}
+      {/* ─── Modern Premium Responsive Header ─── */}
       <header className="header glassmorphism">
         <Link to="/" onClick={handleLogoClick} style={{ textDecoration: 'none', color: '#fff', display: 'flex', alignItems: 'center' }}>
           <div className="header-brand" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -232,6 +237,7 @@ function Layout({ children }) {
             {/* Permanent Green Slogan Badge & Changelog Trigger */}
             <button
               type="button"
+              className="header-slogan-btn"
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
@@ -263,26 +269,121 @@ function Layout({ children }) {
           </div>
         </Link>
 
-        <nav className="header-nav">
-          <Link to="/" onClick={handleLogoClick} className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>{t.navHome}</Link>
-          <Link to="/drafts" className={`nav-link ${location.pathname.includes('/drafts') ? 'active' : ''}`}>{t.navDrafts}</Link>
-          {hasWarehouseAccess && (
-            <Link to="/warehouse" className={`nav-link ${location.pathname.includes('/warehouse') ? 'active' : ''}`}>
-              📦 {t.navWarehouse || (lang === 'ar' ? 'المخزون' : 'Warehouse')}
+        {/* Mobile Hamburger Toggle Button */}
+        <button
+          type="button"
+          className={`mobile-menu-toggle ${mobileMenuOpen ? 'active' : ''}`}
+          onClick={() => setMobileMenuOpen(prev => !prev)}
+          aria-label={lang === 'ar' ? 'القائمة الرئيسية' : 'Toggle navigation menu'}
+        >
+          <span className="hamburger-line"></span>
+          <span className="hamburger-line"></span>
+          <span className="hamburger-line"></span>
+        </button>
+
+        {/* Backdrop overlay for mobile menu */}
+        {mobileMenuOpen && (
+          <div className="mobile-menu-backdrop" onClick={() => setMobileMenuOpen(false)} />
+        )}
+
+        {/* Navigation Bar (Inline on Desktop / Slide Drawer on Mobile) */}
+        <nav className={`header-nav ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+          <div className="mobile-nav-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <img src="/Logo.png" alt="Logo" style={{ height: '28px', objectFit: 'contain' }} />
+              <strong style={{ fontSize: '1rem', color: '#fff' }}>{t.logo}</strong>
+            </div>
+            <button
+              type="button"
+              className="btn-close-mobile-nav"
+              onClick={() => setMobileMenuOpen(false)}
+              aria-label="Close menu"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="mobile-nav-links">
+            <Link to="/" onClick={(e) => { handleLogoClick(e); setMobileMenuOpen(false); }} className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>
+              📊 {t.navHome}
             </Link>
-          )}
-          {isAdmin && (
-            <Link to="/admin" className={`nav-link ${location.pathname.includes('/admin') ? 'active' : ''}`}>{t.navAdmin || (lang === 'ar' ? 'لوحة الأدمن' : 'Admin Panel')}</Link>
-          )}
-          <button type="button" className="nav-link" onClick={() => setShowTutorialModal(true)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.5rem 0.75rem', fontWeight: 600 }}>
-            💡 {lang === 'ar' ? 'دليل الخطوات' : 'Step Guide'}
-          </button>
-          <button className="nav-link btn-settings-trigger" onClick={() => setShowSettingsModal(true)}>
-            ⚙️ {t.navSettings}
-          </button>
+            <Link to="/drafts" onClick={() => setMobileMenuOpen(false)} className={`nav-link ${location.pathname.includes('/drafts') ? 'active' : ''}`}>
+              📁 {t.navDrafts}
+            </Link>
+            {hasWarehouseAccess && (
+              <Link to="/warehouse" onClick={() => setMobileMenuOpen(false)} className={`nav-link ${location.pathname.includes('/warehouse') ? 'active' : ''}`}>
+                📦 {t.navWarehouse || (lang === 'ar' ? 'المخزون' : 'Warehouse')}
+              </Link>
+            )}
+            {isAdmin && (
+              <Link to="/admin" onClick={() => setMobileMenuOpen(false)} className={`nav-link ${location.pathname.includes('/admin') ? 'active' : ''}`}>
+                👑 {t.navAdmin || (lang === 'ar' ? 'لوحة الأدمن' : 'Admin Panel')}
+              </Link>
+            )}
+            <button type="button" className="nav-link" onClick={() => { setShowTutorialModal(true); setMobileMenuOpen(false); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}>
+              💡 {lang === 'ar' ? 'دليل الخطوات' : 'Step Guide'}
+            </button>
+            <button className="nav-link btn-settings-trigger" onClick={() => { setShowSettingsModal(true); setMobileMenuOpen(false); }} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+              ⚙️ {t.navSettings}
+            </button>
+          </div>
+
+          {/* Mobile Drawer Bottom Quick Controls */}
+          <div className="mobile-nav-footer">
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm mobile-footer-btn"
+              onClick={() => { setShowReleaseNotesModal(true); setMobileMenuOpen(false); }}
+            >
+              <span>⚡ {lang === 'ar' ? 'سجل التحديثات' : 'Release Notes'}</span>
+              <span style={{ color: 'var(--accent)', fontWeight: 800 }}>{CURRENT_APP_VERSION}</span>
+            </button>
+
+            <button
+              type="button"
+              className="lang-toggle-btn mobile-lang-btn"
+              onClick={() => { setLang(lang === 'ar' ? 'en' : 'ar'); }}
+            >
+              🌐 {lang === 'ar' ? 'English' : 'العربية'}
+            </button>
+
+            {user && (
+              <div className="mobile-user-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                  <div
+                    className="user-avatar"
+                    style={{
+                      width: '38px',
+                      height: '38px',
+                      backgroundImage: user.photoURL ? `url(${user.photoURL})` : 'none',
+                      backgroundSize: 'cover',
+                      flexShrink: 0
+                    }}
+                  >
+                    {!user.photoURL && (user.displayName?.slice(0, 2).toUpperCase() || 'US')}
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {user.displayName || 'User'}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {user.email}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  className="btn-logout"
+                  onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
+                >
+                  {t.logout} 🚪
+                </button>
+              </div>
+            )}
+          </div>
         </nav>
 
-        <div className="header-actions">
+        {/* Desktop Header Actions */}
+        <div className="header-actions desktop-header-actions">
           <button className="lang-toggle-btn" onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}>
             🌐 {lang === 'ar' ? 'English' : 'العربية'}
           </button>
