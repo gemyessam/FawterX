@@ -12,6 +12,7 @@ const {
   listProjects,
   createProject,
   deleteProject,
+  unarchiveProject,
   getProjectStock,
   processInboundInvoice,
   processManualStockMovement,
@@ -38,6 +39,12 @@ const {
 
 const router = express.Router();
 router.use(express.json());
+// Warehouse data always requires a real authenticated session, even on a
+// misconfigured/non-production server that permits demo auth on other routes.
+router.use((req, res, next) => {
+  if (!req.headers.authorization?.startsWith('Bearer ')) return res.status(401).json({ success: false, message: 'Warehouse authentication is required.' });
+  next();
+});
 router.use(authMiddleware);
 
 const uploadsDir = path.join(__dirname, "../../uploads");
@@ -69,7 +76,7 @@ router.get("/access", async (req, res) => {
     const access = await getUserWarehouseAccess(req.user.uid, req.user.email);
     return res.json({ success: true, ...access });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -111,7 +118,7 @@ async function requireWarehouse(req, res, next) {
 
     next();
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
+    return res.status(err.statusCode || 500).json({ success: false, message: err.message });
   }
 }
 
@@ -139,7 +146,7 @@ async function requireAdmin(req, res, next) {
     req.warehouseAccess = access;
     next();
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
+    return res.status(err.statusCode || 500).json({ success: false, message: err.message });
   }
 }
 
@@ -152,7 +159,7 @@ router.get("/users", requireAdmin, async (req, res) => {
     const users = await listWarehouseUsers();
     return res.json({ success: true, users });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -170,7 +177,7 @@ router.post("/users/:uid", requireAdmin, async (req, res) => {
     );
     return res.json({ success: true, access: result });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -180,17 +187,17 @@ router.post("/users/:uid", requireAdmin, async (req, res) => {
  */
 router.get("/projects", requireWarehouse, async (req, res) => {
   try {
-    let projects = await listProjects();
+    let projects = await listProjects(req.warehouseAccess?.isAdmin && req.query.includeArchived === "true");
     const access = req.warehouseAccess || {};
     if (!access.isAdmin) {
       const allowed = Array.isArray(access.allowedProjects) ? access.allowedProjects : ["*"];
       if (!allowed.includes("*")) {
-        projects = projects.filter(p => allowed.includes(p.id) || (p.code === "CANEX" && allowed.includes("default_canex")));
+        projects = projects.filter(p => allowed.includes(p.id));
       }
     }
     return res.json({ success: true, projects });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -207,7 +214,7 @@ router.post("/projects", requireAdmin, async (req, res) => {
     const project = await createProject({ name, code, description }, req.user.uid);
     return res.json({ success: true, project });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -221,8 +228,13 @@ router.delete("/projects/:projectId", requireAdmin, async (req, res) => {
     const result = await deleteProject(projectId, req.user.uid);
     return res.json({ success: true, ...result });
   } catch (error) {
-    return res.status(400).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 400).json({ success: false, message: error.message });
   }
+});
+
+router.post("/projects/:projectId/unarchive", requireAdmin, async (req, res) => {
+  try { return res.json(await unarchiveProject(req.params.projectId, req.user.uid)); }
+  catch (error) { return res.status(error.statusCode || 500).json({ success: false, message: error.message }); }
 });
 
 /**
@@ -234,7 +246,7 @@ router.get("/projects/:projectId/stock", requireWarehouse, async (req, res) => {
     const stock = await getProjectStock(req.resolvedProjectId || req.params.projectId);
     return res.json({ success: true, stock });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -258,7 +270,7 @@ router.post("/invoices/parse", requireWarehouse, upload.single("file"), async (r
       ...result,
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   } finally {
     try {
       if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
@@ -291,7 +303,7 @@ router.post("/projects/:projectId/reconcile-delmar-and-costs", requireWarehouse,
     );
     return res.json({ success: true, ...result });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -326,7 +338,7 @@ router.post("/projects/:projectId/invoices/process", requireWarehouse, async (re
     );
     return res.json({ success: true, ...result });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -360,7 +372,7 @@ router.post("/projects/:projectId/manual-movement", requireWarehouse, async (req
     );
     return res.json({ success: true, ...result });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -374,7 +386,7 @@ router.get("/projects/:projectId/dispatches", requireWarehouse, async (req, res)
     const dispatches = await getProjectDispatches(req.resolvedProjectId || req.params.projectId, status);
     return res.json({ success: true, dispatches });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -399,7 +411,7 @@ router.patch("/projects/:projectId/dispatches/:dispatchId/stage", requireWarehou
     );
     return res.json({ success: true, ...result });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -419,7 +431,7 @@ router.delete("/projects/:projectId/dispatches/:dispatchId", requireAdmin, async
     );
     return res.json({ success: true, ...result });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -432,7 +444,7 @@ router.get("/projects/:projectId/invoices", requireWarehouse, async (req, res) =
     const invoices = await getProjectInvoices(req.resolvedProjectId || req.params.projectId);
     return res.json({ success: true, invoices });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -445,7 +457,7 @@ router.get("/projects/:projectId/audit-logs", requireAdmin, async (req, res) => 
     const logs = await getWarehouseAuditLogs(req.resolvedProjectId || req.params.projectId);
     return res.json({ success: true, logs });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -458,7 +470,7 @@ router.get("/projects/:projectId/invoices/:invoiceId/movements", requireWarehous
     const movements = await getProjectMovements(req.resolvedProjectId || req.params.projectId, req.params.invoiceId);
     return res.json({ success: true, movements });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -472,7 +484,7 @@ router.get("/projects/:projectId/stock/:itemKey/movements", requireWarehouse, as
     const movements = await getItemMovementsHistory(req.resolvedProjectId || req.params.projectId, req.params.itemKey, itemCode);
     return res.json({ success: true, movements });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -493,7 +505,7 @@ router.put("/projects/:projectId/stock/:itemKey", requireAdmin, async (req, res)
     );
     return res.json({ success: true, item: result });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -513,7 +525,7 @@ router.delete("/projects/:projectId/stock/:itemKey", requireAdmin, async (req, r
     );
     return res.json({ success: true, ...result });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -538,7 +550,7 @@ router.patch("/projects/:projectId/invoices/:invoiceId", requireWarehouse, async
     );
     return res.json({ success: true, ...result });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -558,7 +570,7 @@ router.post("/projects/:projectId/invoices/:invoiceId/rollback", requireAdmin, a
     );
     return res.json({ success: true, ...result });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -571,7 +583,7 @@ router.get("/projects/:projectId/restore-points", requireWarehouse, async (req, 
     const points = await listProjectRestorePoints(req.resolvedProjectId || req.params.projectId);
     return res.json({ success: true, points });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -595,7 +607,7 @@ router.post("/projects/:projectId/restore-points", requireWarehouse, async (req,
     );
     return res.json({ success: true, point: result });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -603,7 +615,7 @@ router.post("/projects/:projectId/restore-points", requireWarehouse, async (req,
  * POST /api/warehouse/projects/:projectId/restore-points/:pointId/restore
  * Restore project stock to a specific restore point (Admin or authorized warehouse user)
  */
-router.post("/projects/:projectId/restore-points/:pointId/restore", requireWarehouse, async (req, res) => {
+router.post("/projects/:projectId/restore-points/:pointId/restore", requireAdmin, async (req, res) => {
   try {
     if (req.warehouseAccess?.canEdit === false || req.warehouseRole === "warehouse_viewer") {
       return res.status(403).json({ success: false, message: "Forbidden: You do not have permission to restore project state." });
@@ -618,7 +630,7 @@ router.post("/projects/:projectId/restore-points/:pointId/restore", requireWareh
     );
     return res.json({ success: true, ...result });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -641,7 +653,7 @@ router.delete("/projects/:projectId/restore-points/:pointId", requireWarehouse, 
     );
     return res.json({ success: true, ...result });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -654,7 +666,7 @@ router.get("/projects/:projectId/aliases", requireWarehouse, async (req, res) =>
     const aliases = await getProjectItemAliases(req.resolvedProjectId || req.params.projectId);
     return res.json({ success: true, aliases });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -676,7 +688,7 @@ router.post("/projects/:projectId/aliases", requireWarehouse, async (req, res) =
     });
     return res.json(result);
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -699,9 +711,8 @@ router.delete("/projects/:projectId/aliases/:aliasDocId", requireWarehouse, asyn
     );
     return res.json(result);
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
 module.exports = router;
-

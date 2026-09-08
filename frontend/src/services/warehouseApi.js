@@ -39,8 +39,8 @@ export async function updateWarehouseUserAccess(uid, payload) {
 }
 
 /** Get list of warehouse projects */
-export async function getWarehouseProjects() {
-  const { data } = await api.get('/warehouse/projects')
+export async function getWarehouseProjects(includeArchived = false) {
+  const { data } = await api.get('/warehouse/projects', { params: { includeArchived } })
   return data
 }
 
@@ -205,3 +205,8 @@ export async function deleteProjectItemAlias(projectId, aliasDocId) {
 
 
 
+
+export async function unarchiveWarehouseProject(projectId) {
+  const { data } = await api.post(`/warehouse/projects/${projectId}/unarchive`)
+  return data
+}

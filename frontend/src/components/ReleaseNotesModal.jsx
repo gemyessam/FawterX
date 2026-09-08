@@ -14,11 +14,41 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
 
   const releaseHistory = [
     {
+      version: 'v2.27.63',
+      category: 'warehouse',
+      date: isAr ? '8 سبتمبر 2026' : 'Sep 8, 2026',
+      badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
+      badgeColor: '#00e0a1',
+      title: isAr
+        ? 'منع تكرار وحذف المخازن وحماية البيانات بالأرشفة الآمنة ونقاط الحفظ الشاملة'
+        : 'Ghost Warehouse Prevention, Safe Archiving & Multi-Collection Snapshots',
+      highlights: [
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'منع التكرار الوهمي للمخازن وحظر الحذف التلقائي للمخازن المشتركة في الكود؛ الاعتماد الحصري على المعرف الفعلي (Project ID).'
+            : 'Prevented duplicate ghost warehouses and blocked shared-code deletion collisions; strictly scoped to exact Document IDs.'
+        },
+        {
+          icon: '📦',
+          text: isAr
+            ? 'استبدال الحذف النهائي بنظام أرشفة واسترجاع آمن يحفظ الأرصدة والفواتير والحركات وأوامر الصرف وسجل التدقيق كاملاً.'
+            : 'Replaced destructive deletion with safe archive & unarchive, fully retaining inventory, invoices, movements, dispatches, and audits.'
+        },
+        {
+          icon: '🔄',
+          text: isAr
+            ? 'ترقية نقاط الحفظ (Snapshots) لتشمل كافة المجموعات الفرعية الثمانية واستعادة الحالة بدقة تامة وبدون فقد بيانات.'
+            : 'Upgraded restore points across all 8 subcollections for transactional, atomic full-state rollback without data loss.'
+        }
+      ]
+    },
+    {
       version: 'v2.27.62',
       category: 'invoicing',
       date: isAr ? '7 سبتمبر 2026' : 'Sep 7, 2026',
-      badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
-      badgeColor: '#00e0a1',
+      badge: isAr ? 'مستقر' : 'Stable',
+      badgeColor: '#6c757d',
       title: isAr
         ? 'إضافة وسم الميتا المباشر لإثبات ملكية Google Search Console'
         : 'Google Search Console Verification HTML Meta Tag Integration',

@@ -1,4 +1,5 @@
-import { useState, useEffect, useContext, useMemo } from 'react'
+import { getDelmarPool, findDelmarPoolMatches } from '../utils/warehouseCoating.mjs'
+import { useState, useEffect, useContext, useMemo, useRef } from 'react'
 import { toast } from 'react-hot-toast'
 import { AppContext } from '../App'
 import * as XLSX from 'xlsx'
@@ -8,6 +9,7 @@ import {
   getWarehouseProjects,
   createWarehouseProject,
   deleteWarehouseProject,
+  unarchiveWarehouseProject,
   getProjectStock,
   parseWarehouseInvoice,
   processWarehouseInvoice,
@@ -143,48 +145,6 @@ function buildStockCheckResult(matchedItem, availableBar, reqBar, diff, viaAlias
   }
 }
 
-function getDelmarPool(activeDispatches = []) {
-  const pool = []
-  if (Array.isArray(activeDispatches) && activeDispatches.length > 0) {
-    for (let dIdx = 0; dIdx < activeDispatches.length; dIdx++) {
-      const d = activeDispatches[dIdx]
-      if (d.isCompleted || d.currentStage === 'closed' || d.currentStage === 'delivered_to_customer') continue
-      if (Array.isArray(d.items)) {
-        for (let iIdx = 0; iIdx < d.items.length; iIdx++) {
-          const it = d.items[iIdx]
-          const q = Number(it.quantityBar || it.bars || 0)
-          if (q > 0) {
-            const len = Number(it.lengthMm || 6000)
-            let bp = Number(it.barPrice || 0)
-            let up = Number(it.unitPrice || 0)
-            if (bp === 0 && up > 0 && len > 0) bp = Number(((up * len) / 1000).toFixed(4))
-            if (up === 0 && bp > 0 && len > 0) up = Number(((bp * 1000) / len).toFixed(4))
-
-            pool.push({
-              key: `${d.id || dIdx}_${iIdx}`,
-              dispatchId: d.id,
-              dispatchNumber: d.dispatchNumber || '',
-              deliveryNote: d.deliveryNote || '',
-              customerName: d.customerName || '',
-              itemCode: it.itemCode || '',
-              customerCode: it.customerCode || '',
-              color: it.color || it.finish || '',
-              lengthMm: len,
-              barPrice: bp,
-              unitPrice: up,
-              netTotal: Number((q * bp).toFixed(2)),
-              totalBars: q,
-              remainingBars: q,
-              allocatedLines: [],
-            })
-          }
-        }
-      }
-    }
-  }
-  return pool
-}
-
 function resolveCanonicalItemPrice(line, stock = [], activeDispatches = [], aliasesMap = {}, invoices = []) {
   const clean = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
   const lItem = clean(line.itemCode)
@@ -271,52 +231,6 @@ function resolveCanonicalItemPrice(line, stock = [], activeDispatches = [], alia
   }
 
   return { barPrice: 0, unitPrice: 0 }
-}
-
-function findDelmarPoolMatches(line, delmarPool = [], aliasesMap = {}) {
-  const clean = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
-  let lItem = clean(line.itemCode)
-  let lCust = clean(line.customerCode)
-
-  const targetCodes = [lItem, lCust].filter(Boolean)
-  if (lItem === '515750' || lCust === '515750') targetCodes.push('515756', '301201404', '301-201404')
-  if (lItem === '515756' || lCust === '515756') targetCodes.push('515750', '301201404', '301-201404')
-  if (lItem.includes('201404') || lCust.includes('201404')) targetCodes.push('515750', '515756')
-
-  if (aliasesMap && typeof aliasesMap === 'object') {
-    for (const c of [...targetCodes]) {
-      if (aliasesMap[c] && aliasesMap[c].targetItemCode) {
-        targetCodes.push(clean(aliasesMap[c].targetItemCode))
-      }
-    }
-  }
-
-  // 1. Exact or Synonym match
-  const exactMatches = delmarPool.filter((p) => {
-    const iCode = clean(p.itemCode)
-    const cCode = clean(p.customerCode)
-    return targetCodes.some((tc) => iCode === tc || cCode === tc)
-  })
-  if (exactMatches.length > 0) return exactMatches
-
-  // 2. 5-digit prefix match (e.g. 515750 vs 515756)
-  const prefixMatches = delmarPool.filter((p) => {
-    const iCode = clean(p.itemCode)
-    const cCode = clean(p.customerCode)
-    return targetCodes.some((tc) => tc.length >= 5 && (iCode.startsWith(tc.slice(0, 5)) || (cCode && cCode.startsWith(tc.slice(0, 5)))))
-  })
-  if (prefixMatches.length > 0) return prefixMatches
-
-  // 3. Substring match (min 4 characters)
-  const subMatches = delmarPool.filter((p) => {
-    const iCode = clean(p.itemCode)
-    const cCode = clean(p.customerCode)
-    return (lItem && lItem.length >= 4 && (iCode.includes(lItem) || lItem.includes(iCode))) ||
-           (lCust && lCust.length >= 4 && (cCode.includes(lCust) || lCust.includes(cCode)))
-  })
-  if (subMatches.length > 0) return subMatches
-
-  return []
 }
 
 function computeBatchDelmarAllocations(reviewLines = [], activeDispatches = [], aliasesMap = {}, stock = []) {
@@ -702,52 +616,36 @@ export default function Warehouse() {
     }
   }, [user, isAdmin])
 
-  const [projects, setProjects] = useState(() => {
-    try {
-      const saved = localStorage.getItem('fawterx_cached_projects')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed
-      }
-    } catch (e) {}
-    return []
-  })
-
-  const [selectedProjectId, setSelectedProjectId] = useState(() => {
-    try {
-      return localStorage.getItem('fawterx_selected_project_id') || ''
-    } catch (e) {
-      return ''
-    }
-  })
-
-  const [stock, setStock] = useState(() => {
-    try {
-      const savedProj = localStorage.getItem('fawterx_selected_project_id')
-      if (savedProj) {
-        const cachedStock = localStorage.getItem(`fawterx_stock_cache_${savedProj}`)
-        if (cachedStock) {
-          const parsed = JSON.parse(cachedStock)
-          if (Array.isArray(parsed)) return parsed
-        }
-      }
-    } catch (e) {}
-    return []
-  })
-
+  const [projects, setProjects] = useState([])
+  const [archivedProjects, setArchivedProjects] = useState([])
+  const [selectedProjectId, setSelectedProjectId] = useState('')
+  const [stock, setStock] = useState([])
+  const [projectError, setProjectError] = useState('')
+  const dataRequest = useRef({})
+  const [stockError, setStockError] = useState('')
+  const [dataRevision, setDataRevision] = useState(0)
+  const selectedProjectRef = useRef('')
+  const projectRequest = useRef(0)
+  const stockRequest = useRef(0)
+  selectedProjectRef.current = selectedProjectId
   const handleSelectProject = (projectId) => {
+    selectedProjectRef.current = projectId
+    stockRequest.current++
+    dataRequest.current = {}
     setSelectedProjectId(projectId)
-    try {
-      localStorage.setItem('fawterx_selected_project_id', projectId)
-    } catch (e) {}
-    try {
-      const cachedStock = localStorage.getItem(`fawterx_stock_cache_${projectId}`)
-      if (cachedStock) {
-        setStock(JSON.parse(cachedStock))
-      } else {
-        setStock([])
-      }
-    } catch (e) {}
+    setStock([])
+    setInvoices([])
+    setActiveDispatches([])
+    setProjectAliases([])
+    setRestorePoints([])
+    setAuditLogs([])
+    setSelectedInvoice(null)
+    setSelectedStockItemHistory(null)
+    setSelectedStockKeys([])
+    setLinkModalData(null)
+    setInvoiceMovements([])
+    setItemMovements([])
+    setStockError('')
   }
 
   // Item Cross-Reference Aliases (e.g. Schüco 515750 <=> Canex 515756)
@@ -764,9 +662,12 @@ export default function Warehouse() {
   }, [projectAliases])
 
   const loadProjectAliases = async (pId) => {
+    const token = Symbol()
+    dataRequest.current.aliases = token
     if (!pId) return
     try {
       const res = await getProjectItemAliases(pId)
+      if (selectedProjectRef.current !== pId || dataRequest.current.aliases !== token) return
       if (res && Array.isArray(res.aliases)) {
         setProjectAliases(res.aliases)
       }
@@ -1060,6 +961,7 @@ export default function Warehouse() {
     setLoadingItemMovements(true)
     try {
       const res = await getItemMovementsHistory(selectedProjectId, item.itemKey, item.itemCode)
+      if (selectedProjectRef.current !== selectedProjectId) return
       setItemMovements(res.movements || [])
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل جلب سجل حركات البند' : 'Failed to load item movement history'))
@@ -1338,7 +1240,7 @@ export default function Warehouse() {
         setNewProjectDesc('')
         await loadProjects()
         if (res.project?.id) {
-          setSelectedProjectId(res.project.id)
+          handleSelectProject(res.project.id)
         }
       }
     } catch (err) {
@@ -1349,49 +1251,20 @@ export default function Warehouse() {
   }
 
   async function handleDeleteProject(proj) {
-    if (!isAdmin) {
-      toast.error(isAr ? 'صلاحية الأدمن مطلوبة لحذف المشاريع' : 'Admin role required to delete projects')
-      return
-    }
-    if (!proj || !proj.id) return
-
-    if (projects.length <= 1) {
-      toast.error(isAr ? 'لا يمكن حذف المشروع الوحيد المتبقي في النظام' : 'Cannot delete the only remaining project')
-      return
-    }
-
-    const confirmMsg = isAr
-      ? `⚠️ تحذير خطير جداً!\n\nهل أنت تأكد من رغبتك في حذف مشروع المخزن بالكامل ("${proj.name || proj.id}")؟\n\nسيتم حذف جميع الأرصدة، الفواتير، وحركات التوريد الصادرة/الواردة ونقاط الحفظ التابعة لهذا المشروع نهائياً ولا يمكن استعادتها!`
-      : `⚠️ Critical Warning!\n\nAre you sure you want to PERMANENTLY DELETE project ("${proj.name || proj.id}")?\n\nAll inventory stock, invoices, movements, audit logs, and restore points for this project will be permanently erased!`
-
-    if (!window.confirm(confirmMsg)) return
-
+    if (!isAdmin || !proj?.id || projects.length <= 1) return
+    if (!window.confirm(isAr ? `أرشفة المخزن "${proj.name}"؟ سيتم الاحتفاظ بكل بياناته ونقاط حفظه ويمكن استرجاعه من الأرشيف.` : `Archive "${proj.name}"? All data and restore points will be retained.`)) return
     setDeletingProjectId(proj.id)
     try {
-      const res = await deleteWarehouseProject(proj.id)
-      if (res.success) {
-        toast.success(res.message || (isAr ? `تم حذف المشروع ${proj.name} بنجاح` : `Project ${proj.name} deleted successfully`))
-
-        const updatedProjects = projects.filter((p) => p.id !== proj.id && p.code !== proj.code)
-        setProjects(updatedProjects)
-
-        if (selectedProjectId === proj.id) {
-          const nextId = updatedProjects[0]?.id || ''
-          setSelectedProjectId(nextId)
-          try {
-            localStorage.setItem('fawterx_selected_project_id', nextId)
-          } catch (e) {}
-        }
-        loadProjects()
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل حذف المشروع' : 'Failed to delete project'))
-    } finally {
-      setDeletingProjectId(null)
-    }
+      await deleteWarehouseProject(proj.id)
+      await loadProjects()
+      toast.success(isAr ? 'تمت أرشفة المخزن مع الاحتفاظ ببياناته' : 'Warehouse archived; all data retained')
+    } catch (err) { toast.error(err.response?.data?.message || err.message) }
+    finally { setDeletingProjectId(null) }
   }
-
-
+  async function handleUnarchiveProject(proj) {
+    try { await unarchiveWarehouseProject(proj.id); await loadProjects() }
+    catch (err) { toast.error(err.response?.data?.message || err.message) }
+  }
 
   useEffect(() => {
     loadProjects()
@@ -1425,9 +1298,12 @@ export default function Warehouse() {
   }, [activeTab, selectedProjectId])
 
   async function loadRestorePoints(projectId) {
+    const token = Symbol()
+    dataRequest.current.loadRestorePoints = token
     setLoadingRestorePoints(true)
     try {
       const res = await getProjectRestorePoints(projectId)
+      if (selectedProjectRef.current !== projectId || dataRequest.current.loadRestorePoints !== token) return
       if (res.success && res.points) {
         setRestorePoints(res.points)
       }
@@ -1463,8 +1339,8 @@ export default function Warehouse() {
   async function handleRestoreToPoint(point) {
     if (!selectedProjectId || !point) return
     const confirmMsg = isAr
-      ? `⚠️ تحذير مهم جداً!\n\nهل أنت تأكد من استعادة أرصدة المخزن لنقطة الحفظ ("${point.name}")؟\n\nسيتم استبدال رصيد المخزن الحالي بهذا Snapshot وتوثيق العملية في سجل التدقيق.`
-      : `⚠️ Important Warning!\n\nAre you sure you want to restore the stock balance to point ("${point.name}")?\n\nCurrent inventory will be overwritten with this snapshot.`
+      ? `⚠️ تحذير مهم جداً!\n\nهل أنت تأكد من استعادة أرصدة المخزن لنقطة الحفظ ("${point.name}")؟\n\nسيتم استعادة الأصناف والأرصدة والفواتير والحركات وأوامر الصرف وربط الأكواد وعلامات الحذف وبيانات المخزن وسجل التدقيق.`
+      : `⚠️ Important Warning!\n\nAre you sure you want to restore the stock balance to point ("${point.name}")?\n\nStock, items, invoices, movements, dispatches, aliases, deletion markers and warehouse details will be restored.`
 
     if (!window.confirm(confirmMsg)) return
 
@@ -1472,15 +1348,11 @@ export default function Warehouse() {
     try {
       const res = await restoreProjectToPoint(selectedProjectId, point.id)
       if (res.success) {
-        toast.success(isAr ? `تمت استعادة نقطة الحفظ (${point.name}) بنجاح وإرجاع كافة الحركات والأرصدة!` : `Restored to point (${point.name}) successfully!`)
-        await loadStock(selectedProjectId)
-        await loadInvoices(selectedProjectId)
-        try {
-          const dRes = await getWarehouseDispatches(selectedProjectId)
-          if (dRes && dRes.success && Array.isArray(dRes.dispatches)) {
-            setActiveDispatches(dRes.dispatches)
-          }
-        } catch (e) {}
+        if (selectedProjectRef.current !== selectedProjectId) return
+        handleSelectProject(selectedProjectId)
+        setDataRevision(v => v + 1)
+        await Promise.all([loadStock(selectedProjectId), loadInvoices(selectedProjectId), loadProjectAliases(selectedProjectId), loadRestorePoints(selectedProjectId), loadAuditLogs(selectedProjectId)])
+        toast.success(isAr ? 'تمت استعادة بيانات المخزن بالكامل' : 'Warehouse state restored')
       }
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل استعادة نقطة الحفظ' : 'Failed to restore point'))
@@ -1525,6 +1397,7 @@ export default function Warehouse() {
         await loadInvoices(selectedProjectId)
         try {
           const dRes = await getWarehouseDispatches(selectedProjectId)
+          if (selectedProjectRef.current !== selectedProjectId) return
           if (dRes && dRes.success && Array.isArray(dRes.dispatches)) {
             setActiveDispatches(dRes.dispatches)
           }
@@ -1617,9 +1490,12 @@ export default function Warehouse() {
   }
 
   async function loadAuditLogs(projectId) {
+    const token = Symbol()
+    dataRequest.current.loadAuditLogs = token
     setLoadingAuditLogs(true)
     try {
       const res = await getWarehouseAuditLogs(projectId)
+      if (selectedProjectRef.current !== projectId || dataRequest.current.loadAuditLogs !== token) return
       if (res.success && res.logs) {
         setAuditLogs(res.logs)
       }
@@ -1631,9 +1507,12 @@ export default function Warehouse() {
   }
 
   async function loadInvoices(projectId) {
+    const token = Symbol()
+    dataRequest.current.loadInvoices = token
     setLoadingInvoices(true)
     try {
       const res = await getWarehouseInvoices(projectId)
+      if (selectedProjectRef.current !== projectId || dataRequest.current.loadInvoices !== token) return
       if (res.success && res.invoices) {
         setInvoices(res.invoices)
       }
@@ -1656,6 +1535,7 @@ export default function Warehouse() {
       await loadStock(selectedProjectId)
       try {
         const dRes = await getWarehouseDispatches(selectedProjectId)
+          if (selectedProjectRef.current !== selectedProjectId) return
         if (dRes && dRes.success && Array.isArray(dRes.dispatches)) {
           setActiveDispatches(dRes.dispatches)
         }
@@ -1674,6 +1554,7 @@ export default function Warehouse() {
     setLoadingMovements(true)
     try {
       const res = await getInvoiceMovements(selectedProjectId, inv.id)
+      if (selectedProjectRef.current !== selectedProjectId) return
       if (res.success && res.movements) {
         setInvoiceMovements(res.movements)
       }
@@ -1707,74 +1588,43 @@ export default function Warehouse() {
   }
 
   async function loadProjects() {
+    const request = ++projectRequest.current
     setLoading(true)
+    setProjectError('')
     try {
-      const res = await getWarehouseProjects()
-      if (res && res.success && Array.isArray(res.projects) && res.projects.length > 0) {
-        setProjects(res.projects)
-        try {
-          localStorage.setItem('fawterx_cached_projects', JSON.stringify(res.projects))
-        } catch (e) {}
-
-        setSelectedProjectId((prev) => {
-          const saved = localStorage.getItem('fawterx_selected_project_id')
-          const candidate = prev || saved || ''
-          const exists = res.projects.some((p) => p.id === candidate)
-          const nextId = exists ? candidate : res.projects[0].id
-          try {
-            localStorage.setItem('fawterx_selected_project_id', nextId)
-          } catch (e) {}
-          return nextId
-        })
-      } else {
-        if (projects.length === 0) {
-          const defaultProj = { id: 'default_canex', name: 'Canex Stock', code: 'CANEX', description: 'المخزن الرئيسي لقطاعات وإكسسوارات كانكس' }
-          setProjects([defaultProj])
-          setSelectedProjectId((prev) => {
-            const nextId = prev || defaultProj.id
-            try {
-              localStorage.setItem('fawterx_selected_project_id', nextId)
-            } catch (e) {}
-            return nextId
-          })
-        }
-      }
+      const res = await getWarehouseProjects(isAdmin)
+      if (request !== projectRequest.current) return
+      if (!res?.success || !Array.isArray(res.projects)) throw new Error(isAr ? 'تعذر تحميل المخازن' : 'Unable to load warehouses')
+      const active = res.projects.filter(p => p.status !== 'archived')
+      setProjects(active)
+      setArchivedProjects(res.projects.filter(p => p.status === 'archived'))
+      const next = active.some(p => p.id === selectedProjectRef.current) ? selectedProjectRef.current : (active[0]?.id || '')
+      if (next !== selectedProjectRef.current) handleSelectProject(next)
+      if (!active.length) setActiveTab('projects')
     } catch (err) {
-      console.warn('Warehouse projects loading error:', err)
-      if (projects.length === 0) {
-        const defaultProj = { id: 'default_canex', name: 'Canex Stock', code: 'CANEX', description: 'المخزن الرئيسي لقطاعات وإكسسوارات كانكس' }
-        setProjects([defaultProj])
-        setSelectedProjectId((prev) => {
-          const nextId = prev || defaultProj.id
-          try {
-            localStorage.setItem('fawterx_selected_project_id', nextId)
-          } catch (e) {}
-          return nextId
-        })
-      }
-    } finally {
-      setLoading(false)
-    }
+      if (request !== projectRequest.current) return
+      handleSelectProject('')
+      setProjects([])
+      setArchivedProjects([])
+      setProjectError(err.response?.data?.message || err.message)
+    } finally { if (request === projectRequest.current) setLoading(false) }
   }
 
   async function loadStock(projectId) {
-    if (!projectId) return
+    if (!projectId || selectedProjectRef.current !== projectId) return
+    const request = ++stockRequest.current
     try {
-      const res = await getProjectStock(projectId)
-      if (res && res.success && Array.isArray(res.stock)) {
-        setStock(res.stock)
-      try {
-        const dRes = await getWarehouseDispatches(projectId)
-        if (dRes && dRes.success && Array.isArray(dRes.dispatches)) {
-          setActiveDispatches(dRes.dispatches)
-        }
-      } catch (e) {}
-        try {
-          localStorage.setItem(`fawterx_stock_cache_${projectId}`, JSON.stringify(res.stock))
-        } catch (e) {}
-      }
+      const [res, dRes] = await Promise.all([getProjectStock(projectId), getWarehouseDispatches(projectId)])
+      if (selectedProjectRef.current !== projectId || request !== stockRequest.current) return
+      if (!res?.success || !Array.isArray(res.stock) || !dRes?.success) throw new Error('Unable to load warehouse data')
+      setStock(res.stock)
+      setActiveDispatches(dRes.dispatches)
+      setStockError('')
     } catch (err) {
-      console.error('Failed to load stock data:', err)
+      if (selectedProjectRef.current !== projectId || request !== stockRequest.current) return
+      setStock([])
+      setActiveDispatches([])
+      setStockError(err.response?.data?.message || err.message)
     }
   }
 
@@ -2176,6 +2026,7 @@ export default function Warehouse() {
         await loadStock(selectedProjectId)
         try {
           const dRes = await getWarehouseDispatches(selectedProjectId)
+          if (selectedProjectRef.current !== selectedProjectId) return
           if (dRes && dRes.success && Array.isArray(dRes.dispatches)) {
             setActiveDispatches(dRes.dispatches)
           }
@@ -2344,6 +2195,7 @@ export default function Warehouse() {
     await loadStock(selectedProjectId)
     try {
       const dRes = await getWarehouseDispatches(selectedProjectId)
+          if (selectedProjectRef.current !== selectedProjectId) return
       if (dRes && dRes.success && Array.isArray(dRes.dispatches)) {
         setActiveDispatches(dRes.dispatches)
       }
@@ -3000,10 +2852,13 @@ export default function Warehouse() {
     )
   }
 
+  if (projectError) return <div className="card" role="alert">{projectError}<button className="btn btn-secondary" onClick={loadProjects}>{isAr ? 'إعادة المحاولة' : 'Retry'}</button></div>
+
   const selectedProject = projects.find((p) => p.id === selectedProjectId)
 
   return (
     <div className={`warehouse-container fade-in ${!isAr ? 'ltr-layout' : ''}`} style={{ padding: '1.5rem 0' }}>
+      {stockError && <div className="card" role="alert">{isAr ? 'تعذر تحميل الأرصدة؛ القيم الحالية غير متاحة: ' : 'Stock unavailable: '}{stockError}<button className="btn btn-secondary" onClick={() => loadStock(selectedProjectId)}>{isAr ? 'إعادة المحاولة' : 'Retry'}</button></div>}
       {/* ─── Hero Header & Project Selector ─── */}
       <div className="card glassmorphism" style={{ padding: '1.75rem', marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
@@ -3056,19 +2911,19 @@ export default function Warehouse() {
         >
           <div className="card" style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', padding: '1rem' }}>
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'عدد الأصناف (SKU)' : 'Total SKUs'}</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#ffffff', marginTop: '0.2rem' }}>{stats.totalSKUs}</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#ffffff', marginTop: '0.2rem' }}>{stockError ? '—' : stats.totalSKUs}</div>
           </div>
           <div className="card" style={{ background: 'rgba(0, 224, 161, 0.05)', border: '1px solid rgba(0, 224, 161, 0.2)', padding: '1rem' }}>
             <div style={{ fontSize: '0.8rem', color: '#00e0a1' }}>{isAr ? 'إجمالي الأعواد (BAR)' : 'Total Bars (BAR)'}</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#00e0a1', marginTop: '0.2rem' }}>{stats.totalBar.toLocaleString()}</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#00e0a1', marginTop: '0.2rem' }}>{stockError ? '—' : stats.totalBar.toLocaleString()}</div>
           </div>
           <div className="card" style={{ background: 'rgba(255, 215, 0, 0.05)', border: '1px solid rgba(255, 215, 0, 0.2)', padding: '1rem' }}>
             <div style={{ fontSize: '0.8rem', color: '#FFD700' }}>{isAr ? 'الأمتار الطولية (LM)' : 'Linear Meters (LM)'}</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#FFD700', marginTop: '0.2rem' }}>{stats.totalLm.toLocaleString(undefined, { maximumFractionDigits: 1 })} m</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#FFD700', marginTop: '0.2rem' }}>{stockError ? '—' : stats.totalLm.toLocaleString(undefined, { maximumFractionDigits: 1 })} m</div>
           </div>
           <div className="card" style={{ background: 'rgba(100, 181, 246, 0.05)', border: '1px solid rgba(100, 181, 246, 0.2)', padding: '1rem' }}>
             <div style={{ fontSize: '0.8rem', color: '#64b5f6' }}>{isAr ? 'الوزن الإجمالي (KG)' : 'Total Weight (KG)'}</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#64b5f6', marginTop: '0.2rem' }}>{stats.totalKg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#64b5f6', marginTop: '0.2rem' }}>{stockError ? '—' : stats.totalKg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg</div>
           </div>
         </div>
       </div>
@@ -5670,7 +5525,7 @@ export default function Warehouse() {
 
       {/* ─── TAB: Dispatches & Lifecycle Tracker ─── */}
       {activeTab === 'dispatches' && (
-        <DispatchesTrackerView
+        <DispatchesTrackerView key={selectedProjectId + ":" + dataRevision}
           projectId={selectedProjectId}
           projectName={selectedProject?.name}
           isAdmin={isAdmin}
@@ -5923,8 +5778,8 @@ export default function Warehouse() {
                 </h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.2rem' }}>
                   {isAr
-                    ? 'عرض المشاريع الحالية وإدارتها أو حذف المشروع بالكامل مع كافة أصنافه وسجلاته (متاح للمديرين فقط)'
-                    : 'Manage existing warehouse projects or delete complete project data (Admin only)'}
+                    ? 'إدارة المخازن وأرشفتها واسترجاعها مع الاحتفاظ ببياناتها (للمديرين فقط)'
+                    : 'Manage, archive and recover warehouses with all their data (Admin only)'}
                 </p>
               </div>
               <button
@@ -5979,7 +5834,7 @@ export default function Warehouse() {
                         </td>
                         <td>
                           <span className="badge" style={{ background: 'rgba(138, 180, 255, 0.15)', color: '#8ab4ff' }}>
-                            {proj.code || 'MAIN'}
+                            {proj.code || 'MAIN'}<small style={{ display: 'block' }}>{proj.id}</small>
                           </span>
                         </td>
                         <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{proj.description || '—'}</td>
@@ -5993,7 +5848,7 @@ export default function Warehouse() {
                             {!isSelected && (
                               <button
                                 className="btn btn-secondary"
-                                onClick={() => setSelectedProjectId(proj.id)}
+                                onClick={() => handleSelectProject(proj.id)}
                                 style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem', whiteSpace: 'nowrap', borderRadius: '6px' }}
                               >
                                 {isAr ? 'اختيار' : 'Select'}
@@ -6018,9 +5873,9 @@ export default function Warehouse() {
                                   gap: '0.3rem',
                                   fontWeight: 600,
                                 }}
-                                title={projects.length <= 1 ? (isAr ? 'لا يمكن حذف المشروع الوحيد' : 'Cannot delete sole project') : (isAr ? 'حذف المشروع بالكامل' : 'Delete Project')}
+                                title={projects.length <= 1 ? (isAr ? 'لا يمكن حذف المشروع الوحيد' : 'Cannot delete sole project') : (isAr ? 'أرشفة المخزن مع الاحتفاظ ببياناته' : 'Archive warehouse')}
                               >
-                                {isDeleting ? <span className="spinner"></span> : isAr ? '🗑️ حذف' : '🗑️ Delete'}
+                                {isDeleting ? <span className="spinner"></span> : isAr ? 'أرشفة' : 'Archive'}
                               </button>
                             )}
                           </div>
@@ -6033,6 +5888,13 @@ export default function Warehouse() {
             </div>
           </div>
 
+          {isAdmin && archivedProjects.length > 0 && <div className="card" style={{ padding: '1rem' }}>
+            <h3>{isAr ? 'المخازن المؤرشفة — البيانات محفوظة' : 'Archived warehouses — data retained'}</h3>
+            {archivedProjects.map(proj => <div key={proj.id} style={{ display: 'flex', gap: '1rem', padding: '0.5rem' }}>
+              <span>{proj.name} ({proj.code}) · {proj.id}</span>
+              <button className="btn btn-secondary" onClick={() => handleUnarchiveProject(proj)}>{isAr ? 'استرجاع المخزن' : 'Restore warehouse'}</button>
+            </div>)}
+          </div>}
           {/* ─── Warehouse Access & Permissions Management Section ─── */}
           {isAdmin && (
             <div className="card glassmorphism fade-in" style={{ padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
@@ -6305,7 +6167,7 @@ export default function Warehouse() {
                                                     if (u.uid === usr.uid) {
                                                       const current = (u.allowedProjects || []).filter(x => x !== '*')
                                                       const updated = checked ? [...current, p.id] : current.filter(x => x !== p.id)
-                                                      return { ...u, allowedProjects: updated.length === 0 ? ['*'] : updated }
+                                                      return { ...u, allowedProjects: updated }
                                                     }
                                                     return u
                                                   }))
@@ -6663,6 +6525,7 @@ export default function Warehouse() {
                               </span>
                             )}
                           </div>
+                          {!pt.restorable && <div style={{ color: '#ffb74d' }}>{isAr ? 'نقطة قديمة غير مكتملة؛ لا تصلح للاستعادة الشاملة' : 'Legacy incomplete snapshot; full restore unavailable'}</div>}
                           {pt.description && (
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>{pt.description}</div>
                           )}
@@ -6680,7 +6543,7 @@ export default function Warehouse() {
                             <button
                               className="btn btn-secondary"
                               onClick={() => handleRestoreToPoint(pt)}
-                              disabled={restoringPointId === pt.id}
+                              disabled={!isAdmin || !pt.restorable || restoringPointId !== null}
                               style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem', background: '#e65100', borderColor: '#ff9800', color: '#fff' }}
                               title={isAr ? 'استعادة أرصدة المخزن لهذه النقطة' : 'Restore stock to this point'}
                             >
@@ -6707,7 +6570,7 @@ export default function Warehouse() {
       )}
 
       {/* ─── MANUAL STOCK MOVEMENT & MULTI-STAGE OUTBOUND MODAL ─── */}
-      <ManualStockModal
+      {showManualModal && selectedProjectId && <ManualStockModal key={selectedProjectId + ":" + dataRevision}
         isOpen={showManualModal}
         onClose={() => {
           setShowManualModal(false)
@@ -6726,7 +6589,7 @@ export default function Warehouse() {
           loadStock(selectedProjectId)
           setSelectedStockKeys([])
         }}
-      />
+      />}
 
       {/* ─── LINK ITEM ALIAS MODAL (شوكو <=> كانكس) ─── */}
       {linkModalData && linkModalData.isOpen && (

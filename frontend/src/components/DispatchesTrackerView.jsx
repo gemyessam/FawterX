@@ -111,7 +111,7 @@ export default function DispatchesTrackerView({
     let list = dispatches
 
     if (statusFilter === 'active') {
-      list = list.filter((d) => !d.isCompleted && d.currentStage !== 'closed')
+      list = list.filter((d) => !d.isCompleted && !d.isCancelled && d.currentStage !== 'closed')
     } else if (statusFilter === 'completed') {
       list = list.filter((d) => d.isCompleted || d.currentStage === 'closed' || d.currentStage === 'delivered_to_customer')
     }
@@ -145,15 +145,15 @@ export default function DispatchesTrackerView({
     }
 
     return list
-  }, [dispatches, statusFilter, searchQuery])
+  }, [dispatches, statusFilter, searchQuery, invoices])
 
   // Summary KPI stats
   const kpiStats = useMemo(() => {
-    const active = dispatches.filter((d) => !d.isCompleted && d.currentStage !== 'closed')
+    const active = dispatches.filter((d) => !d.isCompleted && !d.isCancelled && d.currentStage !== 'closed')
     const completed = dispatches.filter((d) => d.isCompleted || d.currentStage === 'closed' || d.currentStage === 'delivered_to_customer')
 
-    const activeBars = active.reduce((acc, d) => acc + Number(d.totalQuantityBar || 0), 0)
-    const activeLm = active.reduce((acc, d) => acc + Number(d.totalQuantityLm || 0), 0)
+    const activeBars = active.reduce((acc, d) => acc + (d.items || []).reduce((sum, item) => sum + Math.max(0, Number(item.quantityBar || item.bars || 0) - Number(item.deliveredQuantityBar || 0)), 0), 0)
+    const activeLm = active.reduce((acc, d) => acc + (d.items || []).reduce((sum, item) => sum + Math.max(0, Number(item.quantityBar || item.bars || 0) - Number(item.deliveredQuantityBar || 0)) * Number(item.lengthMm || 6000) / 1000, 0), 0)
     const completedBars = completed.reduce((acc, d) => acc + Number(d.totalQuantityBar || 0), 0)
 
     return {

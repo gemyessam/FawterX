@@ -107,6 +107,7 @@ describe("Warehouse Permissions & Security Enforcement (FX-001 / Phase 1)", () =
     // Inject user context before warehouse router
     app.use((req, res, next) => {
       req.user = { ...currentUser };
+      if (!currentUser.withoutToken) req.headers.authorization = 'Bearer isolated-test-token';
       next();
     });
 
@@ -156,9 +157,9 @@ describe("Warehouse Permissions & Security Enforcement (FX-001 / Phase 1)", () =
       expect(typeof resolveProject).toBe("function");
     });
 
-    test("real resolveProject resolves default_canex to actual project document ID", async () => {
+    test("real resolveProject preserves exact default_canex identity", async () => {
       const resolved = await resolveProject("default_canex");
-      expect(resolved).toBe("real-canex-id");
+      expect(resolved).toBe("default_canex");
     });
 
     test("real resolveProject returns standard project ID unchanged", async () => {
@@ -202,15 +203,14 @@ describe("Warehouse Permissions & Security Enforcement (FX-001 / Phase 1)", () =
 
       const res = await fetch(`${baseUrl}/api/warehouse/projects/default_canex/stock`);
       expect(res.status).toBe(200);
-      expect(mockGetStock).toHaveBeenCalledWith("real-canex-id");
+      expect(mockGetStock).toHaveBeenCalledWith("default_canex");
     });
 
-    test("should allow access and pass resolvedProjectId when allowedProjects contains real resolved ID", async () => {
-      currentAccess.allowedProjects = ["real-canex-id"]; // Real ID in ACL
-
+    test("a grant to another CANEX ID never authorizes default_canex", async () => {
+      currentAccess.allowedProjects = ["real-canex-id"];
       const res = await fetch(`${baseUrl}/api/warehouse/projects/default_canex/stock`);
-      expect(res.status).toBe(200);
-      expect(mockGetStock).toHaveBeenCalledWith("real-canex-id");
+      expect(res.status).toBe(403);
+      expect(mockGetStock).not.toHaveBeenCalled();
     });
 
     test("should allow access when user has wildcard '*' in allowedProjects", async () => {
@@ -228,7 +228,7 @@ describe("Warehouse Permissions & Security Enforcement (FX-001 / Phase 1)", () =
         method: "DELETE",
       });
       expect(res.status).toBe(200);
-      expect(mockDeleteProject).toHaveBeenCalledWith("real-canex-id", currentUser.uid);
+      expect(mockDeleteProject).toHaveBeenCalledWith("default_canex", currentUser.uid);
     });
 
     test("requireAdmin should set resolvedProjectId when user is admin via warehouseAccess", async () => {
@@ -240,7 +240,7 @@ describe("Warehouse Permissions & Security Enforcement (FX-001 / Phase 1)", () =
         method: "DELETE",
       });
       expect(res.status).toBe(200);
-      expect(mockDeleteProject).toHaveBeenCalledWith("real-canex-id", currentUser.uid);
+      expect(mockDeleteProject).toHaveBeenCalledWith("default_canex", currentUser.uid);
     });
 
     test("requireAdmin should deny access (403) to non-admin users", async () => {
@@ -253,6 +253,25 @@ describe("Warehouse Permissions & Security Enforcement (FX-001 / Phase 1)", () =
       });
       expect(res.status).toBe(403);
       expect(mockDeleteProject).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Restore authorization", () => {
+    test("warehouse routes reject missing tokens even outside production mode", async () => {
+      currentUser.withoutToken = true;
+      const res = await fetch(`${baseUrl}/api/warehouse/projects/proj-1/stock`);
+      expect(res.status).toBe(401);
+      expect(mockGetStock).not.toHaveBeenCalled();
+    });
+    test("operators with canEdit cannot overwrite all warehouse state", async () => {
+      currentAccess.canEdit = true;
+      const res = await fetch(`${baseUrl}/api/warehouse/projects/proj-1/restore-points/point/restore`, { method: "POST" });
+      expect(res.status).toBe(403);
+    });
+    test("legacy ACL cannot read another same-code project by its real ID", async () => {
+      currentAccess.allowedProjects = ["default_canex"];
+      const res = await fetch(`${baseUrl}/api/warehouse/projects/real-canex-id/stock`);
+      expect(res.status).toBe(403);
     });
   });
 
@@ -302,7 +321,7 @@ describe("Warehouse Permissions & Security Enforcement (FX-001 / Phase 1)", () =
       const data = await res.json();
       expect(data.success).toBe(true);
       expect(mockReconcile).toHaveBeenCalledWith(
-        "real-canex-id",
+        "default_canex",
         "INV-100",
         currentUser.uid,
         currentUser.email,
@@ -397,7 +416,7 @@ describe("Warehouse Permissions & Security Enforcement (FX-001 / Phase 1)", () =
       expect(mockProcessInbound).toHaveBeenCalled();
       const passedMeta = mockProcessInbound.mock.calls[0][1];
       expect(passedMeta.movementType).toBe("inbound");
-      expect(mockProcessInbound.mock.calls[0][0]).toBe("real-canex-id");
+      expect(mockProcessInbound.mock.calls[0][0]).toBe("default_canex");
     });
 
     test("should allow canDispatch=true when movementType is 'outbound'", async () => {
@@ -488,7 +507,7 @@ describe("Warehouse Permissions & Security Enforcement (FX-001 / Phase 1)", () =
       expect(mockProcessManual).toHaveBeenCalled();
       const passedPayload = mockProcessManual.mock.calls[0][1];
       expect(passedPayload.movementType).toBe("outbound");
-      expect(mockProcessManual.mock.calls[0][0]).toBe("real-canex-id");
+      expect(mockProcessManual.mock.calls[0][0]).toBe("default_canex");
     });
   });
 });

@@ -1,12 +1,20 @@
+const { validateLines, reserveStock } = require("./warehouseValidation");
+const { allocateCoating, applyAllocations } = require("./warehouseCoating");
 const admin = require("./firebaseAdmin");
 const { isAdminEmail } = require("./adminAccess");
 
-function getDb() {
+const { problem, validId, getScopedDb, projectOperation } = require("./warehousePersistence");
+const { snapshotService } = require("./warehouseSnapshots");
+
+function rawGetDb() {
   if (admin && admin.apps && admin.apps.length > 0) {
     return admin.firestore();
   }
   return null;
 }
+
+function getDb() { return getScopedDb(rawGetDb()); }
+const snapshots = snapshotService(getDb, rawGetDb, admin);
 
 /**
  * Get warehouse permission status for a user
@@ -37,6 +45,9 @@ async function getUserWarehouseAccess(uid, email) {
 
     const data = userDoc.data() || {};
     const access = data.access && typeof data.access === "object" ? data.access : data;
+    if (['blocked', 'suspended'].includes(String(access.status || data.status || '').toLowerCase())) {
+      return { enabled: false, role: 'disabled', isAdmin: false, allowedProjects: [] };
+    }
 
     // Strict priority 1: If warehouseEnabled is explicitly false or role is disabled, deny immediately
     if (
@@ -62,6 +73,7 @@ async function getUserWarehouseAccess(uid, email) {
     const warehouseRole = String(
       data.warehouseRole || access.warehouseRole || "warehouse_operator"
     );
+    if (!['admin', 'warehouse_operator', 'warehouse_viewer'].includes(warehouseRole)) return { enabled: false, role: 'disabled', isAdmin: false, allowedProjects: [] };
 
     const isWarehouseAdmin = warehouseRole === "admin";
     const allowedProjects = Array.isArray(data.allowedProjects)
@@ -224,7 +236,9 @@ async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehous
 
   const enabled = isSuperAdminTarget ? true : Boolean(warehouseEnabled);
   const role = isSuperAdminTarget ? "admin" : (enabled ? (warehouseRole || "warehouse_operator") : "disabled");
-  const formattedProjects = isSuperAdminTarget ? ["*"] : (Array.isArray(allowedProjects) && allowedProjects.length > 0 ? allowedProjects : ["*"]);
+  const formattedProjects = isSuperAdminTarget ? ["*"] : (Array.isArray(allowedProjects) ? allowedProjects : (userDoc.data()?.allowedProjects || []));
+  for (const id of formattedProjects) if (id !== "*") validId(id);
+  if (!["admin", "warehouse_operator", "warehouse_viewer", "disabled"].includes(role)) throw problem("Invalid warehouse role.", 400);
   const boolDelete = isSuperAdminTarget ? true : (typeof canDelete === "boolean" ? canDelete : true);
   const boolEdit = isSuperAdminTarget ? true : (typeof canEdit === "boolean" ? canEdit : true);
   const boolUpload = isSuperAdminTarget ? true : (typeof canUpload === "boolean" ? canUpload : true);
@@ -267,41 +281,8 @@ async function updateWarehouseUserAccess(targetUid, { warehouseEnabled, warehous
 /**
  * Helper to resolve project ID (handles legacy 'default_canex' mapping to real CANEX doc ID e.g. BJFieT4FRQeqGFcmMhvZ)
  */
-async function resolveProjectId(db, projectId) {
-  if (!db || !projectId) return projectId;
+async function resolveProjectId(db, projectId) { return validId(projectId); }
 
-  if (projectId === "default_canex") {
-    try {
-      const defaultStockSnap = await db
-        .collection("warehouseProjects")
-        .doc("default_canex")
-        .collection("stock")
-        .limit(1)
-        .get();
-
-      if (!defaultStockSnap.empty) {
-        return "default_canex";
-      }
-
-      const canexSnap = await db
-        .collection("warehouseProjects")
-        .where("code", "==", "CANEX")
-        .limit(1)
-        .get();
-
-      if (!canexSnap.empty) {
-        return canexSnap.docs[0].id;
-      }
-    } catch (e) {
-      console.warn("Error resolving projectId for default_canex:", e.message);
-    }
-  }
-  return projectId;
-}
-
-/**
- * Public resolver to resolve project ID or legacy alias using active database
- */
 async function resolveProject(projectId) {
   const db = getDb();
   return resolveProjectId(db, projectId);
@@ -310,268 +291,41 @@ async function resolveProject(projectId) {
 /**
  * List warehouse projects (creates default Canex Stock if empty)
  */
-async function listProjects() {
+async function listProjects(includeArchived = false) {
   const db = getDb();
-  if (!db) return [];
-
+  if (!db) throw problem("Firestore is unavailable.", 503);
   const snapshot = await db.collection("warehouseProjects").get();
-  let projects = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-
-  const defaultProjectData = {
-    name: "Canex Stock",
-    code: "CANEX",
-    description: "المخزن الرئيسي لقطاعات وإكسسوارات كانكس",
-    status: "active",
-  };
-
-  // Ensure default project exists ONLY if system has 0 projects in total
-  if (projects.length === 0) {
-    await db.collection("warehouseProjects").doc("default_canex").set(
-      {
-        ...defaultProjectData,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
-    projects.push({ id: "default_canex", ...defaultProjectData });
-  }
-
-  // Deduplicate while PRESERVING actual doc.id
-  const projectMap = new Map();
-  projects.forEach((p) => {
-    if (!projectMap.has(p.id)) {
-      projectMap.set(p.id, {
-        ...p,
-        id: p.id,
-        name: p.name || (p.code === "CANEX" ? "Canex Stock" : p.id),
-      });
-    }
-  });
-
-  return Array.from(projectMap.values());
+  return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })).filter(p => includeArchived || p.status !== "archived");
 }
 
-/**
- * Create a new warehouse project
- */
 async function createProject({ name, code, description }, actorUid) {
-  const db = getDb();
-  if (!db) throw new Error("Firestore is unavailable.");
-
-  const projectData = {
-    name: name.trim(),
-    code: (code || name).trim().toUpperCase().replace(/\s+/g, "_"),
-    description: (description || "").trim(),
-    status: "active",
-    createdBy: actorUid || "admin",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-
-  const ref = await db.collection("warehouseProjects").add(projectData);
-  return { id: ref.id, ...projectData };
+  if (typeof name !== "string" || !name.trim()) throw problem("Project name is required.", 400);
+  const normalizedCode = String(code || name).trim().toUpperCase().replace(/\s+/g, "_");
+  if (name.length > 150 || normalizedCode.length > 100) throw problem("Project name or code is too long.", 400);
+  const db = rawGetDb();
+  if (!db) throw problem("Firestore is unavailable.", 503);
+  return db.runTransaction(async tx => {
+    const catalog = db.collection("warehouseMetadata").doc("catalog");
+    await tx.get(catalog);
+    const all = await tx.get(db.collection("warehouseProjects"));
+    if (all.docs.some(doc => String(doc.data().code || "").trim().toUpperCase().replace(/\s+/g, "_") === normalizedCode)) throw problem("كود المخزن موجود بالفعل، بما في ذلك المخازن المؤرشفة. اختر كوداً مختلفاً أو استرجع المخزن.");
+    const ref = db.collection("warehouseProjects").doc();
+    const data = { name: name.trim(), code: normalizedCode, description: String(description || "").trim(), status: "active", createdBy: actorUid || "", createdAt: new Date().toISOString(), warehouseRevision: 0 };
+    tx.set(ref, data);
+    tx.set(catalog, { updatedAt: new Date().toISOString() });
+    return { ...data, id: ref.id };
+  });
 }
 
-/**
- * Get current stock snapshot for a project (with cross-project aggregation fallback & movement invoice enrichment)
- */
 async function getProjectStock(projectId) {
   const db = getDb();
-  if (!db) return [];
-  projectId = await resolveProjectId(db, projectId);
-
-  const stockMap = new Map();
-
-  const fetchStockFromProj = async (pid) => {
-    try {
-      const snapshot = await db.collection("warehouseProjects").doc(pid).collection("stock").get();
-      snapshot.docs.forEach((doc) => {
-        const itemKey = doc.id;
-        const data = doc.data() || {};
-        if (!stockMap.has(itemKey)) {
-          stockMap.set(itemKey, { itemKey, ...data });
-        } else {
-          const existing = stockMap.get(itemKey);
-          stockMap.set(itemKey, {
-            ...existing,
-            ...data,
-            quantityBar: (Number(existing.quantityBar) || 0) + (Number(data.quantityBar) || 0),
-            quantityLm: (Number(existing.quantityLm) || 0) + (Number(data.quantityLm) || 0),
-            quantityKg: (Number(existing.quantityKg) || 0) + (Number(data.quantityKg) || 0),
-          });
-        }
-      });
-    } catch (e) {
-      console.warn(`Error fetching stock for project ${pid}:`, e.message);
-    }
-  };
-
-  await fetchStockFromProj(projectId);
-
-  // Fetch deleted stock keys to prevent self-healing from resurrecting deleted stock items
-  const deletedKeys = new Set();
-  try {
-    const deletedSnap = await db.collection("warehouseProjects").doc(projectId).collection("deletedStock").get();
-    deletedSnap.docs.forEach((dDoc) => deletedKeys.add(dDoc.id));
-  } catch (dErr) {
-    console.warn(`Error fetching deletedStock for ${projectId}:`, dErr.message);
-  }
-
-  // Self-Healing & Enrichment from Movements History
-  const itemInvoicesMap = new Map(); // key/code -> Set of invoice numbers
-  const itemLatestInvoiceMap = new Map(); // key/code -> { invoiceNumber, createdAt }
-  const mvtAggMap = new Map(); // key -> aggregated stock object calculated directly from movements
-
-  const fetchMovementsForEnrichment = async (pid) => {
-    try {
-      const mvtsSnap = await db.collection("warehouseProjects").doc(pid).collection("movements").get();
-      mvtsSnap.docs.forEach((mDoc) => {
-        const mData = mDoc.data() || {};
-        const invNo = mData.invoiceNumber;
-        const itemCode = mData.itemCode || "";
-        const supplier = mData.supplier || "CANEX";
-        const finish = mData.finish || mData.color || "MF";
-        const lengthMm = Number(mData.lengthMm || 6000);
-        const itemKey = mData.itemKey || generateItemKey(supplier, itemCode, finish, lengthMm);
-
-        if (!itemKey) return;
-
-        // Build invoice tracking maps
-        if (invNo && invNo !== "-" && invNo !== "—") {
-          const keys = [itemKey, itemCode].filter(Boolean);
-          keys.forEach((k) => {
-            if (!itemInvoicesMap.has(k)) itemInvoicesMap.set(k, new Set());
-            itemInvoicesMap.get(k).add(invNo);
-
-            const existingLatest = itemLatestInvoiceMap.get(k);
-            const mvtDate = mData.createdAt || 0;
-            if (!existingLatest || new Date(mvtDate) > new Date(existingLatest.createdAt || 0)) {
-              itemLatestInvoiceMap.set(k, {
-                invoiceNumber: invNo,
-                salesOrder: mData.salesOrder || "",
-                customerReference: mData.customerReference || "",
-                createdAt: mvtDate,
-              });
-            }
-          });
-        }
-
-        // Build stock aggregation map from movements for self-healing
-        if (!mvtAggMap.has(itemKey)) {
-          mvtAggMap.set(itemKey, {
-            itemKey,
-            itemCode: itemCode || "CODE",
-            customerCode: mData.customerCode || "",
-            description: mData.description || "",
-            finish,
-            color: mData.color || finish,
-            lengthMm,
-            unit: mData.unit || "BAR",
-            quantityBar: 0,
-            quantityLm: 0,
-            quantityKg: 0,
-            lastUnitCost: Number(mData.unitPrice || 0),
-            lastBarCost: Number(mData.barPrice || 0),
-            priceUnit: mData.priceUnit || "M",
-            currency: mData.currency || "EGP",
-            lastInvoiceNumber: invNo || "—",
-            lastSalesOrder: mData.salesOrder || "",
-            lastCustomerRef: mData.customerReference || "",
-            updatedAt: mData.createdAt || new Date().toISOString(),
-          });
-        }
-
-        const aggItem = mvtAggMap.get(itemKey);
-        const isOutbound = mData.movementType === "outbound";
-        const qBar = Number(mData.quantityBar || 0);
-        const qLm = Number(mData.quantityLm || 0);
-        const qKg = Number(mData.quantityKg || 0);
-
-        aggItem.quantityBar += isOutbound ? -qBar : qBar;
-        aggItem.quantityLm += isOutbound ? -qLm : qLm;
-        aggItem.quantityKg += isOutbound ? -qKg : qKg;
-      });
-    } catch (e) {
-      console.warn(`Error fetching movements for enrichment in ${pid}:`, e.message);
-    }
-  };
-
-  await fetchMovementsForEnrichment(projectId);
-
-  // Self-Healing Step: Reconcile missing stock items from movements into stockMap & write back to Firestore
-  let repairBatch = db.batch();
-  let repairOps = 0;
-
-  for (const [key, aggItem] of mvtAggMap.entries()) {
-    if (deletedKeys.has(key)) {
-      // Do not self-heal items that have been explicitly deleted by admin
-      continue;
-    }
-    if (!stockMap.has(key)) {
-      const invoicesSet = itemInvoicesMap.get(key) || new Set();
-      const newStockDoc = {
-        ...aggItem,
-        invoiceNumbers: Array.from(invoicesSet),
-      };
-      stockMap.set(key, newStockDoc);
-
-      try {
-        const stockDocRef = db.collection("warehouseProjects").doc(projectId).collection("stock").doc(key);
-        repairBatch.set(stockDocRef, newStockDoc, { merge: true });
-        repairOps++;
-      } catch (e) {
-        console.warn(`Error queuing stock repair for ${key}:`, e.message);
-      }
-    }
-  }
-
-  if (repairOps > 0) {
-    try {
-      await repairBatch.commit();
-      console.log(`[Self-Healing] Repaired and synced ${repairOps} stock items for project ${projectId}`);
-    } catch (e) {
-      console.warn(`[Self-Healing] Failed to commit stock repair batch for ${projectId}:`, e.message);
-    }
-  }
-
-  // Attach enriched invoice numbers and metadata to stock items
-  const finalStock = Array.from(stockMap.values())
-    .filter((item) => !deletedKeys.has(item.itemKey))
-    .map((item) => {
-      const keyInvoices = itemInvoicesMap.get(item.itemKey) || itemInvoicesMap.get(item.itemCode) || new Set();
-      const existingInvoices = new Set(Array.isArray(item.invoiceNumbers) ? item.invoiceNumbers : []);
-      if (item.lastInvoiceNumber && item.lastInvoiceNumber !== "—" && item.lastInvoiceNumber !== "-") {
-        existingInvoices.add(item.lastInvoiceNumber);
-      }
-      keyInvoices.forEach((inv) => existingInvoices.add(inv));
-
-      const combinedInvoices = Array.from(existingInvoices).filter(Boolean);
-      const latestFromMvts = itemLatestInvoiceMap.get(item.itemKey) || itemLatestInvoiceMap.get(item.itemCode);
-      const lastInvoiceNumber = item.lastInvoiceNumber && item.lastInvoiceNumber !== "—" && item.lastInvoiceNumber !== "-"
-        ? item.lastInvoiceNumber
-        : (latestFromMvts ? latestFromMvts.invoiceNumber : (combinedInvoices[combinedInvoices.length - 1] || "—"));
-
-      const lastSalesOrder = item.lastSalesOrder || (latestFromMvts ? latestFromMvts.salesOrder : "") || "—";
-      const lastCustomerRef = item.lastCustomerRef || (latestFromMvts ? latestFromMvts.customerReference : "") || "—";
-
-      return {
-        ...item,
-        invoiceNumbers: combinedInvoices,
-        lastInvoiceNumber,
-        lastSalesOrder,
-        lastCustomerRef,
-        salesOrder: lastSalesOrder,
-        customerReference: lastCustomerRef,
-      };
-    });
-
-  return finalStock;
+  const ref = db.collection("warehouseProjects").doc(projectId);
+  const stock = await ref.collection("stock").get();
+  const deleted = await ref.collection("deletedStock").get();
+  const tombstones = new Set(deleted.docs.map(doc => doc.id));
+  return stock.docs.filter(doc => !tombstones.has(doc.id)).map(doc => ({ ...doc.data(), itemKey: doc.id }));
 }
 
-/**
- * Helper to generate item key
- */
 function generateItemKey(supplier, itemCode, finish, lengthMm) {
   const clean = (val) => String(val || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
   const p1 = clean(supplier) || "ITEM";
@@ -626,7 +380,7 @@ async function getWarehouseAuditLogs(projectId, limit = 150) {
       .limit(limit)
       .get();
 
-    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    return snap.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
   } catch (err) {
     console.error("Error fetching warehouse audit logs:", err.message);
     return [];
@@ -866,103 +620,8 @@ function isCoatedItem(line) {
 /**
  * Fulfills/closes active Delmar dispatches when an outbound delivery invoice is dispatched from Delmar.
  */
-async function fulfillDelmarDispatches(projectRef, invoiceDoc, lines, userUid, userEmail, userName) {
-  try {
-    const activeDispatchesSnap = await projectRef.collection("dispatches")
-      .where("isCompleted", "==", false)
-      .get();
-
-    if (activeDispatchesSnap.empty) return 0;
-
-    const clean = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]/gi, "");
-    const nowIso = new Date().toISOString();
-    const invNumber = invoiceDoc.invoiceNumber || "—";
-    const invCustomer = clean(invoiceDoc.customerReference || invoiceDoc.salesOrder || "");
-
-    const delmarDispatches = [];
-    for (const dDoc of activeDispatchesSnap.docs) {
-      const d = dDoc.data() || {};
-      const dSupplier = clean(d.coatingSupplier || "");
-      const isDelmar = dSupplier.includes("delmar") || dSupplier.includes("دلمار") || d.dispatchType === "coating_then_customer";
-      if (isDelmar && !d.isCompleted && d.currentStage !== "delivered_to_customer" && d.currentStage !== "closed") {
-        delmarDispatches.push({ ref: dDoc.ref, id: dDoc.id, ...d });
-      }
-    }
-
-    if (delmarDispatches.length === 0) return 0;
-
-    // Calculate total bars to fulfill from Delmar
-    let totalDelmarBarsInInvoice = 0;
-    if (Array.isArray(lines) && lines.length > 0) {
-      for (const l of lines) {
-        if (l.delmarCovered) {
-          const bars = l.delmarBars !== undefined && l.delmarBars !== null && l.delmarBars !== ""
-            ? Number(l.delmarBars)
-            : (l.delmarMode === "full" ? Number(l.quantityBar || l.bars || 0) : Number(l.delmarShortage || 0));
-          totalDelmarBarsInInvoice += (isNaN(bars) ? 0 : bars);
-        } else if (isCoatedItem(l)) {
-          totalDelmarBarsInInvoice += Number(l.quantityBar || l.bars || 0);
-        }
-      }
-    }
-    if (totalDelmarBarsInInvoice === 0) {
-      totalDelmarBarsInInvoice = Number(invoiceDoc.totalQuantityBar || invoiceDoc.totalBars || 0);
-    }
-
-    // Match priority: 1) Customer/SO match, 2) All active Delmar in project
-    let candidateDispatches = delmarDispatches.filter(d => {
-      const dCust = clean(d.customerName || "");
-      const dProj = clean(d.projectNameOrSite || "");
-      const dNote = clean(d.deliveryNote || "");
-      return invCustomer && (dCust.includes(invCustomer) || invCustomer.includes(dCust) ||
-                             dProj.includes(invCustomer) || invCustomer.includes(dProj) ||
-                             dNote.includes(invCustomer) || invCustomer.includes(dNote));
-    });
-
-    if (candidateDispatches.length === 0) {
-      candidateDispatches = delmarDispatches;
-    }
-
-    let closedCount = 0;
-    let remainingBarsToFulfill = totalDelmarBarsInInvoice;
-
-    for (const disp of candidateDispatches) {
-      const dispTotalBars = Number(disp.totalQuantityBar || 0);
-      const willFullyClose = remainingBarsToFulfill >= dispTotalBars || dispTotalBars === 0;
-
-      const stageLabel = `المرحلة 2: تم تسليم القطاعات للعميل النهائي وإغلاق الدورة بموجب إذن الصرف (${invNumber})`;
-      const stageNote = `تم تسليم ${willFullyClose ? dispTotalBars : remainingBarsToFulfill} عود للعميل النهائي بموجب إذن صرف رقم (${invNumber})`;
-
-      await disp.ref.set(
-        {
-          currentStage: "delivered_to_customer",
-          isCompleted: true,
-          completedAt: nowIso,
-          deliveryInvoiceNumber: invNumber,
-          customerReceivedBy: invoiceDoc.customerReference || invoiceDoc.salesOrder || disp.customerName || "العميل النهائي",
-          notes: (disp.notes ? disp.notes + " | " : "") + stageNote,
-          stageHistory: admin.firestore.FieldValue.arrayUnion({
-            stage: "delivered_to_customer",
-            label: stageLabel,
-            timestamp: nowIso,
-            user: userName || userEmail || "النظام",
-          }),
-          updatedAt: nowIso,
-          updatedBy: userUid || "system",
-        },
-        { merge: true }
-      );
-
-      closedCount++;
-      remainingBarsToFulfill -= dispTotalBars;
-      if (remainingBarsToFulfill <= 0) break;
-    }
-
-    return closedCount;
-  } catch (err) {
-    console.error("Error fulfilling Delmar dispatches:", err.message);
-    return 0;
-  }
+async function fulfillDelmarDispatches(projectRef, invoiceDoc, lines) {
+  return applyAllocations(projectRef, lines, invoiceDoc.invoiceNumber);
 }
 
 async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, userEmail, userName) {
@@ -978,8 +637,9 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
 
   // Check if an invoice with the same invoiceNumber and movementType already exists
   const targetInvNo = String(invoiceMeta.invoiceNumber || "").trim();
-  const forceSave = Boolean(invoiceMeta.forceSave || invoiceMeta.allowDuplicate);
-  if (!forceSave && targetInvNo && targetInvNo !== "-" && targetInvNo !== "—" && !targetInvNo.startsWith("INV-")) {
+  validateLines(movementType, lines);
+  const consumed = new Map();
+  if (targetInvNo && targetInvNo !== "-" && targetInvNo !== "—") {
     try {
       const existingSnap = await projectRef
         .collection("invoices")
@@ -1055,6 +715,8 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
     }
   }
 
+  if (isOutbound) lines = await allocateCoating(projectRef, lines);
+
   // 1. Save Invoice Document
   const validLinesCount = lines.filter((l) => !l.ignored && !l.isService).length;
   const totalQtyBar = lines.reduce((acc, l) => acc + (l.ignored || l.isService ? 0 : Number(l.quantityBar || l.quantity || l.qtyBar || l.bars || 0)), 0);
@@ -1110,6 +772,8 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
     : `[تلقائي] قبل معالجة فاتورة توريد رقم ${invoiceDoc.invoiceNumber || '—'}`;
   const autoDesc = `حفظ تلقائي قبل معالجة فاتورة ${isOutbound ? 'صرف' : 'توريد'} (${invoiceDoc.invoiceNumber || '—'}) - بواسطة: ${userName || userEmail || 'النظام'}`;
   await createAutoRestorePoint(projectId, autoTitle, autoDesc, userUid, userEmail, userName);
+  batch.set(invRef, invoiceDoc);
+  opCount++;
 
   // 2. Loop through lines
   for (const line of lines) {
@@ -1172,6 +836,7 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
     const factorBar = isOutbound ? -actualDeductBar : qtyBar;
     const factorLm = isOutbound ? -actualDeductLm : qtyLm;
     const factorKg = isOutbound ? -actualDeductKg : qtyKg;
+    if (isOutbound) await reserveStock(projectRef, itemKey, { quantityBar: actualDeductBar, quantityLm: actualDeductLm, quantityKg: actualDeductKg }, consumed);
 
     // Create Movement
     const mvtRef = projectRef.collection("movements").doc();
@@ -1181,6 +846,7 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
       salesOrder: invoiceDoc.salesOrder,
       customerReference: invoiceDoc.customerReference,
       movementType: isOutbound ? "outbound" : "inbound",
+      dispatchAllocations: line.dispatchAllocations || [],
       delmarCovered: Boolean(line.delmarCovered),
       delmarMode: line.delmarMode || null,
       delmarDispatchedBars: (() => {
@@ -1284,12 +950,14 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
 
   await commitBatchIfNeeded(true);
 
+  await invRef.update({ totalAmount: Number(computedInvoiceTotal.toFixed(2)), delmarAllocated: totalDelmarDispatchedBars > 0 });
+
   // If Outbound delivery invoice, fulfill matching active Delmar dispatches
   if (isOutbound) {
     try {
       await fulfillDelmarDispatches(projectRef, invoiceDoc, lines, userUid, userEmail, userName);
     } catch (fulfillErr) {
-      console.error("[processInboundInvoice] Error fulfilling Delmar dispatches:", fulfillErr.message);
+      throw fulfillErr;
     }
   }
 
@@ -1321,7 +989,7 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
 }
 
 /**
- * Get transaction invoice history for a project (with cross-project aggregation fallback)
+ * Get transaction invoice history for a project (scoped to the exact project)
  */
 async function getProjectInvoices(projectId) {
   const db = getDb();
@@ -1383,7 +1051,7 @@ async function getProjectInvoices(projectId) {
         });
       }
     } catch (e) {
-      console.warn(`Error fetching invoices for project ${pid}:`, e.message);
+      throw e;
     }
   };
 
@@ -1397,7 +1065,7 @@ async function getProjectInvoices(projectId) {
 }
 
 /**
- * Get item movement log for a project or specific invoice (with cross-project fallback)
+ * Get item movement log for a project or specific invoice (scoped to the exact project)
  */
 async function getProjectMovements(projectId, invoiceId) {
   const db = getDb();
@@ -1415,11 +1083,11 @@ async function getProjectMovements(projectId, invoiceId) {
       const snapshot = await query.get();
       snapshot.docs.forEach((doc) => {
         if (!mvtMap.has(doc.id)) {
-          mvtMap.set(doc.id, { id: doc.id, ...doc.data() });
+          mvtMap.set(doc.id, { ...doc.data(), id: doc.id });
         }
       });
     } catch (e) {
-      console.warn(`Error fetching project movements for ${pid}:`, e.message);
+      throw e;
     }
   };
 
@@ -1443,6 +1111,12 @@ async function updateStockItem(projectId, itemKey, updateData, userUid, userEmai
   if (!doc.exists) throw new Error("Stock item not found in warehouse.");
 
   const existing = doc.data() || {};
+  for (const field of ['quantityBar', 'quantityLm', 'quantityKg', 'lastUnitCost', 'lengthMm']) {
+    if (updateData[field] !== undefined && (!Number.isFinite(Number(updateData[field])) || Number(updateData[field]) < 0)) throw problem('Invalid stock value: ' + field, 400);
+  }
+  for (const field of ['itemCode', 'finish', 'lengthMm']) {
+    if (updateData[field] !== undefined && String(updateData[field]) !== String(existing[field])) throw problem('لا يمكن تغيير هوية صنف له رصيد وحركات. أنشئ صنفاً مستقلاً واستخدم حركة مخزنية موثقة.', 400);
+  }
   const lengthMm = Number(updateData.lengthMm !== undefined ? updateData.lengthMm : (existing.lengthMm || 6000));
   const qtyBar = Number(updateData.quantityBar !== undefined ? updateData.quantityBar : (existing.quantityBar || 0));
   const qtyLm = Number(updateData.quantityLm !== undefined ? updateData.quantityLm : ((qtyBar * lengthMm) / 1000));
@@ -1459,7 +1133,7 @@ async function updateStockItem(projectId, itemKey, updateData, userUid, userEmai
   const payload = {
     itemCode: updateData.itemCode !== undefined ? updateData.itemCode : existing.itemCode,
     customerCode: updateData.customerCode !== undefined ? updateData.customerCode : (existing.customerCode || ""),
-    description: updateData.description !== undefined ? updateData.description : existing.description,
+    description: updateData.description !== undefined ? updateData.description : (existing.description || ''),
     finish: updateData.finish !== undefined ? updateData.finish : existing.finish,
     lengthMm,
     quantityBar: qtyBar,
@@ -1467,12 +1141,29 @@ async function updateStockItem(projectId, itemKey, updateData, userUid, userEmai
     quantityKg: qtyKg,
     lastSalesOrder: newSalesOrder,
     lastCustomerRef: newCustomerRef,
-    lastUnitCost: updateData.lastUnitCost !== undefined ? Number(updateData.lastUnitCost) : existing.lastUnitCost,
+    lastUnitCost: updateData.lastUnitCost !== undefined ? Number(updateData.lastUnitCost) : (existing.lastUnitCost || 0),
     updatedBy: userUid,
     updatedAt: new Date().toISOString(),
   };
 
+  await createAutoRestorePoint(projectId, "[تلقائي] قبل تعديل رصيد صنف", "", userUid, userEmail, userName);
   await stockRef.set(payload, { merge: true });
+  await db.collection('warehouseProjects').doc(projectId).collection('items').doc(itemKey).set({
+    itemKey, itemCode: payload.itemCode, description: payload.description, customerCode: payload.customerCode,
+    finish: payload.finish, lengthMm: payload.lengthMm, updatedAt: payload.updatedAt,
+  }, { merge: true });
+  const delta = { quantityBar: qtyBar - Number(existing.quantityBar || 0), quantityLm: qtyLm - Number(existing.quantityLm || 0), quantityKg: qtyKg - Number(existing.quantityKg || 0) };
+  if (Object.values(delta).some(value => value !== 0)) {
+    // Each dimension can differ in sign during an audited stock adjustment.
+    for (const movementType of ['inbound', 'outbound']) {
+      const quantities = Object.fromEntries(Object.entries(delta).map(([key, value]) => [key, movementType === 'inbound' ? Math.max(0, value) : Math.max(0, -value)]));
+      if (!Object.values(quantities).some(Boolean)) continue;
+      await db.collection('warehouseProjects').doc(projectId).collection('movements').add({
+        itemKey, itemCode: payload.itemCode, description: payload.description, finish: payload.finish, lengthMm,
+        movementType, sourceType: 'stock_adjustment', ...quantities, createdAt: payload.updatedAt, createdBy: userUid,
+      });
+    }
+  }
 
   await logWarehouseAudit(projectId, {
     action: "EDIT_STOCK_ITEM",
@@ -1506,6 +1197,7 @@ async function deleteStockItem(projectId, itemKey, userUid, userEmail, userName)
   const doc = await stockRef.get();
   const existing = doc.exists ? doc.data() : {};
 
+  await createAutoRestorePoint(projectId, "[تلقائي] قبل حذف صنف", "", userUid, userEmail, userName);
   // 1. Delete stock document from Firestore
   await stockRef.delete();
 
@@ -1603,7 +1295,7 @@ async function getItemMovementsHistory(projectId, itemKey, itemCode) {
 
       snap.docs.forEach((doc) => {
         if (!mvtMap.has(doc.id)) {
-          mvtMap.set(doc.id, { id: doc.id, ...doc.data() });
+          mvtMap.set(doc.id, { ...doc.data(), id: doc.id });
         }
       });
     } catch (e) {
@@ -1740,177 +1432,11 @@ async function updateInvoiceMetadata(projectId, invoiceId, { salesOrder, custome
 /**
  * Create a new Restore Point (Snapshot) for a project
  */
-async function createProjectRestorePoint(projectId, { name, description, isAuto } = {}, userUid, userEmail, userName) {
-  const db = getDb();
-  if (!db) throw new Error("Firestore is unavailable.");
-  projectId = await resolveProjectId(db, projectId);
-
-  const stockSnap = await db
-    .collection("warehouseProjects")
-    .doc(projectId)
-    .collection("stock")
-    .get();
-
-  const stockItems = [];
-  let totalQuantityBar = 0;
-  let totalQuantityLm = 0;
-  let totalQuantityKg = 0;
-
-  stockSnap.docs.forEach((doc) => {
-    const data = doc.data() || {};
-    const item = { itemKey: doc.id, ...data };
-    stockItems.push(item);
-    totalQuantityBar += Number(data.quantityBar || 0);
-    totalQuantityLm += Number(data.quantityLm || 0);
-    totalQuantityKg += Number(data.quantityKg || 0);
-  });
-
-  // Snapshot movements history as well
-  let movementsSnapshot = [];
-  try {
-    const mvtsSnap = await db
-      .collection("warehouseProjects")
-      .doc(projectId)
-      .collection("movements")
-      .get();
-    movementsSnapshot = mvtsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  } catch (mErr) {
-    console.warn(`[CreateRestorePoint] Warning capturing movements for ${projectId}:`, mErr.message);
-  }
-
-  // Snapshot invoices history as well
-  let invoicesSnapshot = [];
-  try {
-    const invsSnap = await db
-      .collection("warehouseProjects")
-      .doc(projectId)
-      .collection("invoices")
-      .get();
-    invoicesSnapshot = invsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  } catch (iErr) {
-    console.warn(`[CreateRestorePoint] Warning capturing invoices for ${projectId}:`, iErr.message);
-  }
-
-  // Snapshot dispatches history as well
-  let dispatchesSnapshot = [];
-  try {
-    const dispSnap = await db
-      .collection("warehouseProjects")
-      .doc(projectId)
-      .collection("dispatches")
-      .get();
-    dispatchesSnapshot = dispSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  } catch (dErr) {
-    console.warn(`[CreateRestorePoint] Warning capturing dispatches for ${projectId}:`, dErr.message);
-  }
-
-  const pointName = String(name || "").trim() || `نقطة حفظ تلقائية - ${new Date().toLocaleDateString("ar-EG")}`;
-  const pointDesc = String(description || "").trim();
-
-  const restorePointData = {
-    name: pointName,
-    description: pointDesc,
-    isAuto: Boolean(isAuto),
-    totalItems: stockItems.length,
-    totalQuantityBar,
-    totalQuantityLm: Number(totalQuantityLm.toFixed(2)),
-    totalQuantityKg: Number(totalQuantityKg.toFixed(2)),
-    createdBy: userUid || "admin",
-    createdByEmail: userEmail || "",
-    createdByName: userName || "",
-    createdAt: new Date().toISOString(),
-    stockSnapshot: stockItems,
-    movementsSnapshot,
-    invoicesSnapshot,
-    dispatchesSnapshot,
-  };
-
-  const pointRef = await db
-    .collection("warehouseProjects")
-    .doc(projectId)
-    .collection("restorePoints")
-    .add(restorePointData);
-
-  await logWarehouseAudit(projectId, {
-    action: "CREATE_RESTORE_POINT",
-    userUid,
-    userEmail,
-    userName,
-    details: {
-      pointId: pointRef.id,
-      name: pointName,
-      description: pointDesc,
-      isAuto: Boolean(isAuto),
-      totalItems: stockItems.length,
-      totalQuantityBar,
-    },
-  });
-
-  const { stockSnapshot, ...summaryData } = restorePointData;
-  return { id: pointRef.id, ...summaryData };
+async function createProjectRestorePoint(...args) { return snapshots.create(...args); }
+async function createAutoRestorePoint(projectId, name, description, ...actor) {
+  return snapshots.create(projectId, { name, description, isAuto: true }, ...actor);
 }
 
-/**
- * Create an automatic Restore Point (Snapshot) before critical stock mutations
- */
-async function createAutoRestorePoint(projectId, actionTitle, actionDescription, userUid, userEmail, userName) {
-  try {
-    const db = getDb();
-    if (!db) return null;
-
-    const res = await createProjectRestorePoint(
-      projectId,
-      {
-        name: actionTitle,
-        description: actionDescription,
-        isAuto: true,
-      },
-      userUid,
-      userEmail,
-      userName
-    );
-
-    // Prune older auto restore points beyond the latest 30 to prevent excessive storage
-    try {
-      const resolvedProjId = await resolveProjectId(db, projectId);
-      const allPointsSnap = await db
-        .collection("warehouseProjects")
-        .doc(resolvedProjId)
-        .collection("restorePoints")
-        .orderBy("createdAt", "desc")
-        .get();
-
-      const autoDocs = allPointsSnap.docs.filter((d) => d.data()?.isAuto === true);
-      if (autoDocs.length > 30) {
-        const toDelete = autoDocs.slice(30);
-        let delBatch = db.batch();
-        let delCount = 0;
-        for (const doc of toDelete) {
-          delBatch.delete(doc.ref);
-          delCount++;
-          if (delCount % 400 === 0) {
-            await delBatch.commit();
-            delBatch = db.batch();
-          }
-        }
-        if (delCount % 400 !== 0) {
-          await delBatch.commit();
-        }
-      }
-    } catch (pruneErr) {
-      console.warn("[createAutoRestorePoint] Prune warning:", pruneErr.message);
-    }
-
-    return res;
-  } catch (err) {
-    console.warn("[createAutoRestorePoint] Auto-snapshot skipped on error:", err.message);
-    return null;
-  }
-}
-
-/**
- * Rollback / Undo an Invoice transaction and reverse stock movements (Admin Only)
- */
 async function rollbackInvoiceTransaction(projectId, invoiceId, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
@@ -1968,6 +1494,7 @@ async function rollbackInvoiceTransaction(projectId, invoiceId, userUid, userEma
 
   // 4. Reverse Stock quantities for each movement item
   const reversedItems = [];
+  const consumed = new Map();
   for (const mDoc of mvtsSnap.docs) {
     const mData = mDoc.data() || {};
     if (mData.isDeleted) continue;
@@ -1988,7 +1515,8 @@ async function rollbackInvoiceTransaction(projectId, invoiceId, userUid, userEma
     const reverseFactorLm = isOutbound ? actualWhDeductLm : -qtyLm;
     const reverseFactorKg = isOutbound ? actualWhDeductKg : -qtyKg;
 
-    if (itemKey && (reverseFactorBar !== 0 || reverseFactorLm !== 0)) {
+    if (!isOutbound && itemKey) await reserveStock(projectRef, itemKey, { quantityBar: qtyBar, quantityLm: qtyLm, quantityKg: qtyKg }, consumed);
+    if (itemKey && (reverseFactorBar !== 0 || reverseFactorLm !== 0 || reverseFactorKg !== 0)) {
       const stockRef = projectRef.collection("stock").doc(itemKey);
       batch.set(
         stockRef,
@@ -2041,40 +1569,8 @@ async function rollbackInvoiceTransaction(projectId, invoiceId, userUid, userEma
     }
   }
 
-  // Reopen any Delmar dispatches that were delivered or fulfilled by this rolled-back delivery note
-  if (isOutbound) {
-    const invNumber = invData.invoiceNumber || "";
-    try {
-      const dispSnap = await projectRef.collection("dispatches").get();
-      for (const dDoc of dispSnap.docs) {
-        const d = dDoc.data() || {};
-        const dNotes = String(d.notes || "");
-        const dSupplier = String(d.coatingSupplier || "").toLowerCase();
-        const dCustomer = String(d.customerName || "").toLowerCase();
-        const invCustomer = String(invData.customerReference || invData.salesOrder || "").toLowerCase();
+  await applyAllocations(projectRef, mvtsSnap.docs.map(doc => doc.data()).filter(m => !m.isDeleted), invData.invoiceNumber, true);
 
-        const isDelmar = dSupplier.includes("delmar") || dSupplier.includes("دلمار");
-        const matchesDeliv = invNumber && dNotes.includes(invNumber);
-        const matchesCustomer = invCustomer && (dCustomer.includes(invCustomer) || invCustomer.includes(dCustomer));
-
-        if (isDelmar && (matchesDeliv || matchesCustomer)) {
-          batch.update(dDoc.ref, {
-            currentStage: "in_coating",
-            isCompleted: false,
-            completedAt: null,
-            notes: dNotes.replace(new RegExp(`.*?${invNumber}.*?`, "g"), "").trim() || "تم التراجع عن إذن الصرف وإعادة فتح الأمر لقيد الدهان",
-            updatedAt: nowIso,
-          });
-          opCount++;
-          await commitBatchIfNeeded(false);
-        }
-      }
-    } catch (dReopenErr) {
-      console.warn("[rollbackInvoiceTransaction] Error reopening Delmar dispatches:", dReopenErr.message);
-    }
-  }
-
-  // 6. Mark Invoice document as cancelled
   batch.update(invRef, {
     status: "cancelled",
     isCancelled: true,
@@ -2117,393 +1613,31 @@ async function rollbackInvoiceTransaction(projectId, invoiceId, userUid, userEma
 /**
  * List all Restore Points for a project
  */
-async function listProjectRestorePoints(projectId) {
-  const db = getDb();
-  if (!db) return [];
-  projectId = await resolveProjectId(db, projectId);
-
-  const snap = await db
-    .collection("warehouseProjects")
-    .doc(projectId)
-    .collection("restorePoints")
-    .orderBy("createdAt", "desc")
-    .get();
-
-  return snap.docs.map((doc) => {
-    const data = doc.data() || {};
-    const { stockSnapshot, ...summary } = data;
-    return { id: doc.id, isAuto: Boolean(data.isAuto), ...summary };
+async function listProjectRestorePoints(...args) { return snapshots.list(...args); }
+async function restoreProjectToPoint(...args) { return snapshots.restore(...args); }
+async function deleteProjectRestorePoint(...args) { return snapshots.remove(...args); }
+async function setProjectArchived(projectId, archived, actorUid) {
+  validId(projectId);
+  const db = rawGetDb();
+  if (!db) throw problem("Firestore is unavailable.", 503);
+  return db.runTransaction(async tx => {
+    const catalog = db.collection("warehouseMetadata").doc("catalog");
+    await tx.get(catalog);
+    const ref = db.collection("warehouseProjects").doc(projectId);
+    const project = await tx.get(ref);
+    const all = await tx.get(db.collection("warehouseProjects"));
+    if (!project.exists) throw problem("Project not found.", 404);
+    const data = project.data();
+    if (archived && data.status !== "archived" && all.docs.filter(doc => doc.data().status !== "archived").length <= 1) throw problem("لا يمكن أرشفة المخزن الوحيد المتبقي.");
+    tx.update(ref, { status: archived ? "archived" : "active", archivedAt: archived ? new Date().toISOString() : null, archivedBy: archived ? actorUid : null, warehouseRevision: Number(data.warehouseRevision || 0) + 1 });
+    tx.set(catalog, { updatedAt: new Date().toISOString() });
+    return { success: true, projectId, archived, message: archived ? "تمت أرشفة المخزن مع الاحتفاظ بكل بياناته ونقاط حفظه" : "تم استرجاع المخزن من الأرشيف" };
   });
 }
+async function deleteProject(projectId, actorUid) { return setProjectArchived(projectId, true, actorUid); }
+async function unarchiveProject(projectId, actorUid) { return setProjectArchived(projectId, false, actorUid); }
 
-/**
- * Restore a project to a specific Restore Point
- */
-async function restoreProjectToPoint(projectId, pointId, userUid, userEmail, userName) {
-  const db = getDb();
-  if (!db) throw new Error("Firestore is unavailable.");
-  projectId = await resolveProjectId(db, projectId);
 
-  const pointRef = db
-    .collection("warehouseProjects")
-    .doc(projectId)
-    .collection("restorePoints")
-    .doc(pointId);
-
-  const pointDoc = await pointRef.get();
-  if (!pointDoc.exists) throw new Error("Restore point not found.");
-
-  const pointData = pointDoc.data() || {};
-  const stockSnapshot = Array.isArray(pointData.stockSnapshot) ? pointData.stockSnapshot : [];
-
-  // 1. Clear deletedStock records so restored items are not blocked from appearing
-  try {
-    const deletedStockSnap = await db
-      .collection("warehouseProjects")
-      .doc(projectId)
-      .collection("deletedStock")
-      .get();
-
-    if (!deletedStockSnap.empty) {
-      let delBatch = db.batch();
-      let delCount = 0;
-      const delBatches = [];
-      deletedStockSnap.docs.forEach((doc) => {
-        delBatch.delete(doc.ref);
-        delCount++;
-        if (delCount % 400 === 0) {
-          delBatches.push(delBatch.commit());
-          delBatch = db.batch();
-        }
-      });
-      if (delCount % 400 !== 0) {
-        delBatches.push(delBatch.commit());
-      }
-      await Promise.all(delBatches);
-    }
-  } catch (dErr) {
-    console.warn(`[RestoreToPoint] Error clearing deletedStock for ${projectId}:`, dErr.message);
-  }
-
-  // 2. Delete current stock items in batches
-  const currentStockSnap = await db
-    .collection("warehouseProjects")
-    .doc(projectId)
-    .collection("stock")
-    .get();
-
-  if (!currentStockSnap.empty) {
-    const deleteBatches = [];
-    let currentBatch = db.batch();
-    let count = 0;
-
-    for (const doc of currentStockSnap.docs) {
-      currentBatch.delete(doc.ref);
-      count++;
-      if (count % 400 === 0) {
-        deleteBatches.push(currentBatch.commit());
-        currentBatch = db.batch();
-      }
-    }
-    if (count % 400 !== 0) {
-      deleteBatches.push(currentBatch.commit());
-    }
-    await Promise.all(deleteBatches);
-  }
-
-  // 3. Write snapshot stock items in batches
-  if (stockSnapshot.length > 0) {
-    const setBatches = [];
-    let setBatch = db.batch();
-    let setCount = 0;
-
-    for (const item of stockSnapshot) {
-      const itemKey = item.itemKey;
-      if (!itemKey) continue;
-      const itemRef = db
-        .collection("warehouseProjects")
-        .doc(projectId)
-        .collection("stock")
-        .doc(itemKey);
-
-      const { itemKey: _, ...itemData } = item;
-      setBatch.set(itemRef, { itemKey, ...itemData });
-      setCount++;
-      if (setCount % 400 === 0) {
-        setBatches.push(setBatch.commit());
-        setBatch = db.batch();
-      }
-    }
-    if (setCount % 400 !== 0) {
-      setBatches.push(setBatch.commit());
-    }
-    await Promise.all(setBatches);
-  }
-
-  // 4. Restore movementsSnapshot if present in pointData
-  const movementsSnapshot = Array.isArray(pointData.movementsSnapshot) ? pointData.movementsSnapshot : [];
-  if (movementsSnapshot.length > 0) {
-    try {
-      const currentMvtsSnap = await db
-        .collection("warehouseProjects")
-        .doc(projectId)
-        .collection("movements")
-        .get();
-
-      if (!currentMvtsSnap.empty) {
-        let mvtDelBatch = db.batch();
-        let mvtDelCount = 0;
-        const mvtDelBatches = [];
-        for (const mDoc of currentMvtsSnap.docs) {
-          mvtDelBatch.delete(mDoc.ref);
-          mvtDelCount++;
-          if (mvtDelCount % 400 === 0) {
-            mvtDelBatches.push(mvtDelBatch.commit());
-            mvtDelBatch = db.batch();
-          }
-        }
-        if (mvtDelCount % 400 !== 0) {
-          mvtDelBatches.push(mvtDelBatch.commit());
-        }
-        await Promise.all(mvtDelBatches);
-      }
-
-      let mvtSetBatch = db.batch();
-      let mvtSetCount = 0;
-      const mvtSetBatches = [];
-      for (const mvt of movementsSnapshot) {
-        const { id: mvtId, ...mvtData } = mvt;
-        const targetDocId = mvtId || db.collection("warehouseProjects").doc(projectId).collection("movements").doc().id;
-        const mvtRef = db
-          .collection("warehouseProjects")
-          .doc(projectId)
-          .collection("movements")
-          .doc(targetDocId);
-
-        mvtSetBatch.set(mvtRef, { ...mvtData, isDeleted: false });
-        mvtSetCount++;
-        if (mvtSetCount % 400 === 0) {
-          mvtSetBatches.push(mvtSetBatch.commit());
-          mvtSetBatch = db.batch();
-        }
-      }
-      if (mvtSetCount % 400 !== 0) {
-        mvtSetBatches.push(mvtSetBatch.commit());
-      }
-      await Promise.all(mvtSetBatches);
-    } catch (mvtRestoreErr) {
-      console.warn(`[RestoreToPoint] Error restoring movements for ${projectId}:`, mvtRestoreErr.message);
-    }
-  }
-
-  // 5. Restore Invoices Snapshot or clean invoices added after this restore point
-  const invoicesSnapshot = Array.isArray(pointData.invoicesSnapshot) ? pointData.invoicesSnapshot : [];
-  try {
-    const currentInvsSnap = await db
-      .collection("warehouseProjects")
-      .doc(projectId)
-      .collection("invoices")
-      .get();
-
-    if (invoicesSnapshot.length > 0) {
-      // Full exact restore of invoices
-      for (const iDoc of currentInvsSnap.docs) {
-        await iDoc.ref.delete();
-      }
-      for (const inv of invoicesSnapshot) {
-        const { id, ...iData } = inv;
-        await db.collection("warehouseProjects").doc(projectId).collection("invoices").doc(id).set(iData);
-      }
-    } else {
-      // Legacy point: Remove any invoice that did not exist in movementsSnapshot
-      const validInvNums = new Set(movementsSnapshot.map(m => m.invoiceNumber).filter(Boolean));
-      const validInvIds = new Set(movementsSnapshot.map(m => m.invoiceId).filter(Boolean));
-
-      for (const iDoc of currentInvsSnap.docs) {
-        const inv = iDoc.data() || {};
-        if (!validInvNums.has(inv.invoiceNumber) && !validInvIds.has(iDoc.id)) {
-          await iDoc.ref.delete();
-        }
-      }
-    }
-  } catch (invRestoreErr) {
-    console.warn(`[RestoreToPoint] Error restoring invoices for ${projectId}:`, invRestoreErr.message);
-  }
-
-  // 6. Restore Dispatches Snapshot or Revert Dispatches to in_coating if their delivery note was rolled back
-  const dispatchesSnapshot = Array.isArray(pointData.dispatchesSnapshot) ? pointData.dispatchesSnapshot : [];
-  try {
-    const currentDispSnap = await db
-      .collection("warehouseProjects")
-      .doc(projectId)
-      .collection("dispatches")
-      .get();
-
-    if (dispatchesSnapshot.length > 0) {
-      // Full exact restore of dispatches
-      for (const dDoc of currentDispSnap.docs) {
-        await dDoc.ref.delete();
-      }
-      for (const disp of dispatchesSnapshot) {
-        const { id, ...dData } = disp;
-        await db.collection("warehouseProjects").doc(projectId).collection("dispatches").doc(id).set(dData);
-      }
-    } else {
-      // Legacy point: Check if active outbound deliveries exist for Delmar. If not, reopen to in_coating!
-      const validInvNums = new Set(movementsSnapshot.map(m => m.invoiceNumber).filter(Boolean));
-      for (const dDoc of currentDispSnap.docs) {
-        const d = dDoc.data() || {};
-        const dNotes = String(d.notes || "");
-        // If it was marked completed/delivered, reopen it back to in_coating!
-        if (d.isCompleted || d.currentStage === "delivered_to_customer" || d.currentStage === "closed") {
-          await dDoc.ref.update({
-            currentStage: "in_coating",
-            isCompleted: false,
-            completedAt: null,
-            notes: "تمت الاستعادة لنقطة حفظ سابقة وإعادة فتح الأمر لقيد الدهان والمعالجة",
-            updatedAt: new Date().toISOString(),
-          });
-        }
-      }
-    }
-  } catch (dispRestoreErr) {
-    console.warn(`[RestoreToPoint] Error restoring dispatches for ${projectId}:`, dispRestoreErr.message);
-  }
-
-  await logWarehouseAudit(projectId, {
-    action: "RESTORE_PROJECT_POINT",
-    userUid,
-    userEmail,
-    userName,
-    details: {
-      pointId,
-      pointName: pointData.name || "",
-      restoredItemsCount: stockSnapshot.length,
-    },
-  });
-
-  return {
-    success: true,
-    pointId,
-    pointName: pointData.name,
-    restoredItemsCount: stockSnapshot.length,
-  };
-}
-
-/**
- * Delete a Restore Point
- */
-async function deleteProjectRestorePoint(projectId, pointId, userUid, userEmail, userName) {
-  const db = getDb();
-  if (!db) throw new Error("Firestore is unavailable.");
-  projectId = await resolveProjectId(db, projectId);
-
-  const pointRef = db
-    .collection("warehouseProjects")
-    .doc(projectId)
-    .collection("restorePoints")
-    .doc(pointId);
-
-  const pointDoc = await pointRef.get();
-  const existingName = pointDoc.exists ? pointDoc.data().name : "";
-
-  await pointRef.delete();
-
-  await logWarehouseAudit(projectId, {
-    action: "DELETE_RESTORE_POINT",
-    userUid,
-    userEmail,
-    userName,
-    details: {
-      pointId,
-      pointName: existingName,
-    },
-  });
-
-  return { success: true, pointId };
-}
-
-/**
- * Delete a warehouse project and its subcollections (Admin only)
- */
-async function deleteProject(projectId, actorUid) {
-  const db = getDb();
-  if (!db) throw new Error("Firestore is unavailable.");
-
-  const resolvedId = await resolveProjectId(db, projectId);
-
-  const projRef = db.collection("warehouseProjects").doc(resolvedId);
-  const projSnap = await projRef.get();
-
-  if (!projSnap.exists) {
-    throw new Error("Project not found");
-  }
-
-  const projData = projSnap.data() || {};
-
-  const allProjectsSnap = await db.collection("warehouseProjects").get();
-  if (allProjectsSnap.docs.length <= 1) {
-    throw new Error("لا يمكن حذف المشروع الوحيد المتبقي في النظام.");
-  }
-
-  const deleteCollection = async (collectionRef, batchSize = 100) => {
-    const query = collectionRef.limit(batchSize);
-    return new Promise((resolve, reject) => {
-      deleteQueryBatch(db, query, resolve, reject);
-    });
-  };
-
-  const deleteQueryBatch = (dbInstance, query, resolve, reject) => {
-    query.get()
-      .then((snapshot) => {
-        if (snapshot.size === 0) return 0;
-        const batch = dbInstance.batch();
-        snapshot.docs.forEach((doc) => batch.delete(doc.ref));
-        return batch.commit().then(() => snapshot.size);
-      })
-      .then((numDeleted) => {
-        if (numDeleted === 0) {
-          resolve();
-          return;
-        }
-        process.nextTick(() => deleteQueryBatch(dbInstance, query, resolve, reject));
-      })
-      .catch(reject);
-  };
-
-  try {
-    await deleteCollection(projRef.collection("stock"));
-    await deleteCollection(projRef.collection("invoices"));
-    await deleteCollection(projRef.collection("movements"));
-    await deleteCollection(projRef.collection("restorePoints"));
-    await deleteCollection(projRef.collection("auditLogs"));
-  } catch (err) {
-    console.warn("Warning deleting project subcollections:", err);
-  }
-
-  await projRef.delete();
-
-  // Also clean up any legacy or duplicate document matching default_canex ID or code
-  if (projectId === "default_canex" || resolvedId === "default_canex") {
-    try {
-      await db.collection("warehouseProjects").doc("default_canex").delete();
-    } catch (e) { }
-  }
-  if (projData.code) {
-    try {
-      const codeDups = await db.collection("warehouseProjects").where("code", "==", projData.code).get();
-      for (const dDoc of codeDups.docs) {
-        await dDoc.ref.delete();
-      }
-    } catch (e) { }
-  }
-
-  return { success: true, message: `تم حذف المشروع ${projData.name || resolvedId} بنجاح` };
-}
-
-/**
- * Process manual stock movement (Inbound or Outbound with Multi-Stage Dispatches)
- */
 async function processManualStockMovement(projectId, { movementType, lines, meta, dispatchDetails }, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
@@ -2512,6 +1646,13 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
   const projectRef = db.collection("warehouseProjects").doc(projectId);
   const isOutbound = (movementType || "").toLowerCase() === "outbound";
   const nowIso = new Date().toISOString();
+  validateLines(movementType, lines);
+  const consumed = new Map();
+  const suppliedNumber = String(meta?.docNumber || dispatchDetails?.deliveryNote || "").trim();
+  if (suppliedNumber) {
+    const existing = await projectRef.collection("invoices").where("invoiceNumber", "==", suppliedNumber).where("movementType", "==", movementType).get();
+    if (!existing.empty) return { success: true, isDuplicate: true, invoiceId: existing.docs[0].id, message: "هذه الحركة مسجلة بالفعل؛ لم يتم تكرار الكميات." };
+  }
 
   if (!lines || !Array.isArray(lines) || lines.length === 0) {
     throw new Error("يجب تحديد بند واحد على الأقل للحركة اليدوية.");
@@ -2759,6 +1900,7 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
     const factorBar = isOutbound ? -qtyBar : qtyBar;
     const factorLm = isOutbound ? -qtyLm : qtyLm;
     const factorKg = isOutbound ? -qtyKg : qtyKg;
+    if (isOutbound) await reserveStock(projectRef, itemKey, { quantityBar: qtyBar, quantityLm: qtyLm, quantityKg: qtyKg }, consumed);
 
     // Movement entry
     const mvtRef = projectRef.collection("movements").doc();
@@ -2825,6 +1967,8 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
     batch.set(stockRef, stockUpdatePayload, { merge: true });
     opCount++;
 
+    if (!isOutbound) { batch.delete(projectRef.collection("deletedStock").doc(itemKey)); opCount++; }
+
     // Ensure item master
     const itemRef = projectRef.collection("items").doc(itemKey);
     batch.set(itemRef, {
@@ -2878,79 +2022,10 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
  * Fetch all dispatches and lifecycle stages for a project
  */
 async function getProjectDispatches(projectId, statusFilter = "all") {
-  const db = getDb();
-  if (!db) return [];
-  projectId = await resolveProjectId(db, projectId);
-
-  try {
-    let query = db.collection("warehouseProjects").doc(projectId).collection("dispatches");
-    const snap = await query.orderBy("dispatchedAt", "desc").get();
-    let dispatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-    // Auto-integrity verification:
-    // If no active outbound invoices exist for this project, all Delmar dispatches must be in_coating!
-    const invSnap = await db.collection("warehouseProjects").doc(projectId).collection("invoices")
-      .where("movementType", "==", "outbound")
-      .get();
-    const activeOutboundInvoices = invSnap.docs
-      .map(doc => doc.data())
-      .filter(inv => !inv.isCancelled && inv.status !== "cancelled");
-
-    if (activeOutboundInvoices.length === 0) {
-      for (const d of dispatches) {
-        if (d.isCompleted || d.currentStage === "delivered_to_customer") {
-          d.currentStage = "in_coating";
-          d.isCompleted = false;
-          d.completedAt = null;
-          // Persist update in Firestore
-          db.collection("warehouseProjects").doc(projectId).collection("dispatches").doc(d.id).update({
-            currentStage: "in_coating",
-            isCompleted: false,
-            completedAt: null,
-          }).catch(() => {});
-        }
-      }
-    } else {
-      // Auto-integrity verification: If active Delmar dispatches exist and matching outbound invoices exist, auto-fulfill them!
-      const hasActiveDelmar = dispatches.some(
-        (d) => !d.isCompleted && d.currentStage !== "delivered_to_customer" && (String(d.coatingSupplier || "").toLowerCase().includes("delmar") || String(d.coatingSupplier || "").includes("دلمار"))
-      );
-      if (hasActiveDelmar) {
-        const projectRef = db.collection("warehouseProjects").doc(projectId);
-        let anyClosed = false;
-        for (const inv of activeOutboundInvoices) {
-          const isDelmarInv = Boolean(inv.delmarAllocated) ||
-            String(inv.coatingSupplier || "").toLowerCase().includes("delmar") ||
-            String(inv.coatingSupplier || "").includes("دلمار") ||
-            (inv.invoiceNumber && inv.invoiceNumber.startsWith("SD-"));
-          if (isDelmarInv) {
-            const closed = await fulfillDelmarDispatches(projectRef, inv, null, "system", "auto@fawterx.com", "فحص النزاهة التلقائي");
-            if (closed > 0) anyClosed = true;
-          }
-        }
-        if (anyClosed) {
-          const updatedSnap = await query.orderBy("dispatchedAt", "desc").get();
-          dispatches = updatedSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        }
-      }
-    }
-
-    if (statusFilter === "active" || statusFilter === "in_progress") {
-      dispatches = dispatches.filter(d => !d.isCompleted && d.currentStage !== "closed");
-    } else if (statusFilter === "completed" || statusFilter === "closed") {
-      dispatches = dispatches.filter(d => d.isCompleted || d.currentStage === "closed" || d.currentStage === "delivered_to_customer");
-    }
-
-    return dispatches;
-  } catch (err) {
-    console.error(`Error fetching dispatches for ${projectId}:`, err.message);
-    return [];
-  }
+  const snap = await getDb().collection("warehouseProjects").doc(projectId).collection("dispatches").get();
+  return snap.docs.map(doc => ({ ...doc.data(), id: doc.id })).filter(d => statusFilter === "all" || (statusFilter === "active" ? !d.isCompleted && !d.isCancelled : d.isCompleted));
 }
 
-/**
- * Transition a dispatch to the next stage or mark completed
- */
 async function updateDispatchStage(projectId, dispatchId, { stage, notes, completionDate, customerReceivedBy }, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
@@ -2963,6 +2038,8 @@ async function updateDispatchStage(projectId, dispatchId, { stage, notes, comple
   const currentData = dDoc.data() || {};
   const nowIso = new Date().toISOString();
   const targetStage = stage || "delivered_to_customer";
+  const transitions = { in_coating: ["ready_from_coating", "delivered_to_customer", "closed"], ready_from_coating: ["delivered_to_customer", "closed"], delivered_to_customer: ["closed"], closed: [] };
+  if (currentData.isCancelled || (targetStage !== currentData.currentStage && !transitions[currentData.currentStage]?.includes(targetStage))) throw problem("Invalid dispatch stage transition.", 400);
   const isNowCompleted = targetStage === "delivered_to_customer" || targetStage === "closed";
 
   const stageLabelMap = {
@@ -3027,6 +2104,9 @@ async function deleteProjectDispatch(projectId, dispatchId, userUid, userEmail, 
   const dDoc = await dispatchRef.get();
   const dData = dDoc.exists ? dDoc.data() : {};
 
+  const linked = await db.collection("warehouseProjects").doc(projectId).collection("invoices").where("dispatchId", "==", dispatchId).get();
+  if (linked.docs.some(doc => !doc.data().isCancelled)) throw problem("أمر الصرف مرتبط بفاتورة. استخدم التراجع عن الفاتورة لعكس الرصيد والسجلات معاً.");
+  await createAutoRestorePoint(projectId, "[تلقائي] قبل حذف سجل صرف", "", userUid, userEmail, userName);
   await dispatchRef.delete();
 
   await logWarehouseAudit(projectId, {
@@ -3051,7 +2131,7 @@ async function getProjectItemAliases(projectId) {
   if (!db) return [];
   try {
     const snap = await db.collection("warehouseProjects").doc(projectId).collection("itemAliases").get();
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return snap.docs.map((d) => ({ ...d.data(), id: d.id }));
   } catch (err) {
     console.error("Error getting item aliases:", err.message);
     return [];
@@ -3066,11 +2146,30 @@ async function saveProjectItemAlias(projectId, { aliasCode, targetItemCode, targ
   }
 
   const cleanAlias = String(aliasCode).trim();
-  const cleanDocId = cleanAlias.toLowerCase().replace(/[^a-z0-9_-]/g, "_");
-
+  if (!cleanAlias || cleanAlias.length > 150) throw problem("Invalid item alias.", 400);
   const projectRef = db.collection("warehouseProjects").doc(projectId);
+  if (!targetItemKey) {
+    const targets = await projectRef.collection("stock").where("itemCode", "==", String(targetItemCode).trim()).get();
+    if (targets.size !== 1) throw problem("اختر صنفاً محدداً لربط الكود؛ الكود وحده غير كافٍ.");
+    targetItemKey = targets.docs[0].id;
+  }
+  const target = await projectRef.collection("stock").doc(validId(targetItemKey)).get();
+  const tombstone = await projectRef.collection("deletedStock").doc(targetItemKey).get();
+  if (!target.exists || tombstone.exists) throw problem("Alias target is not an active stock item.", 400);
+  targetItemCode = target.data().itemCode;
+  const aliases = await projectRef.collection("itemAliases").get();
+  const matching = aliases.docs.filter(doc => String(doc.data().aliasCode || "").trim().toLowerCase() === cleanAlias.toLowerCase());
+  if (matching.length > 1) throw problem("يوجد ربط قديم متكرر لهذا الكود؛ راجع الروابط قبل تغييرها.");
+  const cleanDocId = matching[0]?.id || require('node:crypto').createHash('sha256').update(cleanAlias.toLowerCase()).digest('hex');
   const aliasRef = projectRef.collection("itemAliases").doc(cleanDocId);
+  const oldTarget = matching[0]?.data().targetItemKey;
+  if (oldTarget && oldTarget !== targetItemKey) {
+    const previousRef = projectRef.collection("stock").doc(oldTarget);
+    const previous = await previousRef.get();
+    if (previous.exists) await previousRef.update({ aliases: admin.firestore.FieldValue.arrayRemove(matching[0].data().aliasCode) });
+  }
 
+  await createAutoRestorePoint(projectId, "[تلقائي] قبل تعديل ربط الأكواد", "", userUid, userEmail, userName);
   const aliasPayload = {
     aliasCode: cleanAlias,
     cleanDocId,
@@ -3125,6 +2224,7 @@ async function deleteProjectItemAlias(projectId, aliasDocId, userUid, userEmail,
   if (!snap.exists) return { success: true };
 
   const data = snap.data();
+  await createAutoRestorePoint(projectId, "[تلقائي] قبل حذف ربط الأكواد", "", userUid, userEmail, userName);
   await aliasRef.delete();
 
   if (data.targetItemKey && data.aliasCode) {
@@ -3161,6 +2261,7 @@ async function reconcileDelmarAndCosts(projectId, targetInvoiceNumber = null, us
   const projectRef = db.collection("warehouseProjects").doc(projectId);
   const nowIso = new Date().toISOString();
 
+  await createAutoRestorePoint(projectId, "[تلقائي] قبل تدقيق التكاليف", "", userUid, userEmail, userName);
   let invoicesUpdated = 0;
   let dispatchesClosed = 0;
 
@@ -3171,7 +2272,7 @@ async function reconcileDelmarAndCosts(projectId, targetInvoiceNumber = null, us
 
   for (const invDoc of invSnap.docs) {
     const invData = invDoc.data() || {};
-    if (targetInvoiceNumber && invData.invoiceNumber !== targetInvoiceNumber && !invData.invoiceNumber.includes(targetInvoiceNumber)) {
+    if (targetInvoiceNumber && invData.invoiceNumber !== targetInvoiceNumber && !String(invData.invoiceNumber || "").includes(targetInvoiceNumber)) {
       continue;
     }
 
@@ -3181,6 +2282,7 @@ async function reconcileDelmarAndCosts(projectId, targetInvoiceNumber = null, us
       .get();
 
     let invTotal = 0;
+    const reconciledMovements = [];
     let batch = db.batch();
     let bCount = 0;
 
@@ -3225,6 +2327,7 @@ async function reconcileDelmarAndCosts(projectId, targetInvoiceNumber = null, us
       });
       bCount++;
       invTotal += nTotal;
+      reconciledMovements.push({ ...m, barPrice: bPrice, unitPrice: uPrice, netTotal: nTotal });
 
       if (bCount >= 400) {
         await batch.commit();
@@ -3254,7 +2357,7 @@ async function reconcileDelmarAndCosts(projectId, targetInvoiceNumber = null, us
         if (dDoc.exists) {
           const dData = dDoc.data() || {};
           const currentItems = Array.isArray(dData.items) ? dData.items : [];
-          const mvtList = mvtSnap.docs.map((d) => d.data());
+          const mvtList = reconciledMovements;
           const updatedItems = currentItems.map((it) => {
             const matchedM = mvtList.find((m) => m.itemKey === it.itemKey || m.itemCode === it.itemCode);
             if (matchedM) {
@@ -3275,77 +2378,17 @@ async function reconcileDelmarAndCosts(projectId, targetInvoiceNumber = null, us
     }
   }
 
-  // 2. Fulfill and close active Delmar dispatches for matching outbound invoices
-  const activeDispatchesSnap = await projectRef.collection("dispatches")
-    .where("isCompleted", "==", false)
-    .get();
-
-  if (!activeDispatchesSnap.empty) {
-    for (const invDoc of invSnap.docs) {
-      const invData = invDoc.data() || {};
-      if (invData.isCancelled || invData.status === "cancelled") continue;
-      if (targetInvoiceNumber && invData.invoiceNumber !== targetInvoiceNumber && !invData.invoiceNumber.includes(targetInvoiceNumber)) {
-        continue;
-      }
-
-      const isDelmarOut = Boolean(invData.delmarAllocated) ||
-        String(invData.coatingSupplier || "").toLowerCase().includes("delmar") ||
-        String(invData.coatingSupplier || "").includes("دلمار") ||
-        (invData.invoiceNumber && invData.invoiceNumber.startsWith("SD-"));
-
-      if (isDelmarOut) {
-        const mvtSnap = await projectRef.collection("movements")
-          .where("invoiceId", "==", invDoc.id)
-          .get();
-        const lines = mvtSnap.docs.map(d => d.data());
-
-        const closed = await fulfillDelmarDispatches(projectRef, invData, lines, userUid, userEmail, userName);
-        dispatchesClosed += closed;
-
-        // Auto-correct warehouse deduction for Delmar portion if it was wrongly deducted from main warehouse
-        if (closed > 0) {
-          let restoreBatch = db.batch();
-          let rCount = 0;
-          for (const mDoc of mvtSnap.docs) {
-            const m = mDoc.data() || {};
-            const qBar = Number(m.quantityBar || 0);
-            const dBars = Number(m.delmarDispatchedBars || 0);
-            if (dBars === 0 && qBar > 0) {
-              const stockRef = projectRef.collection("stock").doc(m.itemKey);
-              restoreBatch.set(stockRef, {
-                quantityBar: admin.firestore.FieldValue.increment(qBar),
-                quantityLm: admin.firestore.FieldValue.increment(Number(m.quantityLm || 0)),
-                updatedAt: nowIso,
-              }, { merge: true });
-              rCount++;
-
-              restoreBatch.update(mDoc.ref, {
-                delmarCovered: true,
-                delmarMode: "full",
-                delmarDispatchedBars: qBar,
-                updatedAt: nowIso,
-              });
-              rCount++;
-            }
-          }
-          if (rCount > 0) {
-            await restoreBatch.commit();
-          }
-        }
-      }
-    }
-  }
-
   return {
     success: true,
     invoicesUpdated,
     dispatchesClosed,
-    message: `تم تدقيق التكاليف وتحديث عدد (${invoicesUpdated}) فواتير صرف، وإغلاق وتسليم عدد (${dispatchesClosed}) أوامر دلمار بنجاح!`,
+    message: `تم تدقيق التكاليف وتحديث عدد (${invoicesUpdated}) فواتير صرف، مع الحفاظ على كميات المخزن وروابط الصرف.`,
   };
 }
 
 
 module.exports = {
+  unarchiveProject,
   resolveProject,
   reconcileDelmarAndCosts,
   getUserWarehouseAccess,
@@ -3379,3 +2422,9 @@ module.exports = {
   deleteProjectItemAlias,
 };
 
+
+// All public project services share one atomic read/write boundary and generation.
+const readServices = ['getProjectStock', 'getProjectDispatches', 'getProjectInvoices', 'getProjectMovements', 'getItemMovementsHistory', 'getWarehouseAuditLogs', 'listProjectRestorePoints', 'getProjectItemAliases'];
+const writeServices = ['reconcileDelmarAndCosts', 'processInboundInvoice', 'processManualStockMovement', 'updateDispatchStage', 'deleteProjectDispatch', 'updateStockItem', 'deleteStockItem', 'updateInvoiceMetadata', 'logWarehouseAudit', 'createProjectRestorePoint', 'createAutoRestorePoint', 'deleteProjectRestorePoint', 'rollbackInvoiceTransaction', 'saveProjectItemAlias', 'deleteProjectItemAlias'];
+for (const name of readServices) module.exports[name] = projectOperation(rawGetDb, module.exports[name], { readOnly: true });
+for (const name of writeServices) module.exports[name] = projectOperation(rawGetDb, module.exports[name]);

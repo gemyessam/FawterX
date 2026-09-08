@@ -16,7 +16,6 @@ export default function ManualStockModal({
   onSuccess,
   isAr = true,
 }) {
-  if (!isOpen) return null
 
   const [activeProjectId, setActiveProjectId] = useState(projectId)
   const [mode, setMode] = useState(initialMode) // 'inbound' | 'outbound'
@@ -26,7 +25,7 @@ export default function ManualStockModal({
   // Load saved dispatch metadata from previous outbound operations
   const savedDispatch = useMemo(() => {
     try {
-      const raw = localStorage.getItem('fawterx_last_dispatch_meta')
+      const raw = localStorage.getItem(`fawterx_last_dispatch_meta_${projectId}`)
       return raw ? JSON.parse(raw) : null
     } catch {
       return null
@@ -55,7 +54,7 @@ export default function ManualStockModal({
     setNotes('')
     setHasRestoredDispatch(false)
     try {
-      localStorage.removeItem('fawterx_last_dispatch_meta')
+      localStorage.removeItem(`fawterx_last_dispatch_meta_${projectId}`)
     } catch {
       // ignore
     }
@@ -480,7 +479,7 @@ export default function ManualStockModal({
         if (isOut) {
           try {
             localStorage.setItem(
-              'fawterx_last_dispatch_meta',
+              `fawterx_last_dispatch_meta_${projectId}`,
               JSON.stringify({
                 coatingSupplier,
                 targetFinish: resolvedTargetFinish,
@@ -519,6 +518,8 @@ export default function ManualStockModal({
   }
 
   const activeProjectObject = projects.find((p) => p.id === activeProjectId) || { name: projectName || 'المستودع الرئيسي' }
+
+  if (!isOpen) return null
 
   return (
     <div
