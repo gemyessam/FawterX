@@ -56,7 +56,7 @@ export default function DispatchesTrackerView({
   const [dispatches, setDispatches] = useState([])
   const [loading, setLoading] = useState(false)
   const [reconciling, setReconciling] = useState(false)
-  const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'active' | 'completed'
+  const [statusFilter, setStatusFilter] = useState('active') // 'active' | 'completed' | 'cancelled' | 'all'
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedDispatchId, setExpandedDispatchId] = useState(null)
 
@@ -111,9 +111,11 @@ export default function DispatchesTrackerView({
     let list = dispatches
 
     if (statusFilter === 'active') {
-      list = list.filter((d) => !d.isCompleted && !d.isCancelled && d.currentStage !== 'closed')
+      list = list.filter((d) => !d.isCompleted && !d.isCancelled && d.currentStage !== 'closed' && d.currentStage !== 'cancelled')
     } else if (statusFilter === 'completed') {
-      list = list.filter((d) => d.isCompleted || d.currentStage === 'closed' || d.currentStage === 'delivered_to_customer')
+      list = list.filter((d) => !d.isCancelled && (d.isCompleted || d.currentStage === 'closed' || d.currentStage === 'delivered_to_customer'))
+    } else if (statusFilter === 'cancelled') {
+      list = list.filter((d) => d.isCancelled || d.currentStage === 'cancelled')
     }
 
     const q = searchQuery.trim().toLowerCase()
@@ -149,20 +151,23 @@ export default function DispatchesTrackerView({
 
   // Summary KPI stats
   const kpiStats = useMemo(() => {
-    const active = dispatches.filter((d) => !d.isCompleted && !d.isCancelled && d.currentStage !== 'closed')
-    const completed = dispatches.filter((d) => d.isCompleted || d.currentStage === 'closed' || d.currentStage === 'delivered_to_customer')
+    const active = dispatches.filter((d) => !d.isCompleted && !d.isCancelled && d.currentStage !== 'closed' && d.currentStage !== 'cancelled')
+    const completed = dispatches.filter((d) => !d.isCancelled && (d.isCompleted || d.currentStage === 'closed' || d.currentStage === 'delivered_to_customer'))
+    const cancelled = dispatches.filter((d) => d.isCancelled || d.currentStage === 'cancelled')
 
     const activeBars = active.reduce((acc, d) => acc + (d.items || []).reduce((sum, item) => sum + Math.max(0, Number(item.quantityBar || item.bars || 0) - Number(item.deliveredQuantityBar || 0)), 0), 0)
     const activeLm = active.reduce((acc, d) => acc + (d.items || []).reduce((sum, item) => sum + Math.max(0, Number(item.quantityBar || item.bars || 0) - Number(item.deliveredQuantityBar || 0)) * Number(item.lengthMm || 6000) / 1000, 0), 0)
     const completedBars = completed.reduce((acc, d) => acc + Number(d.totalQuantityBar || 0), 0)
 
     return {
-      totalCount: dispatches.length,
+      totalCount: active.length + completed.length,
+      allRecordedCount: dispatches.length,
       activeCount: active.length,
       activeBars,
       activeLm,
       completedCount: completed.length,
       completedBars,
+      cancelledCount: cancelled.length,
     }
   }, [dispatches])
 
@@ -334,11 +339,16 @@ export default function DispatchesTrackerView({
 
         <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border)', borderRadius: '14px', padding: '1.1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
           <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 700 }}>
-            📦 {isAr ? 'إجمالي حركات الصرف المسجلة' : 'Total Dispatches Logged'}
+            📦 {isAr ? 'إجمالي حركات الصرف السارية' : 'Total Active Dispatches'}
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.2rem' }}>
             <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#fff' }}>
-              {kpiStats.totalCount} <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.85 }}>{isAr ? 'أمر صرف' : 'dispatches'}</span>
+              {kpiStats.totalCount} <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.85 }}>{isAr ? 'أمر ساري' : 'orders'}</span>
+              {kpiStats.cancelledCount > 0 && (
+                <span style={{ fontSize: '0.8rem', color: '#ff6b81', marginRight: '0.4rem', fontWeight: 700 }}>
+                  ({kpiStats.cancelledCount} {isAr ? 'ملغي' : 'cancelled'})
+                </span>
+              )}
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', background: 'rgba(255, 255, 255, 0.06)', padding: '0.25rem 0.75rem', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
               <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#64b5f6', letterSpacing: '0.5px' }}>{(kpiStats.activeBars + kpiStats.completedBars).toLocaleString()}</span>
@@ -346,7 +356,7 @@ export default function DispatchesTrackerView({
             </div>
           </div>
           <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
-            {isAr ? 'إجمالي الأعواد المسجلة في الأوامر' : 'total bars across all dispatches'}
+            {isAr ? 'إجمالي الأعواد في الأوامر السارية' : 'total bars across active dispatches'}
           </div>
         </div>
       </div>
@@ -356,15 +366,7 @@ export default function DispatchesTrackerView({
         <div style={{ display: 'flex', gap: '0.4rem', background: '#101223', padding: '3px', borderRadius: '8px', border: '1px solid var(--border)' }}>
           <button
             type="button"
-            className={`btn btn-sm ${statusFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setStatusFilter('all')}
-            style={{ borderRadius: '6px', fontSize: '0.8rem' }}
-          >
-            {isAr ? 'الكل' : 'All'} ({dispatches.length})
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm"
+            className={`btn btn-sm ${statusFilter === 'active' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setStatusFilter('active')}
             style={{
               borderRadius: '6px',
@@ -378,7 +380,7 @@ export default function DispatchesTrackerView({
           </button>
           <button
             type="button"
-            className="btn btn-sm"
+            className={`btn btn-sm ${statusFilter === 'completed' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setStatusFilter('completed')}
             style={{
               borderRadius: '6px',
@@ -389,6 +391,37 @@ export default function DispatchesTrackerView({
             }}
           >
             🟢 {isAr ? 'مكتمل ومسلّم' : 'Completed'} ({kpiStats.completedCount})
+          </button>
+          {kpiStats.cancelledCount > 0 && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => setStatusFilter('cancelled')}
+              style={{
+                borderRadius: '6px',
+                fontSize: '0.8rem',
+                background: statusFilter === 'cancelled' ? '#ff4757' : 'rgba(255, 71, 87, 0.12)',
+                color: statusFilter === 'cancelled' ? '#fff' : '#ff4757',
+                border: '1px solid rgba(255, 71, 87, 0.4)',
+                fontWeight: 700,
+              }}
+            >
+              ⚠️ {isAr ? 'ملغاة (تم التراجع)' : 'Cancelled'} ({kpiStats.cancelledCount})
+            </button>
+          )}
+          <button
+            type="button"
+            className={`btn btn-sm ${statusFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setStatusFilter('all')}
+            style={{
+              borderRadius: '6px',
+              fontSize: '0.8rem',
+              background: statusFilter === 'all' ? '#64b5f6' : 'transparent',
+              color: statusFilter === 'all' ? '#000' : '#64b5f6',
+              fontWeight: 700,
+            }}
+          >
+            {isAr ? 'الكل' : 'All'} ({dispatches.length})
           </button>
         </div>
 
@@ -421,7 +454,8 @@ export default function DispatchesTrackerView({
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {filteredDispatches.map((disp) => {
-            const isCompleted = disp.isCompleted || disp.currentStage === 'delivered_to_customer' || disp.currentStage === 'closed'
+            const isCancelled = disp.isCancelled || disp.currentStage === 'cancelled'
+            const isCompleted = !isCancelled && (disp.isCompleted || disp.currentStage === 'delivered_to_customer' || disp.currentStage === 'closed')
             const isExpanded = expandedDispatchId === disp.id
             const dateFormatted = disp.dispatchedAt ? new Date(disp.dispatchedAt).toLocaleDateString(isAr ? 'ar-EG' : 'en-US') : '—'
 
@@ -429,11 +463,12 @@ export default function DispatchesTrackerView({
               <div
                 key={disp.id}
                 style={{
-                  background: 'rgba(255,255,255,0.025)',
-                  border: `1px solid ${isCompleted ? 'rgba(0, 224, 161, 0.25)' : 'rgba(255, 215, 0, 0.35)'}`,
+                  background: isCancelled ? 'rgba(255, 71, 87, 0.03)' : 'rgba(255,255,255,0.025)',
+                  border: `1px solid ${isCancelled ? 'rgba(255, 71, 87, 0.4)' : isCompleted ? 'rgba(0, 224, 161, 0.25)' : 'rgba(255, 215, 0, 0.35)'}`,
                   borderRadius: '12px',
                   overflow: 'hidden',
                   transition: 'all 0.2s ease',
+                  opacity: isCancelled ? 0.75 : 1,
                 }}
               >
                 {/* Dispatch Card Header Row */}
@@ -445,22 +480,26 @@ export default function DispatchesTrackerView({
                     alignItems: 'center',
                     flexWrap: 'wrap',
                     gap: '1rem',
-                    background: isCompleted ? 'rgba(0, 224, 161, 0.03)' : 'rgba(255, 215, 0, 0.03)',
+                    background: isCancelled ? 'rgba(255, 71, 87, 0.06)' : isCompleted ? 'rgba(0, 224, 161, 0.03)' : 'rgba(255, 215, 0, 0.03)',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                     <span
                       className="badge"
                       style={{
-                        background: isCompleted ? 'rgba(0, 224, 161, 0.15)' : 'rgba(255, 215, 0, 0.15)',
-                        color: isCompleted ? '#00e0a1' : '#FFD700',
-                        border: `1px solid ${isCompleted ? 'rgba(0, 224, 161, 0.3)' : 'rgba(255, 215, 0, 0.4)'}`,
+                        background: isCancelled ? 'rgba(255, 71, 87, 0.18)' : isCompleted ? 'rgba(0, 224, 161, 0.15)' : 'rgba(255, 215, 0, 0.15)',
+                        color: isCancelled ? '#ff4757' : isCompleted ? '#00e0a1' : '#FFD700',
+                        border: `1px solid ${isCancelled ? 'rgba(255, 71, 87, 0.5)' : isCompleted ? 'rgba(0, 224, 161, 0.3)' : 'rgba(255, 215, 0, 0.4)'}`,
                         fontSize: '0.85rem',
                         fontWeight: 700,
                         padding: '4px 10px',
                       }}
                     >
-                      {isCompleted ? (isAr ? '🟢 المرحلة 2: مسلّم نهائي ومكتمل' : '🟢 Delivered & Completed') : (isAr ? '🟡 المرحلة 1: قيد الدهان والمعالجة' : '🟡 In Coating')}
+                      {isCancelled
+                        ? (isAr ? '⚠️ ملغاة (تم التراجع وعكس الرصيد)' : '⚠️ Cancelled (Rolled Back)')
+                        : isCompleted
+                        ? (isAr ? '🟢 المرحلة 2: مسلّم نهائي ومكتمل' : '🟢 Delivered & Completed')
+                        : (isAr ? '🟡 المرحلة 1: قيد الدهان والمعالجة' : '🟡 In Coating')}
                     </span>
 
                     <div>
@@ -507,7 +546,7 @@ export default function DispatchesTrackerView({
                       <strong style={{ color: '#a29bfe', fontSize: '0.95rem' }}>{(disp.totalQuantityLm || 0).toFixed(1)} m</strong>
                     </div>
 
-                    {!isCompleted && (
+                    {!isCompleted && !isCancelled && (
                       <button
                         className="btn btn-sm"
                         onClick={() => handleOpenDeliverModal(disp)}
@@ -530,6 +569,29 @@ export default function DispatchesTrackerView({
                       </button>
                     )}
 
+                    {isCancelled && isAdmin && (
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => handleDeleteDispatch(disp)}
+                        style={{
+                          background: 'rgba(255, 71, 87, 0.15)',
+                          color: '#ff6b81',
+                          border: '1px solid rgba(255, 71, 87, 0.4)',
+                          fontWeight: 700,
+                          padding: '0.45rem 0.9rem',
+                          borderRadius: '6px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                        }}
+                        title={isAr ? 'حذف نهائي لسجل أمر الصرف الملغي من النظام' : 'Permanently remove cancelled dispatch record'}
+                      >
+                        🗑️ {isAr ? 'حذف نهائي للسجل' : 'Delete Record'}
+                      </button>
+                    )}
+
                     <button
                       className="btn btn-ghost btn-sm"
                       onClick={() => setExpandedDispatchId(isExpanded ? null : disp.id)}
@@ -538,7 +600,7 @@ export default function DispatchesTrackerView({
                       {isExpanded ? (isAr ? '▲ إخفاء التفاصيل' : '▲ Less') : (isAr ? '▼ عرض التفاصيل والبنود' : '▼ Details')}
                     </button>
 
-                    {isAdmin && (
+                    {isAdmin && !isCancelled && (
                       <button
                         onClick={() => handleDeleteDispatch(disp)}
                         style={{ background: 'transparent', border: 'none', color: '#ff4757', cursor: 'pointer', fontSize: '0.9rem' }}
@@ -552,6 +614,12 @@ export default function DispatchesTrackerView({
 
                 {/* Details Section */}
                 <div style={{ padding: '0.85rem 1.25rem', borderTop: '1px solid rgba(255,255,255,0.04)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', fontSize: '0.85rem' }}>
+                  {isCancelled && (
+                    <div style={{ gridColumn: '1 / -1', background: 'rgba(255, 71, 87, 0.1)', border: '1px solid rgba(255, 71, 87, 0.3)', padding: '0.5rem 0.85rem', borderRadius: '8px', color: '#ff6b81', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span>⚠️</span>
+                      <span>{isAr ? 'تم التراجع عن إذن الصرف هذا وإلغاء حركته وإعادة كامل الكميات إلى رصيد المخزن الرئيسي.' : 'This dispatch was rolled back, movements reversed, and stock restored.'}</span>
+                    </div>
+                  )}
                   {(() => {
                     const src = resolveDispatchSourceInvoice(disp)
                     if (!src) return null

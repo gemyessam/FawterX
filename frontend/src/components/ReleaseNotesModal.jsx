@@ -14,11 +14,41 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
 
   const releaseHistory = [
     {
-      version: 'v2.27.63',
+      version: 'v2.27.64',
       category: 'warehouse',
       date: isAr ? '8 سبتمبر 2026' : 'Sep 8, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
       badgeColor: '#00e0a1',
+      title: isAr
+        ? 'ضبط تتبع مراحل الصرف: استبعاد وعزل الأوامر الملغاة وإتاحة حذفها بضغطة زر'
+        : 'Dispatches Tracker Fix: Cancelled Orders Isolation, Red Badging & One-Click Cleanup',
+      highlights: [
+        {
+          icon: '🛡️',
+          text: isAr
+            ? 'عزل الأوامر الملغاة (التي تم التراجع عنها) في تبويب مخصص ومنع ظهورها كأوامر جارية قيد الدهان.'
+            : 'Isolated rolled-back/cancelled dispatches into a dedicated tab and prevented them from appearing as active in coating.'
+        },
+        {
+          icon: '🏷️',
+          text: isAr
+            ? 'تمييز بطاقات الأوامر الملغاة بشارة حمراء واضحة وإخفاء أزرار التسليم للعميل منعاً لأي لبس.'
+            : 'Distinct red cancelled badges for rolled-back orders and hidden delivery buttons to prevent accidental handoffs.'
+        },
+        {
+          icon: '🗑️',
+          text: isAr
+            ? 'إتاحة حذف سجل الصرف الملغي نهائياً بضغطة زر للإدارة، ومزامنة الإلغاء الشامل في السيرفر عند التراجع.'
+            : 'Enabled one-click permanent cleanup for cancelled dispatches and comprehensive server-side cancellation on rollback.'
+        }
+      ]
+    },
+    {
+      version: 'v2.27.63',
+      category: 'warehouse',
+      date: isAr ? '8 سبتمبر 2026' : 'Sep 8, 2026',
+      badge: isAr ? 'سابق' : 'Previous',
+      badgeColor: '#64b5f6',
       title: isAr
         ? 'منع تكرار وحذف المخازن وحماية البيانات بالأرشفة الآمنة ونقاط الحفظ الشاملة'
         : 'Ghost Warehouse Prevention, Safe Archiving & Multi-Collection Snapshots',

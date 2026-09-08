@@ -1552,16 +1552,40 @@ async function rollbackInvoiceTransaction(projectId, invoiceId, userUid, userEma
     });
   }
 
-  // 5. If there's an associated dispatch, mark it cancelled
-  if (invData.dispatchId) {
+  // 5. If there are associated dispatches, mark them cancelled
+  const dispatchesToCancel = new Set();
+  if (invData.dispatchId) dispatchesToCancel.add(invData.dispatchId);
+
+  try {
+    const dSnap1 = await projectRef.collection("dispatches").where("sourceInvoiceId", "==", invoiceId).get();
+    dSnap1.docs.forEach(d => dispatchesToCancel.add(d.id));
+
+    if (invData.invoiceNumber) {
+      const dSnap2 = await projectRef.collection("dispatches").where("sourceInvoiceNumber", "==", invData.invoiceNumber).get();
+      dSnap2.docs.forEach(d => dispatchesToCancel.add(d.id));
+
+      const allDispatchesSnap = await projectRef.collection("dispatches").get();
+      for (const dDoc of allDispatchesSnap.docs) {
+        const dData = dDoc.data();
+        const note = String(dData.deliveryNote || dData.dispatchNumber || "");
+        if (note === invData.invoiceNumber || note.includes(invData.invoiceNumber)) {
+          dispatchesToCancel.add(dDoc.id);
+        }
+      }
+    }
+  } catch (dErr) {
+    console.warn("[rollbackInvoiceTransaction] Dispatch lookup warning:", dErr.message);
+  }
+
+  for (const dId of dispatchesToCancel) {
     try {
-      const dRef = projectRef.collection("dispatches").doc(invData.dispatchId);
-      batch.update(dRef, {
+      const dRef = projectRef.collection("dispatches").doc(dId);
+      batch.set(dRef, {
         currentStage: "cancelled",
         isCancelled: true,
         cancelledAt: nowIso,
-        notes: `تم إلغاء الإذن وعكس حركة الصرف بواسطة ${userName || userEmail}`,
-      });
+        notes: `تم إلغاء الإذن وعكس حركة الصرف بواسطة ${userName || userEmail || 'Admin'}`,
+      }, { merge: true });
       opCount++;
       await commitBatchIfNeeded(false);
     } catch (dErr) {
@@ -2023,7 +2047,12 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
  */
 async function getProjectDispatches(projectId, statusFilter = "all") {
   const snap = await getDb().collection("warehouseProjects").doc(projectId).collection("dispatches").get();
-  return snap.docs.map(doc => ({ ...doc.data(), id: doc.id })).filter(d => statusFilter === "all" || (statusFilter === "active" ? !d.isCompleted && !d.isCancelled : d.isCompleted));
+  return snap.docs.map(doc => ({ ...doc.data(), id: doc.id })).filter(d => {
+    if (statusFilter === "active") return !d.isCompleted && !d.isCancelled && d.currentStage !== "closed" && d.currentStage !== "cancelled";
+    if (statusFilter === "completed") return !d.isCancelled && (d.isCompleted || d.currentStage === "closed" || d.currentStage === "delivered_to_customer");
+    if (statusFilter === "cancelled") return d.isCancelled || d.currentStage === "cancelled";
+    return true;
+  });
 }
 
 async function updateDispatchStage(projectId, dispatchId, { stage, notes, completionDate, customerReceivedBy }, userUid, userEmail, userName) {
