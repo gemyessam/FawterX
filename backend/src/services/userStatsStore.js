@@ -149,30 +149,72 @@ const { encryptSecret, decryptSecret } = require("../utils/cryptoUtil");
 
 /**
  * يحفظ إعدادات العميل (ClientId/Secrets) الخاصة بالمستخدم في Firestore بشكل مشفر وآمن
+ * تشفير الأسرار في الذاكرة أولاً؛ وأي فشل يمنع أي كتابة في قاعدة البيانات (Zero writes)
  */
 async function saveUserSettings(userId, settingsData) {
   const db = getDb();
   if (!db) {
     throw new Error("لم يتم تهيئة قاعدة بيانات Firebase Admin SDK. يرجى التأكد من توفير مفتاح حساب الخدمة (Service Account JSON) بشكل صحيح.");
   }
-  try {
-    const payload = { ...settingsData };
-    if (payload.clientSecret1) {
-      payload.clientSecret1 = encryptSecret(payload.clientSecret1);
+
+  if (!settingsData || typeof settingsData !== "object" || Array.isArray(settingsData)) {
+    throw new Error("بيانات الإعدادات غير صالحة");
+  }
+
+  const payload = { ...settingsData };
+
+  // معالجة clientSecret1 في الذاكرة أولاً
+  if (settingsData.clientSecret1 !== undefined) {
+    if (settingsData.clientSecret1 === null || settingsData.clientSecret1 === "") {
+      payload.clientSecret1 = null; // تفريغ صريح للسر
+    } else if (typeof settingsData.clientSecret1 === "string") {
+      try {
+        payload.clientSecret1 = encryptSecret(settingsData.clientSecret1);
+      } catch (err) {
+        console.error("[UserStats] Encryption failed for clientSecret1: [REDACTED]");
+        throw new Error("فشل معالجة أو حفظ إعدادات الشركة بأمان");
+      }
+    } else {
+      throw new TypeError("Invalid secret type: clientSecret1 must be a string, null, or undefined");
     }
-    if (payload.clientSecret2) {
-      payload.clientSecret2 = encryptSecret(payload.clientSecret2);
+  } else {
+    delete payload.clientSecret1; // استبعاد الحقل غير الممرر تماماً للحفاظ على القيمة السابقة
+  }
+
+  // معالجة clientSecret2 في الذاكرة أولاً
+  if (settingsData.clientSecret2 !== undefined) {
+    if (settingsData.clientSecret2 === null || settingsData.clientSecret2 === "") {
+      payload.clientSecret2 = null; // تفريغ صريح للسر
+    } else if (typeof settingsData.clientSecret2 === "string") {
+      try {
+        payload.clientSecret2 = encryptSecret(settingsData.clientSecret2);
+      } catch (err) {
+        console.error("[UserStats] Encryption failed for clientSecret2: [REDACTED]");
+        throw new Error("فشل معالجة أو حفظ إعدادات الشركة بأمان");
+      }
+    } else {
+      throw new TypeError("Invalid secret type: clientSecret2 must be a string, null, or undefined");
+    }
+  } else {
+    delete payload.clientSecret2; // استبعاد الحقل غير الممرر تماماً للحفاظ على القيمة السابقة
+  }
+
+  try {
+    const docRef = db.collection("users").doc(userId);
+    const updateData = {
+      updatedAt: new Date().toISOString()
+    };
+
+    // منع كتابة companySettings: {} الفارغة لتجنب مسح الحقول المتداخلة في Firestore SDK
+    if (Object.keys(payload).length > 0) {
+      updateData.companySettings = payload;
     }
 
-    const docRef = db.collection("users").doc(userId);
-    await docRef.set({
-      companySettings: payload,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    await docRef.set(updateData, { merge: true });
     return true;
   } catch (e) {
-    console.error("Firestore error in saveUserSettings:", e);
-    throw new Error(`خطأ أثناء الحفظ في Firestore: ${e.message}`);
+    console.error("[UserStats] Firestore error in saveUserSettings: [REDACTED]");
+    throw new Error("فشل معالجة أو حفظ إعدادات الشركة بأمان");
   }
 }
 
@@ -201,8 +243,8 @@ async function getUserSettings(userId) {
       return settings;
     }
   } catch (e) {
-    console.error("Firestore error in getUserSettings:", e);
-    throw new Error(`خطأ أثناء جلب البيانات من Firestore: ${e.message}`);
+    console.error("[UserStats] Decryption or Firestore error in getUserSettings: [REDACTED]");
+    throw new Error("فشل استرجاع إعدادات الشركة بأمان");
   }
   return null;
 }

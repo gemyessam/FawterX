@@ -70,7 +70,7 @@ router.get("/settings", async (req, res) => {
     const settings = await getUserSettings(req.user.uid);
     return res.json({ success: true, settings });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({ success: false, message: "فشل استرجاع إعدادات الشركة بأمان" });
   }
 });
 
@@ -112,11 +112,11 @@ router.post("/settings", async (req, res) => {
 
     const success = await saveUserSettings(req.user.uid, settingsData);
     if (!success) {
-      return res.status(500).json({ success: false, message: "فشل حفظ الإعدادات في قاعدة البيانات" });
+      return res.status(500).json({ success: false, message: "فشل حفظ إعدادات الشركة بأمان" });
     }
     return res.json({ success: true, message: "✅ تم حفظ الإعدادات بنجاح في حسابك" });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({ success: false, message: "فشل حفظ إعدادات الشركة بأمان" });
   }
 });
 
