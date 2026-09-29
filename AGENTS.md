@@ -56,3 +56,12 @@ If `codex` or `agy` is absent from an existing terminal's PATH, restart that ter
 - Review `git status --short`, `git diff --stat`, and the complete relevant diff, including new files.
 - Add task-specific verification where the existing tests do not cover the risk. Antigravity writes permanent regression tests; Codex reviews and runs them.
 - Never exercise real ETA submissions, production Firestore writes, or USB signing as an incidental test.
+
+## Strict Prohibition on Browser Tools (`browser_subagent`)
+
+- **NEVER USE `browser_subagent` or any automated browser testing/capturing tools.**
+- Do NOT launch automated browser sessions, headless Chromium navigation, screenshot capture via browser, or video recording.
+- Visual inspection is left exclusively to the user in their own browser (`http://localhost:3000`).
+- Local verification is restricted strictly to local CLI commands (`npm run build`, `npm test`).
+- Rationale: Mandated by user on 2026-09-13 to protect internet bandwidth and eliminate lag.
+

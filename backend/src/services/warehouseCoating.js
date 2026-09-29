@@ -25,6 +25,29 @@ async function allocateCoating(project, lines) {
     if (a && t) unionCodes(a, t);
   }
 
+  // Predefined system cross-reference (Schüco 515750 <=> Canex 515756)
+  unionCodes('515750', '515756');
+
+  // Auto-persist default alias to project database if not present
+  try {
+    const hasAlias = aliasDocs.docs.some(doc => {
+      const d = doc.data() || {};
+      const a = clean(d.aliasCode || d.sourceCode);
+      const t = clean(d.targetItemCode || d.targetCode);
+      return (a === '515750' && t === '515756') || (a === '515756' && t === '515750');
+    });
+    if (!hasAlias && typeof project?.collection === 'function') {
+      project.collection('itemAliases').doc('alias_515750_515756').set({
+        aliasCode: '515750',
+        cleanDocId: 'alias_515750_515756',
+        targetItemCode: '515756',
+        targetDescription: 'Schüco 515750 <=> Canex 515756',
+        source: 'system_predefined',
+        updatedAt: new Date().toISOString(),
+      }, { merge: true }).catch(() => {});
+    }
+  } catch (_) {}
+
   const canonical = value => {
     const c = clean(value);
     return c ? findRoot(c) : '';

@@ -50,3 +50,7 @@ ARTIFACTS: <Absolute paths to diff.patch, check logs, or reference briefs>
 
 In `FIX` mode, omit settled background context and focus strictly on:
 `R1: <Finding> -> <Fix location> -> <Verification evidence>`
+
+## 6. Review Circuit Breaker
+- Review cycles are strictly limited to at most 3 rounds (`R1`, `R2`, `R3`).
+- If consensus is not reached after `R3`, do NOT continue iterative review. Antigravity compiles an adjudication summary of the disputed finding for user arbitration.

@@ -576,6 +576,9 @@ export default function App() {
   }, [user, isAdmin])
 
   useEffect(() => {
+    const isLocalDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || import.meta.env.DEV)
+    const hasDevBypass = isLocalDev && localStorage.getItem('fawterx_dev_bypass') === 'true'
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         try {
@@ -586,6 +589,13 @@ export default function App() {
         }
         setUser(currentUser)
         syncUserData(currentUser)
+      } else if (hasDevBypass) {
+        setUser({
+          uid: 'dev-local-master-user',
+          displayName: 'Gemy (Dev Master)',
+          email: 'gemy.essam.ge@gmail.com',
+          photoURL: ''
+        })
       } else {
         localStorage.removeItem('fawterx_id_token')
         setUser(null)
@@ -610,11 +620,13 @@ export default function App() {
 
   async function handleLogout() {
     try {
+      localStorage.removeItem('fawterx_dev_bypass')
       localStorage.removeItem('companySettings')
       await signOut(auth)
       setUser(null)
       toast.success(lang === 'ar' ? 'تم تسجيل الخروج بأمان' : 'Logged out safely')
     } catch (error) {
+      localStorage.removeItem('fawterx_dev_bypass')
       localStorage.removeItem('companySettings')
       setUser(null)
       toast.success(lang === 'ar' ? 'تم تسجيل الخروج بأمان' : 'Logged out safely')
@@ -646,7 +658,7 @@ export default function App() {
         {!user ? (
           <div className={`auth-full-screen ${lang === 'en' ? 'ltr-layout' : ''}`}>
             <div className="auth-brand-side">
-              <div className="brand-side-content">
+              <div className="brand-side-content" style={{ position: 'relative', zIndex: 2 }}>
                 <div className="brand-side-logo-icon">
                   <img src="/Logo.png" alt="Logo" style={{ height: '70px', objectFit: 'contain', marginBottom: '1rem' }} />
                 </div>
@@ -696,6 +708,45 @@ export default function App() {
                   </svg>
                   {t.googleBtn}
                 </button>
+
+                {/* Local Development Quick Bypass Button */}
+                {(import.meta.env.DEV || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))) && (
+                  <button
+                    type="button"
+                    className="btn-dev-bypass"
+                    onClick={() => {
+                      const devUser = {
+                        uid: 'dev-local-master-user',
+                        displayName: 'Gemy (Dev Master)',
+                        email: 'gemy.essam.ge@gmail.com',
+                        photoURL: ''
+                      }
+                      localStorage.setItem('fawterx_dev_bypass', 'true')
+                      setUser(devUser)
+                      toast.success(lang === 'ar' ? 'تم تخطي الدخول كمسؤول للتطوير المحلي 🛠️' : 'Dev Master Bypass Activated 🛠️')
+                    }}
+                    style={{
+                      marginTop: '0.75rem',
+                      width: '100%',
+                      padding: '0.75rem 1rem',
+                      background: 'rgba(0, 224, 161, 0.08)',
+                      border: '1px dashed #00e0a1',
+                      borderRadius: '12px',
+                      color: '#00e0a1',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <span>🛠️</span>
+                    <span>{lang === 'ar' ? 'تخطي تسجيل الدخول (وضع المطور المحلي)' : 'Bypass Login (Dev Mode)'}</span>
+                  </button>
+                )}
 
               </div>
             </div>

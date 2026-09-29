@@ -602,9 +602,30 @@ export default function Warehouse() {
   const aliasesMap = useMemo(() => {
     const map = {}
     const clean = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
+
+    // 1. Built-in system cross-references (Schüco 515750 <=> Canex 515756)
+    const defaultAliases = [
+      { aliasCode: '515750', targetItemCode: '515756', targetDescription: 'Schüco 515750 <=> Canex 515756' },
+      { aliasCode: '515756', targetItemCode: '515750', targetDescription: 'Canex 515756 <=> Schüco 515750' },
+    ]
+    defaultAliases.forEach((a) => {
+      map[clean(a.aliasCode)] = a
+    })
+
+    // 2. Project-level aliases (bidirectional mapping)
     projectAliases.forEach((a) => {
       if (a.aliasCode) {
         map[clean(a.aliasCode)] = a
+        if (a.targetItemCode) {
+          const revKey = clean(a.targetItemCode)
+          if (!map[revKey]) {
+            map[revKey] = {
+              ...a,
+              aliasCode: a.targetItemCode,
+              targetItemCode: a.aliasCode,
+            }
+          }
+        }
       }
     })
     return map

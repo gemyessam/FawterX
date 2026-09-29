@@ -56,6 +56,9 @@ export function findDelmarPoolMatches(line, delmarPool = [], aliasesMap = {}) {
     if (rx !== ry) parent.set(rx, ry);
   };
 
+  // Default system equivalence (Schüco 515750 <=> Canex 515756)
+  unionCodes('515750', '515756');
+
   if (aliasesMap && typeof aliasesMap === 'object') {
     Object.values(aliasesMap).forEach((a) => {
       const src = clean(a.aliasCode || a.sourceCode);

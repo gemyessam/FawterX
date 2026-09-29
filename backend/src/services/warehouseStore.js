@@ -2160,7 +2160,37 @@ async function getProjectItemAliases(projectId) {
   if (!db) return [];
   try {
     const snap = await db.collection("warehouseProjects").doc(projectId).collection("itemAliases").get();
-    return snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+    const aliases = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+
+    // Check if 515750 <=> 515756 is recorded
+    const clean = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]/gi, "");
+    const hasPair = aliases.some(
+      (a) =>
+        (clean(a.aliasCode) === "515750" && clean(a.targetItemCode) === "515756") ||
+        (clean(a.aliasCode) === "515756" && clean(a.targetItemCode) === "515750")
+    );
+
+    // Auto-seed in database for active projects
+    if (!hasPair && projectId && process.env.NODE_ENV !== "test") {
+      const docId = "alias_515750_515756";
+      const defaultAlias = {
+        aliasCode: "515750",
+        cleanDocId: docId,
+        targetItemCode: "515756",
+        targetItemKey: null,
+        targetDescription: "Schüco 515750 <=> Canex 515756",
+        source: "system_predefined",
+        updatedAt: new Date().toISOString(),
+      };
+      try {
+        await db.collection("warehouseProjects").doc(projectId).collection("itemAliases").doc(docId).set(defaultAlias, { merge: true });
+      } catch (err) {
+        console.warn("Could not auto-seed default item alias:", err.message);
+      }
+      aliases.push({ ...defaultAlias, id: docId });
+    }
+
+    return aliases;
   } catch (err) {
     console.error("Error getting item aliases:", err.message);
     return [];
