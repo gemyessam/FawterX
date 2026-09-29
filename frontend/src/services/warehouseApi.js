@@ -90,6 +90,12 @@ export async function deleteStockItem(projectId, itemKey) {
   return data
 }
 
+/** Clean up zero-balance duplicate ghost stock items (Admin only) */
+export async function cleanupZeroStock(projectId) {
+  const { data } = await api.post(`/warehouse/projects/${projectId}/stock/cleanup-zero-stock`)
+  return data
+}
+
 /** Fetch transaction invoice history for a project */
 export async function getWarehouseInvoices(projectId) {
   const { data } = await api.get(`/warehouse/projects/${projectId}/invoices`)

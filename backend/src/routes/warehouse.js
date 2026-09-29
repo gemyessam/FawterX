@@ -25,6 +25,7 @@ const {
   getItemMovementsHistory,
   updateStockItem,
   deleteStockItem,
+  cleanupZeroStockItems,
   updateInvoiceMetadata,
   getWarehouseAuditLogs,
   createProjectRestorePoint,
@@ -545,6 +546,25 @@ router.delete("/projects/:projectId/stock/:itemKey", requireAdmin, async (req, r
     const result = await deleteStockItem(
       req.resolvedProjectId || req.params.projectId,
       req.params.itemKey,
+      req.user.uid,
+      req.user.email,
+      userName
+    );
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/warehouse/projects/:projectId/stock/cleanup-zero-stock
+ * Clean up zero-balance duplicate ghost items from warehouse stock (Admin Only)
+ */
+router.post("/projects/:projectId/stock/cleanup-zero-stock", requireAdmin, async (req, res) => {
+  try {
+    const userName = req.user.name || req.user.displayName || req.user.email;
+    const result = await cleanupZeroStockItems(
+      req.resolvedProjectId || req.params.projectId,
       req.user.uid,
       req.user.email,
       userName

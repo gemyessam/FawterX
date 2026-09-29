@@ -63,3 +63,20 @@ test('dispatch where delivered + scrap >= total does not appear in active pool',
   assert.deepEqual(getDelmarPool([settled]), []);
 });
 
+test('zero stock items are accurately detected and filterable', () => {
+  const stock = [
+    { itemKey: 'A', quantityBar: 15, quantityLm: 90 },
+    { itemKey: 'B', quantityBar: 0, quantityLm: 0 },
+    { itemKey: 'C', quantityBar: '0', quantityLm: 0 },
+    { itemKey: 'D', quantityBar: 5, quantityLm: 30 },
+  ];
+  const zeroItems = stock.filter((item) => Number(item.quantityBar || 0) <= 0 && Number(item.quantityLm || 0) <= 0);
+  assert.equal(zeroItems.length, 2);
+  assert.deepEqual(zeroItems.map(i => i.itemKey), ['B', 'C']);
+
+  const activeStock = stock.filter((item) => Number(item.quantityBar || 0) > 0 || Number(item.quantityLm || 0) > 0);
+  assert.equal(activeStock.length, 2);
+  assert.deepEqual(activeStock.map(i => i.itemKey), ['A', 'D']);
+});
+
+

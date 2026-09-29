@@ -881,69 +881,75 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
     createdMovements.push({ id: mvtRef.id, ...movementData });
     opCount++;
 
-    // Update Item Master
-    const itemRef = projectRef.collection("items").doc(itemKey);
-    batch.set(
-      itemRef,
-      {
-        itemKey,
-        itemCode,
-        customerCode,
-        description: line.description || "",
-        finish,
-        color: line.color || finish,
-        lengthMm,
-        unit: line.unit || "BAR",
-        secondaryUnit: "LM",
-        priceUnit,
-        barPrice,
-        weightKg: qtyKg,
-        temper: line.temper || "",
-        alloy: line.alloy || "",
-        hsCode: line.hsCode || "",
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
-    opCount++;
-
-    // If item was previously marked deleted, remove from deletedStock to resurrect with new invoice payload
-    try {
-      const deletedRef = projectRef.collection("deletedStock").doc(itemKey);
-      batch.delete(deletedRef);
+    // Only update Item Master and Stock Snapshot if this is an inbound delivery,
+    // or an outbound delivery that actually deducts quantity from the warehouse (actualDeductBar > 0).
+    // If the entire quantity is covered by Delmar coating stock (actualDeductBar === 0),
+    // we MUST NOT create zero-balance phantom stock items or resurrect deleted items!
+    if (!isOutbound || actualDeductBar > 0) {
+      // Update Item Master
+      const itemRef = projectRef.collection("items").doc(itemKey);
+      batch.set(
+        itemRef,
+        {
+          itemKey,
+          itemCode,
+          customerCode,
+          description: line.description || "",
+          finish,
+          color: line.color || finish,
+          lengthMm,
+          unit: line.unit || "BAR",
+          secondaryUnit: "LM",
+          priceUnit,
+          barPrice,
+          weightKg: qtyKg,
+          temper: line.temper || "",
+          alloy: line.alloy || "",
+          hsCode: line.hsCode || "",
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
       opCount++;
-    } catch (dErr) { }
 
-    // Update Stock Snapshot
-    const stockRef = projectRef.collection("stock").doc(itemKey);
-    batch.set(
-      stockRef,
-      {
-        itemKey,
-        itemCode,
-        customerCode,
-        description: line.description || "",
-        finish,
-        color: line.color || finish,
-        lengthMm,
-        unit: line.unit || "BAR",
-        quantityBar: admin.firestore.FieldValue.increment(factorBar),
-        quantityLm: admin.firestore.FieldValue.increment(factorLm),
-        quantityKg: admin.firestore.FieldValue.increment(factorKg),
-        lastUnitCost: unitPrice,
-        lastBarCost: barPrice,
-        priceUnit,
-        currency: invoiceDoc.currency,
-        lastInvoiceNumber: invoiceDoc.invoiceNumber,
-        lastSalesOrder: invoiceDoc.salesOrder || "",
-        lastCustomerRef: invoiceDoc.customerReference || "",
-        lastMovementType: invoiceDoc.movementType,
-        invoiceNumbers: admin.firestore.FieldValue.arrayUnion(invoiceDoc.invoiceNumber),
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
-    opCount++;
+      // If item was previously marked deleted, remove from deletedStock to resurrect with new invoice payload
+      try {
+        const deletedRef = projectRef.collection("deletedStock").doc(itemKey);
+        batch.delete(deletedRef);
+        opCount++;
+      } catch (dErr) { }
+
+      // Update Stock Snapshot
+      const stockRef = projectRef.collection("stock").doc(itemKey);
+      batch.set(
+        stockRef,
+        {
+          itemKey,
+          itemCode,
+          customerCode,
+          description: line.description || "",
+          finish,
+          color: line.color || finish,
+          lengthMm,
+          unit: line.unit || "BAR",
+          quantityBar: admin.firestore.FieldValue.increment(factorBar),
+          quantityLm: admin.firestore.FieldValue.increment(factorLm),
+          quantityKg: admin.firestore.FieldValue.increment(factorKg),
+          lastUnitCost: unitPrice,
+          lastBarCost: barPrice,
+          priceUnit,
+          currency: invoiceDoc.currency,
+          lastInvoiceNumber: invoiceDoc.invoiceNumber,
+          lastSalesOrder: invoiceDoc.salesOrder || "",
+          lastCustomerRef: invoiceDoc.customerReference || "",
+          lastMovementType: invoiceDoc.movementType,
+          invoiceNumbers: admin.firestore.FieldValue.arrayUnion(invoiceDoc.invoiceNumber),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+      opCount++;
+    }
 
     await commitBatchIfNeeded(false);
   }
@@ -1263,6 +1269,101 @@ async function deleteStockItem(projectId, itemKey, userUid, userEmail, userName)
   });
 
   return { itemKey, deleted: true };
+}
+
+/**
+ * Clean up and permanently remove zero-balance stock items (quantityBar <= 0 and quantityLm <= 0)
+ */
+async function cleanupZeroStockItems(projectId, userUid, userEmail, userName) {
+  const db = getDb();
+  if (!db) throw new Error("Firestore is unavailable.");
+  projectId = await resolveProjectId(db, projectId);
+
+  const projectRef = db.collection("warehouseProjects").doc(projectId);
+  const stockSnap = await projectRef.collection("stock").get();
+
+  const zeroItems = [];
+  for (const doc of stockSnap.docs) {
+    const data = doc.data() || {};
+    const bar = Number(data.quantityBar || 0);
+    const lm = Number(data.quantityLm || 0);
+    if (bar <= 0 && lm <= 0) {
+      zeroItems.push({
+        itemKey: doc.id,
+        itemCode: data.itemCode || doc.id,
+        description: data.description || "",
+      });
+    }
+  }
+
+  if (zeroItems.length === 0) {
+    return {
+      success: true,
+      count: 0,
+      deletedKeys: [],
+      message: "لا توجد أصناف برصيد صفر لتنظيفها.",
+    };
+  }
+
+  // 1. Create auto restore point before batch deletion
+  await createAutoRestorePoint(
+    projectId,
+    `[تلقائي] قبل تنظيف وحذف ${zeroItems.length} صنف برصيد صفر`,
+    `تنظيف وحذف الأصناف الصفرية (${zeroItems.length} صنف) بواسطة ${userName || userEmail || 'المسؤول'}`,
+    userUid,
+    userEmail,
+    userName
+  );
+
+  // 2. Batch delete from stock and register in deletedStock
+  let batch = db.batch();
+  let opCount = 0;
+  const deletedKeys = [];
+
+  for (const item of zeroItems) {
+    const stockDocRef = projectRef.collection("stock").doc(item.itemKey);
+    const delDocRef = projectRef.collection("deletedStock").doc(item.itemKey);
+
+    batch.delete(stockDocRef);
+    batch.set(delDocRef, {
+      itemKey: item.itemKey,
+      itemCode: item.itemCode,
+      deletedAt: new Date().toISOString(),
+      deletedBy: userUid || "admin",
+      reason: "zero_stock_cleanup",
+    });
+    opCount += 2;
+    deletedKeys.push(item.itemKey);
+
+    if (opCount >= 400) {
+      await batch.commit();
+      batch = db.batch();
+      opCount = 0;
+    }
+  }
+
+  if (opCount > 0) {
+    await batch.commit();
+  }
+
+  // 3. Log audit trail
+  await logWarehouseAudit(projectId, {
+    action: "CLEANUP_ZERO_STOCK",
+    userUid,
+    userEmail,
+    userName,
+    details: {
+      count: deletedKeys.length,
+      deletedKeys,
+    },
+  });
+
+  return {
+    success: true,
+    count: deletedKeys.length,
+    deletedKeys,
+    message: `تم تنظيف وحذف ${deletedKeys.length} صنف برصيد صفر بنجاح.`,
+  };
 }
 
 /**
@@ -2656,6 +2757,7 @@ module.exports = {
   getItemMovementsHistory,
   updateStockItem,
   deleteStockItem,
+  cleanupZeroStockItems,
   updateInvoiceMetadata,
   logWarehouseAudit,
   getWarehouseAuditLogs,
@@ -2674,6 +2776,6 @@ module.exports = {
 
 // All public project services share one atomic read/write boundary and generation.
 const readServices = ['getProjectStock', 'getProjectDispatches', 'getProjectInvoices', 'getProjectMovements', 'getItemMovementsHistory', 'getWarehouseAuditLogs', 'listProjectRestorePoints', 'getProjectItemAliases'];
-const writeServices = ['reconcileDelmarAndCosts', 'processInboundInvoice', 'processManualStockMovement', 'updateDispatchStage', 'recordDispatchScrap', 'deleteProjectDispatch', 'updateStockItem', 'deleteStockItem', 'updateInvoiceMetadata', 'logWarehouseAudit', 'createProjectRestorePoint', 'createAutoRestorePoint', 'deleteProjectRestorePoint', 'rollbackInvoiceTransaction', 'saveProjectItemAlias', 'deleteProjectItemAlias'];
+const writeServices = ['reconcileDelmarAndCosts', 'processInboundInvoice', 'processManualStockMovement', 'updateDispatchStage', 'recordDispatchScrap', 'deleteProjectDispatch', 'updateStockItem', 'deleteStockItem', 'cleanupZeroStockItems', 'updateInvoiceMetadata', 'logWarehouseAudit', 'createProjectRestorePoint', 'createAutoRestorePoint', 'deleteProjectRestorePoint', 'rollbackInvoiceTransaction', 'saveProjectItemAlias', 'deleteProjectItemAlias'];
 for (const name of readServices) module.exports[name] = projectOperation(rawGetDb, module.exports[name], { readOnly: true });
 for (const name of writeServices) module.exports[name] = projectOperation(rawGetDb, module.exports[name]);
