@@ -44,12 +44,38 @@ export function getDelmarPool(activeDispatches = []) {
 
 export function findDelmarPoolMatches(line, delmarPool = [], aliasesMap = {}) {
   const clean = (value) => String(value || '').trim().toUpperCase();
-  const aliases = new Map(Object.values(aliasesMap || {}).map((a) => [clean(a.aliasCode), clean(a.targetItemCode)]));
-  const canonical = (value) => aliases.get(clean(value)) || clean(value);
-  const codes = [line.itemCode, line.customerCode].filter(Boolean).map(canonical);
+  const parent = new Map();
+  const findRoot = (x) => {
+    if (!parent.has(x)) parent.set(x, x);
+    if (parent.get(x) !== x) parent.set(x, findRoot(parent.get(x)));
+    return parent.get(x);
+  };
+  const unionCodes = (x, y) => {
+    const rx = findRoot(x);
+    const ry = findRoot(y);
+    if (rx !== ry) parent.set(rx, ry);
+  };
+
+  if (aliasesMap && typeof aliasesMap === 'object') {
+    Object.values(aliasesMap).forEach((a) => {
+      const src = clean(a.aliasCode || a.sourceCode);
+      const tgt = clean(a.targetItemCode || a.targetCode);
+      if (src && tgt) unionCodes(src, tgt);
+    });
+  }
+
+  const canonical = (value) => {
+    const c = clean(value);
+    return c ? findRoot(c) : '';
+  };
+
+  const lineCodes = [line.itemCode, line.customerCode, line.manualTargetCode].filter(Boolean).map(canonical);
+  const targetLen = Number(line.lengthMm || line.length || 6000);
+
   return delmarPool.filter(
     (item) =>
-      Number(item.lengthMm || 6000) === Number(line.lengthMm || line.length || 6000) &&
-      [item.itemCode, item.customerCode].filter(Boolean).some((code) => codes.includes(canonical(code)))
+      Number(item.lengthMm || 6000) === targetLen &&
+      [item.itemCode, item.customerCode].filter(Boolean).some((code) => lineCodes.includes(canonical(code)))
   );
 }
+

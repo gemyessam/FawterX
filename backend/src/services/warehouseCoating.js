@@ -4,8 +4,32 @@ async function allocateCoating(project, lines) {
   if (!lines.some(line => line.delmarCovered && !line.ignored && !line.isService)) return lines;
   const docs = await project.collection('dispatches').get();
   const aliasDocs = await project.collection('itemAliases').get();
-  const aliases = new Map(aliasDocs.docs.map(doc => [clean(doc.data().aliasCode), clean(doc.data().targetItemCode)]));
-  const canonical = value => aliases.get(clean(value)) || clean(value);
+  
+  // Bidirectional alias equivalence mapping
+  const parent = new Map();
+  const findRoot = (x) => {
+    if (!parent.has(x)) parent.set(x, x);
+    if (parent.get(x) !== x) parent.set(x, findRoot(parent.get(x)));
+    return parent.get(x);
+  };
+  const unionCodes = (x, y) => {
+    const rx = findRoot(x);
+    const ry = findRoot(y);
+    if (rx !== ry) parent.set(rx, ry);
+  };
+
+  for (const doc of aliasDocs.docs) {
+    const d = doc.data() || {};
+    const a = clean(d.aliasCode || d.sourceCode);
+    const t = clean(d.targetItemCode || d.targetCode);
+    if (a && t) unionCodes(a, t);
+  }
+
+  const canonical = value => {
+    const c = clean(value);
+    return c ? findRoot(c) : '';
+  };
+
   const pool = [];
   for (const doc of docs.docs) {
     const data = doc.data();
@@ -19,15 +43,24 @@ async function allocateCoating(project, lines) {
     if (!Number.isFinite(wanted) || wanted < 0 || wanted > bars) throw problem('Invalid coating allocation.', 400);
     let remaining = wanted;
     const allocations = [];
+    const lineCodes = [line.itemCode, line.customerCode, line.manualTargetCode].filter(Boolean).map(canonical);
+    const targetLength = Number(line.lengthMm || line.length || 6000);
+
     for (const entry of pool) {
-      const sameCode = [line.itemCode, line.customerCode].filter(Boolean).some(code => [entry.item.itemCode, entry.item.customerCode].filter(Boolean).some(other => canonical(code) === canonical(other)));
-      const sameLength = Number(line.lengthMm || line.length || 6000) === Number(entry.item.lengthMm || entry.item.length || 6000);
+      const entryCodes = [entry.item.itemCode, entry.item.customerCode].filter(Boolean).map(canonical);
+      const sameCode = lineCodes.some(code => entryCodes.includes(code));
+      const entryLength = Number(entry.item.lengthMm || entry.item.length || 6000);
+      const sameLength = targetLength === entryLength;
       if (!sameCode || !sameLength || entry.available <= 0 || remaining <= 0) continue;
       const quantity = Math.min(entry.available, remaining);
       allocations.push({ dispatchId: entry.dispatchId, itemIndex: entry.itemIndex, bars: quantity });
       entry.available -= quantity; remaining -= quantity;
     }
-    if (remaining > 0.00001) throw problem('الكمية المطلوبة من الدهان غير متاحة لهذا الصنف والطول. راجع أوامر الصرف وربط الأكواد.');
+    if (remaining > 0.00001) {
+      const codeLabel = line.itemCode || line.customerCode || '—';
+      const allocatedSoFar = Math.max(0, wanted - remaining);
+      throw problem(`الصنف [${codeLabel}] (طول ${targetLength} مم): الكمية المطلوبة من الدهان (${wanted} عود) غير متاحة في أوامر دهان دلمار المفتوحة (المتاح المتبقي لهذا الصنف: ${allocatedSoFar} عود). يرجى ربط كود الصنف (Alias) بكود أمر الدهان في كانكس، أو تعديل كمية الصرف من المستودع.`);
+    }
     return { ...line, delmarBars: wanted, dispatchAllocations: allocations };
   });
 }

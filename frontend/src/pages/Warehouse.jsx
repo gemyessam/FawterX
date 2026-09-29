@@ -40,51 +40,10 @@ function getDelmarAvailableBars(line, activeDispatches = [], aliasesMap = {}) {
   if (line.delmarAvailableBars !== undefined && line.delmarAvailableBars !== null && line.delmarAvailableBars !== '') {
     return Number(line.delmarAvailableBars)
   }
-  const clean = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/gi, '')
-  let lItem = clean(line.itemCode)
-  let lCust = clean(line.customerCode)
-
-  // Check aliases dictionary for mapped target item code
-  if (aliasesMap && typeof aliasesMap === 'object') {
-    const aliasMatch = aliasesMap[lItem] || (lCust && aliasesMap[lCust])
-    if (aliasMatch && aliasMatch.targetItemCode) {
-      lItem = clean(aliasMatch.targetItemCode)
-    }
-  }
-
-  let sum = 0
-  if (Array.isArray(activeDispatches) && activeDispatches.length > 0) {
-    for (const d of activeDispatches) {
-      if (d.isCompleted || d.currentStage === 'closed' || d.currentStage === 'delivered_to_customer') continue
-      if (Array.isArray(d.items)) {
-        for (const it of d.items) {
-          const iCode = clean(it.itemCode)
-          const cCode = clean(it.customerCode)
-          if (
-            (lItem && (iCode === lItem || cCode === lItem || (lItem.length >= 4 && (iCode.includes(lItem) || lItem.includes(iCode))))) ||
-            (lCust && (iCode === lCust || cCode === lCust || (lCust.length >= 4 && (cCode.includes(lCust) || lCust.includes(cCode)))))
-          ) {
-            sum += Number(it.quantityBar || it.bars || 0)
-          }
-        }
-      }
-    }
-  }
-
-  if (sum > 0) return sum
-
-  // If item is coated (RAL/ANODIZED), check total active bars actually available at Delmar
-  if (isCoatedItem(line) && Array.isArray(activeDispatches) && activeDispatches.length > 0) {
-    const delmarTotalActive = activeDispatches
-      .filter((d) => !d.isCompleted && d.currentStage !== 'closed' && d.currentStage !== 'delivered_to_customer')
-      .reduce((acc, d) => acc + Number(d.totalQuantityBar || 0), 0)
-
-    if (delmarTotalActive > 0) {
-      return Math.min(Number(line.quantityBar || line.bars || line.quantity || 0), delmarTotalActive)
-    }
-  }
-
-  return 0
+  if (!line || !Array.isArray(activeDispatches) || activeDispatches.length === 0) return 0
+  const pool = getDelmarPool(activeDispatches)
+  const matches = findDelmarPoolMatches(line, pool, aliasesMap)
+  return matches.reduce((acc, m) => acc + Math.max(0, Number(m.remainingBars || 0)), 0)
 }
 
 function buildStockCheckResult(matchedItem, availableBar, reqBar, diff, viaAlias, aliasInfo, line, activeDispatches = [], aliasesMap = {}) {
@@ -320,9 +279,8 @@ function computeBatchDelmarAllocations(reviewLines = [], activeDispatches = [], 
         }
 
         availableDelmar = matches.reduce((acc, p) => acc + Math.max(0, p.remainingBars), 0)
-      } else if (isCoatedItem(line)) {
-        const totalRemainingInPool = pool.reduce((acc, p) => acc + Math.max(0, p.remainingBars), 0)
-        availableDelmar = Math.min(reqBar, totalRemainingInPool)
+      } else {
+        availableDelmar = 0
       }
     }
 
@@ -354,7 +312,7 @@ function computeBatchDelmarAllocations(reviewLines = [], activeDispatches = [], 
       delmarDispatched = 0
     }
 
-    // Deduct taken delmarDispatched from matched pool items
+    // Deduct taken delmarDispatched only from strictly matched pool items
     if (delmarDispatched > 0) {
       let needed = delmarDispatched
       const matches = lineMatches[idx]?.matches || []
@@ -364,15 +322,6 @@ function computeBatchDelmarAllocations(reviewLines = [], activeDispatches = [], 
           p.remainingBars -= take
           needed -= take
           p.allocatedLines.push({ lineIdx: idx, bars: take })
-        }
-      }
-      if (needed > 0) {
-        for (const p of pool) {
-          if (p.remainingBars > 0 && needed > 0) {
-            const take = Math.min(p.remainingBars, needed)
-            p.remainingBars -= take
-            needed -= take
-          }
         }
       }
     }
@@ -1975,27 +1924,26 @@ export default function Warehouse() {
           ? batchAllocations[origIdx]
           : checkStockAvailability(l, stock, aliasesMap, activeDispatches)
 
-        const isDelmarLine = alloc.delmarCovered || l.delmarCovered || l.delmarPriority === 'delmar' || batch.delmarDecision === 'delmar' || (batch.movementType === 'outbound' && isCoatedItem(l))
+        const totalLineBars = Number(l.quantityBar || l.quantity || l.qtyBar || l.bars || 0)
         const delmarBarsVal = l.delmarBars !== undefined && l.delmarBars !== null && l.delmarBars !== ''
-          ? Number(l.delmarBars)
-          : (alloc.delmarDispatched !== undefined ? alloc.delmarDispatched : (isDelmarLine ? Number(l.quantityBar || l.bars || 0) : 0))
-        const whBarsVal = alloc.warehouseDispatched !== undefined ? alloc.warehouseDispatched : Math.max(0, Number(l.quantityBar || l.bars || 0) - delmarBarsVal)
+          ? Math.min(totalLineBars, Math.max(0, Number(l.delmarBars)))
+          : Math.min(totalLineBars, Math.max(0, Number(alloc?.delmarDispatched || 0)))
+        const whBarsVal = alloc?.warehouseDispatched !== undefined
+          ? alloc.warehouseDispatched
+          : Math.max(0, totalLineBars - delmarBarsVal)
 
         return {
           ...l,
           delmarCovered: delmarBarsVal > 0,
-          delmarMode: delmarBarsVal >= Number(l.quantityBar || l.bars || 0) ? 'full' : (delmarBarsVal > 0 ? 'shortage' : null),
-          delmarPriority: l.delmarPriority || alloc.delmarPriority || 'delmar',
+          delmarMode: delmarBarsVal >= totalLineBars ? 'full' : (delmarBarsVal > 0 ? 'shortage' : null),
+          delmarPriority: l.delmarPriority || alloc?.delmarPriority || (delmarBarsVal > 0 ? 'delmar' : 'warehouse'),
           delmarBars: delmarBarsVal,
           delmarDispatched: delmarBarsVal,
           warehouseDispatched: whBarsVal,
         }
       })
 
-      const hasDelmarActive = batch.movementType === 'outbound' && (
-        batch.delmarDecision === 'delmar' ||
-        preparedLines.some((l) => l.delmarCovered || isCoatedItem(l))
-      )
+      const hasDelmarActive = batch.movementType === 'outbound' && preparedLines.some((l) => l.delmarCovered)
       const payloadMeta = {
         ...batch.parsedMeta,
         movementType: batch.movementType,
@@ -2128,27 +2076,26 @@ export default function Warehouse() {
             ? batchAllocations[origIdx]
             : checkStockAvailability(l, stock, aliasesMap, activeDispatches)
 
-          const isDelmarLine = alloc.delmarCovered || l.delmarCovered || l.delmarPriority === 'delmar' || inv.delmarDecision === 'delmar' || (inv.movementType === 'outbound' && isCoatedItem(l))
+          const totalLineBars = Number(l.quantityBar || l.quantity || l.qtyBar || l.bars || 0)
           const delmarBarsVal = l.delmarBars !== undefined && l.delmarBars !== null && l.delmarBars !== ''
-            ? Number(l.delmarBars)
-            : (alloc.delmarDispatched !== undefined ? alloc.delmarDispatched : (isDelmarLine ? Number(l.quantityBar || l.bars || 0) : 0))
-          const whBarsVal = alloc.warehouseDispatched !== undefined ? alloc.warehouseDispatched : Math.max(0, Number(l.quantityBar || l.bars || 0) - delmarBarsVal)
+            ? Math.min(totalLineBars, Math.max(0, Number(l.delmarBars)))
+            : Math.min(totalLineBars, Math.max(0, Number(alloc?.delmarDispatched || 0)))
+          const whBarsVal = alloc?.warehouseDispatched !== undefined
+            ? alloc.warehouseDispatched
+            : Math.max(0, totalLineBars - delmarBarsVal)
 
           return {
             ...l,
             delmarCovered: delmarBarsVal > 0,
-            delmarMode: delmarBarsVal >= Number(l.quantityBar || l.bars || 0) ? 'full' : (delmarBarsVal > 0 ? 'shortage' : null),
-            delmarPriority: l.delmarPriority || alloc.delmarPriority || 'delmar',
+            delmarMode: delmarBarsVal >= totalLineBars ? 'full' : (delmarBarsVal > 0 ? 'shortage' : null),
+            delmarPriority: l.delmarPriority || alloc?.delmarPriority || (delmarBarsVal > 0 ? 'delmar' : 'warehouse'),
             delmarBars: delmarBarsVal,
             delmarDispatched: delmarBarsVal,
             warehouseDispatched: whBarsVal,
           }
         })
 
-        const hasDelmarActive = inv.movementType === 'outbound' && (
-          inv.delmarDecision === 'delmar' ||
-          preparedLines.some((l) => l.delmarCovered || isCoatedItem(l))
-        )
+        const hasDelmarActive = inv.movementType === 'outbound' && preparedLines.some((l) => l.delmarCovered)
         const payloadMeta = {
           ...inv.parsedMeta,
           movementType: inv.movementType,
@@ -4426,24 +4373,39 @@ export default function Warehouse() {
                             📋 {isAr ? 'مجموع أعواد شوكو المطلوبة:' : 'SD Req:'} {totalBars} BAR
                           </span>
                           {batch.movementType === 'outbound' && (() => {
-                            const activeDelmarDispatches = (activeDispatches || []).filter(
-                              (d) => !d.isCompleted && d.currentStage !== 'closed' && d.currentStage !== 'delivered_to_customer'
+                            const bAllocations = computeBatchDelmarAllocations(batch.reviewLines, activeDispatches, aliasesMap, stock)
+                            const validB = (batch.reviewLines || []).filter(
+                              (l) => !l.ignored && !l.isService && Number(l.quantityBar || l.quantity || l.qtyBar || l.bars || 0) > 0
                             )
-                            const delmarBars = activeDelmarDispatches.reduce((acc, d) => acc + Number(d.totalQuantityBar || 0), 0)
-                            const diffBars = totalBars - delmarBars
-                            if (delmarBars > 0) {
+                            const totalDelmarCoveredBars = validB.reduce((acc, l) => {
+                              const origIdx = (batch.reviewLines || []).indexOf(l)
+                              const alloc = origIdx >= 0 ? bAllocations[origIdx] : null
+                              const dBars = l.delmarBars !== undefined && l.delmarBars !== null && l.delmarBars !== ''
+                                ? Number(l.delmarBars)
+                                : Number(alloc?.delmarDispatched || 0)
+                              return acc + dBars
+                            }, 0)
+                            const remainingWhBars = Math.max(0, totalBars - totalDelmarCoveredBars)
+                            const unmatchedLines = validB.filter((l) => {
+                              const origIdx = (batch.reviewLines || []).indexOf(l)
+                              const alloc = origIdx >= 0 ? bAllocations[origIdx] : null
+                              return !alloc || Number(alloc.delmarAvailable || 0) === 0
+                            })
+
+                            if (totalDelmarCoveredBars > 0 || totalBars > 0) {
                               return (
                                 <>
                                   <span className="badge" style={{ background: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24', border: '1.5px solid #fbbf24', fontSize: '0.85rem', fontWeight: 800 }}>
-                                    🏭 {isAr ? 'رصيد دلمار الفعلي:' : 'Delmar:'} {delmarBars} BAR
+                                    🏭 {isAr ? 'المغطى من دلمار:' : 'Delmar Covered:'} {totalDelmarCoveredBars} BAR
                                   </span>
-                                  {diffBars > 0 ? (
-                                    <span className="badge" style={{ background: 'rgba(255, 71, 87, 0.25)', color: '#ff4757', border: '1.5px solid #ff4757', fontSize: '0.85rem', fontWeight: 900 }}>
-                                      ⚠️ {isAr ? `فارق على المستودع: +${diffBars} عود` : `Variance: +${diffBars} b`}
-                                    </span>
-                                  ) : (
+                                  {remainingWhBars === 0 && totalBars > 0 && unmatchedLines.length === 0 ? (
                                     <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1.5px solid #00e0a1', fontSize: '0.85rem', fontWeight: 800 }}>
                                       ✅ {isAr ? 'مغطى بالكامل من دلمار' : 'Fully Covered'}
+                                    </span>
+                                  ) : (
+                                    <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1.5px solid #38bdf8', fontSize: '0.85rem', fontWeight: 800 }}>
+                                      📦 {isAr ? `من المستودع: ${remainingWhBars} عود` : `Warehouse: ${remainingWhBars} b`}
+                                      {unmatchedLines.length > 0 && ` (${unmatchedLines.length} غير مسجل بدلمار)`}
                                     </span>
                                   )}
                                 </>

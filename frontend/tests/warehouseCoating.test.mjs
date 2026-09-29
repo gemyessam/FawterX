@@ -18,7 +18,13 @@ test('an explicit project alias permits the exact code and length', () => {
   const matches = findDelmarPoolMatches({ itemCode: '515750', lengthMm: 6000 }, pool, { alias: { aliasCode: '515750', targetItemCode: '515756' } });
   assert.equal(matches.length, 1);
   assert.equal(matches[0].dispatchId, 'd');
+
+  // Reverse direction alias check
+  const reverseMatches = findDelmarPoolMatches({ itemCode: '515750', lengthMm: 6000 }, pool, { alias: { aliasCode: '515756', targetItemCode: '515750' } });
+  assert.equal(reverseMatches.length, 1);
+  assert.equal(reverseMatches[0].dispatchId, 'd');
 });
 test('cancelled, delivered and closed orders never appear as available stock', () => {
   assert.deepEqual(getDelmarPool([{ ...dispatch, isCancelled: true }, { ...dispatch, isCompleted: true }, { ...dispatch, currentStage: 'closed' }]), []);
 });
+
