@@ -3,13 +3,14 @@ export function getDelmarPool(activeDispatches = []) {
   if (Array.isArray(activeDispatches) && activeDispatches.length > 0) {
     for (let dIdx = 0; dIdx < activeDispatches.length; dIdx++) {
       const d = activeDispatches[dIdx];
-      if (d.isCompleted || d.isCancelled || !['in_coating', 'ready_from_coating'].includes(d.currentStage)) continue;
+      if (d.isCompleted || d.isCancelled || !['in_coating', 'ready_from_coating', 'partially_delivered'].includes(d.currentStage)) continue;
       if (Array.isArray(d.items)) {
         for (let iIdx = 0; iIdx < d.items.length; iIdx++) {
           const it = d.items[iIdx];
           const rawTotal = Number(it.quantityBar || it.bars || 0);
           const delivered = Number(it.deliveredQuantityBar || 0);
-          const q = Math.max(0, rawTotal - delivered);
+          const scrap = Number(it.scrapQuantityBar || 0);
+          const q = Math.max(0, rawTotal - delivered - scrap);
           if (q > 0) {
             const len = Number(it.lengthMm || 6000);
             let bp = Number(it.barPrice || 0);

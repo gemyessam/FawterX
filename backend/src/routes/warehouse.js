@@ -35,6 +35,7 @@ const {
   getProjectItemAliases,
   saveProjectItemAlias,
   deleteProjectItemAlias,
+  recordDispatchScrap,
 } = require("../services/warehouseStore");
 
 const router = express.Router();
@@ -399,12 +400,37 @@ router.patch("/projects/:projectId/dispatches/:dispatchId/stage", requireWarehou
     if (req.warehouseRole === "warehouse_viewer" || req.warehouseAccess?.canDispatch === false || req.warehouseAccess?.canEdit === false) {
       return res.status(403).json({ success: false, message: "Forbidden: You do not have permissions to update dispatch stages." });
     }
-    const { stage, notes, completionDate, customerReceivedBy } = req.body;
+    const { stage, notes, completionDate, customerReceivedBy, settleRemainingAsScrap, partialDeliveryOnly } = req.body;
     const userName = req.user.name || req.user.displayName || req.user.email;
     const result = await updateDispatchStage(
       req.resolvedProjectId || req.params.projectId,
       req.params.dispatchId,
-      { stage, notes, completionDate, customerReceivedBy },
+      { stage, notes, completionDate, customerReceivedBy, settleRemainingAsScrap, partialDeliveryOnly },
+      req.user.uid,
+      req.user.email,
+      userName
+    );
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/warehouse/projects/:projectId/dispatches/:dispatchId/scrap
+ * Record coating scrap / waste / damaged profiles
+ */
+router.post("/projects/:projectId/dispatches/:dispatchId/scrap", requireWarehouse, async (req, res) => {
+  try {
+    if (req.warehouseRole === "warehouse_viewer" || req.warehouseAccess?.canDispatch === false || req.warehouseAccess?.canEdit === false) {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not have permissions to record scrap." });
+    }
+    const { scrapItems, notes, settleAllRemaining } = req.body;
+    const userName = req.user.name || req.user.displayName || req.user.email;
+    const result = await recordDispatchScrap(
+      req.resolvedProjectId || req.params.projectId,
+      req.params.dispatchId,
+      { scrapItems, notes, settleAllRemaining },
       req.user.uid,
       req.user.email,
       userName

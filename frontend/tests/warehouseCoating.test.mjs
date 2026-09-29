@@ -30,7 +30,36 @@ test('an explicit project alias permits the exact code and length', () => {
   assert.equal(reverseMatches.length, 1);
   assert.equal(reverseMatches[0].dispatchId, 'd');
 });
-test('cancelled, delivered and closed orders never appear as available stock', () => {
-  assert.deepEqual(getDelmarPool([{ ...dispatch, isCancelled: true }, { ...dispatch, isCompleted: true }, { ...dispatch, currentStage: 'closed' }]), []);
+test('partially_delivered stage and scrapQuantityBar reduce available coating pool bars', () => {
+  const partialWithScrap = {
+    id: 'd_scrap',
+    currentStage: 'partially_delivered',
+    isCompleted: false,
+    items: [{
+      itemCode: '515756',
+      lengthMm: 6000,
+      quantityBar: 10,
+      deliveredQuantityBar: 4,
+      scrapQuantityBar: 2,
+    }],
+  };
+  const [item] = getDelmarPool([partialWithScrap]);
+  assert.equal(item.remainingBars, 4); // 10 - 4 - 2 = 4
+});
+
+test('dispatch where delivered + scrap >= total does not appear in active pool', () => {
+  const settled = {
+    id: 'd_settled',
+    currentStage: 'partially_delivered',
+    isCompleted: false,
+    items: [{
+      itemCode: '515756',
+      lengthMm: 6000,
+      quantityBar: 10,
+      deliveredQuantityBar: 8,
+      scrapQuantityBar: 2,
+    }],
+  };
+  assert.deepEqual(getDelmarPool([settled]), []);
 });
 

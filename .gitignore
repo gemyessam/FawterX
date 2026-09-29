@@ -11,5 +11,9 @@ firebase-service-account.json
 backend/firebase-service-account.json
 PROJECT_ARCHITECTURE_GUIDE*
 format_rtl*
+scratch/
+unity_card_assets/
+skills-lock.json
+frontend/src/experiments/
 
 

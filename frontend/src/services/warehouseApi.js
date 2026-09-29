@@ -166,6 +166,12 @@ export async function updateDispatchStage(projectId, dispatchId, payload) {
   return data
 }
 
+/** Record scrap / waste / damaged profiles during coating */
+export async function recordWarehouseDispatchScrap(projectId, dispatchId, payload) {
+  const { data } = await api.post(`/warehouse/projects/${projectId}/dispatches/${dispatchId}/scrap`, payload)
+  return data
+}
+
 /** Delete a dispatch record (Admin only) */
 export async function deleteWarehouseDispatch(projectId, dispatchId) {
   const { data } = await api.delete(`/warehouse/projects/${projectId}/dispatches/${dispatchId}`)

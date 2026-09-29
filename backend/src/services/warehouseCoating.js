@@ -56,8 +56,13 @@ async function allocateCoating(project, lines) {
   const pool = [];
   for (const doc of docs.docs) {
     const data = doc.data();
-    if (data.isCompleted || data.isCancelled || !['in_coating', 'ready_from_coating'].includes(data.currentStage)) continue;
-    (data.items || []).forEach((item, index) => pool.push({ dispatchId: doc.id, itemIndex: index, item, available: Number(item.quantityBar || item.bars || 0) - Number(item.deliveredQuantityBar || 0) }));
+    if (data.isCompleted || data.isCancelled || !['in_coating', 'ready_from_coating', 'partially_delivered'].includes(data.currentStage)) continue;
+    (data.items || []).forEach((item, index) => {
+      const avail = Math.max(0, Number(item.quantityBar || item.bars || 0) - Number(item.deliveredQuantityBar || 0) - Number(item.scrapQuantityBar || 0));
+      if (avail > 0) {
+        pool.push({ dispatchId: doc.id, itemIndex: index, item, available: avail });
+      }
+    });
   }
   return lines.map(line => {
     if (!line.delmarCovered || line.ignored || line.isService) return { ...line, dispatchAllocations: [] };
@@ -103,13 +108,52 @@ async function applyAllocations(project, lines, invoiceNumber, reverse = false) 
       const item = items[allocation.itemIndex];
       if (!item || !Number.isFinite(allocation.bars) || allocation.bars <= 0) throw problem('Invalid linked dispatch allocation.');
       const delivered = Number(item.deliveredQuantityBar || 0) + (reverse ? -1 : 1) * allocation.bars;
-      if (delivered < -0.00001 || delivered > Number(item.quantityBar || item.bars || 0) + 0.00001) throw problem('Coating allocation exceeds linked quantity.');
+      const totalItemBars = Number(item.quantityBar || item.bars || 0);
+      const scrapBars = Number(item.scrapQuantityBar || 0);
+      if (delivered < -0.00001 || (delivered + scrapBars) > totalItemBars + 0.00001) throw problem('Coating allocation exceeds linked quantity.');
       item.deliveredQuantityBar = Math.max(0, delivered);
     }
-    const isCompleted = items.length > 0 && items.every(item => Number(item.deliveredQuantityBar || 0) >= Number(item.quantityBar || item.bars || 0));
-    const stage = isCompleted ? 'delivered_to_customer' : (data.currentStage === 'ready_from_coating' ? 'ready_from_coating' : 'in_coating');
-    await ref.update({ items, isCompleted, currentStage: stage, completedAt: isCompleted ? new Date().toISOString() : null,
-      stageHistory: [...(data.stageHistory || []), { stage, timestamp: new Date().toISOString(), label: reverse ? 'عكس تخصيص الفاتورة' : 'تسليم كمية مرتبطة بالفاتورة', invoiceNumber }] });
+
+    const totalDelivered = items.reduce((sum, it) => sum + Number(it.deliveredQuantityBar || 0), 0);
+    const totalScrap = items.reduce((sum, it) => sum + Number(it.scrapQuantityBar || 0), 0);
+    const totalBars = items.reduce((sum, it) => sum + Number(it.quantityBar || it.bars || 0), 0);
+    const totalRemaining = Math.max(0, totalBars - totalDelivered - totalScrap);
+
+    const isCompleted = items.length > 0 && items.every(item => (Number(item.deliveredQuantityBar || 0) + Number(item.scrapQuantityBar || 0)) >= Number(item.quantityBar || item.bars || 0));
+
+    let stage = data.currentStage;
+    if (isCompleted) {
+      stage = 'delivered_to_customer';
+    } else if (totalDelivered > 0 || totalScrap > 0) {
+      stage = 'partially_delivered';
+    } else {
+      stage = data.currentStage === 'ready_from_coating' ? 'ready_from_coating' : 'in_coating';
+    }
+
+    const historyLabel = reverse
+      ? 'عكس تخصيص الفاتورة'
+      : isCompleted
+        ? `🏁 تم إتمام وتسليم كامل أعواد أمر الصرف للعميل النهائي (${totalDelivered} عود مسلّم${totalScrap > 0 ? ` + ${totalScrap} عود هادر دهان` : ''})`
+        : `📦 تسليم جزئي مرتبط بالفاتورة ${invoiceNumber || '—'}: تم تسليم ${allocations.reduce((sum, a) => sum + a.bars, 0)} عود (المتبقي بالتشغيل: ${totalRemaining} عود)`;
+
+    await ref.update({
+      items,
+      isCompleted,
+      currentStage: stage,
+      completedAt: isCompleted ? new Date().toISOString() : null,
+      stageHistory: [
+        ...(data.stageHistory || []),
+        {
+          stage,
+          timestamp: new Date().toISOString(),
+          label: historyLabel,
+          invoiceNumber: invoiceNumber || '',
+          deliveredBars: totalDelivered,
+          remainingBars: totalRemaining,
+          scrapBars: totalScrap,
+        }
+      ]
+    });
     if (isCompleted) completed++;
   }
   return completed;

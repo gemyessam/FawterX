@@ -2055,7 +2055,7 @@ async function getProjectDispatches(projectId, statusFilter = "all") {
   });
 }
 
-async function updateDispatchStage(projectId, dispatchId, { stage, notes, completionDate, customerReceivedBy }, userUid, userEmail, userName) {
+async function updateDispatchStage(projectId, dispatchId, { stage, notes, completionDate, customerReceivedBy, settleRemainingAsScrap = false, partialDeliveryOnly = false }, userUid, userEmail, userName) {
   const db = getDb();
   if (!db) throw new Error("Firestore is unavailable.");
   projectId = await resolveProjectId(db, projectId);
@@ -2066,27 +2066,70 @@ async function updateDispatchStage(projectId, dispatchId, { stage, notes, comple
 
   const currentData = dDoc.data() || {};
   const nowIso = new Date().toISOString();
-  const targetStage = stage || "delivered_to_customer";
-  const transitions = { in_coating: ["ready_from_coating", "delivered_to_customer", "closed"], ready_from_coating: ["delivered_to_customer", "closed"], delivered_to_customer: ["closed"], closed: [] };
-  if (currentData.isCancelled || (targetStage !== currentData.currentStage && !transitions[currentData.currentStage]?.includes(targetStage))) throw problem("Invalid dispatch stage transition.", 400);
+  let targetStage = stage || (partialDeliveryOnly ? "partially_delivered" : "delivered_to_customer");
+  const transitions = {
+    in_coating: ["ready_from_coating", "partially_delivered", "delivered_to_customer", "closed"],
+    ready_from_coating: ["partially_delivered", "delivered_to_customer", "closed"],
+    partially_delivered: ["ready_from_coating", "delivered_to_customer", "closed"],
+    delivered_to_customer: ["closed"],
+    closed: [],
+  };
+  if (currentData.isCancelled || (targetStage !== currentData.currentStage && !transitions[currentData.currentStage]?.includes(targetStage))) {
+    throw problem("Invalid dispatch stage transition.", 400);
+  }
+
+  const items = (currentData.items || []).map(item => ({ ...item }));
+  let scrapAddedTotal = 0;
+
+  if (settleRemainingAsScrap) {
+    items.forEach(item => {
+      const total = Number(item.quantityBar || item.bars || 0);
+      const delivered = Number(item.deliveredQuantityBar || 0);
+      const currentScrap = Number(item.scrapQuantityBar || 0);
+      const rem = Math.max(0, total - delivered - currentScrap);
+      if (rem > 0) {
+        item.scrapQuantityBar = currentScrap + rem;
+        scrapAddedTotal += rem;
+        item.scrapNotes = notes || "هادر وتالف أثناء الدهان تم تسويته عند إغلاق الأمر";
+      }
+    });
+    targetStage = "delivered_to_customer";
+  }
+
   const isNowCompleted = targetStage === "delivered_to_customer" || targetStage === "closed";
+
+  // If user selected full delivery to customer without scrap, ensure all items marked delivered
+  if (isNowCompleted && !settleRemainingAsScrap && !partialDeliveryOnly) {
+    items.forEach(item => {
+      const total = Number(item.quantityBar || item.bars || 0);
+      const scrap = Number(item.scrapQuantityBar || 0);
+      item.deliveredQuantityBar = Math.max(0, total - scrap);
+    });
+  }
 
   const stageLabelMap = {
     in_coating: "المرحلة 1: قيد الدهان والمعالجة لدى المورد",
     ready_from_coating: "تم استلام القطاعات من الدهان وجاهزة للتسليم",
+    partially_delivered: "تسليم جزئي (متبقي أعواد قيد التشغيل)",
     delivered_to_customer: "المرحلة 2: تم التسليم للعميل النهائي وإغلاق العملية",
     closed: "مكتمل ومغلق نهائياً",
   };
 
+  let historyLabel = stageLabelMap[targetStage] || targetStage;
+  if (settleRemainingAsScrap && scrapAddedTotal > 0) {
+    historyLabel += ` (مع تسوية ${scrapAddedTotal} عود كهادر/تالف دهان)`;
+  }
+
   const newHistoryEntry = {
     stage: targetStage,
-    label: stageLabelMap[targetStage] || targetStage,
+    label: historyLabel,
     timestamp: completionDate || nowIso,
     user: userName || userEmail || "مستخدم",
     notes: notes || (targetStage === "delivered_to_customer" ? `تم التسليم للعميل النهائي (${currentData.customerName || "العميل"})${customerReceivedBy ? ` - المستلم: ${customerReceivedBy}` : ""}` : "تحديث المرحلة"),
   };
 
   const updatePayload = {
+    items,
     currentStage: targetStage,
     isCompleted: isNowCompleted,
     completedAt: isNowCompleted ? (completionDate || nowIso) : null,
@@ -2109,6 +2152,8 @@ async function updateDispatchStage(projectId, dispatchId, { stage, notes, comple
       previousStage: currentData.currentStage,
       newStage: targetStage,
       isCompleted: isNowCompleted,
+      settleRemainingAsScrap,
+      scrapAddedTotal,
       notes,
     },
   });
@@ -2118,6 +2163,150 @@ async function updateDispatchStage(projectId, dispatchId, { stage, notes, comple
     dispatchId,
     currentStage: targetStage,
     isCompleted: isNowCompleted,
+    items,
+  };
+}
+
+/**
+ * Record scrap / waste / damaged profiles during coating
+ */
+async function recordDispatchScrap(projectId, dispatchId, { scrapItems = [], notes = "", settleAllRemaining = false }, userUid, userEmail, userName) {
+  const db = getDb();
+  if (!db) throw new Error("Firestore is unavailable.");
+  projectId = await resolveProjectId(db, projectId);
+
+  const dispatchRef = db.collection("warehouseProjects").doc(projectId).collection("dispatches").doc(dispatchId);
+  const dDoc = await dispatchRef.get();
+  if (!dDoc.exists) throw problem("سجل أمر الصرف والتتبع غير موجود.", 404);
+
+  const currentData = dDoc.data() || {};
+  if (currentData.isCancelled) throw problem("لا يمكن تسجيل هادر لأمر صرف ملغي.", 400);
+
+  const nowIso = new Date().toISOString();
+  const items = (currentData.items || []).map(item => ({ ...item }));
+  let totalScrappedNow = 0;
+
+  if (settleAllRemaining) {
+    items.forEach(item => {
+      const total = Number(item.quantityBar || item.bars || 0);
+      const delivered = Number(item.deliveredQuantityBar || 0);
+      const currentScrap = Number(item.scrapQuantityBar || 0);
+      const rem = Math.max(0, total - delivered - currentScrap);
+      if (rem > 0) {
+        item.scrapQuantityBar = currentScrap + rem;
+        totalScrappedNow += rem;
+        item.scrapNotes = notes || "هادر وتالف أثناء الدهان";
+      }
+    });
+  } else if (Array.isArray(scrapItems) && scrapItems.length > 0) {
+    scrapItems.forEach(({ itemIndex, itemCode, scrapBars, itemNotes }) => {
+      let targetIdx = itemIndex;
+      if (targetIdx === undefined && itemCode) {
+        targetIdx = items.findIndex(it => it.itemCode === itemCode);
+      }
+      if (targetIdx !== undefined && items[targetIdx]) {
+        const item = items[targetIdx];
+        const total = Number(item.quantityBar || item.bars || 0);
+        const delivered = Number(item.deliveredQuantityBar || 0);
+        const currentScrap = Number(item.scrapQuantityBar || 0);
+        const maxAllowed = Math.max(0, total - delivered - currentScrap);
+        const toAdd = Math.min(maxAllowed, Math.max(0, Number(scrapBars || 0)));
+        if (toAdd > 0) {
+          item.scrapQuantityBar = currentScrap + toAdd;
+          totalScrappedNow += toAdd;
+          item.scrapNotes = itemNotes || notes || "هادر وتالف أثناء الدهان";
+        }
+      }
+    });
+  }
+
+  if (totalScrappedNow <= 0) {
+    throw problem("يرجى تحديد كمية صالحة من الأعواد للهادر (أكبر من 0).", 400);
+  }
+
+  const isCompleted = items.length > 0 && items.every(item => (Number(item.deliveredQuantityBar || 0) + Number(item.scrapQuantityBar || 0)) >= Number(item.quantityBar || item.bars || 0));
+  const totalDelivered = items.reduce((sum, it) => sum + Number(it.deliveredQuantityBar || 0), 0);
+  const totalScrap = items.reduce((sum, it) => sum + Number(it.scrapQuantityBar || 0), 0);
+  const totalBars = items.reduce((sum, it) => sum + Number(it.quantityBar || it.bars || 0), 0);
+  const totalRemaining = Math.max(0, totalBars - totalDelivered - totalScrap);
+
+  let newStage = currentData.currentStage;
+  if (isCompleted) {
+    newStage = "delivered_to_customer";
+  } else if (totalDelivered > 0 || totalScrap > 0) {
+    newStage = "partially_delivered";
+  }
+
+  const historyEntry = {
+    stage: newStage,
+    label: isCompleted
+      ? `🗑️ تسجيل هادر دهان (${totalScrappedNow} عود) وإتمام إغلاق الأمر بنجاح`
+      : `🗑️ تسجيل هادر دهان (${totalScrappedNow} عود) - المتبقي بالتشغيل: ${totalRemaining} عود`,
+    timestamp: nowIso,
+    user: userName || userEmail || "مستخدم",
+    notes: notes || "تسجيل قطاعات تالفة/هادر لدى مورد الدهان",
+    scrappedBars: totalScrappedNow,
+    remainingBars: totalRemaining,
+  };
+
+  const updatePayload = {
+    items,
+    currentStage: newStage,
+    isCompleted,
+    completedAt: isCompleted ? nowIso : (currentData.completedAt || null),
+    stageHistory: admin.firestore.FieldValue.arrayUnion(historyEntry),
+    updatedAt: nowIso,
+    updatedBy: userUid || "admin",
+  };
+
+  await dispatchRef.set(updatePayload, { merge: true });
+
+  try {
+    const projectRef = db.collection("warehouseProjects").doc(projectId);
+    const mvtRef = projectRef.collection("movements").doc();
+    await mvtRef.set({
+      dispatchId,
+      dispatchNumber: currentData.dispatchNumber || "",
+      movementType: "scrap",
+      sourceType: "coating_scrap",
+      description: `هادر وتالف دهان - أمر صرف ${currentData.dispatchNumber || ""} (${currentData.coatingSupplier || "مورد الدهان"})`,
+      coatingSupplier: currentData.coatingSupplier || "مورد الدهان",
+      quantityBar: totalScrappedNow,
+      notes: notes || "قطاعات هادر/تالف أثناء مرحلة الدهان",
+      createdBy: userUid || "admin",
+      createdAt: nowIso,
+    });
+  } catch (mErr) {
+    console.warn("Could not log scrap movement:", mErr.message);
+  }
+
+  await logWarehouseAudit(projectId, {
+    action: "RECORD_COATING_SCRAP",
+    userUid,
+    userEmail,
+    userName,
+    details: {
+      dispatchId,
+      dispatchNumber: currentData.dispatchNumber,
+      totalScrappedNow,
+      totalRemaining,
+      isCompleted,
+      newStage,
+      notes,
+    },
+  });
+
+  return {
+    success: true,
+    dispatchId,
+    totalScrappedNow,
+    totalRemaining,
+    isCompleted,
+    currentStage: newStage,
+    items,
+    message: isCompleted
+      ? `✅ تم تسجيل (${totalScrappedNow}) عود كهادر دهان وإغلاق أمر الصرف بالكامل بنجاح!`
+      : `✅ تم تسجيل (${totalScrappedNow}) عود كهادر دهان، والمتبقي بالتشغيل (${totalRemaining}) عود.`,
   };
 }
 
@@ -2479,11 +2668,12 @@ module.exports = {
   getProjectItemAliases,
   saveProjectItemAlias,
   deleteProjectItemAlias,
+  recordDispatchScrap,
 };
 
 
 // All public project services share one atomic read/write boundary and generation.
 const readServices = ['getProjectStock', 'getProjectDispatches', 'getProjectInvoices', 'getProjectMovements', 'getItemMovementsHistory', 'getWarehouseAuditLogs', 'listProjectRestorePoints', 'getProjectItemAliases'];
-const writeServices = ['reconcileDelmarAndCosts', 'processInboundInvoice', 'processManualStockMovement', 'updateDispatchStage', 'deleteProjectDispatch', 'updateStockItem', 'deleteStockItem', 'updateInvoiceMetadata', 'logWarehouseAudit', 'createProjectRestorePoint', 'createAutoRestorePoint', 'deleteProjectRestorePoint', 'rollbackInvoiceTransaction', 'saveProjectItemAlias', 'deleteProjectItemAlias'];
+const writeServices = ['reconcileDelmarAndCosts', 'processInboundInvoice', 'processManualStockMovement', 'updateDispatchStage', 'recordDispatchScrap', 'deleteProjectDispatch', 'updateStockItem', 'deleteStockItem', 'updateInvoiceMetadata', 'logWarehouseAudit', 'createProjectRestorePoint', 'createAutoRestorePoint', 'deleteProjectRestorePoint', 'rollbackInvoiceTransaction', 'saveProjectItemAlias', 'deleteProjectItemAlias'];
 for (const name of readServices) module.exports[name] = projectOperation(rawGetDb, module.exports[name], { readOnly: true });
 for (const name of writeServices) module.exports[name] = projectOperation(rawGetDb, module.exports[name]);

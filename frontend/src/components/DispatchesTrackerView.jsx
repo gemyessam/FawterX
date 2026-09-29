@@ -1,6 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'react-hot-toast'
-import { getWarehouseDispatches, updateDispatchStage, deleteWarehouseDispatch, reconcileWarehouseDelmarAndCosts, getWarehouseInvoices } from '../services/warehouseApi'
+import {
+  getWarehouseDispatches,
+  updateDispatchStage,
+  deleteWarehouseDispatch,
+  reconcileWarehouseDelmarAndCosts,
+  getWarehouseInvoices,
+  recordWarehouseDispatchScrap,
+} from '../services/warehouseApi'
 
 export default function DispatchesTrackerView({
   projectId,
@@ -64,7 +71,15 @@ export default function DispatchesTrackerView({
   const [transitioningDispatch, setTransitioningDispatch] = useState(null)
   const [customerReceivedBy, setCustomerReceivedBy] = useState('')
   const [transitionNotes, setTransitionNotes] = useState('')
+  const [deliveryMode, setDeliveryMode] = useState('settle_scrap') // 'settle_scrap' | 'partial' | 'full'
   const [savingTransition, setSavingTransition] = useState(false)
+
+  // Scrap / Waste Modal State
+  const [scrapModalDispatch, setScrapModalDispatch] = useState(null)
+  const [scrapTargetIndex, setScrapTargetIndex] = useState('all') // 'all' | itemIndex
+  const [scrapQuantity, setScrapQuantity] = useState('')
+  const [scrapNotes, setScrapNotes] = useState('')
+  const [savingScrap, setSavingScrap] = useState(false)
 
   const loadDispatches = async () => {
     if (!projectId) return
@@ -155,8 +170,8 @@ export default function DispatchesTrackerView({
     const completed = dispatches.filter((d) => !d.isCancelled && (d.isCompleted || d.currentStage === 'closed' || d.currentStage === 'delivered_to_customer'))
     const cancelled = dispatches.filter((d) => d.isCancelled || d.currentStage === 'cancelled')
 
-    const activeBars = active.reduce((acc, d) => acc + (d.items || []).reduce((sum, item) => sum + Math.max(0, Number(item.quantityBar || item.bars || 0) - Number(item.deliveredQuantityBar || 0)), 0), 0)
-    const activeLm = active.reduce((acc, d) => acc + (d.items || []).reduce((sum, item) => sum + Math.max(0, Number(item.quantityBar || item.bars || 0) - Number(item.deliveredQuantityBar || 0)) * Number(item.lengthMm || 6000) / 1000, 0), 0)
+    const activeBars = active.reduce((acc, d) => acc + (d.items || []).reduce((sum, item) => sum + Math.max(0, Number(item.quantityBar || item.bars || 0) - Number(item.deliveredQuantityBar || 0) - Number(item.scrapQuantityBar || 0)), 0), 0)
+    const activeLm = active.reduce((acc, d) => acc + (d.items || []).reduce((sum, item) => sum + Math.max(0, Number(item.quantityBar || item.bars || 0) - Number(item.deliveredQuantityBar || 0) - Number(item.scrapQuantityBar || 0)) * Number(item.lengthMm || 6000) / 1000, 0), 0)
     const completedBars = completed.reduce((acc, d) => acc + Number(d.totalQuantityBar || 0), 0)
 
     return {
@@ -176,6 +191,31 @@ export default function DispatchesTrackerView({
     setTransitioningDispatch(dispatch)
     setCustomerReceivedBy('')
     setTransitionNotes('')
+    const totalBars = Number(dispatch.totalQuantityBar || 0)
+    const items = Array.isArray(dispatch.items) ? dispatch.items : []
+    const delivered = items.reduce((sum, it) => sum + Number(it.deliveredQuantityBar || 0), 0)
+    const scrap = items.reduce((sum, it) => sum + Number(it.scrapQuantityBar || 0), 0)
+    const rem = Math.max(0, totalBars - delivered - scrap)
+    setDeliveryMode(rem > 0 ? 'settle_scrap' : 'full')
+  }
+
+  // Open scrap / waste modal
+  const handleOpenScrapModal = (dispatch, targetIndex = 'all') => {
+    setScrapModalDispatch(dispatch)
+    setScrapTargetIndex(targetIndex)
+    setScrapNotes('')
+    const items = Array.isArray(dispatch.items) ? dispatch.items : []
+    if (targetIndex === 'all') {
+      const totalBars = Number(dispatch.totalQuantityBar || 0)
+      const delivered = items.reduce((sum, it) => sum + Number(it.deliveredQuantityBar || 0), 0)
+      const scrap = items.reduce((sum, it) => sum + Number(it.scrapQuantityBar || 0), 0)
+      const rem = Math.max(0, totalBars - delivered - scrap)
+      setScrapQuantity(rem)
+    } else {
+      const it = items[targetIndex]
+      const rem = Math.max(0, Number(it?.quantityBar || 0) - Number(it?.deliveredQuantityBar || 0) - Number(it?.scrapQuantityBar || 0))
+      setScrapQuantity(rem)
+    }
   }
 
   // Commit delivery to final customer
@@ -185,17 +225,25 @@ export default function DispatchesTrackerView({
 
     setSavingTransition(true)
     try {
+      const isSettleScrap = deliveryMode === 'settle_scrap'
+      const isPartial = deliveryMode === 'partial'
       const res = await updateDispatchStage(projectId, transitioningDispatch.id, {
-        stage: 'delivered_to_customer',
+        stage: isPartial ? 'partially_delivered' : 'delivered_to_customer',
         notes: transitionNotes,
         customerReceivedBy,
+        settleRemainingAsScrap: isSettleScrap,
+        partialDeliveryOnly: isPartial,
       })
 
       if (res && res.success) {
         toast.success(
           isAr
-            ? `🏁 تم تسليم أمر الصرف (${transitioningDispatch.dispatchNumber}) للعميل النهائي (${transitioningDispatch.customerName}) وإتمام الدورة بنجاح!`
-            : `Order ${transitioningDispatch.dispatchNumber} marked as delivered & completed!`
+            ? isSettleScrap
+              ? `🏁 تم تسليم أمر الصرف (${transitioningDispatch.dispatchNumber}) وتسوية باقي الأعواد كهادر دهان وإغلاق الدورة بنجاح!`
+              : isPartial
+                ? `📦 تم تسجيل التسليم الجزئي لأمر الصرف (${transitioningDispatch.dispatchNumber}) وإبقاء المتبقي قيد الدهان بنجاح!`
+                : `🏁 تم تسليم أمر الصرف (${transitioningDispatch.dispatchNumber}) للعميل النهائي (${transitioningDispatch.customerName}) وإتمام الدورة بنجاح!`
+            : `Order updated successfully!`
         )
         setTransitioningDispatch(null)
         loadDispatches()
@@ -204,6 +252,47 @@ export default function DispatchesTrackerView({
       toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل تحديث مرحلة التسليم' : 'Failed to update stage'))
     } finally {
       setSavingTransition(false)
+    }
+  }
+
+  // Commit scrap / waste recording
+  const handleConfirmScrap = async (e) => {
+    e?.preventDefault()
+    if (!scrapModalDispatch) return
+    setSavingScrap(true)
+    try {
+      let payload = {}
+      if (scrapTargetIndex === 'all') {
+        payload = {
+          settleAllRemaining: true,
+          notes: scrapNotes || (isAr ? 'هادر وتالف أثناء مرحلة الدهان' : 'Coating scrap'),
+        }
+      } else {
+        const idx = Number(scrapTargetIndex)
+        const it = scrapModalDispatch.items[idx]
+        payload = {
+          settleAllRemaining: false,
+          scrapItems: [
+            {
+              itemIndex: idx,
+              itemCode: it.itemCode,
+              scrapBars: Number(scrapQuantity),
+              itemNotes: scrapNotes,
+            }
+          ],
+          notes: scrapNotes || (isAr ? 'هادر وتالف أثناء مرحلة الدهان' : 'Coating scrap'),
+        }
+      }
+      const res = await recordWarehouseDispatchScrap(projectId, scrapModalDispatch.id, payload)
+      if (res && res.success) {
+        toast.success(res.message || (isAr ? '✅ تم تسجيل الهادر بنجاح!' : 'Scrap recorded successfully!'))
+        setScrapModalDispatch(null)
+        loadDispatches()
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل تسجيل الهادر' : 'Failed to record scrap'))
+    } finally {
+      setSavingScrap(false)
     }
   }
 
@@ -459,12 +548,19 @@ export default function DispatchesTrackerView({
             const isExpanded = expandedDispatchId === disp.id
             const dateFormatted = disp.dispatchedAt ? new Date(disp.dispatchedAt).toLocaleDateString(isAr ? 'ar-EG' : 'en-US') : '—'
 
+            const dispItems = Array.isArray(disp.items) ? disp.items : []
+            const dispTotalBars = Number(disp.totalQuantityBar || 0)
+            const dispDeliveredBars = dispItems.reduce((sum, it) => sum + Number(it.deliveredQuantityBar || 0), 0)
+            const dispScrapBars = dispItems.reduce((sum, it) => sum + Number(it.scrapQuantityBar || 0), 0)
+            const dispRemBars = Math.max(0, dispTotalBars - dispDeliveredBars - dispScrapBars)
+            const isPartial = !isCancelled && !isCompleted && (disp.currentStage === 'partially_delivered' || dispDeliveredBars > 0 || dispScrapBars > 0)
+
             return (
               <div
                 key={disp.id}
                 style={{
                   background: isCancelled ? 'rgba(255, 71, 87, 0.03)' : 'rgba(255,255,255,0.025)',
-                  border: `1px solid ${isCancelled ? 'rgba(255, 71, 87, 0.4)' : isCompleted ? 'rgba(0, 224, 161, 0.25)' : 'rgba(255, 215, 0, 0.35)'}`,
+                  border: `1px solid ${isCancelled ? 'rgba(255, 71, 87, 0.4)' : isCompleted ? 'rgba(0, 224, 161, 0.25)' : isPartial ? 'rgba(255, 159, 67, 0.4)' : 'rgba(255, 215, 0, 0.35)'}`,
                   borderRadius: '12px',
                   overflow: 'hidden',
                   transition: 'all 0.2s ease',
@@ -480,16 +576,16 @@ export default function DispatchesTrackerView({
                     alignItems: 'center',
                     flexWrap: 'wrap',
                     gap: '1rem',
-                    background: isCancelled ? 'rgba(255, 71, 87, 0.06)' : isCompleted ? 'rgba(0, 224, 161, 0.03)' : 'rgba(255, 215, 0, 0.03)',
+                    background: isCancelled ? 'rgba(255, 71, 87, 0.06)' : isCompleted ? 'rgba(0, 224, 161, 0.03)' : isPartial ? 'rgba(255, 159, 67, 0.05)' : 'rgba(255, 215, 0, 0.03)',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                     <span
                       className="badge"
                       style={{
-                        background: isCancelled ? 'rgba(255, 71, 87, 0.18)' : isCompleted ? 'rgba(0, 224, 161, 0.15)' : 'rgba(255, 215, 0, 0.15)',
-                        color: isCancelled ? '#ff4757' : isCompleted ? '#00e0a1' : '#FFD700',
-                        border: `1px solid ${isCancelled ? 'rgba(255, 71, 87, 0.5)' : isCompleted ? 'rgba(0, 224, 161, 0.3)' : 'rgba(255, 215, 0, 0.4)'}`,
+                        background: isCancelled ? 'rgba(255, 71, 87, 0.18)' : isCompleted ? 'rgba(0, 224, 161, 0.15)' : isPartial ? 'rgba(255, 159, 67, 0.18)' : 'rgba(255, 215, 0, 0.15)',
+                        color: isCancelled ? '#ff4757' : isCompleted ? '#00e0a1' : isPartial ? '#ff9f43' : '#FFD700',
+                        border: `1px solid ${isCancelled ? 'rgba(255, 71, 87, 0.5)' : isCompleted ? 'rgba(0, 224, 161, 0.3)' : isPartial ? 'rgba(255, 159, 67, 0.5)' : 'rgba(255, 215, 0, 0.4)'}`,
                         fontSize: '0.85rem',
                         fontWeight: 700,
                         padding: '4px 10px',
@@ -499,6 +595,8 @@ export default function DispatchesTrackerView({
                         ? (isAr ? '⚠️ ملغاة (تم التراجع وعكس الرصيد)' : '⚠️ Cancelled (Rolled Back)')
                         : isCompleted
                         ? (isAr ? '🟢 المرحلة 2: مسلّم نهائي ومكتمل' : '🟢 Delivered & Completed')
+                        : isPartial
+                        ? (isAr ? `🟠 تسليم جزئي (متبقي ${dispRemBars} عود)` : `🟠 Partially Delivered (${dispRemBars} rem)`)
                         : (isAr ? '🟡 المرحلة 1: قيد الدهان والمعالجة' : '🟡 In Coating')}
                     </span>
 
@@ -537,14 +635,59 @@ export default function DispatchesTrackerView({
                   </div>
 
                   {/* Summary Badges & Quick Action */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
                     <div style={{ textAlign: isAr ? 'left' : 'right', display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(255,255,255,0.04)', padding: '0.3rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isAr ? 'الكمية:' : 'Qty:'}</span>
-                      <strong style={{ color: '#64b5f6', fontSize: '1.25rem', fontWeight: 900 }}>{(disp.totalQuantityBar || 0).toLocaleString()}</strong>
-                      <span style={{ color: '#64b5f6', fontWeight: 800, fontSize: '0.9rem' }}>BAR</span>
-                      <span style={{ color: 'var(--text-muted)', margin: '0 2px' }}>•</span>
-                      <strong style={{ color: '#a29bfe', fontSize: '0.95rem' }}>{(disp.totalQuantityLm || 0).toFixed(1)} m</strong>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isAr ? 'الإجمالي:' : 'Total:'}</span>
+                      <strong style={{ color: '#64b5f6', fontSize: '1.15rem', fontWeight: 900 }}>{dispTotalBars.toLocaleString()}</strong>
+                      <span style={{ color: '#64b5f6', fontWeight: 800, fontSize: '0.85rem' }}>BAR</span>
                     </div>
+
+                    {dispDeliveredBars > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(0, 224, 161, 0.08)', padding: '0.3rem 0.65rem', borderRadius: '8px', border: '1px solid rgba(0, 224, 161, 0.3)' }}>
+                        <span style={{ color: '#00e0a1', fontSize: '0.8rem' }}>{isAr ? 'تم تسليمه:' : 'Delivered:'}</span>
+                        <strong style={{ color: '#00e0a1', fontSize: '1.1rem', fontWeight: 900 }}>{dispDeliveredBars.toLocaleString()}</strong>
+                        <span style={{ color: '#00e0a1', fontWeight: 700, fontSize: '0.8rem' }}>BAR</span>
+                      </div>
+                    )}
+
+                    {dispScrapBars > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(255, 71, 87, 0.08)', padding: '0.3rem 0.65rem', borderRadius: '8px', border: '1px solid rgba(255, 71, 87, 0.3)' }}>
+                        <span style={{ color: '#ff6b81', fontSize: '0.8rem' }}>{isAr ? 'هادر دهان:' : 'Scrap:'}</span>
+                        <strong style={{ color: '#ff6b81', fontSize: '1.1rem', fontWeight: 900 }}>{dispScrapBars.toLocaleString()}</strong>
+                        <span style={{ color: '#ff6b81', fontWeight: 700, fontSize: '0.8rem' }}>BAR</span>
+                      </div>
+                    )}
+
+                    {!isCompleted && !isCancelled && dispRemBars > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(255, 215, 0, 0.08)', padding: '0.3rem 0.65rem', borderRadius: '8px', border: '1px solid rgba(255, 215, 0, 0.3)' }}>
+                        <span style={{ color: '#FFD700', fontSize: '0.8rem' }}>{isAr ? 'متبقي دهان:' : 'Rem:'}</span>
+                        <strong style={{ color: '#FFD700', fontSize: '1.1rem', fontWeight: 900 }}>{dispRemBars.toLocaleString()}</strong>
+                        <span style={{ color: '#FFD700', fontWeight: 700, fontSize: '0.8rem' }}>BAR</span>
+                      </div>
+                    )}
+
+                    {!isCompleted && !isCancelled && dispRemBars > 0 && (
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => handleOpenScrapModal(disp, 'all')}
+                        style={{
+                          background: 'rgba(255, 107, 129, 0.15)',
+                          color: '#ff6b81',
+                          border: '1px solid rgba(255, 107, 129, 0.4)',
+                          fontWeight: 700,
+                          padding: '0.45rem 0.85rem',
+                          borderRadius: '6px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                        }}
+                        title={isAr ? 'تسجيل الأعواد التالفة أو الهادر أثناء الدهان لتسوية الأمر' : 'Record scrap / waste from coating'}
+                      >
+                        🗑️ {isAr ? 'تسجيل هادر دهان' : 'Record Scrap'}
+                      </button>
+                    )}
 
                     {!isCompleted && !isCancelled && (
                       <button
@@ -667,28 +810,82 @@ export default function DispatchesTrackerView({
                             <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
                             <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'الدهان الأصلي' : 'Original Finish'}</th>
                             <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'الطول' : 'Length'}</th>
-                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'الأعواد' : 'Bars'}</th>
-                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'الأمتار' : 'Meters'}</th>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'إجمالي الأعواد' : 'Total Bars'}</th>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'تم تسليمه' : 'Delivered'}</th>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'هادر دهان' : 'Scrap'}</th>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'المتبقي' : 'Remaining'}</th>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'الحالة' : 'Status'}</th>
+                            {!isCompleted && !isCancelled && (
+                              <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'إجراءات' : 'Actions'}</th>
+                            )}
                           </tr>
                         </thead>
                         <tbody>
                           {Array.isArray(disp.items) && disp.items.length > 0 ? (
-                            disp.items.map((it, idx) => (
-                              <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                                <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)' }}>{idx + 1}</td>
-                                <td style={{ padding: '0.5rem 0.75rem', fontWeight: 700, color: '#00e0a1' }}>{it.itemCode}</td>
-                                <td style={{ padding: '0.5rem 0.75rem' }}>{it.description}</td>
-                                <td style={{ padding: '0.5rem 0.75rem' }}>{it.finish || 'STD'}</td>
-                                <td style={{ padding: '0.5rem 0.75rem' }}><span dir="ltr">{it.lengthMm} mm</span></td>
-                                <td style={{ padding: '0.5rem 0.75rem', fontWeight: 700, color: '#fff' }}>{it.quantityBar}</td>
-                                <td style={{ padding: '0.5rem 0.75rem', color: '#64b5f6' }}>
-                                  <span dir="ltr">{(it.quantityLm || 0).toFixed(1)} m</span>
-                                </td>
-                              </tr>
-                            ))
+                            disp.items.map((it, idx) => {
+                              const itTotal = Number(it.quantityBar || it.bars || 0)
+                              const itDelivered = Number(it.deliveredQuantityBar || 0)
+                              const itScrap = Number(it.scrapQuantityBar || 0)
+                              const itRem = Math.max(0, itTotal - itDelivered - itScrap)
+                              const itStatus = itRem === 0 ? 'completed' : (itDelivered > 0 || itScrap > 0) ? 'partial' : 'in_coating'
+
+                              return (
+                                <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                  <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)' }}>{idx + 1}</td>
+                                  <td style={{ padding: '0.5rem 0.75rem', fontWeight: 700, color: '#00e0a1' }}>{it.itemCode}</td>
+                                  <td style={{ padding: '0.5rem 0.75rem' }}>{it.description}</td>
+                                  <td style={{ padding: '0.5rem 0.75rem' }}>{it.finish || 'STD'}</td>
+                                  <td style={{ padding: '0.5rem 0.75rem' }}><span dir="ltr">{it.lengthMm} mm</span></td>
+                                  <td style={{ padding: '0.5rem 0.75rem', fontWeight: 700, color: '#fff' }}>{itTotal}</td>
+                                  <td style={{ padding: '0.5rem 0.75rem', color: '#00e0a1', fontWeight: 600 }}>{itDelivered}</td>
+                                  <td style={{ padding: '0.5rem 0.75rem', color: '#ff6b81', fontWeight: 600 }}>{itScrap}</td>
+                                  <td style={{ padding: '0.5rem 0.75rem', color: itRem > 0 ? '#FFD700' : 'var(--text-muted)', fontWeight: 700 }}>{itRem}</td>
+                                  <td style={{ padding: '0.5rem 0.75rem' }}>
+                                    <span
+                                      className="badge"
+                                      style={{
+                                        fontSize: '0.75rem',
+                                        padding: '2px 6px',
+                                        background: itStatus === 'completed' ? 'rgba(0, 224, 161, 0.15)' : itStatus === 'partial' ? 'rgba(255, 159, 67, 0.15)' : 'rgba(255, 215, 0, 0.15)',
+                                        color: itStatus === 'completed' ? '#00e0a1' : itStatus === 'partial' ? '#ff9f43' : '#FFD700',
+                                        border: `1px solid ${itStatus === 'completed' ? 'rgba(0, 224, 161, 0.3)' : itStatus === 'partial' ? 'rgba(255, 159, 67, 0.3)' : 'rgba(255, 215, 0, 0.3)'}`,
+                                      }}
+                                    >
+                                      {itStatus === 'completed'
+                                        ? (isAr ? 'مكتمل المسلّم' : 'Completed')
+                                        : itStatus === 'partial'
+                                        ? (isAr ? 'مسلّم جزئي' : 'Partial')
+                                        : (isAr ? 'قيد الدهان' : 'In Coating')}
+                                    </span>
+                                  </td>
+                                  {!isCompleted && !isCancelled && (
+                                    <td style={{ padding: '0.5rem 0.75rem' }}>
+                                      {itRem > 0 && (
+                                        <button
+                                          type="button"
+                                          className="btn btn-ghost btn-sm"
+                                          onClick={() => handleOpenScrapModal(disp, idx)}
+                                          style={{
+                                            color: '#ff6b81',
+                                            border: '1px solid rgba(255, 107, 129, 0.3)',
+                                            fontSize: '0.75rem',
+                                            padding: '2px 6px',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                          }}
+                                          title={isAr ? 'تسجيل هادر وتالف لهذا البند' : 'Record scrap for this item'}
+                                        >
+                                          🗑️ {isAr ? 'هادر' : 'Scrap'}
+                                        </button>
+                                      )}
+                                    </td>
+                                  )}
+                                </tr>
+                              )
+                            })
                           ) : (
                             <tr>
-                              <td colSpan={7} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                              <td colSpan={11} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                                 {isAr ? 'لا توجد بنود تفصيلية مسجلة' : 'No items recorded'}
                               </td>
                             </tr>
@@ -743,7 +940,225 @@ export default function DispatchesTrackerView({
       )}
 
       {/* ─── STAGE COMPLETION MODAL ─── */}
-      {transitioningDispatch && (
+      {transitioningDispatch && (() => {
+        const transItems = Array.isArray(transitioningDispatch.items) ? transitioningDispatch.items : []
+        const transTotalBars = Number(transitioningDispatch.totalQuantityBar || 0)
+        const transDeliveredBars = transItems.reduce((sum, it) => sum + Number(it.deliveredQuantityBar || 0), 0)
+        const transScrapBars = transItems.reduce((sum, it) => sum + Number(it.scrapQuantityBar || 0), 0)
+        const transRemBars = Math.max(0, transTotalBars - transDeliveredBars - transScrapBars)
+
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.85)',
+              backdropFilter: 'blur(8px)',
+              zIndex: 1200,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem',
+            }}
+          >
+            <div
+              style={{
+                background: '#121629',
+                border: '1px solid rgba(0, 224, 161, 0.4)',
+                borderRadius: '16px',
+                maxWidth: '560px',
+                width: '100%',
+                overflow: 'hidden',
+                boxShadow: '0 20px 50px rgba(0,0,0,0.7)',
+              }}
+            >
+              <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0, 224, 161, 0.08)' }}>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#00e0a1', fontWeight: 800 }}>
+                  🚀 {isAr ? 'إتمام تسليم القطاعات للعميل النهائي' : 'Complete Delivery to Final Customer'}
+                </h3>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  {isAr
+                    ? `أمر الصرف: ${transitioningDispatch.dispatchNumber} | العميل: ${transitioningDispatch.customerName}`
+                    : `Order: ${transitioningDispatch.dispatchNumber} | Customer: ${transitioningDispatch.customerName}`}
+                </p>
+              </div>
+
+              <form onSubmit={handleConfirmDeliverToCustomer} style={{ padding: '1.5rem' }}>
+                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.85rem', borderRadius: '8px', marginBottom: '1.25rem', fontSize: '0.85rem' }}>
+                  <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'إجمالي الصرف:' : 'Total Qty:'} </span>
+                      <strong style={{ color: '#64b5f6' }}>{transTotalBars} BAR</strong>
+                    </div>
+                    {transDeliveredBars > 0 && (
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'المسلّم:' : 'Delivered:'} </span>
+                        <strong style={{ color: '#00e0a1' }}>{transDeliveredBars} BAR</strong>
+                      </div>
+                    )}
+                    {transScrapBars > 0 && (
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'الهادر:' : 'Scrap:'} </span>
+                        <strong style={{ color: '#ff6b81' }}>{transScrapBars} BAR</strong>
+                      </div>
+                    )}
+                    {transRemBars > 0 && (
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'المتبقي:' : 'Rem:'} </span>
+                        <strong style={{ color: '#FFD700' }}>{transRemBars} BAR</strong>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ marginTop: '0.4rem' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'الدهان المنفذ:' : 'Finished Coating:'} </span>
+                    <strong style={{ color: '#FFD700' }}>{transitioningDispatch.targetFinish}</strong>
+                  </div>
+                </div>
+
+                {/* Delivery mode selection if there are remaining bars */}
+                {transRemBars > 0 && (
+                  <div style={{ background: 'rgba(255, 159, 67, 0.08)', border: '1px solid rgba(255, 159, 67, 0.3)', borderRadius: '10px', padding: '1rem', marginBottom: '1.25rem' }}>
+                    <div style={{ fontWeight: 800, color: '#ff9f43', marginBottom: '0.5rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span>⚠️</span>
+                      <span>{isAr ? `تنبيه: متبقي ${transRemBars} عود لم يتم استلامها في فاتورة الصرف` : `Note: ${transRemBars} bars remain undelivered`}</span>
+                    </div>
+                    <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                      {isAr
+                        ? 'تم تسليم بنود الفاتورة بالفعل، اختر كيفية معالجة المتبقي لإغلاق الأمر أو إبقائه قيد المتابعة:'
+                        : 'Invoice items were deducted. Choose how to handle remaining bars:'}
+                    </p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', background: deliveryMode === 'settle_scrap' ? 'rgba(0, 224, 161, 0.1)' : 'rgba(255,255,255,0.02)', padding: '0.6rem 0.8rem', borderRadius: '8px', border: `1px solid ${deliveryMode === 'settle_scrap' ? '#00e0a1' : 'rgba(255,255,255,0.08)'}` }}>
+                        <input
+                          type="radio"
+                          name="deliveryMode"
+                          value="settle_scrap"
+                          checked={deliveryMode === 'settle_scrap'}
+                          onChange={() => setDeliveryMode('settle_scrap')}
+                          style={{ marginTop: '0.2rem' }}
+                        />
+                        <div>
+                          <strong style={{ color: '#00e0a1', fontSize: '0.85rem' }}>
+                            🎯 {isAr ? `تسوية الـ (${transRemBars} عود) المتبقية كهادر/تالف دهان وإغلاق الأمر نهائياً (موصى به)` : `Settle remaining ${transRemBars} bars as coating scrap & close order`}
+                          </strong>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                            {isAr
+                              ? 'تسجيل الأعواد المتبقية كهادر أو بوزان أثناء الرش بمصنع الدهان وإتمام إغلاق دورة أمر الصرف بالكامل.'
+                              : 'Mark undelivered bars as scrap/waste from coating and complete the dispatch lifecycle.'}
+                          </div>
+                        </div>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', background: deliveryMode === 'partial' ? 'rgba(255, 159, 67, 0.1)' : 'rgba(255,255,255,0.02)', padding: '0.6rem 0.8rem', borderRadius: '8px', border: `1px solid ${deliveryMode === 'partial' ? '#ff9f43' : 'rgba(255,255,255,0.08)'}` }}>
+                        <input
+                          type="radio"
+                          name="deliveryMode"
+                          value="partial"
+                          checked={deliveryMode === 'partial'}
+                          onChange={() => setDeliveryMode('partial')}
+                          style={{ marginTop: '0.2rem' }}
+                        />
+                        <div>
+                          <strong style={{ color: '#ff9f43', fontSize: '0.85rem' }}>
+                            📦 {isAr ? `تسجيل تسليم جزئي وإبقاء الـ (${transRemBars} عود) قيد الدهان` : `Record partial delivery and keep ${transRemBars} bars in coating`}
+                          </strong>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                            {isAr
+                              ? 'تسليم البنود المنتهية فقط، مع إبقاء أمر الصرف مفتوحاً في مرحلة الدهان لمتابعة باقي الأعواد لاحقاً.'
+                              : 'Keep order active in coating pool for tracking the remaining bars later.'}
+                          </div>
+                        </div>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', background: deliveryMode === 'full' ? 'rgba(100, 181, 246, 0.1)' : 'rgba(255,255,255,0.02)', padding: '0.6rem 0.8rem', borderRadius: '8px', border: `1px solid ${deliveryMode === 'full' ? '#64b5f6' : 'rgba(255,255,255,0.08)'}` }}>
+                        <input
+                          type="radio"
+                          name="deliveryMode"
+                          value="full"
+                          checked={deliveryMode === 'full'}
+                          onChange={() => setDeliveryMode('full')}
+                          style={{ marginTop: '0.2rem' }}
+                        />
+                        <div>
+                          <strong style={{ color: '#64b5f6', fontSize: '0.85rem' }}>
+                            🏁 {isAr ? 'إغلاق أمر الصرف بالكامل وتأكيد الاستلام' : 'Force complete order delivery'}
+                          </strong>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                            {isAr
+                              ? 'إغلاق الأمر ونقله لمرحلة التسليم النهائي مع تجاهل أي فوارق كميات.'
+                              : 'Close order and move to completed stage directly.'}
+                          </div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '0.4rem', fontWeight: 600 }}>
+                    👤 {isAr ? 'اسم المستلم في موقع العميل (اختياري)' : 'Received By (Optional)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={customerReceivedBy}
+                    onChange={(e) => setCustomerReceivedBy(e.target.value)}
+                    placeholder={isAr ? 'مثال: م/ أحمد إبراهيم (مدير الموقع)...' : 'e.g. Site supervisor...'}
+                    style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem', fontSize: '0.85rem' }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '0.4rem', fontWeight: 600 }}>
+                    📝 {isAr ? 'ملاحظات التسليم والإغلاق' : 'Closing Notes'}
+                  </label>
+                  <textarea
+                    rows="3"
+                    value={transitionNotes}
+                    onChange={(e) => setTransitionNotes(e.target.value)}
+                    placeholder={isAr ? 'تم استلام القطاعات بحالة ممتازة ومطابقة للمواصفات...' : 'Received in good condition...'}
+                    style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem', fontSize: '0.85rem', resize: 'none' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={savingTransition}
+                    onClick={() => setTransitioningDispatch(null)}
+                  >
+                    {isAr ? 'إلغاء' : 'Cancel'}
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn"
+                    disabled={savingTransition}
+                    style={{
+                      background: 'linear-gradient(135deg, #00e0a1 0%, #00b894 100%)',
+                      color: '#000',
+                      border: 'none',
+                      padding: '0.55rem 1.5rem',
+                      borderRadius: '8px',
+                      fontWeight: 800,
+                      fontSize: '0.9rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {savingTransition ? '...' : (isAr ? '🏁 تأكيد وحفظ العملية' : 'Confirm & Save')}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ─── COATING SCRAP / WASTE MODAL ─── */}
+      {scrapModalDispatch && (
         <div
           style={{
             position: 'fixed',
@@ -763,61 +1178,86 @@ export default function DispatchesTrackerView({
           <div
             style={{
               background: '#121629',
-              border: '1px solid rgba(0, 224, 161, 0.4)',
+              border: '1px solid rgba(255, 107, 129, 0.4)',
               borderRadius: '16px',
-              maxWidth: '550px',
+              maxWidth: '520px',
               width: '100%',
               overflow: 'hidden',
               boxShadow: '0 20px 50px rgba(0,0,0,0.7)',
             }}
           >
-            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0, 224, 161, 0.08)' }}>
-              <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#00e0a1', fontWeight: 800 }}>
-                🚀 {isAr ? 'إتمام تسليم القطاعات للعميل النهائي' : 'Complete Delivery to Final Customer'}
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255, 107, 129, 0.08)' }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#ff6b81', fontWeight: 800 }}>
+                🗑️ {isAr ? 'تسجيل هادر وتالف دهان (Coating Scrap)' : 'Record Coating Scrap / Waste'}
               </h3>
               <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                 {isAr
-                  ? `أمر الصرف: ${transitioningDispatch.dispatchNumber} | العميل: ${transitioningDispatch.customerName}`
-                  : `Order: ${transitioningDispatch.dispatchNumber} | Customer: ${transitioningDispatch.customerName}`}
+                  ? `أمر الصرف: ${scrapModalDispatch.dispatchNumber} | المورد: ${scrapModalDispatch.coatingSupplier || 'مصنع الدهان'}`
+                  : `Dispatch: ${scrapModalDispatch.dispatchNumber} | Supplier: ${scrapModalDispatch.coatingSupplier}`}
               </p>
             </div>
 
-            <form onSubmit={handleConfirmDeliverToCustomer} style={{ padding: '1.5rem' }}>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.85rem', borderRadius: '8px', marginBottom: '1.25rem', fontSize: '0.85rem' }}>
-                <div>
-                  <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'الكمية المنصرفة:' : 'Dispatched Qty:'} </span>
-                  <strong style={{ color: '#00e0a1' }}>{transitioningDispatch.totalQuantityBar} BAR</strong>
-                  <span style={{ color: 'var(--text-muted)', margin: '0 4px' }}>|</span>
-                  <strong style={{ color: '#64b5f6' }}>{(transitioningDispatch.totalQuantityLm || 0).toFixed(1)} m</strong>
-                </div>
-                <div style={{ marginTop: '0.3rem' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'الدهان المنفذ:' : 'Finished Coating:'} </span>
-                  <strong style={{ color: '#FFD700' }}>{transitioningDispatch.targetFinish}</strong>
-                </div>
+            <form onSubmit={handleConfirmScrap} style={{ padding: '1.5rem' }}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '0.4rem', fontWeight: 600 }}>
+                  🎯 {isAr ? 'نطاق تسجيل الهادر:' : 'Scrap Scope:'}
+                </label>
+                <select
+                  value={scrapTargetIndex}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setScrapTargetIndex(val)
+                    const items = Array.isArray(scrapModalDispatch.items) ? scrapModalDispatch.items : []
+                    if (val === 'all') {
+                      const totalBars = Number(scrapModalDispatch.totalQuantityBar || 0)
+                      const delivered = items.reduce((sum, it) => sum + Number(it.deliveredQuantityBar || 0), 0)
+                      const scrap = items.reduce((sum, it) => sum + Number(it.scrapQuantityBar || 0), 0)
+                      setScrapQuantity(Math.max(0, totalBars - delivered - scrap))
+                    } else {
+                      const it = items[Number(val)]
+                      const rem = Math.max(0, Number(it?.quantityBar || 0) - Number(it?.deliveredQuantityBar || 0) - Number(it?.scrapQuantityBar || 0))
+                      setScrapQuantity(rem)
+                    }
+                  }}
+                  style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem', fontSize: '0.85rem' }}
+                >
+                  <option value="all">
+                    {isAr ? '🔥 كامل المتبقي في أمر الصرف بالكامل' : 'All remaining bars in dispatch'}
+                  </option>
+                  {(scrapModalDispatch.items || []).map((it, idx) => {
+                    const itRem = Math.max(0, Number(it.quantityBar || 0) - Number(it.deliveredQuantityBar || 0) - Number(it.scrapQuantityBar || 0))
+                    return (
+                      <option key={idx} value={idx}>
+                        {it.itemCode} - {it.description} ({isAr ? `متبقي: ${itRem} عود` : `Rem: ${itRem} bars`})
+                      </option>
+                    )
+                  })}
+                </select>
               </div>
 
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '0.4rem', fontWeight: 600 }}>
-                  👤 {isAr ? 'اسم المستلم في موقع العميل (اختياري)' : 'Received By (Optional)'}
+                  🔢 {isAr ? 'عدد الأعواد التالفة / الهادر:' : 'Scrap Quantity (Bars):'}
                 </label>
                 <input
-                  type="text"
-                  value={customerReceivedBy}
-                  onChange={(e) => setCustomerReceivedBy(e.target.value)}
-                  placeholder={isAr ? 'مثال: م/ أحمد إبراهيم (مدير الموقع)...' : 'e.g. Site supervisor...'}
-                  style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem', fontSize: '0.85rem' }}
+                  type="number"
+                  min="1"
+                  required
+                  value={scrapQuantity}
+                  onChange={(e) => setScrapQuantity(e.target.value)}
+                  style={{ width: '100%', background: '#0d1020', color: '#ff6b81', fontWeight: 800, fontSize: '1.1rem', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem' }}
                 />
               </div>
 
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '0.4rem', fontWeight: 600 }}>
-                  📝 {isAr ? 'ملاحظات التسليم والإغلاق' : 'Closing Notes'}
+                  📝 {isAr ? 'سبب التلف / ملاحظات الدهان:' : 'Reason / Notes:'}
                 </label>
                 <textarea
                   rows="3"
-                  value={transitionNotes}
-                  onChange={(e) => setTransitionNotes(e.target.value)}
-                  placeholder={isAr ? 'تم استلام القطاعات بحالة ممتازة ومطابقة للمواصفات...' : 'Received in good condition...'}
+                  value={scrapNotes}
+                  onChange={(e) => setScrapNotes(e.target.value)}
+                  placeholder={isAr ? 'مثال: قطاعات تعرضت للثني أو تشوه بالدهان أثناء المعالجة بالمصنع وتم استبعادها...' : 'Damaged during coating process...'}
                   style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem', fontSize: '0.85rem', resize: 'none' }}
                 />
               </div>
@@ -826,18 +1266,18 @@ export default function DispatchesTrackerView({
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  disabled={savingTransition}
-                  onClick={() => setTransitioningDispatch(null)}
+                  disabled={savingScrap}
+                  onClick={() => setScrapModalDispatch(null)}
                 >
                   {isAr ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
                   className="btn"
-                  disabled={savingTransition}
+                  disabled={savingScrap}
                   style={{
-                    background: 'linear-gradient(135deg, #00e0a1 0%, #00b894 100%)',
-                    color: '#000',
+                    background: 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)',
+                    color: '#fff',
                     border: 'none',
                     padding: '0.55rem 1.5rem',
                     borderRadius: '8px',
@@ -846,7 +1286,7 @@ export default function DispatchesTrackerView({
                     cursor: 'pointer',
                   }}
                 >
-                  {savingTransition ? '...' : (isAr ? '🏁 تأكيد التسليم وإغلاق الدورة' : 'Confirm Delivery')}
+                  {savingScrap ? '...' : (isAr ? '🗑️ تأكيد تسجيل الهادر' : 'Confirm Scrap')}
                 </button>
               </div>
             </form>
