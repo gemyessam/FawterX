@@ -8,6 +8,43 @@ import {
   getWarehouseInvoices,
   recordWarehouseDispatchScrap,
 } from '../services/warehouseApi'
+function safeFormatDateTime(ts, locale = 'ar-EG') {
+  if (!ts) return '—'
+  try {
+    let d
+    if (typeof ts?.toDate === 'function') {
+      d = ts.toDate()
+    } else if (typeof ts === 'object' && (ts.seconds !== undefined || ts._seconds !== undefined)) {
+      const sec = ts.seconds !== undefined ? ts.seconds : ts._seconds
+      d = new Date(sec * 1000)
+    } else {
+      d = new Date(ts)
+    }
+    if (isNaN(d.getTime())) return '—'
+    return d.toLocaleString(locale)
+  } catch {
+    return '—'
+  }
+}
+
+function safeFormatDate(ts, locale = 'ar-EG') {
+  if (!ts) return '—'
+  try {
+    let d
+    if (typeof ts?.toDate === 'function') {
+      d = ts.toDate()
+    } else if (typeof ts === 'object' && (ts.seconds !== undefined || ts._seconds !== undefined)) {
+      const sec = ts.seconds !== undefined ? ts.seconds : ts._seconds
+      d = new Date(sec * 1000)
+    } else {
+      d = new Date(ts)
+    }
+    if (isNaN(d.getTime())) return '—'
+    return d.toLocaleDateString(locale)
+  } catch {
+    return '—'
+  }
+}
 
 export default function DispatchesTrackerView({
   projectId,
@@ -542,11 +579,12 @@ export default function DispatchesTrackerView({
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {filteredDispatches.map((disp) => {
+          {filteredDispatches.map((disp, idx) => {
             const isCancelled = disp.isCancelled || disp.currentStage === 'cancelled'
             const isCompleted = !isCancelled && (disp.isCompleted || disp.currentStage === 'delivered_to_customer' || disp.currentStage === 'closed')
-            const isExpanded = expandedDispatchId === disp.id
-            const dateFormatted = disp.dispatchedAt ? new Date(disp.dispatchedAt).toLocaleDateString(isAr ? 'ar-EG' : 'en-US') : '—'
+            const dispatchKey = String(disp.id || disp._id || disp.dispatchNumber || disp.deliveryNote || `disp_${idx}`)
+            const isExpanded = expandedDispatchId === dispatchKey
+            const dateFormatted = safeFormatDate(disp.dispatchedAt, isAr ? 'ar-EG' : 'en-US')
 
             const dispItems = Array.isArray(disp.items) ? disp.items : []
             const dispTotalBars = Number(disp.totalQuantityBar || 0)
@@ -557,7 +595,7 @@ export default function DispatchesTrackerView({
 
             return (
               <div
-                key={disp.id}
+                key={dispatchKey}
                 style={{
                   background: isCancelled ? 'rgba(255, 71, 87, 0.03)' : 'rgba(255,255,255,0.025)',
                   border: `1px solid ${isCancelled ? 'rgba(255, 71, 87, 0.4)' : isCompleted ? 'rgba(0, 224, 161, 0.25)' : isPartial ? 'rgba(255, 159, 67, 0.4)' : 'rgba(255, 215, 0, 0.35)'}`,
@@ -736,8 +774,12 @@ export default function DispatchesTrackerView({
                     )}
 
                     <button
+                      type="button"
                       className="btn btn-ghost btn-sm"
-                      onClick={() => setExpandedDispatchId(isExpanded ? null : disp.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setExpandedDispatchId((prev) => (prev === dispatchKey ? null : dispatchKey))
+                      }}
                       style={{ fontSize: '0.8rem', padding: '4px 8px' }}
                     >
                       {isExpanded ? (isAr ? '▲ إخفاء التفاصيل' : '▲ Less') : (isAr ? '▼ عرض التفاصيل والبنود' : '▼ Details')}
@@ -795,144 +837,289 @@ export default function DispatchesTrackerView({
                 </div>
 
                 {/* Expanded Line Items & Stage Timeline */}
-                {isExpanded && (
-                  <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.2)' }}>
-                    <h5 style={{ margin: '0 0 0.6rem 0', color: '#fff', fontSize: '0.9rem' }}>
-                      📋 {isAr ? 'تفاصيل القطاعات المنصرفة في هذا الأمر:' : 'Dispatched Profile Items:'}
-                    </h5>
+                {isExpanded && (() => {
+                  const rawItems = Array.isArray(disp.items) ? disp.items.filter(Boolean) : []
+                  const remainingItems = []
+                  const deliveredItems = []
 
-                    <div style={{ overflowX: 'auto', marginBottom: '1.25rem' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                        <thead>
-                          <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
-                            <th style={{ padding: '0.5rem 0.75rem' }}>#</th>
-                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
-                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
-                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'الدهان الأصلي' : 'Original Finish'}</th>
-                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'الطول' : 'Length'}</th>
-                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'إجمالي الأعواد' : 'Total Bars'}</th>
-                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'تم تسليمه' : 'Delivered'}</th>
-                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'هادر دهان' : 'Scrap'}</th>
-                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'المتبقي' : 'Remaining'}</th>
-                            <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'الحالة' : 'Status'}</th>
-                            {!isCompleted && !isCancelled && (
-                              <th style={{ padding: '0.5rem 0.75rem' }}>{isAr ? 'إجراءات' : 'Actions'}</th>
-                            )}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {Array.isArray(disp.items) && disp.items.length > 0 ? (
-                            disp.items.map((it, idx) => {
-                              const itTotal = Number(it.quantityBar || it.bars || 0)
-                              const itDelivered = Number(it.deliveredQuantityBar || 0)
-                              const itScrap = Number(it.scrapQuantityBar || 0)
-                              const itRem = Math.max(0, itTotal - itDelivered - itScrap)
-                              const itStatus = itRem === 0 ? 'completed' : (itDelivered > 0 || itScrap > 0) ? 'partial' : 'in_coating'
+                  rawItems.forEach((it, originalIdx) => {
+                    const itTotal = Number(it.quantityBar || it.bars || 0)
+                    const itDelivered = Number(it.deliveredQuantityBar || 0)
+                    const itScrap = Number(it.scrapQuantityBar || 0)
+                    const itRem = Math.max(0, itTotal - itDelivered - itScrap)
+                    const itStatus = itRem === 0 ? 'completed' : (itDelivered > 0 || itScrap > 0) ? 'partial' : 'in_coating'
 
-                              return (
-                                <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                                  <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)' }}>{idx + 1}</td>
-                                  <td style={{ padding: '0.5rem 0.75rem', fontWeight: 700, color: '#00e0a1' }}>{it.itemCode}</td>
-                                  <td style={{ padding: '0.5rem 0.75rem' }}>{it.description}</td>
-                                  <td style={{ padding: '0.5rem 0.75rem' }}>{it.finish || 'STD'}</td>
-                                  <td style={{ padding: '0.5rem 0.75rem' }}><span dir="ltr">{it.lengthMm} mm</span></td>
-                                  <td style={{ padding: '0.5rem 0.75rem', fontWeight: 700, color: '#fff' }}>{itTotal}</td>
-                                  <td style={{ padding: '0.5rem 0.75rem', color: '#00e0a1', fontWeight: 600 }}>{itDelivered}</td>
-                                  <td style={{ padding: '0.5rem 0.75rem', color: '#ff6b81', fontWeight: 600 }}>{itScrap}</td>
-                                  <td style={{ padding: '0.5rem 0.75rem', color: itRem > 0 ? '#FFD700' : 'var(--text-muted)', fontWeight: 700 }}>{itRem}</td>
-                                  <td style={{ padding: '0.5rem 0.75rem' }}>
-                                    <span
-                                      className="badge"
-                                      style={{
-                                        fontSize: '0.75rem',
-                                        padding: '2px 6px',
-                                        background: itStatus === 'completed' ? 'rgba(0, 224, 161, 0.15)' : itStatus === 'partial' ? 'rgba(255, 159, 67, 0.15)' : 'rgba(255, 215, 0, 0.15)',
-                                        color: itStatus === 'completed' ? '#00e0a1' : itStatus === 'partial' ? '#ff9f43' : '#FFD700',
-                                        border: `1px solid ${itStatus === 'completed' ? 'rgba(0, 224, 161, 0.3)' : itStatus === 'partial' ? 'rgba(255, 159, 67, 0.3)' : 'rgba(255, 215, 0, 0.3)'}`,
-                                      }}
-                                    >
-                                      {itStatus === 'completed'
-                                        ? (isAr ? 'مكتمل المسلّم' : 'Completed')
-                                        : itStatus === 'partial'
-                                        ? (isAr ? 'مسلّم جزئي' : 'Partial')
-                                        : (isAr ? 'قيد الدهان' : 'In Coating')}
-                                    </span>
-                                  </td>
+                    const itemData = {
+                      ...it,
+                      originalIdx,
+                      itTotal,
+                      itDelivered,
+                      itScrap,
+                      itRem,
+                      itStatus,
+                    }
+
+                    if (itRem > 0) {
+                      remainingItems.push(itemData)
+                    }
+                    if (itDelivered > 0 || itScrap > 0) {
+                      deliveredItems.push(itemData)
+                    }
+                  })
+
+                  const stageHistoryList = Array.isArray(disp.stageHistory) ? disp.stageHistory.filter(Boolean) : []
+
+                  return (
+                    <div style={{ padding: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.2)' }}>
+                      {/* Summary KPI Pills inside Expanded View */}
+                      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+                        <div style={{ background: 'rgba(255, 215, 0, 0.1)', border: '1px solid rgba(255, 215, 0, 0.3)', borderRadius: '8px', padding: '0.4rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ color: '#FFD700', fontSize: '0.85rem' }}>🟡 {isAr ? 'المتبقي قيد الدهان:' : 'Remaining in Coating:'}</span>
+                          <strong style={{ color: '#FFD700', fontSize: '1rem', fontWeight: 800 }}>{dispRemBars} BAR</strong>
+                        </div>
+                        <div style={{ background: 'rgba(0, 224, 161, 0.1)', border: '1px solid rgba(0, 224, 161, 0.3)', borderRadius: '8px', padding: '0.4rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ color: '#00e0a1', fontSize: '0.85rem' }}>🟢 {isAr ? 'المسلّم للعميل:' : 'Delivered to Customer:'}</span>
+                          <strong style={{ color: '#00e0a1', fontSize: '1rem', fontWeight: 800 }}>{dispDeliveredBars} BAR</strong>
+                        </div>
+                        {dispScrapBars > 0 && (
+                          <div style={{ background: 'rgba(255, 107, 129, 0.1)', border: '1px solid rgba(255, 107, 129, 0.3)', borderRadius: '8px', padding: '0.4rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ color: '#ff6b81', fontSize: '0.85rem' }}>🗑️ {isAr ? 'الهادر المسجل:' : 'Scrap:'}</span>
+                            <strong style={{ color: '#ff6b81', fontSize: '1rem', fontWeight: 800 }}>{dispScrapBars} BAR</strong>
+                          </div>
+                        )}
+                        <div style={{ background: 'rgba(100, 181, 246, 0.1)', border: '1px solid rgba(100, 181, 246, 0.3)', borderRadius: '8px', padding: '0.4rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ color: '#64b5f6', fontSize: '0.85rem' }}>📦 {isAr ? 'إجمالي الأمر:' : 'Total Dispatch:'}</span>
+                          <strong style={{ color: '#64b5f6', fontSize: '1rem', fontWeight: 800 }}>{dispTotalBars} BAR</strong>
+                        </div>
+                      </div>
+
+                      {/* ─── 1. REMAINING ITEMS IN COATING ─── */}
+                      <div style={{ marginBottom: '1.5rem', background: 'rgba(255, 215, 0, 0.02)', border: '1px solid rgba(255, 215, 0, 0.2)', borderRadius: '10px', padding: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div>
+                            <h5 style={{ margin: 0, color: '#FFD700', fontSize: '0.95rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              🟡 {isAr ? `البنود المتبقية قيد الدهان والتشغيل (${remainingItems.length} بند)` : `Remaining Items in Coating (${remainingItems.length})`}
+                            </h5>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                              {isAr
+                                ? 'القطاعات التي لا تزال لدى ورشة/مورد الدهان ولم يتم تسليمها للعميل النهائي بعد:'
+                                : 'Profiles currently at the coating supplier awaiting final delivery:'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {remainingItems.length > 0 ? (
+                          <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                              <thead>
+                                <tr style={{ background: 'rgba(255, 215, 0, 0.05)', borderBottom: '1px solid rgba(255, 215, 0, 0.2)', textAlign: isAr ? 'right' : 'left' }}>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>#</th>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'الدهان الأصلي' : 'Original Finish'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'الطول' : 'Length'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'إجمالي الأمر' : 'Total Bars'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'مسلّم سابقاً' : 'Delivered'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'هادر مسجل' : 'Scrap'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem', color: '#FFD700', fontWeight: 800 }}>{isAr ? 'المتبقي قيد الدهان' : 'Remaining in Coating'}</th>
                                   {!isCompleted && !isCancelled && (
-                                    <td style={{ padding: '0.5rem 0.75rem' }}>
-                                      {itRem > 0 && (
+                                    <th style={{ padding: '0.55rem 0.75rem', textAlign: 'center' }}>{isAr ? 'إجراءات' : 'Actions'}</th>
+                                  )}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {remainingItems.map((it, rIdx) => (
+                                  <tr key={it.originalIdx || rIdx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                    <td style={{ padding: '0.55rem 0.75rem', color: 'var(--text-muted)' }}>{rIdx + 1}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem', fontWeight: 700, color: '#00e0a1' }}>{it.itemCode}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem' }}>{it.description}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem', color: '#8ab4ff' }}>{it.finish || 'STD'}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem' }}><span dir="ltr">{it.lengthMm} mm</span></td>
+                                    <td style={{ padding: '0.55rem 0.75rem', fontWeight: 600, color: '#fff' }}>{it.itTotal}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem', color: '#00e0a1' }}>{it.itDelivered > 0 ? it.itDelivered : '—'}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem', color: '#ff6b81' }}>{it.itScrap > 0 ? it.itScrap : '—'}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem' }}>
+                                      <span
+                                        style={{
+                                          background: 'rgba(255, 215, 0, 0.15)',
+                                          border: '1px solid rgba(255, 215, 0, 0.4)',
+                                          color: '#FFD700',
+                                          fontWeight: 800,
+                                          fontSize: '0.9rem',
+                                          padding: '2px 8px',
+                                          borderRadius: '6px',
+                                          display: 'inline-block',
+                                        }}
+                                      >
+                                        {it.itRem} BAR
+                                      </span>
+                                    </td>
+                                    {!isCompleted && !isCancelled && (
+                                      <td style={{ padding: '0.55rem 0.75rem', textAlign: 'center' }}>
                                         <button
                                           type="button"
                                           className="btn btn-ghost btn-sm"
-                                          onClick={() => handleOpenScrapModal(disp, idx)}
+                                          onClick={() => handleOpenScrapModal(disp, it.originalIdx)}
                                           style={{
                                             color: '#ff6b81',
-                                            border: '1px solid rgba(255, 107, 129, 0.3)',
+                                            border: '1px solid rgba(255, 107, 129, 0.35)',
+                                            background: 'rgba(255, 107, 129, 0.08)',
                                             fontSize: '0.75rem',
-                                            padding: '2px 6px',
-                                            borderRadius: '4px',
+                                            padding: '3px 8px',
+                                            borderRadius: '5px',
                                             cursor: 'pointer',
+                                            fontWeight: 600,
                                           }}
-                                          title={isAr ? 'تسجيل هادر وتالف لهذا البند' : 'Record scrap for this item'}
+                                          title={isAr ? 'تسجيل هادر/تالف لهذا البند' : 'Record scrap for this item'}
                                         >
-                                          🗑️ {isAr ? 'هادر' : 'Scrap'}
+                                          🗑️ {isAr ? 'تحويل للهادر' : 'To Scrap'}
                                         </button>
-                                      )}
-                                    </td>
-                                  )}
-                                </tr>
-                              )
-                            })
-                          ) : (
-                            <tr>
-                              <td colSpan={11} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                                {isAr ? 'لا توجد بنود تفصيلية مسجلة' : 'No items recorded'}
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Timeline History */}
-                    <h5 style={{ margin: '0 0 0.6rem 0', color: '#FFD700', fontSize: '0.9rem' }}>
-                      ⏱️ {isAr ? 'سجل تتبع خط السير والمراحل (Timeline):' : 'Stage History Timeline:'}
-                    </h5>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {Array.isArray(disp.stageHistory) && disp.stageHistory.length > 0 ? (
-                        disp.stageHistory.map((hist, hIdx) => (
-                          <div
-                            key={hIdx}
-                            style={{
-                              background: 'rgba(255,255,255,0.02)',
-                              borderLeft: isAr ? 'none' : '3px solid #00e0a1',
-                              borderRight: isAr ? '3px solid #00e0a1' : 'none',
-                              padding: '0.5rem 0.85rem',
-                              borderRadius: '4px',
-                              fontSize: '0.8rem',
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <strong style={{ color: '#fff' }}>{hist.label || hist.stage}</strong>
-                              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                                {hist.timestamp ? new Date(hist.timestamp).toLocaleString(isAr ? 'ar-EG' : 'en-US') : ''}
-                              </span>
-                            </div>
-                            {hist.notes && <div style={{ color: 'var(--text-muted)', marginTop: '0.2rem' }}>{hist.notes}</div>}
-                            <div style={{ color: '#8ab4ff', fontSize: '0.75rem', marginTop: '0.2rem' }}>
-                              {isAr ? 'المسؤول:' : 'By:'} {hist.user || 'نظام'}
-                            </div>
+                                      </td>
+                                    )}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
-                        ))
-                      ) : (
-                        <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                          {isAr ? 'تم إنشاء الأمر بنجاح' : 'Order initialized'}
+                        ) : (
+                          <div style={{ textAlign: 'center', padding: '1.25rem', background: 'rgba(0, 224, 161, 0.05)', borderRadius: '8px', color: '#00e0a1', fontWeight: 700, fontSize: '0.85rem' }}>
+                            🎉 {isAr ? 'تم تسليم كامل بنود هذا الأمر للعميل النهائي بنجاح ولا توجد أي أعواد متبقية قيد الدهان.' : 'All items from this dispatch have been fully delivered or settled.'}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ─── 2. DELIVERED / FULFILLED ITEMS TABLE ─── */}
+                      <div style={{ marginBottom: '1.5rem', background: 'rgba(0, 224, 161, 0.02)', border: '1px solid rgba(0, 224, 161, 0.2)', borderRadius: '10px', padding: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div>
+                            <h5 style={{ margin: 0, color: '#00e0a1', fontSize: '0.95rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              🟢 {isAr ? `البنود المسلّمة والمرحّلة للعميل النهائي (${deliveredItems.length} بند)` : `Delivered & Settled Items (${deliveredItems.length})`}
+                            </h5>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                              {isAr
+                                ? 'القطاعات التي تم تسليمها للعميل أو تسويتها بالكامل من هذا الأمر:'
+                                : 'Profiles delivered to the customer site or settled as scrap:'}
+                            </span>
+                          </div>
                         </div>
-                      )}
+
+                        {deliveredItems.length > 0 ? (
+                          <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                              <thead>
+                                <tr style={{ background: 'rgba(0, 224, 161, 0.05)', borderBottom: '1px solid rgba(0, 224, 161, 0.2)', textAlign: isAr ? 'right' : 'left' }}>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>#</th>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'الدهان المنفذ' : 'Finished Coating'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'الطول' : 'Length'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'إجمالي الأمر' : 'Original Total'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem', color: '#00e0a1', fontWeight: 800 }}>{isAr ? 'المسلّم للعميل' : 'Delivered Qty'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem', color: '#ff6b81' }}>{isAr ? 'الهادر المسجل' : 'Scrap Qty'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'المتبقي بالأمر' : 'Remaining'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'حالة البند' : 'Item Status'}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {deliveredItems.map((it, dIdx) => (
+                                  <tr key={it.originalIdx || dIdx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                    <td style={{ padding: '0.55rem 0.75rem', color: 'var(--text-muted)' }}>{dIdx + 1}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem', fontWeight: 700, color: '#00e0a1' }}>{it.itemCode}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem' }}>{it.description}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem', color: '#FFD700' }}>{disp.targetFinish || it.finish || 'STD'}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem' }}><span dir="ltr">{it.lengthMm} mm</span></td>
+                                    <td style={{ padding: '0.55rem 0.75rem', color: 'var(--text-muted)' }}>{it.itTotal} BAR</td>
+                                    <td style={{ padding: '0.55rem 0.75rem' }}>
+                                      <span
+                                        style={{
+                                          background: 'rgba(0, 224, 161, 0.15)',
+                                          border: '1px solid rgba(0, 224, 161, 0.4)',
+                                          color: '#00e0a1',
+                                          fontWeight: 800,
+                                          fontSize: '0.9rem',
+                                          padding: '2px 8px',
+                                          borderRadius: '6px',
+                                          display: 'inline-block',
+                                        }}
+                                      >
+                                        {it.itDelivered} BAR
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: '0.55rem 0.75rem', color: it.itScrap > 0 ? '#ff6b81' : 'var(--text-muted)', fontWeight: it.itScrap > 0 ? 700 : 400 }}>
+                                      {it.itScrap > 0 ? `${it.itScrap} BAR` : '—'}
+                                    </td>
+                                    <td style={{ padding: '0.55rem 0.75rem', color: it.itRem > 0 ? '#FFD700' : 'var(--text-muted)', fontWeight: it.itRem > 0 ? 700 : 400 }}>
+                                      {it.itRem > 0 ? `${it.itRem} BAR` : '0 (مكتمل)'}
+                                    </td>
+                                    <td style={{ padding: '0.55rem 0.75rem' }}>
+                                      <span
+                                        className="badge"
+                                        style={{
+                                          fontSize: '0.75rem',
+                                          padding: '2px 7px',
+                                          background: it.itRem === 0 ? 'rgba(0, 224, 161, 0.15)' : 'rgba(255, 159, 67, 0.15)',
+                                          color: it.itRem === 0 ? '#00e0a1' : '#ff9f43',
+                                          border: `1px solid ${it.itRem === 0 ? 'rgba(0, 224, 161, 0.3)' : 'rgba(255, 159, 67, 0.3)'}`,
+                                          fontWeight: 700,
+                                        }}
+                                      >
+                                        {it.itRem === 0 ? (isAr ? '🟢 مسلّم بالكامل' : 'Delivered') : (isAr ? '🟠 تسليم جزئي' : 'Partial')}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div style={{ textAlign: 'center', padding: '1.25rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                            ⏳ {isAr ? 'لم يتم تسليم أي بنود للعميل النهائي بعد — كامل الكميات لا تزال قيد التشغيل والدهان لدى المورد.' : 'No items have been delivered to the customer yet.'}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ─── 3. STAGE HISTORY TIMELINE ─── */}
+                      <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', padding: '1rem' }}>
+                        <h5 style={{ margin: '0 0 0.6rem 0', color: '#64b5f6', fontSize: '0.9rem', fontWeight: 800 }}>
+                          ⏱️ {isAr ? 'سجل تتبع خط السير والمراحل (Timeline):' : 'Stage History Timeline:'}
+                        </h5>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {stageHistoryList.length > 0 ? (
+                            stageHistoryList.map((hist, hIdx) => (
+                              <div
+                                key={hIdx}
+                                style={{
+                                  background: 'rgba(255,255,255,0.02)',
+                                  borderLeft: isAr ? 'none' : '3px solid #00e0a1',
+                                  borderRight: isAr ? '3px solid #00e0a1' : 'none',
+                                  padding: '0.5rem 0.85rem',
+                                  borderRadius: '4px',
+                                  fontSize: '0.8rem',
+                                }}
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <strong style={{ color: '#fff' }}>{hist.label || hist.stage || (isAr ? 'مرحلة غير محددة' : 'Stage')}</strong>
+                                  <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                                    {safeFormatDateTime(hist.timestamp, isAr ? 'ar-EG' : 'en-US')}
+                                  </span>
+                                </div>
+                                {hist.notes && <div style={{ color: 'var(--text-muted)', marginTop: '0.2rem' }}>{hist.notes}</div>}
+                                <div style={{ color: '#8ab4ff', fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                                  {isAr ? 'المسؤول:' : 'By:'} {hist.user || 'نظام'}
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                              {isAr ? 'تم إنشاء الأمر بنجاح' : 'Order initialized'}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
               </div>
             )
           })}

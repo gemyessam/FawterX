@@ -35,6 +35,7 @@ import {
 } from '../services/warehouseApi'
 import ManualStockModal from '../components/ManualStockModal'
 import DispatchesTrackerView from '../components/DispatchesTrackerView'
+import ErrorBoundary from '../components/ErrorBoundary'
 
 function getDelmarAvailableBars(line, activeDispatches = [], aliasesMap = {}) {
   if (line.delmarAvailableBars !== undefined && line.delmarAvailableBars !== null && line.delmarAvailableBars !== '') {
@@ -5508,14 +5509,16 @@ export default function Warehouse() {
 
       {/* ─── TAB: Dispatches & Lifecycle Tracker ─── */}
       {activeTab === 'dispatches' && (
-        <DispatchesTrackerView key={selectedProjectId + ":" + dataRevision}
-          projectId={selectedProjectId}
-          projectName={selectedProject?.name}
-          isAdmin={isAdmin}
-          isAr={isAr}
-          invoices={invoices}
-          onOpenManualModal={handleOpenManualModal}
-        />
+        <ErrorBoundary isAr={isAr}>
+          <DispatchesTrackerView key={selectedProjectId + ":" + dataRevision}
+            projectId={selectedProjectId}
+            projectName={selectedProject?.name}
+            isAdmin={isAdmin}
+            isAr={isAr}
+            invoices={invoices}
+            onOpenManualModal={handleOpenManualModal}
+          />
+        </ErrorBoundary>
       )}
 
       {/* ─── TAB 3: Access Control (Admin Only) ─── */}
