@@ -324,7 +324,6 @@ async function getProjectStock(projectId) {
   const deleted = await ref.collection("deletedStock").get();
   const tombstones = new Set(deleted.docs.map(doc => doc.id));
 
-  const zeroDocs = [];
   const validItems = [];
 
   for (const doc of stock.docs) {
@@ -333,43 +332,14 @@ async function getProjectStock(projectId) {
     const bar = Number(data.quantityBar || 0);
     const lm = Number(data.quantityLm || 0);
     // Strict invariant: Zero-balance or negative items must NOT appear in stock
-    if (bar <= 0 && lm <= 0) {
-      zeroDocs.push(doc);
-    } else {
+    if (bar > 0 || lm > 0) {
       validItems.push({ ...data, itemKey: doc.id });
     }
   }
 
-  // Auto-purge zero-balance ghost items silently and permanently from database
-  if (zeroDocs.length > 0) {
-    (async () => {
-      try {
-        let batch = db.batch();
-        let ops = 0;
-        for (const zDoc of zeroDocs) {
-          batch.delete(zDoc.ref);
-          batch.set(ref.collection("deletedStock").doc(zDoc.id), {
-            itemKey: zDoc.id,
-            deletedAt: new Date().toISOString(),
-            deletedBy: "system_auto_purge",
-            reason: "auto_zero_stock_purge",
-          });
-          ops += 2;
-          if (ops >= 400) {
-            await batch.commit();
-            batch = db.batch();
-            ops = 0;
-          }
-        }
-        if (ops > 0) await batch.commit();
-      } catch (err) {
-        console.warn("[getProjectStock] Error auto-purging zero stock docs:", err.message);
-      }
-    })().catch(() => {});
-  }
-
   return validItems;
 }
+
 
 function generateItemKey(supplier, itemCode, finish, lengthMm) {
   const clean = (val) => String(val || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
