@@ -32,7 +32,6 @@ import {
   deleteProjectItemAlias,
   getWarehouseDispatches,
   reconcileWarehouseDelmarAndCosts,
-  cleanupZeroStock,
 } from '../services/warehouseApi'
 import ManualStockModal from '../components/ManualStockModal'
 import DispatchesTrackerView from '../components/DispatchesTrackerView'
@@ -1162,8 +1161,6 @@ export default function Warehouse() {
   const [savingStockEdit, setSavingStockEdit] = useState(false)
   const [selectedStockKeys, setSelectedStockKeys] = useState([])
   const [deletingBulk, setDeletingBulk] = useState(false)
-  const [cleaningZeroStock, setCleaningZeroStock] = useState(false)
-  const [hideZeroStock, setHideZeroStock] = useState(false)
 
   const handleStartStockEdit = (item) => {
     setEditingStockKey(item.itemKey)
@@ -1463,31 +1460,6 @@ export default function Warehouse() {
     }
   }
 
-  const handleCleanupZeroStock = async () => {
-    if (!selectedProjectId || zeroStockItems.length === 0) return
-    const count = zeroStockItems.length
-    const confirmMsg = isAr
-      ? `هل أنت متأكد من تنظيف وحذف (${count}) صنف برصيد صفر (0 BAR) نهائياً من رصيد المخزن؟\n\nسيتم حفظ نقطة استعادة تلقائياً قبل الحذف لضمان أمان البيانات.`
-      : `Are you sure you want to clean up and permanently delete (${count}) zero-balance items from stock?\n\nAn auto restore point will be created before deletion.`
-    if (!window.confirm(confirmMsg)) return
-
-    setCleaningZeroStock(true)
-    try {
-      const res = await cleanupZeroStock(selectedProjectId)
-      if (res && res.success) {
-        toast.success(isAr ? `تم تنظيف وحذف ${res.count || count} صنف برصيد صفر بنجاح!` : `Successfully cleaned up ${res.count || count} zero-balance items!`)
-        loadStock(selectedProjectId)
-      } else {
-        toast.error(res?.message || (isAr ? 'فشل تنظيف الأصناف الصفرية' : 'Failed to clean up zero stock items'))
-      }
-    } catch (err) {
-      console.error('[handleCleanupZeroStock Error]:', err)
-      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل تنظيف الأصناف الصفرية' : 'Failed to clean up zero stock items'))
-    } finally {
-      setCleaningZeroStock(false)
-    }
-  }
-
   async function loadAuditLogs(projectId) {
     const token = Symbol()
     dataRequest.current.loadAuditLogs = token
@@ -1616,7 +1588,8 @@ export default function Warehouse() {
       const [res, dRes] = await Promise.all([getProjectStock(projectId), getWarehouseDispatches(projectId)])
       if (selectedProjectRef.current !== projectId || request !== stockRequest.current) return
       if (!res?.success || !Array.isArray(res.stock) || !dRes?.success) throw new Error('Unable to load warehouse data')
-      setStock(res.stock)
+      const activeOnlyStock = res.stock.filter((item) => Number(item.quantityBar || 0) > 0 || Number(item.quantityLm || 0) > 0)
+      setStock(activeOnlyStock)
       setActiveDispatches(dRes.dispatches)
       setStockError('')
     } catch (err) {
@@ -2309,16 +2282,9 @@ export default function Warehouse() {
     }
   }
 
-  const zeroStockItems = useMemo(() => {
-    return stock.filter((item) => Number(item.quantityBar || 0) <= 0 && Number(item.quantityLm || 0) <= 0)
-  }, [stock])
-
-  // Filter Stock List (Comprehensive Search across all fields)
+  // Filter Stock List (Comprehensive Search across all fields) - Zero balance items strictly excluded
   const filteredStock = useMemo(() => {
-    let list = stock
-    if (hideZeroStock) {
-      list = list.filter((item) => Number(item.quantityBar || 0) > 0 || Number(item.quantityLm || 0) > 0)
-    }
+    let list = stock.filter((item) => Number(item.quantityBar || 0) > 0 || Number(item.quantityLm || 0) > 0)
     const q = searchQuery.trim().toLowerCase()
     if (!q) return list
 
@@ -2356,7 +2322,7 @@ export default function Warehouse() {
 
       return searchTerms.every((term) => fullItemText.includes(term))
     })
-  }, [stock, searchQuery, hideZeroStock])
+  }, [stock, searchQuery])
 
   // Helper to resolve human-readable source invoice reference when an outbound was dispatched from an invoice
   const resolveInvoiceSource = (inv, allInvoices) => {
@@ -3052,15 +3018,6 @@ export default function Warehouse() {
                   color: '#fff',
                 }}
               />
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.85rem', color: '#cbd5e1', cursor: 'pointer', background: 'rgba(255,255,255,0.05)', padding: '0.5rem 0.8rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', userSelect: 'none' }}>
-                <input
-                  type="checkbox"
-                  checked={hideZeroStock}
-                  onChange={(e) => setHideZeroStock(e.target.checked)}
-                  style={{ accentColor: '#00e0a1', width: '16px', height: '16px', cursor: 'pointer' }}
-                />
-                {isAr ? 'إخفاء الأرصدة الصفرية (0)' : 'Hide Zero Stock'}
-              </label>
               <button
                 className="btn"
                 onClick={() => handleOpenManualModal('inbound')}
@@ -3146,30 +3103,6 @@ export default function Warehouse() {
               >
                 📊 {isAr ? 'تصدير Excel' : 'Export Excel'}
               </button>
-
-              {isAdmin && zeroStockItems.length > 0 && (
-                <button
-                  className="btn"
-                  disabled={cleaningZeroStock}
-                  onClick={handleCleanupZeroStock}
-                  style={{
-                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                    color: '#fff',
-                    border: 'none',
-                    padding: '0.55rem 1.2rem',
-                    borderRadius: '8px',
-                    fontWeight: 700,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 14px rgba(245, 158, 11, 0.4)',
-                  }}
-                  title={isAr ? `تنظيف وحذف ${zeroStockItems.length} صنف برصيد صفر نهائياً من رصيد المخزن` : `Clean up ${zeroStockItems.length} zero-balance items`}
-                >
-                  🧹 {cleaningZeroStock ? '...' : (isAr ? `تنظيف وحذف الأصناف الصفرية (${zeroStockItems.length})` : `Clean Zero Stock (${zeroStockItems.length})`)}
-                </button>
-              )}
 
               {isAdmin && selectedStockKeys.length > 0 && (
                 <button

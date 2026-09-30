@@ -323,7 +323,52 @@ async function getProjectStock(projectId) {
   const stock = await ref.collection("stock").get();
   const deleted = await ref.collection("deletedStock").get();
   const tombstones = new Set(deleted.docs.map(doc => doc.id));
-  return stock.docs.filter(doc => !tombstones.has(doc.id)).map(doc => ({ ...doc.data(), itemKey: doc.id }));
+
+  const zeroDocs = [];
+  const validItems = [];
+
+  for (const doc of stock.docs) {
+    if (tombstones.has(doc.id)) continue;
+    const data = doc.data() || {};
+    const bar = Number(data.quantityBar || 0);
+    const lm = Number(data.quantityLm || 0);
+    // Strict invariant: Zero-balance or negative items must NOT appear in stock
+    if (bar <= 0 && lm <= 0) {
+      zeroDocs.push(doc);
+    } else {
+      validItems.push({ ...data, itemKey: doc.id });
+    }
+  }
+
+  // Auto-purge zero-balance ghost items silently and permanently from database
+  if (zeroDocs.length > 0) {
+    (async () => {
+      try {
+        let batch = db.batch();
+        let ops = 0;
+        for (const zDoc of zeroDocs) {
+          batch.delete(zDoc.ref);
+          batch.set(ref.collection("deletedStock").doc(zDoc.id), {
+            itemKey: zDoc.id,
+            deletedAt: new Date().toISOString(),
+            deletedBy: "system_auto_purge",
+            reason: "auto_zero_stock_purge",
+          });
+          ops += 2;
+          if (ops >= 400) {
+            await batch.commit();
+            batch = db.batch();
+            ops = 0;
+          }
+        }
+        if (ops > 0) await batch.commit();
+      } catch (err) {
+        console.warn("[getProjectStock] Error auto-purging zero stock docs:", err.message);
+      }
+    })().catch(() => {});
+  }
+
+  return validItems;
 }
 
 function generateItemKey(supplier, itemCode, finish, lengthMm) {
@@ -912,12 +957,14 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
       );
       opCount++;
 
-      // If item was previously marked deleted, remove from deletedStock to resurrect with new invoice payload
-      try {
-        const deletedRef = projectRef.collection("deletedStock").doc(itemKey);
-        batch.delete(deletedRef);
-        opCount++;
-      } catch (dErr) { }
+      // If item was previously marked deleted and this is an inbound delivery, remove from deletedStock to resurrect with new invoice payload
+      if (!isOutbound) {
+        try {
+          const deletedRef = projectRef.collection("deletedStock").doc(itemKey);
+          batch.delete(deletedRef);
+          opCount++;
+        } catch (dErr) { }
+      }
 
       // Update Stock Snapshot
       const stockRef = projectRef.collection("stock").doc(itemKey);
@@ -955,6 +1002,38 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
   }
 
   await commitBatchIfNeeded(true);
+
+  // If Outbound delivery invoice, purge any stock items that reached 0 or negative balance
+  if (isOutbound) {
+    try {
+      const stockSnap = await projectRef.collection("stock").get();
+      let purgeBatch = db.batch();
+      let purgeOps = 0;
+      for (const sDoc of stockSnap.docs) {
+        const sData = sDoc.data() || {};
+        const b = Number(sData.quantityBar || 0);
+        const l = Number(sData.quantityLm || 0);
+        if (b <= 0 && l <= 0) {
+          purgeBatch.delete(sDoc.ref);
+          purgeBatch.set(projectRef.collection("deletedStock").doc(sDoc.id), {
+            itemKey: sDoc.id,
+            deletedAt: new Date().toISOString(),
+            deletedBy: userUid || "system",
+            reason: "outbound_depleted_to_zero",
+          });
+          purgeOps += 2;
+          if (purgeOps >= 400) {
+            await purgeBatch.commit();
+            purgeBatch = db.batch();
+            purgeOps = 0;
+          }
+        }
+      }
+      if (purgeOps > 0) await purgeBatch.commit();
+    } catch (purgeErr) {
+      console.warn("[processInboundInvoice] Error purging zero stock docs:", purgeErr.message);
+    }
+  }
 
   await invRef.update({ totalAmount: Number(computedInvoiceTotal.toFixed(2)), delmarAllocated: totalDelmarDispatchedBars > 0 });
 
@@ -2114,6 +2193,38 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
   }
 
   await commitBatchIfNeeded(true);
+
+  // If Outbound, purge any stock items that were depleted to 0 or negative balance
+  if (isOutbound) {
+    try {
+      const stockSnap = await projectRef.collection("stock").get();
+      let purgeBatch = db.batch();
+      let purgeOps = 0;
+      for (const sDoc of stockSnap.docs) {
+        const sData = sDoc.data() || {};
+        const b = Number(sData.quantityBar || 0);
+        const l = Number(sData.quantityLm || 0);
+        if (b <= 0 && l <= 0) {
+          purgeBatch.delete(sDoc.ref);
+          purgeBatch.set(projectRef.collection("deletedStock").doc(sDoc.id), {
+            itemKey: sDoc.id,
+            deletedAt: new Date().toISOString(),
+            deletedBy: userUid || "system",
+            reason: "manual_outbound_depleted_to_zero",
+          });
+          purgeOps += 2;
+          if (purgeOps >= 400) {
+            await purgeBatch.commit();
+            purgeBatch = db.batch();
+            purgeOps = 0;
+          }
+        }
+      }
+      if (purgeOps > 0) await purgeBatch.commit();
+    } catch (purgeErr) {
+      console.warn("[processManualStockMovement] Error purging zero stock docs:", purgeErr.message);
+    }
+  }
 
   await logWarehouseAudit(projectId, {
     action: isOutbound ? "MANUAL_OUTBOUND_DISPATCH" : "MANUAL_INBOUND_SUPPLY",
