@@ -883,11 +883,8 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
     createdMovements.push({ id: mvtRef.id, ...movementData });
     opCount++;
 
-    // Only update Item Master and Stock Snapshot if this is an inbound delivery,
-    // or an outbound delivery that actually deducts quantity from the warehouse (actualDeductBar > 0).
-    // If the entire quantity is covered by Delmar coating stock (actualDeductBar === 0),
-    // we MUST NOT create zero-balance phantom stock items or resurrect deleted items!
-    if (!isOutbound || actualDeductBar > 0) {
+    // Only create or merge Item Master and Stock Snapshot on INBOUND delivery
+    if (!isOutbound) {
       // Update Item Master
       const itemRef = projectRef.collection("items").doc(itemKey);
       batch.set(
@@ -914,14 +911,12 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
       );
       opCount++;
 
-      // If item was previously marked deleted and this is an inbound delivery, remove from deletedStock to resurrect with new invoice payload
-      if (!isOutbound) {
-        try {
-          const deletedRef = projectRef.collection("deletedStock").doc(itemKey);
-          batch.delete(deletedRef);
-          opCount++;
-        } catch (dErr) { }
-      }
+      // Remove from deletedStock to resurrect with new inbound invoice payload
+      try {
+        const deletedRef = projectRef.collection("deletedStock").doc(itemKey);
+        batch.delete(deletedRef);
+        opCount++;
+      } catch (dErr) { }
 
       // Update Stock Snapshot
       const stockRef = projectRef.collection("stock").doc(itemKey);
@@ -953,6 +948,23 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
         { merge: true }
       );
       opCount++;
+    } else if (actualDeductBar > 0) {
+      // OUTBOUND: Only deduct from an existing warehouse stock record, NEVER create a new item!
+      const stockDoc = await projectRef.collection("stock").doc(itemKey).get();
+      if (stockDoc.exists) {
+        const stockRef = projectRef.collection("stock").doc(itemKey);
+        batch.update(stockRef, {
+          quantityBar: admin.firestore.FieldValue.increment(-actualDeductBar),
+          quantityLm: admin.firestore.FieldValue.increment(-actualDeductLm),
+          quantityKg: admin.firestore.FieldValue.increment(-actualDeductKg),
+          lastMovementType: invoiceDoc.movementType,
+          lastInvoiceNumber: invoiceDoc.invoiceNumber,
+          lastSalesOrder: invoiceDoc.salesOrder || "",
+          lastCustomerRef: invoiceDoc.customerReference || "",
+          updatedAt: new Date().toISOString(),
+        });
+        opCount++;
+      }
     }
 
     await commitBatchIfNeeded(false);
@@ -2068,51 +2080,71 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
     createdMovements.push({ id: mvtRef.id, ...movementData });
     opCount++;
 
-    // Update Stock Snapshot
-    const stockRef = projectRef.collection("stock").doc(itemKey);
-    const stockUpdatePayload = {
-      itemKey,
-      itemCode,
-      customerCode,
-      description: line.description || "قطاع ألومنيوم",
-      finish,
-      color: line.color || finish,
-      lengthMm,
-      unit: line.unit || "BAR",
-      quantityBar: admin.firestore.FieldValue.increment(factorBar),
-      quantityLm: admin.firestore.FieldValue.increment(factorLm),
-      quantityKg: admin.firestore.FieldValue.increment(factorKg),
-      lastMovementType: isOutbound ? "outbound" : "inbound",
-      lastInvoiceNumber: docNo,
-      lastSalesOrder: movementData.salesOrder,
-      lastCustomerRef: movementData.customerReference,
-      updatedAt: nowIso,
-    };
+    if (!isOutbound) {
+      // Inbound: Update Stock Snapshot and Item Master
+      const stockRef = projectRef.collection("stock").doc(itemKey);
+      const stockUpdatePayload = {
+        itemKey,
+        itemCode,
+        customerCode,
+        description: line.description || "قطاع ألومنيوم",
+        finish,
+        color: line.color || finish,
+        lengthMm,
+        unit: line.unit || "BAR",
+        quantityBar: admin.firestore.FieldValue.increment(factorBar),
+        quantityLm: admin.firestore.FieldValue.increment(factorLm),
+        quantityKg: admin.firestore.FieldValue.increment(factorKg),
+        lastMovementType: "inbound",
+        lastInvoiceNumber: docNo,
+        lastSalesOrder: movementData.salesOrder,
+        lastCustomerRef: movementData.customerReference,
+        updatedAt: nowIso,
+      };
 
-    if (!isOutbound && unitPrice > 0) {
-      stockUpdatePayload.lastUnitCost = unitPrice;
+      if (unitPrice > 0) {
+        stockUpdatePayload.lastUnitCost = unitPrice;
+      }
+
+      batch.set(stockRef, stockUpdatePayload, { merge: true });
+      opCount++;
+
+      batch.delete(projectRef.collection("deletedStock").doc(itemKey));
+      opCount++;
+
+      // Ensure item master on inbound
+      const itemRef = projectRef.collection("items").doc(itemKey);
+      batch.set(itemRef, {
+        itemKey,
+        itemCode,
+        customerCode,
+        description: line.description || "",
+        finish,
+        color: line.color || finish,
+        lengthMm,
+        unit: line.unit || "BAR",
+        secondaryUnit: "LM",
+        updatedAt: nowIso,
+      }, { merge: true });
+      opCount++;
+    } else if (qtyBar > 0) {
+      // Outbound: Only deduct from existing warehouse stock record, NEVER create a new item!
+      const stockDoc = await projectRef.collection("stock").doc(itemKey).get();
+      if (stockDoc.exists) {
+        const stockRef = projectRef.collection("stock").doc(itemKey);
+        batch.update(stockRef, {
+          quantityBar: admin.firestore.FieldValue.increment(-qtyBar),
+          quantityLm: admin.firestore.FieldValue.increment(-qtyLm),
+          quantityKg: admin.firestore.FieldValue.increment(-qtyKg),
+          lastMovementType: "outbound",
+          lastInvoiceNumber: docNo,
+          lastSalesOrder: movementData.salesOrder,
+          lastCustomerRef: movementData.customerReference,
+          updatedAt: nowIso,
+        });
+        opCount++;
+      }
     }
-
-    batch.set(stockRef, stockUpdatePayload, { merge: true });
-    opCount++;
-
-    if (!isOutbound) { batch.delete(projectRef.collection("deletedStock").doc(itemKey)); opCount++; }
-
-    // Ensure item master
-    const itemRef = projectRef.collection("items").doc(itemKey);
-    batch.set(itemRef, {
-      itemKey,
-      itemCode,
-      customerCode,
-      description: line.description || "",
-      finish,
-      color: line.color || finish,
-      lengthMm,
-      unit: line.unit || "BAR",
-      secondaryUnit: "LM",
-      updatedAt: nowIso,
-    }, { merge: true });
-    opCount++;
 
     await commitBatchIfNeeded(false);
   }
