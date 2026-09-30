@@ -65,3 +65,11 @@ If `codex` or `agy` is absent from an existing terminal's PATH, restart that ter
 - Local verification is restricted strictly to local CLI commands (`npm run build`, `npm test`).
 - Rationale: Mandated by user on 2026-09-13 to protect internet bandwidth and eliminate lag.
 
+## Release Logs & On-Disk State Ledger (`release_logs/`)
+
+- All release markdown logs MUST be placed in `release_logs/` as `release_logs/RELEASE_LOG_v<VERSION>.md`.
+- No `.md` release logs may be written to the workspace root directory.
+- Logs serve as an on-disk state ledger for Antigravity and Codex to instantly recall established invariants, modified surfaces, and verified test results without wasting tokens on full repository scans.
+- Detailed structure and rules are governed by `.agents/rules/release-logs-and-ledger.md`.
+
+
