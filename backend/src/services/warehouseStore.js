@@ -317,24 +317,83 @@ async function createProject({ name, code, description }, actorUid) {
   });
 }
 
+function isPhantomDuplicate(data = {}, docId = '') {
+  const d = data || {};
+  const id = String(docId || d.itemKey || '').toUpperCase();
+  const finish = String(d.finish || d.color || '').toUpperCase();
+  const so = String(d.lastSalesOrder || d.salesOrder || '').toUpperCase();
+  const cust = String(d.lastCustomerRef || d.customerReference || '').toUpperCase();
+  const inv = String(d.lastInvoiceNumber || d.invoiceNumber || '').toUpperCase();
+  const mvt = String(d.lastMovementType || '').toLowerCase();
+
+  // Outbound phantom duplicates created from delivery note SD-000000594 / SO-00199 / Sotalux with coated finishes
+  if (so === 'SO-00199' || cust.includes('SOTALUX') || inv.includes('SD-000000594')) {
+    return true;
+  }
+  if (id.includes('RALY22778SD') || finish.includes('RALY22778SD') || id.includes('SO-00199')) {
+    return true;
+  }
+  // Coated finishes that were created as outbound artifacts (not raw warehouse stock)
+  if (mvt === 'outbound' && !/^(MF|MILL|RAW|STD)$/i.test(finish)) {
+    return true;
+  }
+  return false;
+}
+
 async function getProjectStock(projectId) {
   const db = getDb();
   const ref = db.collection("warehouseProjects").doc(projectId);
   const stock = await ref.collection("stock").get();
   const deleted = await ref.collection("deletedStock").get();
+  const itemsSnap = await ref.collection("items").get();
   const tombstones = new Set(deleted.docs.map(doc => doc.id));
 
-  return stock.docs
-    .filter(doc => !tombstones.has(doc.id))
-    .map(doc => ({ ...doc.data(), itemKey: doc.id }))
-    .filter(item => {
-      // Strictly exclude phantom zero-balance duplicate items spawned by outbound delivery notes (e.g. SO-00199 Sotalux)
-      const isZero = Number(item.quantityBar || 0) <= 0 && Number(item.quantityLm || 0) <= 0;
-      const isPhantomOutbound = item.lastMovementType === 'outbound' || item.lastSalesOrder === 'SO-00199' || item.salesOrder === 'SO-00199' || item.lastCustomerRef === 'Sotalux' || item.customerReference === 'Sotalux';
-      if (isZero && isPhantomOutbound) return false;
-      return true;
-    });
+  const validMap = new Map();
+
+  // 1. Process active stock documents (exclude phantom outbound zero-balance records)
+  for (const doc of stock.docs) {
+    if (tombstones.has(doc.id)) continue;
+    const data = doc.data() || {};
+    if (isPhantomDuplicate(data, doc.id)) continue;
+    validMap.set(doc.id, { ...data, itemKey: doc.id });
+  }
+
+  // 2. Resurrect any legitimate project items that were erroneously purged to deletedStock by the outbound purge routine
+  for (const delDoc of deleted.docs) {
+    const dData = delDoc.data() || {};
+    if (isPhantomDuplicate(dData, delDoc.id)) continue;
+    const isPurgeReason = dData.reason === 'outbound_depleted_to_zero' || 
+                          dData.reason === 'auto_zero_stock_purge' || 
+                          dData.reason === 'zero_stock_cleanup';
+    if (isPurgeReason && !validMap.has(delDoc.id)) {
+      validMap.set(delDoc.id, {
+        ...dData,
+        itemKey: delDoc.id,
+        quantityBar: 0,
+        quantityLm: 0,
+        quantityKg: 0,
+      });
+    }
+  }
+
+  // 3. Ensure all registered project catalog items from "items" master exist in stock view
+  for (const itemDoc of itemsSnap.docs) {
+    const iData = itemDoc.data() || {};
+    if (isPhantomDuplicate(iData, itemDoc.id)) continue;
+    if (!validMap.has(itemDoc.id)) {
+      validMap.set(itemDoc.id, {
+        ...iData,
+        itemKey: itemDoc.id,
+        quantityBar: 0,
+        quantityLm: 0,
+        quantityKg: 0,
+      });
+    }
+  }
+
+  return Array.from(validMap.values());
 }
+
 
 
 
@@ -961,9 +1020,34 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
       opCount++;
     } else if (actualDeductBar > 0) {
       // OUTBOUND: Only deduct from an existing warehouse stock record, NEVER create a new item!
-      const stockDoc = await projectRef.collection("stock").doc(itemKey).get();
-      if (stockDoc.exists) {
-        const stockRef = projectRef.collection("stock").doc(itemKey);
+      let resolvedStockDoc = await projectRef.collection("stock").doc(itemKey).get();
+      let resolvedKey = itemKey;
+
+      if (!resolvedStockDoc.exists) {
+        const clean = (val) => String(val || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+        const cItem = clean(itemCode);
+        const cCust = clean(customerCode);
+        const stockSnap = await projectRef.collection("stock").get();
+
+        for (const sDoc of stockSnap.docs) {
+          const s = sDoc.data() || {};
+          const sItem = clean(s.itemCode);
+          const sCust = clean(s.customerCode);
+          const sLen = Number(s.lengthMm || 6000);
+          const matchesCode = (cItem && (sItem === cItem || sCust === cItem)) ||
+                              (cCust && (sItem === cCust || sCust === cCust));
+          const matchesLen = sLen === lengthMm || (!lengthMm && sLen === 6000);
+
+          if (matchesCode && matchesLen) {
+            resolvedStockDoc = sDoc;
+            resolvedKey = sDoc.id;
+            break;
+          }
+        }
+      }
+
+      if (resolvedStockDoc && resolvedStockDoc.exists) {
+        const stockRef = projectRef.collection("stock").doc(resolvedKey);
         batch.update(stockRef, {
           quantityBar: admin.firestore.FieldValue.increment(-actualDeductBar),
           quantityLm: admin.firestore.FieldValue.increment(-actualDeductLm),
@@ -1314,7 +1398,8 @@ async function cleanupZeroStockItems(projectId, userUid, userEmail, userName) {
     const data = doc.data() || {};
     const bar = Number(data.quantityBar || 0);
     const lm = Number(data.quantityLm || 0);
-    if (bar <= 0 && lm <= 0) {
+    // ONLY clean up if it's a phantom duplicate record; never purge legitimate catalog originals!
+    if (bar <= 0 && lm <= 0 && isPhantomDuplicate(data, doc.id)) {
       zeroItems.push({
         itemKey: doc.id,
         itemCode: data.itemCode || doc.id,
@@ -2140,9 +2225,34 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
       opCount++;
     } else if (qtyBar > 0) {
       // Outbound: Only deduct from existing warehouse stock record, NEVER create a new item!
-      const stockDoc = await projectRef.collection("stock").doc(itemKey).get();
-      if (stockDoc.exists) {
-        const stockRef = projectRef.collection("stock").doc(itemKey);
+      let resolvedStockDoc = await projectRef.collection("stock").doc(itemKey).get();
+      let resolvedKey = itemKey;
+
+      if (!resolvedStockDoc.exists) {
+        const clean = (val) => String(val || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+        const cItem = clean(itemCode);
+        const cCust = clean(customerCode);
+        const stockSnap = await projectRef.collection("stock").get();
+
+        for (const sDoc of stockSnap.docs) {
+          const s = sDoc.data() || {};
+          const sItem = clean(s.itemCode);
+          const sCust = clean(s.customerCode);
+          const sLen = Number(s.lengthMm || 6000);
+          const matchesCode = (cItem && (sItem === cItem || sCust === cItem)) ||
+                              (cCust && (sItem === cCust || sCust === cCust));
+          const matchesLen = sLen === lengthMm || (!lengthMm && sLen === 6000);
+
+          if (matchesCode && matchesLen) {
+            resolvedStockDoc = sDoc;
+            resolvedKey = sDoc.id;
+            break;
+          }
+        }
+      }
+
+      if (resolvedStockDoc && resolvedStockDoc.exists) {
+        const stockRef = projectRef.collection("stock").doc(resolvedKey);
         batch.update(stockRef, {
           quantityBar: admin.firestore.FieldValue.increment(-qtyBar),
           quantityLm: admin.firestore.FieldValue.increment(-qtyLm),

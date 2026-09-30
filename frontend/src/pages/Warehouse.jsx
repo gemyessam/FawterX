@@ -1589,8 +1589,17 @@ export default function Warehouse() {
       if (selectedProjectRef.current !== projectId || request !== stockRequest.current) return
       const validStock = (res.stock || []).filter((item) => {
         const isZero = Number(item.quantityBar || 0) <= 0 && Number(item.quantityLm || 0) <= 0;
-        const isPhantomOutbound = item.lastMovementType === 'outbound' || item.lastSalesOrder === 'SO-00199' || item.salesOrder === 'SO-00199' || item.lastCustomerRef === 'Sotalux' || item.customerReference === 'Sotalux';
-        return !(isZero && isPhantomOutbound);
+        const key = String(item.itemKey || '').toUpperCase();
+        const finish = String(item.finish || item.color || '').toUpperCase();
+        const so = String(item.lastSalesOrder || item.salesOrder || '').toUpperCase();
+        const cust = String(item.lastCustomerRef || item.customerReference || '').toUpperCase();
+        const isPhantom = so === 'SO-00199' || 
+                          cust.includes('SOTALUX') || 
+                          key.includes('RALY22778SD') || 
+                          finish.includes('RALY22778SD') ||
+                          key.includes('SO-00199') ||
+                          (item.lastMovementType === 'outbound' && !/^(MF|MILL|RAW|STD)$/i.test(finish));
+        return !(isZero && isPhantom);
       });
       setStock(validStock)
       setActiveDispatches(dRes.dispatches)
