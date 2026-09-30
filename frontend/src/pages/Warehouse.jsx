@@ -1588,8 +1588,7 @@ export default function Warehouse() {
       const [res, dRes] = await Promise.all([getProjectStock(projectId), getWarehouseDispatches(projectId)])
       if (selectedProjectRef.current !== projectId || request !== stockRequest.current) return
       if (!res?.success || !Array.isArray(res.stock) || !dRes?.success) throw new Error('Unable to load warehouse data')
-      const activeOnlyStock = res.stock.filter((item) => Number(item.quantityBar || 0) > 0 || Number(item.quantityLm || 0) > 0)
-      setStock(activeOnlyStock)
+      setStock(res.stock)
       setActiveDispatches(dRes.dispatches)
       setStockError('')
     } catch (err) {
@@ -2282,9 +2281,9 @@ export default function Warehouse() {
     }
   }
 
-  // Filter Stock List (Comprehensive Search across all fields) - Zero balance items strictly excluded
+  // Filter Stock List (Comprehensive Search across all fields)
   const filteredStock = useMemo(() => {
-    let list = stock.filter((item) => Number(item.quantityBar || 0) > 0 || Number(item.quantityLm || 0) > 0)
+    let list = stock
     const q = searchQuery.trim().toLowerCase()
     if (!q) return list
 

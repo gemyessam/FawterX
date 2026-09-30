@@ -323,22 +323,9 @@ async function getProjectStock(projectId) {
   const stock = await ref.collection("stock").get();
   const deleted = await ref.collection("deletedStock").get();
   const tombstones = new Set(deleted.docs.map(doc => doc.id));
-
-  const validItems = [];
-
-  for (const doc of stock.docs) {
-    if (tombstones.has(doc.id)) continue;
-    const data = doc.data() || {};
-    const bar = Number(data.quantityBar || 0);
-    const lm = Number(data.quantityLm || 0);
-    // Strict invariant: Zero-balance or negative items must NOT appear in stock
-    if (bar > 0 || lm > 0) {
-      validItems.push({ ...data, itemKey: doc.id });
-    }
-  }
-
-  return validItems;
+  return stock.docs.filter(doc => !tombstones.has(doc.id)).map(doc => ({ ...doc.data(), itemKey: doc.id }));
 }
+
 
 
 function generateItemKey(supplier, itemCode, finish, lengthMm) {
@@ -972,38 +959,6 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
   }
 
   await commitBatchIfNeeded(true);
-
-  // If Outbound delivery invoice, purge any stock items that reached 0 or negative balance
-  if (isOutbound) {
-    try {
-      const stockSnap = await projectRef.collection("stock").get();
-      let purgeBatch = db.batch();
-      let purgeOps = 0;
-      for (const sDoc of stockSnap.docs) {
-        const sData = sDoc.data() || {};
-        const b = Number(sData.quantityBar || 0);
-        const l = Number(sData.quantityLm || 0);
-        if (b <= 0 && l <= 0) {
-          purgeBatch.delete(sDoc.ref);
-          purgeBatch.set(projectRef.collection("deletedStock").doc(sDoc.id), {
-            itemKey: sDoc.id,
-            deletedAt: new Date().toISOString(),
-            deletedBy: userUid || "system",
-            reason: "outbound_depleted_to_zero",
-          });
-          purgeOps += 2;
-          if (purgeOps >= 400) {
-            await purgeBatch.commit();
-            purgeBatch = db.batch();
-            purgeOps = 0;
-          }
-        }
-      }
-      if (purgeOps > 0) await purgeBatch.commit();
-    } catch (purgeErr) {
-      console.warn("[processInboundInvoice] Error purging zero stock docs:", purgeErr.message);
-    }
-  }
 
   await invRef.update({ totalAmount: Number(computedInvoiceTotal.toFixed(2)), delmarAllocated: totalDelmarDispatchedBars > 0 });
 
@@ -2163,38 +2118,6 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
   }
 
   await commitBatchIfNeeded(true);
-
-  // If Outbound, purge any stock items that were depleted to 0 or negative balance
-  if (isOutbound) {
-    try {
-      const stockSnap = await projectRef.collection("stock").get();
-      let purgeBatch = db.batch();
-      let purgeOps = 0;
-      for (const sDoc of stockSnap.docs) {
-        const sData = sDoc.data() || {};
-        const b = Number(sData.quantityBar || 0);
-        const l = Number(sData.quantityLm || 0);
-        if (b <= 0 && l <= 0) {
-          purgeBatch.delete(sDoc.ref);
-          purgeBatch.set(projectRef.collection("deletedStock").doc(sDoc.id), {
-            itemKey: sDoc.id,
-            deletedAt: new Date().toISOString(),
-            deletedBy: userUid || "system",
-            reason: "manual_outbound_depleted_to_zero",
-          });
-          purgeOps += 2;
-          if (purgeOps >= 400) {
-            await purgeBatch.commit();
-            purgeBatch = db.batch();
-            purgeOps = 0;
-          }
-        }
-      }
-      if (purgeOps > 0) await purgeBatch.commit();
-    } catch (purgeErr) {
-      console.warn("[processManualStockMovement] Error purging zero stock docs:", purgeErr.message);
-    }
-  }
 
   await logWarehouseAudit(projectId, {
     action: isOutbound ? "MANUAL_OUTBOUND_DISPATCH" : "MANUAL_INBOUND_SUPPLY",
