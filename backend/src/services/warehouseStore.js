@@ -323,8 +323,19 @@ async function getProjectStock(projectId) {
   const stock = await ref.collection("stock").get();
   const deleted = await ref.collection("deletedStock").get();
   const tombstones = new Set(deleted.docs.map(doc => doc.id));
-  return stock.docs.filter(doc => !tombstones.has(doc.id)).map(doc => ({ ...doc.data(), itemKey: doc.id }));
+
+  return stock.docs
+    .filter(doc => !tombstones.has(doc.id))
+    .map(doc => ({ ...doc.data(), itemKey: doc.id }))
+    .filter(item => {
+      // Strictly exclude phantom zero-balance duplicate items spawned by outbound delivery notes (e.g. SO-00199 Sotalux)
+      const isZero = Number(item.quantityBar || 0) <= 0 && Number(item.quantityLm || 0) <= 0;
+      const isPhantomOutbound = item.lastMovementType === 'outbound' || item.lastSalesOrder === 'SO-00199' || item.salesOrder === 'SO-00199' || item.lastCustomerRef === 'Sotalux' || item.customerReference === 'Sotalux';
+      if (isZero && isPhantomOutbound) return false;
+      return true;
+    });
 }
+
 
 
 

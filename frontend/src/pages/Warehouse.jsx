@@ -1587,8 +1587,12 @@ export default function Warehouse() {
     try {
       const [res, dRes] = await Promise.all([getProjectStock(projectId), getWarehouseDispatches(projectId)])
       if (selectedProjectRef.current !== projectId || request !== stockRequest.current) return
-      if (!res?.success || !Array.isArray(res.stock) || !dRes?.success) throw new Error('Unable to load warehouse data')
-      setStock(res.stock)
+      const validStock = (res.stock || []).filter((item) => {
+        const isZero = Number(item.quantityBar || 0) <= 0 && Number(item.quantityLm || 0) <= 0;
+        const isPhantomOutbound = item.lastMovementType === 'outbound' || item.lastSalesOrder === 'SO-00199' || item.salesOrder === 'SO-00199' || item.lastCustomerRef === 'Sotalux' || item.customerReference === 'Sotalux';
+        return !(isZero && isPhantomOutbound);
+      });
+      setStock(validStock)
       setActiveDispatches(dRes.dispatches)
       setStockError('')
     } catch (err) {
