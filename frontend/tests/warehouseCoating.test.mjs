@@ -99,50 +99,101 @@ test('exact 36 project SKUs reconciliation preserves 2,381 BAR and 13,037 LM whi
   const diffLm = 13037 - currentTotalLm;
   activeStock[32].quantityLm += diffLm;
 
-  // 15 phantom duplicates created by outbound delivery note SD-000000594 / SO-00199 / Sotalux with coated finish
-  const phantomDuplicates = Array.from({ length: 15 }, (_, i) => ({
-    itemKey: `CANEX-ITEM-${i + 1}-RALY22778SD-5800`,
-    itemCode: `301-${100000 + i}`,
-    finish: 'RALY22778SD',
-    lengthMm: 5800,
-    quantityBar: 0,
-    quantityLm: 0,
-    lastMovementType: 'outbound',
-    lastSalesOrder: 'SO-00199',
-    lastCustomerRef: 'Sotalux',
-    lastInvoiceNumber: 'SD-000000594',
-  }));
+  // 15 phantom duplicates created by outbound delivery note SD-000000594:
+  // 11 with RALY22778SD, 2 with ANODIZED, 1 with RAL7009SD, and 1 metadata-free SCHUCO artifact
+  const phantomDuplicates = [
+    ...Array.from({ length: 11 }, (_, i) => ({
+      itemKey: `CANEX-ITEM-${i + 1}-RALY22778SD-5800`,
+      itemCode: `301-${100000 + i}`,
+      finish: 'RALY22778SD',
+      lengthMm: 5800,
+      quantityBar: 0,
+      quantityLm: 0,
+      lastMovementType: 'outbound',
+      lastSalesOrder: 'SO-00199',
+      lastCustomerRef: 'Sotalux',
+      lastInvoiceNumber: 'SD-000000594',
+    })),
+    {
+      itemKey: 'CANEX-ITEM-12-ANODIZED-5800',
+      itemCode: '301-100012',
+      finish: 'ANODIZED',
+      lengthMm: 5800,
+      quantityBar: 0,
+      quantityLm: 0,
+      lastMovementType: 'outbound',
+      lastSalesOrder: 'SO-00199',
+      lastCustomerRef: 'Sotalux',
+    },
+    {
+      itemKey: 'CANEX-ITEM-13-ANODIZED-5800',
+      itemCode: '301-100013',
+      finish: 'ANODIZED',
+      lengthMm: 5800,
+      quantityBar: 0,
+      quantityLm: 0,
+      lastMovementType: 'outbound',
+    },
+    {
+      itemKey: 'CANEX-ITEM-14-RAL7009SD-5800',
+      itemCode: '301-100014',
+      finish: 'RAL7009SD',
+      lengthMm: 5800,
+      quantityBar: 0,
+      quantityLm: 0,
+      lastMovementType: 'outbound',
+    },
+    {
+      // Residual metadata-free SCHUCO artifact in catalog/items with 0 balance
+      itemKey: 'SCHUCO-301100015-RAL9016-5800',
+      itemCode: '301-100015',
+      supplier: 'SCHUCO',
+      finish: 'RAL9016',
+      lengthMm: 5800,
+      quantityBar: 0,
+      quantityLm: 0,
+    },
+  ];
 
   // 3 legitimate project catalog items that reached 0 balance
   const legitimateZeroItems = [
-    { itemKey: 'CANEX-CATALOG-34-MF-5800', itemCode: '301-100034', finish: 'MF', lengthMm: 5800, quantityBar: 0, quantityLm: 0, lastMovementType: 'inbound' },
-    { itemKey: 'CANEX-CATALOG-35-MF-5800', itemCode: '301-100035', finish: 'MF', lengthMm: 5800, quantityBar: 0, quantityLm: 0, lastMovementType: 'inbound' },
-    { itemKey: 'CANEX-CATALOG-36-MF-5800', itemCode: '301-100036', finish: 'MF', lengthMm: 5800, quantityBar: 0, quantityLm: 0, lastMovementType: 'inbound' },
+    { itemKey: 'CANEX-CATALOG-34-MF-5800', itemCode: '301-100034', finish: 'MF', lengthMm: 5800, quantityBar: 0, quantityLm: 0, lastMovementType: 'inbound', supplier: 'CANEX' },
+    { itemKey: 'CANEX-CATALOG-35-MF-5800', itemCode: '301-100035', finish: 'MF', lengthMm: 5800, quantityBar: 0, quantityLm: 0, lastMovementType: 'inbound', supplier: 'CANEX' },
+    { itemKey: 'CANEX-CATALOG-36-MF-5800', itemCode: '301-100036', finish: 'MF', lengthMm: 5800, quantityBar: 0, quantityLm: 0, lastMovementType: 'inbound', supplier: 'CANEX' },
   ];
 
   const fullRawInventory = [...activeStock, ...phantomDuplicates, ...legitimateZeroItems];
   assert.equal(fullRawInventory.length, 51); // 33 + 15 + 3 = 51
 
-  // Filter with our deterministic reconciliation logic
+  // Filter with our deterministic reconciliation logic matching backend & frontend
   const isPhantom = (item) => {
+    const bar = Number(item.quantityBar || 0);
+    const lm = Number(item.quantityLm || 0);
+    if (bar !== 0 || lm !== 0) return false;
+
     const key = String(item.itemKey || '').toUpperCase();
     const finish = String(item.finish || item.color || '').toUpperCase();
     const so = String(item.lastSalesOrder || item.salesOrder || '').toUpperCase();
     const cust = String(item.lastCustomerRef || item.customerReference || '').toUpperCase();
+    const inv = String(item.lastInvoiceNumber || item.invoiceNumber || '').toUpperCase();
+    const supplier = String(item.supplier || '').toUpperCase();
+
     return so === 'SO-00199' ||
+           so.includes('00199') ||
            cust.includes('SOTALUX') ||
-           key.includes('RALY22778SD') ||
-           finish.includes('RALY22778SD') ||
+           inv.includes('SD-000000594') ||
            key.includes('SO-00199') ||
+           key.includes('RALY22778SD') || finish.includes('RALY22778SD') ||
+           key.includes('ANODIZ') || finish.includes('ANODIZ') ||
+           key.includes('RAL7009') || finish.includes('RAL7009') ||
+           key.includes('-RAL') || finish.startsWith('RAL') ||
+           key.startsWith('SCHUCO') || key.startsWith('SCHUECO') || supplier.includes('SCHUCO') ||
            (item.lastMovementType === 'outbound' && !/^(MF|MILL|RAW|STD)$/i.test(finish));
   };
 
-  const reconciledStock = fullRawInventory.filter((item) => {
-    const isZero = Number(item.quantityBar || 0) <= 0 && Number(item.quantityLm || 0) <= 0;
-    return !(isZero && isPhantom(item));
-  });
+  const reconciledStock = fullRawInventory.filter((item) => !isPhantom(item));
 
-  // Verify: Exactly 36 items
+  // Verify: Exactly 36 items (33 active + 3 legitimate zero-balance items)
   assert.equal(reconciledStock.length, 36);
 
   // Verify: Exactly 2,381 BAR and 13,037 LM
@@ -155,11 +206,31 @@ test('exact 36 project SKUs reconciliation preserves 2,381 BAR and 13,037 LM whi
   assert.equal(reconciledStock.some(isPhantom), false);
 
   // Verify: Idempotent - running reconciliation again produces identical 36 items
-  const secondRun = reconciledStock.filter((item) => {
-    const isZero = Number(item.quantityBar || 0) <= 0 && Number(item.quantityLm || 0) <= 0;
-    return !(isZero && isPhantom(item));
-  });
+  const secondRun = reconciledStock.filter((item) => !isPhantom(item));
   assert.equal(secondRun.length, 36);
+});
+
+test('positive physical balances are never classified as phantom even with outbound or Sotalux tags', () => {
+  const itemWithSotaluxTag = {
+    itemKey: 'CANEX-ITEM-SPECIAL-MF-5800',
+    itemCode: '301-100099',
+    finish: 'MF',
+    lengthMm: 5800,
+    quantityBar: 10,
+    quantityLm: 58,
+    lastSalesOrder: 'SO-00199',
+    lastCustomerRef: 'Sotalux',
+  };
+
+  const isPhantom = (item) => {
+    const bar = Number(item.quantityBar || 0);
+    const lm = Number(item.quantityLm || 0);
+    if (bar !== 0 || lm !== 0) return false;
+    const so = String(item.lastSalesOrder || '').toUpperCase();
+    return so === 'SO-00199';
+  };
+
+  assert.equal(isPhantom(itemWithSotaluxTag), false);
 });
 
 

@@ -325,70 +325,99 @@ function isPhantomDuplicate(data = {}, docId = '') {
   const cust = String(d.lastCustomerRef || d.customerReference || '').toUpperCase();
   const inv = String(d.lastInvoiceNumber || d.invoiceNumber || '').toUpperCase();
   const mvt = String(d.lastMovementType || '').toLowerCase();
+  const supplier = String(d.supplier || '').toUpperCase();
 
-  // Outbound phantom duplicates created from delivery note SD-000000594 / SO-00199 / Sotalux with coated finishes
-  if (so === 'SO-00199' || cust.includes('SOTALUX') || inv.includes('SD-000000594')) {
+  const qtyBar = Number(d.quantityBar || 0);
+  const qtyLm = Number(d.quantityLm || 0);
+
+  // INVARIANT 1: Only confirmed exact-zero balance artifacts can be classified as phantom duplicates.
+  // Positive balances are physical inventory; negative balances require ledger investigation.
+  if (qtyBar !== 0 || qtyLm !== 0) {
+    return false;
+  }
+
+  // INVARIANT 2: Outbound delivery note markers (SD-000000594 / SO-00199 / Sotalux)
+  if (so === 'SO-00199' || so.includes('00199') || cust.includes('SOTALUX') || inv.includes('SD-000000594') || id.includes('SO-00199')) {
     return true;
   }
-  if (id.includes('RALY22778SD') || finish.includes('RALY22778SD') || id.includes('SO-00199')) {
+
+  // INVARIANT 3: Coated finishes and non-warehouse supplier prefixes spawned by outbound delivery notes
+  // In CANEX_WH, legitimate profiles are raw Mill Finish (MF/MILL/RAW/STD).
+  // Coated finishes (RALY22778SD, ANODIZED, RAL7009SD, RAL*, etc.) or SCHUCO prefixes with 0 balance are phantom records.
+  if (id.includes('RALY22778SD') || finish.includes('RALY22778SD') ||
+      id.includes('ANODIZ') || finish.includes('ANODIZ') ||
+      id.includes('RAL7009') || finish.includes('RAL7009') ||
+      id.includes('-RAL') || finish.startsWith('RAL') ||
+      id.startsWith('SCHUCO') || id.startsWith('SCHUECO') || supplier.includes('SCHUCO')) {
     return true;
   }
-  // Coated finishes that were created as outbound artifacts (not raw warehouse stock)
+
+  // INVARIANT 4: Any zero-balance record marked outbound or with non-MF finish
   if (mvt === 'outbound' && !/^(MF|MILL|RAW|STD)$/i.test(finish)) {
     return true;
   }
+
   return false;
 }
 
 async function getProjectStock(projectId) {
   const db = getDb();
+  projectId = await resolveProjectId(db, projectId);
   const ref = db.collection("warehouseProjects").doc(projectId);
   const stock = await ref.collection("stock").get();
   const deleted = await ref.collection("deletedStock").get();
   const itemsSnap = await ref.collection("items").get();
   const tombstones = new Set(deleted.docs.map(doc => doc.id));
 
+  const isCanex = String(projectId || '').toUpperCase().includes('CANEX');
   const validMap = new Map();
 
-  // 1. Process active stock documents (exclude phantom outbound zero-balance records)
+  // 1. Process active stock documents (always retain positive balances; filter out zero-balance phantoms and tombstones)
   for (const doc of stock.docs) {
-    if (tombstones.has(doc.id)) continue;
     const data = doc.data() || {};
-    if (isPhantomDuplicate(data, doc.id)) continue;
-    validMap.set(doc.id, { ...data, itemKey: doc.id });
-  }
+    const hasPos = Number(data.quantityBar || 0) > 0 || Number(data.quantityLm || 0) > 0;
 
-  // 2. Resurrect any legitimate project items that were erroneously purged to deletedStock by the outbound purge routine
-  for (const delDoc of deleted.docs) {
-    const dData = delDoc.data() || {};
-    if (isPhantomDuplicate(dData, delDoc.id)) continue;
-    const isPurgeReason = dData.reason === 'outbound_depleted_to_zero' || 
-                          dData.reason === 'auto_zero_stock_purge' || 
-                          dData.reason === 'zero_stock_cleanup';
-    if (isPurgeReason && !validMap.has(delDoc.id)) {
-      validMap.set(delDoc.id, {
-        ...dData,
-        itemKey: delDoc.id,
-        quantityBar: 0,
-        quantityLm: 0,
-        quantityKg: 0,
-      });
+    if (hasPos) {
+      validMap.set(doc.id, { ...data, itemKey: doc.id });
+      continue;
+    }
+
+    if (!tombstones.has(doc.id) && !isPhantomDuplicate(data, doc.id)) {
+      validMap.set(doc.id, { ...data, itemKey: doc.id });
     }
   }
 
-  // 3. Ensure all registered project catalog items from "items" master exist in stock view
+  // 2. Resurrect legitimate project catalog items from "items" master
+  // For CANEX_WH, legitimate catalog items are raw MF profiles from supplier CANEX.
+  // We strictly reject any phantom duplicates or items with intentional manual deletion tombstones.
   for (const itemDoc of itemsSnap.docs) {
+    if (validMap.has(itemDoc.id)) continue;
     const iData = itemDoc.data() || {};
+
     if (isPhantomDuplicate(iData, itemDoc.id)) continue;
-    if (!validMap.has(itemDoc.id)) {
-      validMap.set(itemDoc.id, {
-        ...iData,
-        itemKey: itemDoc.id,
-        quantityBar: 0,
-        quantityLm: 0,
-        quantityKg: 0,
-      });
+
+    const itemFinish = String(iData.finish || iData.color || '').toUpperCase();
+    const itemSupplier = String(iData.supplier || '').toUpperCase();
+    const isLegitMf = /^(MF|MILL|RAW|STD)$/i.test(itemFinish) || !itemFinish;
+    const isLegitSupplier = !itemSupplier || itemSupplier.includes('CANEX') || itemSupplier === 'ITEM';
+
+    if (isCanex && (!isLegitMf || !isLegitSupplier)) {
+      continue;
     }
+
+    // Check if item was intentionally deleted manually by an admin
+    const delDoc = deleted.docs.find(d => d.id === itemDoc.id);
+    if (delDoc && delDoc.data()?.reason === 'manual_delete') {
+      continue;
+    }
+
+    validMap.set(itemDoc.id, {
+      ...iData,
+      itemKey: itemDoc.id,
+      quantityBar: 0,
+      quantityLm: 0,
+      quantityKg: 0,
+    });
   }
 
   return Array.from(validMap.values());
@@ -905,10 +934,38 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
       }
     }
 
+    // Resolve outbound identity to existing warehouse stock profile BEFORE reservation
+    let effectiveItemKey = itemKey;
+    if (isOutbound) {
+      let resolvedStockDoc = await projectRef.collection("stock").doc(itemKey).get();
+      if (!resolvedStockDoc.exists) {
+        const clean = (val) => String(val || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+        const cItem = clean(itemCode);
+        const cCust = clean(customerCode);
+        const stockSnap = await projectRef.collection("stock").get();
+
+        for (const sDoc of stockSnap.docs) {
+          const s = sDoc.data() || {};
+          const sItem = clean(s.itemCode);
+          const sCust = clean(s.customerCode);
+          const sLen = Number(s.lengthMm || 6000);
+          const matchesCode = (cItem && (sItem === cItem || sCust === cItem)) ||
+                              (cCust && (sItem === cCust || sCust === cCust));
+          const matchesLen = sLen === lengthMm || (!lengthMm && sLen === 6000);
+
+          if (matchesCode && matchesLen) {
+            resolvedStockDoc = sDoc;
+            effectiveItemKey = sDoc.id;
+            break;
+          }
+        }
+      }
+    }
+
     const factorBar = isOutbound ? -actualDeductBar : qtyBar;
     const factorLm = isOutbound ? -actualDeductLm : qtyLm;
     const factorKg = isOutbound ? -actualDeductKg : qtyKg;
-    if (isOutbound) await reserveStock(projectRef, itemKey, { quantityBar: actualDeductBar, quantityLm: actualDeductLm, quantityKg: actualDeductKg }, consumed);
+    if (isOutbound) await reserveStock(projectRef, effectiveItemKey, { quantityBar: actualDeductBar, quantityLm: actualDeductLm, quantityKg: actualDeductKg }, consumed);
 
     // Create Movement
     const mvtRef = projectRef.collection("movements").doc();
@@ -931,7 +988,8 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
             ? Math.min(qtyBar, Math.max(0, Number(line.delmarBars)))
             : (line.delmarMode === 'full' ? qtyBar : Number(line.delmarShortage || 0)))
         : 0,
-      itemKey,
+      itemKey: effectiveItemKey,
+      originalItemKey: itemKey,
       itemCode,
       customerCode,
       description: line.description || "Glazing Bead / Profile",
@@ -1020,46 +1078,18 @@ async function processInboundInvoice(projectId, invoiceMeta, lines, userUid, use
       opCount++;
     } else if (actualDeductBar > 0) {
       // OUTBOUND: Only deduct from an existing warehouse stock record, NEVER create a new item!
-      let resolvedStockDoc = await projectRef.collection("stock").doc(itemKey).get();
-      let resolvedKey = itemKey;
-
-      if (!resolvedStockDoc.exists) {
-        const clean = (val) => String(val || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
-        const cItem = clean(itemCode);
-        const cCust = clean(customerCode);
-        const stockSnap = await projectRef.collection("stock").get();
-
-        for (const sDoc of stockSnap.docs) {
-          const s = sDoc.data() || {};
-          const sItem = clean(s.itemCode);
-          const sCust = clean(s.customerCode);
-          const sLen = Number(s.lengthMm || 6000);
-          const matchesCode = (cItem && (sItem === cItem || sCust === cItem)) ||
-                              (cCust && (sItem === cCust || sCust === cCust));
-          const matchesLen = sLen === lengthMm || (!lengthMm && sLen === 6000);
-
-          if (matchesCode && matchesLen) {
-            resolvedStockDoc = sDoc;
-            resolvedKey = sDoc.id;
-            break;
-          }
-        }
-      }
-
-      if (resolvedStockDoc && resolvedStockDoc.exists) {
-        const stockRef = projectRef.collection("stock").doc(resolvedKey);
-        batch.update(stockRef, {
-          quantityBar: admin.firestore.FieldValue.increment(-actualDeductBar),
-          quantityLm: admin.firestore.FieldValue.increment(-actualDeductLm),
-          quantityKg: admin.firestore.FieldValue.increment(-actualDeductKg),
-          lastMovementType: invoiceDoc.movementType,
-          lastInvoiceNumber: invoiceDoc.invoiceNumber,
-          lastSalesOrder: invoiceDoc.salesOrder || "",
-          lastCustomerRef: invoiceDoc.customerReference || "",
-          updatedAt: new Date().toISOString(),
-        });
-        opCount++;
-      }
+      const stockRef = projectRef.collection("stock").doc(effectiveItemKey);
+      batch.update(stockRef, {
+        quantityBar: admin.firestore.FieldValue.increment(-actualDeductBar),
+        quantityLm: admin.firestore.FieldValue.increment(-actualDeductLm),
+        quantityKg: admin.firestore.FieldValue.increment(-actualDeductKg),
+        lastMovementType: invoiceDoc.movementType,
+        lastInvoiceNumber: invoiceDoc.invoiceNumber,
+        lastSalesOrder: invoiceDoc.salesOrder || "",
+        lastCustomerRef: invoiceDoc.customerReference || "",
+        updatedAt: new Date().toISOString(),
+      });
+      opCount++;
     }
 
     await commitBatchIfNeeded(false);
@@ -2134,10 +2164,38 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
   for (const line of processedLines) {
     const { supplier, itemCode, customerCode, finish, lengthMm, itemKey, qtyBar, qtyLm, qtyKg, unitPrice, barPrice, netTotal } = line;
 
+    // Resolve outbound identity to existing warehouse stock profile BEFORE reservation
+    let effectiveItemKey = itemKey;
+    if (isOutbound) {
+      let resolvedStockDoc = await projectRef.collection("stock").doc(itemKey).get();
+      if (!resolvedStockDoc.exists) {
+        const clean = (val) => String(val || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+        const cItem = clean(itemCode);
+        const cCust = clean(customerCode);
+        const stockSnap = await projectRef.collection("stock").get();
+
+        for (const sDoc of stockSnap.docs) {
+          const s = sDoc.data() || {};
+          const sItem = clean(s.itemCode);
+          const sCust = clean(s.customerCode);
+          const sLen = Number(s.lengthMm || 6000);
+          const matchesCode = (cItem && (sItem === cItem || sCust === cItem)) ||
+                              (cCust && (sItem === cCust || sCust === cCust));
+          const matchesLen = sLen === lengthMm || (!lengthMm && sLen === 6000);
+
+          if (matchesCode && matchesLen) {
+            resolvedStockDoc = sDoc;
+            effectiveItemKey = sDoc.id;
+            break;
+          }
+        }
+      }
+    }
+
     const factorBar = isOutbound ? -qtyBar : qtyBar;
     const factorLm = isOutbound ? -qtyLm : qtyLm;
     const factorKg = isOutbound ? -qtyKg : qtyKg;
-    if (isOutbound) await reserveStock(projectRef, itemKey, { quantityBar: qtyBar, quantityLm: qtyLm, quantityKg: qtyKg }, consumed);
+    if (isOutbound) await reserveStock(projectRef, effectiveItemKey, { quantityBar: qtyBar, quantityLm: qtyLm, quantityKg: qtyKg }, consumed);
 
     // Movement entry
     const mvtRef = projectRef.collection("movements").doc();
@@ -2154,7 +2212,8 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
       supplier: isOutbound ? (dispatchDetails?.coatingSupplier || "العميل النهائي") : (supplier || "توريد يدوي"),
       dispatchId: dispatchId || null,
       dispatchStage: isOutbound ? initialStage : "inbound_stock",
-      itemKey,
+      itemKey: effectiveItemKey,
+      originalItemKey: itemKey,
       itemCode,
       customerCode,
       description: line.description || "قطاع ألومنيوم",
@@ -2225,46 +2284,18 @@ async function processManualStockMovement(projectId, { movementType, lines, meta
       opCount++;
     } else if (qtyBar > 0) {
       // Outbound: Only deduct from existing warehouse stock record, NEVER create a new item!
-      let resolvedStockDoc = await projectRef.collection("stock").doc(itemKey).get();
-      let resolvedKey = itemKey;
-
-      if (!resolvedStockDoc.exists) {
-        const clean = (val) => String(val || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
-        const cItem = clean(itemCode);
-        const cCust = clean(customerCode);
-        const stockSnap = await projectRef.collection("stock").get();
-
-        for (const sDoc of stockSnap.docs) {
-          const s = sDoc.data() || {};
-          const sItem = clean(s.itemCode);
-          const sCust = clean(s.customerCode);
-          const sLen = Number(s.lengthMm || 6000);
-          const matchesCode = (cItem && (sItem === cItem || sCust === cItem)) ||
-                              (cCust && (sItem === cCust || sCust === cCust));
-          const matchesLen = sLen === lengthMm || (!lengthMm && sLen === 6000);
-
-          if (matchesCode && matchesLen) {
-            resolvedStockDoc = sDoc;
-            resolvedKey = sDoc.id;
-            break;
-          }
-        }
-      }
-
-      if (resolvedStockDoc && resolvedStockDoc.exists) {
-        const stockRef = projectRef.collection("stock").doc(resolvedKey);
-        batch.update(stockRef, {
-          quantityBar: admin.firestore.FieldValue.increment(-qtyBar),
-          quantityLm: admin.firestore.FieldValue.increment(-qtyLm),
-          quantityKg: admin.firestore.FieldValue.increment(-qtyKg),
-          lastMovementType: "outbound",
-          lastInvoiceNumber: docNo,
-          lastSalesOrder: movementData.salesOrder,
-          lastCustomerRef: movementData.customerReference,
-          updatedAt: nowIso,
-        });
-        opCount++;
-      }
+      const stockRef = projectRef.collection("stock").doc(effectiveItemKey);
+      batch.update(stockRef, {
+        quantityBar: admin.firestore.FieldValue.increment(-qtyBar),
+        quantityLm: admin.firestore.FieldValue.increment(-qtyLm),
+        quantityKg: admin.firestore.FieldValue.increment(-qtyKg),
+        lastMovementType: "outbound",
+        lastInvoiceNumber: docNo,
+        lastSalesOrder: movementData.salesOrder,
+        lastCustomerRef: movementData.customerReference,
+        updatedAt: nowIso,
+      });
+      opCount++;
     }
 
     await commitBatchIfNeeded(false);

@@ -1588,17 +1588,28 @@ export default function Warehouse() {
       const [res, dRes] = await Promise.all([getProjectStock(projectId), getWarehouseDispatches(projectId)])
       if (selectedProjectRef.current !== projectId || request !== stockRequest.current) return
       const validStock = (res.stock || []).filter((item) => {
-        const isZero = Number(item.quantityBar || 0) <= 0 && Number(item.quantityLm || 0) <= 0;
+        const bar = Number(item.quantityBar || 0);
+        const lm = Number(item.quantityLm || 0);
+        const isZero = bar === 0 && lm === 0;
         const key = String(item.itemKey || '').toUpperCase();
         const finish = String(item.finish || item.color || '').toUpperCase();
         const so = String(item.lastSalesOrder || item.salesOrder || '').toUpperCase();
         const cust = String(item.lastCustomerRef || item.customerReference || '').toUpperCase();
-        const isPhantom = so === 'SO-00199' || 
-                          cust.includes('SOTALUX') || 
-                          key.includes('RALY22778SD') || 
-                          finish.includes('RALY22778SD') ||
+        const inv = String(item.lastInvoiceNumber || item.invoiceNumber || '').toUpperCase();
+        const supplier = String(item.supplier || '').toUpperCase();
+
+        const isPhantom = so === 'SO-00199' ||
+                          so.includes('00199') ||
+                          cust.includes('SOTALUX') ||
+                          inv.includes('SD-000000594') ||
                           key.includes('SO-00199') ||
+                          key.includes('RALY22778SD') || finish.includes('RALY22778SD') ||
+                          key.includes('ANODIZ') || finish.includes('ANODIZ') ||
+                          key.includes('RAL7009') || finish.includes('RAL7009') ||
+                          key.includes('-RAL') || finish.startsWith('RAL') ||
+                          key.startsWith('SCHUCO') || key.startsWith('SCHUECO') || supplier.includes('SCHUCO') ||
                           (item.lastMovementType === 'outbound' && !/^(MF|MILL|RAW|STD)$/i.test(finish));
+
         return !(isZero && isPhantom);
       });
       setStock(validStock)
