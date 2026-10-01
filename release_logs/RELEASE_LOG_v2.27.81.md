@@ -1,7 +1,7 @@
 # FawterX Release Log - v2.27.81
 
 **Release Date:** 2026-10-01
-**Commit Hash:** See the Git commit containing this ledger.
+**Commit Hash:** Application revision `2bc8a1b28e6afba1be8edbaed5f0a20190e7b5e4`.
 **Deployment Target:** Firebase Hosting (`https://fawterx.web.app`) & Render Backend Sync
 **Domain / Scope:** Warehouse manual zero-stock deletion
 
@@ -27,7 +27,7 @@
 - **Frontend Unit Tests:** `node --test frontend/tests/*.test.mjs` -> Passed (11/11).
 - **Backend Test Suite:** `npm --prefix backend test -- --runInBand --silent` -> Passed (123/123).
 - **Production Build:** `npm --prefix frontend run build` -> Passed; existing bundle-size warning remains.
-- **Deployments:** Pending release; verify Firebase deployment and Render revision independently before reporting completion.
+- **Deployments:** GitHub main pushed; Firebase Hosting deployment completed and public index references the new `index-Bk4k7aFv.js` bundle. Render root health returned HTTP 200, deletion contract `2`, and exact application revision `2bc8a1b28e6afba1be8edbaed5f0a20190e7b5e4`. Read-only deployment checks; no inventory records changed.
 
 ## 5. Agent Quick-Context (Compaction Recovery)
 - **Active State:** User authorized Codex implementation/release for this warehouse task after Antigravity quota exhaustion. Default role agreement still applies to other work.
