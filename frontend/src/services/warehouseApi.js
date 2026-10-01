@@ -57,8 +57,8 @@ export async function deleteWarehouseProject(projectId) {
 }
 
 /** Get stock snapshot for a project */
-export async function getProjectStock(projectId) {
-  const { data } = await api.get(`/warehouse/projects/${projectId}/stock`)
+export async function getProjectStock(projectId, { fresh = false } = {}) {
+  const { data } = await api.get(`/warehouse/projects/${encodeURIComponent(projectId)}/stock`, fresh ? { params: { _stockRead: Date.now() } } : undefined)
   return data
 }
 
@@ -86,7 +86,7 @@ export async function updateStockItem(projectId, itemKey, payload) {
 
 /** Delete stock item from inventory (Admin only) */
 export async function deleteStockItem(projectId, itemKey) {
-  const { data } = await api.delete(`/warehouse/projects/${projectId}/stock/${itemKey}`)
+  const { data } = await api.delete(`/warehouse/projects/${encodeURIComponent(projectId)}/stock/${encodeURIComponent(itemKey)}`)
   return data
 }
 

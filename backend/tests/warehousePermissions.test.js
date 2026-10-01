@@ -169,6 +169,15 @@ describe("Warehouse Permissions & Security Enforcement (FX-001 / Phase 1)", () =
   });
 
   describe("2. Project ACL and Alias Resolution in requireWarehouse & requireAdmin", () => {
+    test("stock responses prevent caching and identify the verification contract", async () => {
+      const res = await fetch(`${baseUrl}/api/warehouse/projects/proj-1/stock`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      const data = await res.json();
+      expect(data.stockReadVersion).toBe(2);
+      expect(Array.isArray(data.stock)).toBe(true);
+    });
+
     test("should deny access (403) when user warehouse access is disabled", async () => {
       currentAccess.enabled = false;
       currentAccess.role = "disabled";

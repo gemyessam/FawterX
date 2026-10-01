@@ -24,6 +24,9 @@ app.use(morgan("dev")); // Logging requests
 
 // Health Check
 app.get("/", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.set("X-FawterX-Stock-Deletion-Contract", "2");
+  if (process.env.RENDER_GIT_COMMIT) res.set("X-FawterX-Commit", process.env.RENDER_GIT_COMMIT);
   res.send("ETA Invoice SaaS Backend is running!");
 });
 

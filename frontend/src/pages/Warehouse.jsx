@@ -1,3 +1,4 @@
+import { acquireStockDeletionLock, deleteAndVerifyStock } from '../utils/warehouseDeletion.mjs'
 import { getDelmarPool, findDelmarPoolMatches } from '../utils/warehouseCoating.mjs'
 import { useState, useEffect, useContext, useMemo, useRef } from 'react'
 import { toast } from 'react-hot-toast'
@@ -1161,6 +1162,7 @@ export default function Warehouse() {
   const [savingStockEdit, setSavingStockEdit] = useState(false)
   const [selectedStockKeys, setSelectedStockKeys] = useState([])
   const [deletingBulk, setDeletingBulk] = useState(false)
+  const stockDeletionBusy = useRef(false)
 
   const handleStartStockEdit = (item) => {
     setEditingStockKey(item.itemKey)
@@ -1382,27 +1384,31 @@ export default function Warehouse() {
   }
 
   async function handleDeleteStockItem(item) {
-    if (!selectedProjectId || !item) return
+    if (!selectedProjectId || !item || stockDeletionBusy.current) return
     const confirmMsg = isAr
       ? `هل أنت تأكد من حذف الصنف (${item.itemCode}) نهائياً من أرصدة المخزن؟`
       : `Are you sure you want to delete item (${item.itemCode}) from stock?`
     if (!window.confirm(confirmMsg)) return
 
+    const projectId = selectedProjectId
+    const releaseDeletion = acquireStockDeletionLock(stockDeletionBusy)
+    if (!releaseDeletion) return
+    setDeletingBulk(true)
+    stockRequest.current++
     try {
-      console.log('[DeleteStockItem] Deleting itemKey:', item.itemKey, 'project:', selectedProjectId)
-      setStock((prev) => prev.filter((i) => i.itemKey !== item.itemKey))
-
-      const res = await deleteStockItem(selectedProjectId, item.itemKey)
-      if (res && res.success !== false) {
-        toast.success(isAr ? 'تم حذف الصنف من المخزن بنجاح' : 'Item deleted from stock successfully')
-      } else {
-        toast.error(res?.message || (isAr ? 'فشل حذف الصنف' : 'Failed to delete item'))
-      }
-      loadStock(selectedProjectId)
+      const rows = await deleteAndVerifyStock(projectId, item.itemKey, deleteStockItem, getProjectStock)
+      if (selectedProjectRef.current !== projectId) return
+      stockRequest.current++
+      setStock(rows)
+      setSelectedStockKeys(prev => prev.filter(key => key !== item.itemKey))
+      toast.success(isAr ? 'تم حذف الصنف وتأكيد اختفائه من الخادم' : 'Item deletion confirmed on server')
     } catch (err) {
-      console.error('[DeleteStockItem Error]:', err)
-      toast.error(err.response?.data?.message || err.message || (isAr ? 'فشل حذف الصنف' : 'Failed to delete item'))
-      loadStock(selectedProjectId)
+      if (selectedProjectRef.current !== projectId) return
+      toast.error(err.response?.data?.message || err.message)
+      await loadStock(projectId)
+    } finally {
+      releaseDeletion()
+      setDeletingBulk(false)
     }
   }
 
@@ -1423,39 +1429,44 @@ export default function Warehouse() {
   }
 
   const handleBulkDeleteStockItems = async () => {
-    if (!selectedProjectId || selectedStockKeys.length === 0) return
+    if (!selectedProjectId || selectedStockKeys.length === 0 || stockDeletionBusy.current) return
     const count = selectedStockKeys.length
     const confirmMsg = isAr
       ? `هل أنت تأكد من حذف (${count}) أصناف المحددة من المخزن نهائياً؟`
       : `Are you sure you want to delete (${count}) selected items from stock?`
     if (!window.confirm(confirmMsg)) return
 
+    const projectId = selectedProjectId
+    const keys = [...selectedStockKeys]
+    const releaseDeletion = acquireStockDeletionLock(stockDeletionBusy)
+    if (!releaseDeletion) return
     setDeletingBulk(true)
+    stockRequest.current++
+    let successCount = 0
+    let failureMessage = ''
     try {
-      console.log('[BulkDeleteStockItems] Deleting keys:', selectedStockKeys, 'project:', selectedProjectId)
-      
-      // Optimistic update
-      setStock((prev) => prev.filter((i) => !selectedStockKeys.includes(i.itemKey)))
-
-      const results = await Promise.allSettled(
-        selectedStockKeys.map((key) => deleteStockItem(selectedProjectId, key))
-      )
-
-      const successCount = results.filter((r) => r.status === 'fulfilled' && r.value && r.value.success !== false).length
-
-      toast.success(
-        isAr
-          ? `تم حذف ${successCount} من أصل ${count} أصناف من المخزن بنجاح`
-          : `Successfully deleted ${successCount} of ${count} items from stock`
-      )
-
-      setSelectedStockKeys([])
-      loadStock(selectedProjectId)
-    } catch (err) {
-      console.error('[BulkDeleteStockItems Error]:', err)
-      toast.error(isAr ? 'حدث خطأ أثناء الحذف المجمع' : 'Error performing bulk delete')
-      loadStock(selectedProjectId)
+      for (const key of keys) {
+        if (selectedProjectRef.current !== projectId) break
+        try {
+          const rows = await deleteAndVerifyStock(projectId, key, deleteStockItem, getProjectStock)
+          if (selectedProjectRef.current !== projectId) break
+          stockRequest.current++
+          setStock(rows)
+          setSelectedStockKeys(prev => prev.filter(selected => selected !== key))
+          successCount++
+        } catch (err) {
+          failureMessage = err.response?.data?.message || err.message
+        }
+      }
+      if (selectedProjectRef.current !== projectId) return
+      if (successCount === count) {
+        toast.success(isAr ? `تم تأكيد حذف ${count} أصناف من الخادم` : `Confirmed deletion of ${count} items`)
+      } else {
+        toast.error(isAr ? `تم حذف ${successCount} من ${count}. ${failureMessage}` : `Deleted ${successCount} of ${count}. ${failureMessage}`)
+        await loadStock(projectId)
+      }
     } finally {
+      releaseDeletion()
       setDeletingBulk(false)
     }
   }
@@ -3452,6 +3463,7 @@ export default function Warehouse() {
                                   </button>
                                   <button
                                     className="btn btn-sm"
+                                    disabled={deletingBulk}
                                     onClick={() => handleDeleteStockItem(item)}
                                     style={{ background: 'rgba(255, 71, 87, 0.15)', color: '#ff4757', border: '1px solid rgba(255, 71, 87, 0.3)', padding: '2px 8px', fontSize: '0.8rem' }}
                                     title={isAr ? 'حذف من المخزن' : 'Delete item'}

@@ -5,7 +5,7 @@ const { isAdminEmail } = require("./adminAccess");
 
 const { problem, validId, getScopedDb, projectOperation } = require("./warehousePersistence");
 const { snapshotService } = require("./warehouseSnapshots");
-const { classifyStockItem, buildEvidenceIndex } = require("./warehouseStockProvenance");
+const { classifyStockItem, buildEvidenceIndex, inspectBalance } = require("./warehouseStockProvenance");
 
 function rawGetDb() {
   if (admin && admin.apps && admin.apps.length > 0) {
@@ -1275,6 +1275,31 @@ async function deleteStockItem(projectId, itemKey, userUid, userEmail, userName)
   const doc = await stockRef.get();
   const existing = doc.exists ? doc.data() : {};
 
+  // Explicit deletion of a zero row is independent of provenance classification.
+  // Keep its backup and history fence in bounded, atomic writes instead of
+  // rewriting hundreds of movements or snapshotting the entire warehouse.
+  const projectRef = db.collection("warehouseProjects").doc(projectId);
+  const tombstoneRef = projectRef.collection("deletedStock").doc(itemKey);
+  const tombstone = await tombstoneRef.get();
+  if (tombstone.exists) return { itemKey, deleted: true, deletionContractVersion: 2 };
+  if (!doc.exists) throw problem("الصنف غير موجود في المخزن. حدّث الجدول ثم أعد المحاولة.", 404);
+  if (inspectBalance(existing).isExactZero) {
+    const itemRef = projectRef.collection("items").doc(itemKey);
+    const deletedAt = new Date().toISOString();
+    await stockRef.delete();
+    await tombstoneRef.set({
+      itemKey, itemCode: existing.itemCode || "", deletedAt,
+      deletedBy: userUid || "admin", reason: "user_delete",
+      stockSnapshot: existing,
+    });
+    await itemRef.set({ itemKey, stockHistoryDeletedBefore: deletedAt }, { merge: true });
+    await logWarehouseAudit(projectId, {
+      action: "DELETE_STOCK_ITEM", userUid, userEmail, userName, itemKey,
+      details: { itemCode: existing.itemCode || itemKey, quantityBar: 0, backup: "deletedStock" },
+    });
+    return { itemKey, deleted: true, deletionContractVersion: 2 };
+  }
+
   await createAutoRestorePoint(projectId, "[تلقائي] قبل حذف صنف", "", userUid, userEmail, userName);
   // 1. Delete stock document from Firestore
   await stockRef.delete();
@@ -1340,7 +1365,20 @@ async function deleteStockItem(projectId, itemKey, userUid, userEmail, userName)
     },
   });
 
-  return { itemKey, deleted: true };
+  return { itemKey, deleted: true, deletionContractVersion: 2 };
+}
+
+function movementAfterDeletionFence(movement, fences) {
+  const cutoff = fences.get(movement.itemKey);
+  if (!cutoff) return true;
+  const time = new Date(movement.createdAt || '').getTime();
+  return Number.isFinite(time) && time > new Date(cutoff).getTime();
+}
+
+async function readDeletionFences(projectRef) {
+  const items = await projectRef.collection('items').get();
+  return new Map(items.docs.filter(doc => doc.data()?.stockHistoryDeletedBefore)
+    .map(doc => [doc.id, doc.data().stockHistoryDeletedBefore]));
 }
 
 /**
@@ -1493,7 +1531,8 @@ async function getItemMovementsHistory(projectId, itemKey, itemCode) {
 
   // Return item movements scoped strictly to current project
 
-  let movements = Array.from(mvtMap.values()).filter((m) => !m.isDeleted);
+  const fences = await readDeletionFences(db.collection("warehouseProjects").doc(projectId));
+  let movements = Array.from(mvtMap.values()).filter((m) => !m.isDeleted && movementAfterDeletionFence(m, fences));
 
   // Synthetic initial movement fallback if movements history is empty but stock item exists with balance > 0
   if (movements.length === 0) {
@@ -1656,6 +1695,7 @@ async function rollbackInvoiceTransaction(projectId, invoiceId, userUid, userEma
 
   const isOutbound = (invData.movementType || "").toLowerCase() === "outbound";
   const nowIso = new Date().toISOString();
+  const fences = await readDeletionFences(projectRef);
 
   // 3. Take an auto restore point before doing the rollback (Safety Net)
   await createAutoRestorePoint(
@@ -1683,7 +1723,7 @@ async function rollbackInvoiceTransaction(projectId, invoiceId, userUid, userEma
   const consumed = new Map();
   for (const mDoc of mvtsSnap.docs) {
     const mData = mDoc.data() || {};
-    if (mData.isDeleted) continue;
+    if (mData.isDeleted || !movementAfterDeletionFence(mData, fences)) continue;
 
     const itemKey = mData.itemKey;
     const qtyBar = Number(mData.quantityBar || mData.quantity || 0);
@@ -1779,7 +1819,7 @@ async function rollbackInvoiceTransaction(projectId, invoiceId, userUid, userEma
     }
   }
 
-  await applyAllocations(projectRef, mvtsSnap.docs.map(doc => doc.data()).filter(m => !m.isDeleted), invData.invoiceNumber, true);
+  await applyAllocations(projectRef, mvtsSnap.docs.map(doc => doc.data()).filter(m => !m.isDeleted && movementAfterDeletionFence(m, fences)), invData.invoiceNumber, true);
 
   batch.update(invRef, {
     status: "cancelled",

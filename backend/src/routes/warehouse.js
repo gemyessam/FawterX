@@ -246,7 +246,8 @@ router.post("/projects/:projectId/unarchive", requireAdmin, async (req, res) => 
 router.get("/projects/:projectId/stock", requireWarehouse, async (req, res) => {
   try {
     const stock = await getProjectStock(req.resolvedProjectId || req.params.projectId);
-    return res.json({ success: true, stock });
+    res.set('Cache-Control', 'no-store');
+    return res.json({ success: true, stock, stockReadVersion: 2, ...(process.env.RENDER_GIT_COMMIT ? { backendCommit: process.env.RENDER_GIT_COMMIT } : {}) });
   } catch (error) {
     return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
