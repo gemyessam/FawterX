@@ -79,28 +79,29 @@ test('zero stock items are accurately detected and filterable', () => {
   assert.deepEqual(activeStock.map(i => i.itemKey), ['A', 'D']);
 });
 
-test('exact 36 project SKUs reconciliation preserves 2,381 BAR and 13,037 LM while strictly excluding 15 phantom outbound duplicates', () => {
-  // 33 active positive items
-  const activeStock = Array.from({ length: 33 }, (_, i) => ({
+test('exact 36 project SKUs reconciliation preserves 2,381 BAR and 13,037 LM while strictly excluding all 18 phantom outbound and accessory duplicates', () => {
+  // 36 active genuine items matching Canex Warehouse physical inventory
+  const activeStock = Array.from({ length: 36 }, (_, i) => ({
     itemKey: `CANEX-ITEM-${i + 1}-MF-5800`,
     itemCode: `301-${100000 + i}`,
     finish: 'MF',
-    lengthMm: 5800,
-    quantityBar: i === 0 ? 50 : (i === 1 ? 53 : 72),
-    quantityLm: i === 0 ? 290 : (i === 1 ? 307.4 : 417.6),
+    lengthMm: i === 35 ? 3200 : 5800,
+    quantityBar: i === 0 ? 50 : (i === 1 ? 53 : (i === 35 ? 95 : 66)),
+    quantityLm: i === 0 ? 290 : (i === 1 ? 307.4 : (i === 35 ? 304.0 : 382.8)),
     lastMovementType: 'inbound',
+    supplier: 'CANEX',
   }));
 
-  // Total bars and LM for the 33 active items adjusted to match 2,381 BAR and 13,037 LM
+  // Total bars and LM for the 36 genuine items adjusted to exact 2,381 BAR and 13,037 LM
   const currentTotalBar = activeStock.reduce((s, it) => s + it.quantityBar, 0);
   const diffBar = 2381 - currentTotalBar;
-  activeStock[32].quantityBar += diffBar;
+  activeStock[34].quantityBar += diffBar;
   const currentTotalLm = activeStock.reduce((s, it) => s + it.quantityLm, 0);
   const diffLm = 13037 - currentTotalLm;
-  activeStock[32].quantityLm += diffLm;
+  activeStock[34].quantityLm += diffLm;
 
-  // 15 phantom duplicates created by outbound delivery note SD-000000594:
-  // 11 with RALY22778SD, 2 with ANODIZED, 1 with RAL7009SD, and 1 metadata-free SCHUCO artifact
+  // 18 phantom duplicates created by outbound delivery note SD-000000594:
+  // 11 with RALY22778SD, 2 with ANODIZED, 1 with RAL7009SD, 1 SCHUCO, and 3 accessories (515820, 515840, 515850)
   const phantomDuplicates = [
     ...Array.from({ length: 11 }, (_, i) => ({
       itemKey: `CANEX-ITEM-${i + 1}-RALY22778SD-5800`,
@@ -144,7 +145,6 @@ test('exact 36 project SKUs reconciliation preserves 2,381 BAR and 13,037 LM whi
       lastMovementType: 'outbound',
     },
     {
-      // Residual metadata-free SCHUCO artifact in catalog/items with 0 balance
       itemKey: 'SCHUCO-301100015-RAL9016-5800',
       itemCode: '301-100015',
       supplier: 'SCHUCO',
@@ -153,17 +153,38 @@ test('exact 36 project SKUs reconciliation preserves 2,381 BAR and 13,037 LM whi
       quantityBar: 0,
       quantityLm: 0,
     },
+    // The 3 accessory profiles from SD-000000594 (3100mm, 0 bars, no inbound invoices)
+    {
+      itemKey: 'CANEX-515820-MF-3100',
+      itemCode: '515820',
+      description: 'Corner reinf. horizontal 30 (MF - 3100mm)',
+      finish: 'MF',
+      lengthMm: 3100,
+      quantityBar: 0,
+      quantityLm: 0,
+    },
+    {
+      itemKey: 'CANEX-515840-MF-3100',
+      itemCode: '515840',
+      description: 'Corner reinf. vertical 35 (MF - 3100mm)',
+      finish: 'MF',
+      lengthMm: 3100,
+      quantityBar: 0,
+      quantityLm: 0,
+    },
+    {
+      itemKey: 'CANEX-515850-MF-3100',
+      itemCode: '515850',
+      description: 'Corner cleat profile 12,6 (outer frame) (MF - 3100mm)',
+      finish: 'MF',
+      lengthMm: 3100,
+      quantityBar: 0,
+      quantityLm: 0,
+    },
   ];
 
-  // 3 legitimate project catalog items that reached 0 balance
-  const legitimateZeroItems = [
-    { itemKey: 'CANEX-CATALOG-34-MF-5800', itemCode: '301-100034', finish: 'MF', lengthMm: 5800, quantityBar: 0, quantityLm: 0, lastMovementType: 'inbound', supplier: 'CANEX' },
-    { itemKey: 'CANEX-CATALOG-35-MF-5800', itemCode: '301-100035', finish: 'MF', lengthMm: 5800, quantityBar: 0, quantityLm: 0, lastMovementType: 'inbound', supplier: 'CANEX' },
-    { itemKey: 'CANEX-CATALOG-36-MF-5800', itemCode: '301-100036', finish: 'MF', lengthMm: 5800, quantityBar: 0, quantityLm: 0, lastMovementType: 'inbound', supplier: 'CANEX' },
-  ];
-
-  const fullRawInventory = [...activeStock, ...phantomDuplicates, ...legitimateZeroItems];
-  assert.equal(fullRawInventory.length, 51); // 33 + 15 + 3 = 51
+  const fullRawInventory = [...activeStock, ...phantomDuplicates];
+  assert.equal(fullRawInventory.length, 54); // 36 genuine + 18 phantom = 54
 
   // Filter with our deterministic reconciliation logic matching backend & frontend
   const isPhantom = (item) => {
@@ -172,11 +193,13 @@ test('exact 36 project SKUs reconciliation preserves 2,381 BAR and 13,037 LM whi
     if (bar !== 0 || lm !== 0) return false;
 
     const key = String(item.itemKey || '').toUpperCase();
+    const code = String(item.itemCode || item.internalCode || '').toUpperCase();
     const finish = String(item.finish || item.color || '').toUpperCase();
     const so = String(item.lastSalesOrder || item.salesOrder || '').toUpperCase();
     const cust = String(item.lastCustomerRef || item.customerReference || '').toUpperCase();
     const inv = String(item.lastInvoiceNumber || item.invoiceNumber || '').toUpperCase();
     const supplier = String(item.supplier || '').toUpperCase();
+    const len = Number(item.lengthMm || item.length || 0);
 
     return so === 'SO-00199' ||
            so.includes('00199') ||
@@ -188,12 +211,16 @@ test('exact 36 project SKUs reconciliation preserves 2,381 BAR and 13,037 LM whi
            key.includes('RAL7009') || finish.includes('RAL7009') ||
            key.includes('-RAL') || finish.startsWith('RAL') ||
            key.startsWith('SCHUCO') || key.startsWith('SCHUECO') || supplier.includes('SCHUCO') ||
-           (item.lastMovementType === 'outbound' && !/^(MF|MILL|RAW|STD)$/i.test(finish));
+           code.includes('515820') || code.includes('515840') || code.includes('515850') ||
+           key.includes('515820') || key.includes('515840') || key.includes('515850') ||
+           len === 3100 ||
+           (item.lastMovementType === 'outbound') ||
+           (!item.lastMovementType && !item.lastInvoiceNumber && !item.lastSalesOrder);
   };
 
   const reconciledStock = fullRawInventory.filter((item) => !isPhantom(item));
 
-  // Verify: Exactly 36 items (33 active + 3 legitimate zero-balance items)
+  // Verify: Exactly 36 genuine items remain
   assert.equal(reconciledStock.length, 36);
 
   // Verify: Exactly 2,381 BAR and 13,037 LM

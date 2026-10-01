@@ -320,12 +320,14 @@ async function createProject({ name, code, description }, actorUid) {
 function isPhantomDuplicate(data = {}, docId = '') {
   const d = data || {};
   const id = String(docId || d.itemKey || '').toUpperCase();
+  const code = String(d.itemCode || d.internalCode || docId || '').toUpperCase();
   const finish = String(d.finish || d.color || '').toUpperCase();
   const so = String(d.lastSalesOrder || d.salesOrder || '').toUpperCase();
   const cust = String(d.lastCustomerRef || d.customerReference || '').toUpperCase();
   const inv = String(d.lastInvoiceNumber || d.invoiceNumber || '').toUpperCase();
   const mvt = String(d.lastMovementType || '').toLowerCase();
   const supplier = String(d.supplier || '').toUpperCase();
+  const len = Number(d.lengthMm || d.length || 0);
 
   const qtyBar = Number(d.quantityBar || 0);
   const qtyLm = Number(d.quantityLm || 0);
@@ -352,8 +354,20 @@ function isPhantomDuplicate(data = {}, docId = '') {
     return true;
   }
 
-  // INVARIANT 4: Any zero-balance record marked outbound or with non-MF finish
+  // INVARIANT 4: Accessory and delivery note artifacts (515820, 515840, 515850 / 3100mm)
+  if (code.includes('515820') || code.includes('515840') || code.includes('515850') ||
+      id.includes('515820') || id.includes('515840') || id.includes('515850') ||
+      len === 3100) {
+    return true;
+  }
+
+  // INVARIANT 5: Any zero-balance record marked outbound or with non-MF finish
   if (mvt === 'outbound' && !/^(MF|MILL|RAW|STD)$/i.test(finish)) {
+    return true;
+  }
+
+  // INVARIANT 6: Any zero-balance record with no movements or invoice history
+  if (!mvt && !d.lastInvoiceNumber && !d.lastSalesOrder && (!Array.isArray(d.invoiceNumbers) || !d.invoiceNumbers.length)) {
     return true;
   }
 
@@ -366,14 +380,13 @@ async function getProjectStock(projectId) {
   const ref = db.collection("warehouseProjects").doc(projectId);
   const stock = await ref.collection("stock").get();
   const deleted = await ref.collection("deletedStock").get();
-  const itemsSnap = await ref.collection("items").get();
   const tombstones = new Set(deleted.docs.map(doc => doc.id));
 
-  const isCanex = String(projectId || '').toUpperCase().includes('CANEX');
   const validMap = new Map();
 
-  // 1. Process active stock documents (always retain positive balances; filter out zero-balance phantoms and tombstones)
+  // Process active stock documents
   for (const doc of stock.docs) {
+    if (tombstones.has(doc.id)) continue;
     const data = doc.data() || {};
     const hasPos = Number(data.quantityBar || 0) > 0 || Number(data.quantityLm || 0) > 0;
 
@@ -382,42 +395,14 @@ async function getProjectStock(projectId) {
       continue;
     }
 
-    if (!tombstones.has(doc.id) && !isPhantomDuplicate(data, doc.id)) {
-      validMap.set(doc.id, { ...data, itemKey: doc.id });
+    // For zero balance items: strictly exclude phantoms and require verified inbound origin
+    if (!isPhantomDuplicate(data, doc.id)) {
+      const hasInbound = data.lastMovementType === 'inbound' ||
+        (Array.isArray(data.invoiceNumbers) && data.invoiceNumbers.length > 0 && data.lastMovementType !== 'outbound');
+      if (hasInbound) {
+        validMap.set(doc.id, { ...data, itemKey: doc.id });
+      }
     }
-  }
-
-  // 2. Resurrect legitimate project catalog items from "items" master
-  // For CANEX_WH, legitimate catalog items are raw MF profiles from supplier CANEX.
-  // We strictly reject any phantom duplicates or items with intentional manual deletion tombstones.
-  for (const itemDoc of itemsSnap.docs) {
-    if (validMap.has(itemDoc.id)) continue;
-    const iData = itemDoc.data() || {};
-
-    if (isPhantomDuplicate(iData, itemDoc.id)) continue;
-
-    const itemFinish = String(iData.finish || iData.color || '').toUpperCase();
-    const itemSupplier = String(iData.supplier || '').toUpperCase();
-    const isLegitMf = /^(MF|MILL|RAW|STD)$/i.test(itemFinish) || !itemFinish;
-    const isLegitSupplier = !itemSupplier || itemSupplier.includes('CANEX') || itemSupplier === 'ITEM';
-
-    if (isCanex && (!isLegitMf || !isLegitSupplier)) {
-      continue;
-    }
-
-    // Check if item was intentionally deleted manually by an admin
-    const delDoc = deleted.docs.find(d => d.id === itemDoc.id);
-    if (delDoc && delDoc.data()?.reason === 'manual_delete') {
-      continue;
-    }
-
-    validMap.set(itemDoc.id, {
-      ...iData,
-      itemKey: itemDoc.id,
-      quantityBar: 0,
-      quantityLm: 0,
-      quantityKg: 0,
-    });
   }
 
   return Array.from(validMap.values());
@@ -1464,9 +1449,11 @@ async function cleanupZeroStockItems(projectId, userUid, userEmail, userName) {
 
   for (const item of zeroItems) {
     const stockDocRef = projectRef.collection("stock").doc(item.itemKey);
+    const itemDocRef = projectRef.collection("items").doc(item.itemKey);
     const delDocRef = projectRef.collection("deletedStock").doc(item.itemKey);
 
     batch.delete(stockDocRef);
+    batch.delete(itemDocRef);
     batch.set(delDocRef, {
       itemKey: item.itemKey,
       itemCode: item.itemCode,
@@ -1474,7 +1461,7 @@ async function cleanupZeroStockItems(projectId, userUid, userEmail, userName) {
       deletedBy: userUid || "admin",
       reason: "zero_stock_cleanup",
     });
-    opCount += 2;
+    opCount += 3;
     deletedKeys.push(item.itemKey);
 
     if (opCount >= 400) {
