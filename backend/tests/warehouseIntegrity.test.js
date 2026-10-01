@@ -204,3 +204,282 @@ test('Firestore snapshot codec preserves types without key collisions', () => {
   expect(restored.nested).toEqual(data.nested);
   expect(Number.isNaN(restored.number)).toBe(true);
 });
+
+describe('warehouseStockProvenance & getProjectStock / cleanupZeroStockItems', () => {
+  test('33-positive + 3-depleted synthetic provenance fixture returns 36 genuine items and excludes 18 proven artifacts', async () => {
+    // 33 positive active items
+    for (let i = 1; i <= 33; i++) {
+      const key = `CANEX-ITEM-${i}-MF-6000`;
+      mockDb.rows.set(`${parent}/stock/${key}`, {
+        itemKey: key,
+        itemCode: `ITEM-${i}`,
+        finish: 'MF',
+        lengthMm: 6000,
+        quantityBar: 10,
+        quantityLm: 60,
+        quantityKg: 20,
+      });
+      mockDb.rows.set(`${parent}/movements/m-in-${i}`, {
+        itemKey: key,
+        movementType: 'inbound',
+        quantityBar: 10,
+      });
+    }
+
+    // 3 legitimate project items that reached 0 balance via outbound dispatch
+    for (let i = 34; i <= 36; i++) {
+      const key = `CANEX-ITEM-${i}-MF-6000`;
+      mockDb.rows.set(`${parent}/stock/${key}`, {
+        itemKey: key,
+        itemCode: `ITEM-${i}`,
+        finish: 'MF',
+        lengthMm: 6000,
+        quantityBar: 0,
+        quantityLm: 0,
+        quantityKg: 0,
+        lastMovementType: 'outbound',
+      });
+      mockDb.rows.set(`${parent}/movements/m-in-${i}`, {
+        itemKey: key,
+        movementType: 'inbound',
+        quantityBar: 5,
+      });
+      mockDb.rows.set(`${parent}/movements/m-out-${i}`, {
+        itemKey: key,
+        movementType: 'outbound',
+        quantityBar: 5,
+      });
+    }
+
+    // 18 proven outbound artifacts created solely during outbound delivery note with 0 bars
+    for (let i = 1; i <= 18; i++) {
+      const key = `CANEX-PHANTOM-${i}-COATED-6000`;
+      const time = '2026-09-29T12:00:00.000Z';
+      mockDb.rows.set(`${parent}/stock/${key}`, {
+        itemKey: key,
+        itemCode: `PHANTOM-${i}`,
+        finish: 'RALY22778SD',
+        lengthMm: 6000,
+        quantityBar: 0,
+        quantityLm: 0,
+        quantityKg: 0,
+        createdFrom: 'outbound',
+        lastMovementType: 'outbound',
+        lastInvoiceNumber: 'SD-000000594',
+        createdAt: time,
+        updatedAt: time,
+      });
+      mockDb.rows.set(`${parent}/movements/m-phantom-${i}`, {
+        itemKey: key,
+        movementType: 'outbound',
+        quantityBar: 0,
+        invoiceNumber: 'SD-000000594',
+        createdAt: time,
+      });
+    }
+
+    const stock = await store.getProjectStock('a');
+    expect(stock).toHaveLength(36);
+    expect(stock.filter(s => Number(s.quantityBar) > 0)).toHaveLength(33);
+    expect(stock.filter(s => Number(s.quantityBar) === 0)).toHaveLength(3);
+    expect(stock.some(s => s.itemKey.includes('PHANTOM'))).toBe(false);
+
+    // Test cleanupZeroStockItems: deletes ONLY the 18 proven artifacts and preserves legitimate 3 depleted
+    const cleanupResult = await store.cleanupZeroStockItems('a', 'admin', 'admin@example.test', 'Admin');
+    expect(cleanupResult.count).toBe(18);
+
+    const stockAfterCleanup = await store.getProjectStock('a');
+    expect(stockAfterCleanup).toHaveLength(36);
+  });
+
+  test('unknown provenance zero records and legacy opening records without inbound ledger are preserved conservatively', async () => {
+    // Legacy opening record with outbound movement but NO birth evidence
+    mockDb.rows.set(`${parent}/stock/legacy-zero`, {
+      itemKey: 'legacy-zero',
+      quantityBar: 0,
+      quantityLm: 0,
+      quantityKg: 0,
+      lastMovementType: 'outbound',
+      updatedAt: '2026-09-30T10:00:00.000Z',
+      lastInvoiceNumber: 'OUT-LEGACY',
+    });
+    mockDb.rows.set(`${parent}/movements/m-legacy-out`, {
+      itemKey: 'legacy-zero',
+      movementType: 'outbound',
+      quantityBar: 5,
+      createdAt: '2026-09-30T10:00:00.000Z',
+      invoiceNumber: 'OUT-LEGACY',
+    });
+
+    const stock = await store.getProjectStock('a');
+    expect(stock.some(s => s.itemKey === 'legacy-zero')).toBe(true);
+
+    // cleanupZeroStockItems must NEVER delete unknown records
+    const cleanup = await store.cleanupZeroStockItems('a', 'admin');
+    expect(cleanup.deletedKeys || []).not.toContain('legacy-zero');
+    expect((await store.getProjectStock('a')).some(s => s.itemKey === 'legacy-zero')).toBe(true);
+  });
+
+  test('negative balances, kg-only balances, and non-numeric balances are strictly retained', async () => {
+    mockDb.rows.set(`${parent}/stock/negative`, {
+      itemKey: 'negative',
+      quantityBar: -1,
+      quantityLm: -6,
+      quantityKg: 0,
+      lastMovementType: 'outbound',
+    });
+    mockDb.rows.set(`${parent}/stock/kg-only`, {
+      itemKey: 'kg-only',
+      quantityBar: 0,
+      quantityLm: 0,
+      quantityKg: 15.5,
+    });
+    mockDb.rows.set(`${parent}/stock/malformed`, {
+      itemKey: 'malformed',
+      quantityBar: 'NaN',
+      quantityLm: 0,
+      quantityKg: 0,
+    });
+
+    const stock = await store.getProjectStock('a');
+    expect(stock.some(s => s.itemKey === 'negative')).toBe(true);
+    expect(stock.some(s => s.itemKey === 'kg-only')).toBe(true);
+    expect(stock.some(s => s.itemKey === 'malformed')).toBe(true);
+  });
+
+  test('legitimate coated finishes, 3100mm length, and Schuco profiles with inbound provenance are visible', async () => {
+    mockDb.rows.set(`${parent}/stock/CANEX-COATED-6000`, {
+      itemKey: 'CANEX-COATED-6000',
+      finish: 'RALY22778SD',
+      lengthMm: 3100,
+      supplier: 'SCHUCO',
+      quantityBar: 0,
+      quantityLm: 0,
+      quantityKg: 0,
+    });
+    mockDb.rows.set(`${parent}/movements/m-legit-in`, {
+      itemKey: 'CANEX-COATED-6000',
+      movementType: 'inbound',
+      quantityBar: 20,
+    });
+
+    const stock = await store.getProjectStock('a');
+    expect(stock.some(s => s.itemKey === 'CANEX-COATED-6000')).toBe(true);
+  });
+
+  test('manual deletion tombstone without reason field is strictly respected in getProjectStock', async () => {
+    mockDb.rows.set(`${parent}/stock/manual-deleted`, {
+      itemKey: 'manual-deleted',
+      quantityBar: 10,
+    });
+    // deleteStockItem writes tombstone with itemKey, deletedAt, deletedBy, itemCode and NO reason
+    mockDb.rows.set(`${parent}/deletedStock/manual-deleted`, {
+      itemKey: 'manual-deleted',
+      deletedAt: '2026-09-28T10:00:00Z',
+      deletedBy: 'admin',
+      itemCode: 'ITEM-DEL',
+    });
+
+    const stock = await store.getProjectStock('a');
+    expect(stock.some(s => s.itemKey === 'manual-deleted')).toBe(false);
+  });
+
+  test('cancelled or rolled-back inbound movements and invoices do not grant inbound provenance', async () => {
+    mockDb.rows.set(`${parent}/stock/fake-inbound`, {
+      itemKey: 'fake-inbound',
+      quantityBar: 0,
+      quantityLm: 0,
+      quantityKg: 0,
+      createdFrom: 'outbound',
+    });
+    // Inbound movement was cancelled / rolled back
+    mockDb.rows.set(`${parent}/movements/m-valid-out`, {
+      itemKey: 'fake-inbound', movementType: 'outbound',
+    });
+    mockDb.rows.set(`${parent}/movements/m-cancelled`, {
+      itemKey: 'fake-inbound',
+      movementType: 'inbound',
+      isCancelled: true,
+    });
+    // Inbound invoice was rolled back
+    mockDb.rows.set(`${parent}/invoices/inv-cancelled`, {
+      id: 'inv-cancelled',
+      movementType: 'inbound',
+      isCancelled: true,
+      lines: [{ itemKey: 'fake-inbound' }],
+    });
+
+    const stock = await store.getProjectStock('a');
+    expect(stock.some(s => s.itemKey === 'fake-inbound')).toBe(false);
+  });
+});
+
+test('cancelled invoice document ID overrides forged stored ID and invalidates linked movements', async () => {
+  mockDb.rows.set(`${parent}/stock/artifact`, { quantityBar: 0, createdFrom: 'outbound' });
+  mockDb.rows.set(`${parent}/movements/out`, { itemKey: 'artifact', movementType: 'outbound' });
+  mockDb.rows.set(`${parent}/movements/in`, { itemKey: 'artifact', movementType: 'inbound', invoiceId: 'real-id' });
+  mockDb.rows.set(`${parent}/invoices/real-id`, { id: 'forged-id', movementType: 'inbound', isCancelled: true });
+  expect(await store.getProjectStock('a')).toEqual([]);
+  expect((await store.cleanupZeroStockItems('a', 'admin')).count).toBe(1);
+});
+
+test('evidence is scoped to the active generation and GET never changes rows', async () => {
+  mockDb.rows.get(parent).activeGeneration = 'current';
+  const active = `${parent}/generations/current`;
+  mockDb.rows.set(`${active}/stock/sku`, { quantityBar: 0, createdFrom: 'outbound' });
+  mockDb.rows.set(`${active}/movements/out`, { itemKey: 'sku', movementType: 'outbound' });
+  mockDb.rows.set(`${parent}/movements/in`, { itemKey: 'sku', movementType: 'inbound' });
+  const before = JSON.stringify([...mockDb.rows]);
+  expect(await store.getProjectStock('a')).toEqual([]);
+  expect(JSON.stringify([...mockDb.rows])).toBe(before);
+});
+
+test('failed evidence reads reject GET and cleanup without mutations', async () => {
+  mockDb.rows.set(`${parent}/stock/sku`, { quantityBar: 0, createdFrom: 'outbound' });
+  mockDb.failRead = `${parent}/invoices`;
+  const before = JSON.stringify([...mockDb.rows]);
+  await expect(store.getProjectStock('a')).rejects.toThrow('injected');
+  await expect(store.cleanupZeroStockItems('a', 'admin')).rejects.toThrow('injected');
+  expect(JSON.stringify([...mockDb.rows])).toBe(before);
+});
+
+test('creation timestamps alone and cancelled outbound origins do not authorize cleanup', async () => {
+  const time = '2026-08-25T10:00:00Z';
+  mockDb.rows.set(`${parent}/stock/coincidence`, { quantityBar: 0, createdAt: time });
+  mockDb.rows.set(`${parent}/movements/coincidence`, { itemKey: 'coincidence', movementType: 'outbound', createdAt: time });
+  mockDb.rows.set(`${parent}/stock/cancelled`, { quantityBar: 0, createdFrom: 'outbound' });
+  mockDb.rows.set(`${parent}/movements/cancelled`, { itemKey: 'cancelled', movementType: 'outbound', invoiceId: 'out' });
+  mockDb.rows.set(`${parent}/invoices/out`, { movementType: 'outbound', isCancelled: true });
+  expect((await store.getProjectStock('a')).map(x => x.itemKey)).toEqual(['coincidence', 'cancelled']);
+  expect((await store.cleanupZeroStockItems('a', 'admin')).count).toBe(0);
+});
+
+test('valid invoice-linked creation excludes only its exact key, never the raw original key', async () => {
+  const time = '2026-08-25T10:00:00Z';
+  mockDb.rows.set(`${parent}/stock/raw`, { quantityBar: 0, updatedAt: time, lastInvoiceNumber: 'OUT', lastMovementType: 'outbound' });
+  mockDb.rows.set(`${parent}/stock/coated`, { quantityBar: 0, createdAt: time });
+  mockDb.rows.set(`${parent}/stock/similar`, { quantityBar: 0, createdAt: time });
+  mockDb.rows.set(`${parent}/movements/out`, { itemKey: 'coated', originalItemKey: 'raw', movementType: 'outbound', invoiceId: 'out' });
+  mockDb.rows.set(`${parent}/invoices/out`, { movementType: 'outbound', createdAt: time, lines: [{ itemKey: 'coated' }] });
+  expect((await store.getProjectStock('a')).map(x => x.itemKey)).toEqual(['raw', 'similar']);
+  expect((await store.cleanupZeroStockItems('a', 'admin')).deletedKeys).toEqual(['coated']);
+});
+
+test('cleanup preserves negative, kg-only and malformed physical quantities despite origin tags', async () => {
+  for (const [key, quantities] of Object.entries({ negative: { quantityBar: -1 }, kg: { quantityKg: 2 }, invalid: { quantityBar: NaN }, infinite: { quantityLm: Infinity } })) {
+    mockDb.rows.set(`${parent}/stock/${key}`, { ...quantities, createdFrom: 'outbound' });
+    mockDb.rows.set(`${parent}/movements/${key}`, { itemKey: key, movementType: 'outbound' });
+  }
+  expect(await store.getProjectStock('a')).toHaveLength(4);
+  expect((await store.cleanupZeroStockItems('a', 'admin')).count).toBe(0);
+});
+
+test('conflicting invoice numbers cannot turn uncertain provenance into deletion', async () => {
+  mockDb.rows.set(`${parent}/stock/sku`, { quantityBar: 0, createdFrom: 'outbound' });
+  mockDb.rows.set(`${parent}/movements/in`, { itemKey: 'sku', movementType: 'inbound', invoiceId: 'valid', invoiceNumber: 'COLLISION' });
+  mockDb.rows.set(`${parent}/movements/out`, { itemKey: 'sku', movementType: 'outbound' });
+  mockDb.rows.set(`${parent}/invoices/valid`, { movementType: 'inbound', invoiceNumber: 'COLLISION' });
+  mockDb.rows.set(`${parent}/invoices/cancelled`, { movementType: 'inbound', invoiceNumber: 'COLLISION', isCancelled: true });
+  expect((await store.getProjectStock('a')).map(x => x.itemKey)).toEqual(['sku']);
+  expect((await store.cleanupZeroStockItems('a', 'admin')).count).toBe(0);
+});

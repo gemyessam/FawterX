@@ -1587,41 +1587,8 @@ export default function Warehouse() {
     try {
       const [res, dRes] = await Promise.all([getProjectStock(projectId), getWarehouseDispatches(projectId)])
       if (selectedProjectRef.current !== projectId || request !== stockRequest.current) return
-      const validStock = (res.stock || []).filter((item) => {
-        const bar = Number(item.quantityBar || 0);
-        const lm = Number(item.quantityLm || 0);
-        const isZero = bar === 0 && lm === 0;
-        if (!isZero) return true; // Always retain legitimate positive physical inventory!
-
-        const key = String(item.itemKey || '').toUpperCase();
-        const code = String(item.itemCode || item.internalCode || '').toUpperCase();
-        const finish = String(item.finish || item.color || '').toUpperCase();
-        const so = String(item.lastSalesOrder || item.salesOrder || '').toUpperCase();
-        const cust = String(item.lastCustomerRef || item.customerReference || '').toUpperCase();
-        const inv = String(item.lastInvoiceNumber || item.invoiceNumber || '').toUpperCase();
-        const supplier = String(item.supplier || '').toUpperCase();
-        const len = Number(item.lengthMm || item.length || 0);
-
-        const isPhantom = so === 'SO-00199' ||
-                          so.includes('00199') ||
-                          cust.includes('SOTALUX') ||
-                          inv.includes('SD-000000594') ||
-                          key.includes('SO-00199') ||
-                          key.includes('RALY22778SD') || finish.includes('RALY22778SD') ||
-                          key.includes('ANODIZ') || finish.includes('ANODIZ') ||
-                          key.includes('RAL7009') || finish.includes('RAL7009') ||
-                          key.includes('-RAL') || finish.startsWith('RAL') ||
-                          key.startsWith('SCHUCO') || key.startsWith('SCHUECO') || supplier.includes('SCHUCO') ||
-                          code.includes('515820') || code.includes('515840') || code.includes('515850') ||
-                          key.includes('515820') || key.includes('515840') || key.includes('515850') ||
-                          len === 3100 ||
-                          (item.lastMovementType === 'outbound') ||
-                          (!item.lastMovementType && !item.lastInvoiceNumber && !item.lastSalesOrder);
-
-        return !isPhantom;
-      });
-      setStock(validStock)
-      setActiveDispatches(dRes.dispatches)
+      setStock(Array.isArray(res.stock) ? res.stock : [])
+      setActiveDispatches(dRes.dispatches || [])
       setStockError('')
     } catch (err) {
       if (selectedProjectRef.current !== projectId || request !== stockRequest.current) return

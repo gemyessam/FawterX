@@ -5,6 +5,7 @@ const { isAdminEmail } = require("./adminAccess");
 
 const { problem, validId, getScopedDb, projectOperation } = require("./warehousePersistence");
 const { snapshotService } = require("./warehouseSnapshots");
+const { classifyStockItem, buildEvidenceIndex } = require("./warehouseStockProvenance");
 
 function rawGetDb() {
   if (admin && admin.apps && admin.apps.length > 0) {
@@ -317,95 +318,40 @@ async function createProject({ name, code, description }, actorUid) {
   });
 }
 
-function isPhantomDuplicate(data = {}, docId = '') {
-  const d = data || {};
-  const id = String(docId || d.itemKey || '').toUpperCase();
-  const code = String(d.itemCode || d.internalCode || docId || '').toUpperCase();
-  const finish = String(d.finish || d.color || '').toUpperCase();
-  const so = String(d.lastSalesOrder || d.salesOrder || '').toUpperCase();
-  const cust = String(d.lastCustomerRef || d.customerReference || '').toUpperCase();
-  const inv = String(d.lastInvoiceNumber || d.invoiceNumber || '').toUpperCase();
-  const mvt = String(d.lastMovementType || '').toLowerCase();
-  const supplier = String(d.supplier || '').toUpperCase();
-  const len = Number(d.lengthMm || d.length || 0);
-
-  const qtyBar = Number(d.quantityBar || 0);
-  const qtyLm = Number(d.quantityLm || 0);
-
-  // INVARIANT 1: Only confirmed exact-zero balance artifacts can be classified as phantom duplicates.
-  // Positive balances are physical inventory; negative balances require ledger investigation.
-  if (qtyBar !== 0 || qtyLm !== 0) {
-    return false;
-  }
-
-  // INVARIANT 2: Outbound delivery note markers (SD-000000594 / SO-00199 / Sotalux)
-  if (so === 'SO-00199' || so.includes('00199') || cust.includes('SOTALUX') || inv.includes('SD-000000594') || id.includes('SO-00199')) {
-    return true;
-  }
-
-  // INVARIANT 3: Coated finishes and non-warehouse supplier prefixes spawned by outbound delivery notes
-  // In CANEX_WH, legitimate profiles are raw Mill Finish (MF/MILL/RAW/STD).
-  // Coated finishes (RALY22778SD, ANODIZED, RAL7009SD, RAL*, etc.) or SCHUCO prefixes with 0 balance are phantom records.
-  if (id.includes('RALY22778SD') || finish.includes('RALY22778SD') ||
-      id.includes('ANODIZ') || finish.includes('ANODIZ') ||
-      id.includes('RAL7009') || finish.includes('RAL7009') ||
-      id.includes('-RAL') || finish.startsWith('RAL') ||
-      id.startsWith('SCHUCO') || id.startsWith('SCHUECO') || supplier.includes('SCHUCO')) {
-    return true;
-  }
-
-  // INVARIANT 4: Accessory and delivery note artifacts (515820, 515840, 515850 / 3100mm)
-  if (code.includes('515820') || code.includes('515840') || code.includes('515850') ||
-      id.includes('515820') || id.includes('515840') || id.includes('515850') ||
-      len === 3100) {
-    return true;
-  }
-
-  // INVARIANT 5: Any zero-balance record marked outbound or with non-MF finish
-  if (mvt === 'outbound' && !/^(MF|MILL|RAW|STD)$/i.test(finish)) {
-    return true;
-  }
-
-  // INVARIANT 6: Any zero-balance record with no movements or invoice history
-  if (!mvt && !d.lastInvoiceNumber && !d.lastSalesOrder && (!Array.isArray(d.invoiceNumbers) || !d.invoiceNumbers.length)) {
-    return true;
-  }
-
-  return false;
-}
-
 async function getProjectStock(projectId) {
   const db = getDb();
   projectId = await resolveProjectId(db, projectId);
   const ref = db.collection("warehouseProjects").doc(projectId);
-  const stock = await ref.collection("stock").get();
-  const deleted = await ref.collection("deletedStock").get();
-  const tombstones = new Set(deleted.docs.map(doc => doc.id));
 
-  const validMap = new Map();
+  // Single-pass scoped reads: read stock, tombstones, movements, and invoices once per operation
+  const [stockSnap, deletedSnap, movementsSnap, invoicesSnap] = await Promise.all([
+    ref.collection("stock").get(),
+    ref.collection("deletedStock").get(),
+    ref.collection("movements").get(),
+    ref.collection("invoices").get(),
+  ]);
 
-  // Process active stock documents
-  for (const doc of stock.docs) {
+  // Respect ALL existing tombstones in ordinary GET (no catalog injection or resurrection)
+  const tombstones = new Set(deletedSnap.docs.map(doc => doc.id));
+
+  // Build evidence index once for the active generation
+  const movements = movementsSnap.docs.map(doc => ({ ...(doc.data() || {}), id: doc.id }));
+  const invoices = invoicesSnap.docs.map(doc => ({ ...(doc.data() || {}), id: doc.id }));
+  const evidenceIndex = buildEvidenceIndex({ movements, invoices });
+
+  const validStock = [];
+
+  for (const doc of stockSnap.docs) {
     if (tombstones.has(doc.id)) continue;
     const data = doc.data() || {};
-    const hasPos = Number(data.quantityBar || 0) > 0 || Number(data.quantityLm || 0) > 0;
-
-    if (hasPos) {
-      validMap.set(doc.id, { ...data, itemKey: doc.id });
-      continue;
-    }
-
-    // For zero balance items: strictly exclude phantoms and require verified inbound origin
-    if (!isPhantomDuplicate(data, doc.id)) {
-      const hasInbound = data.lastMovementType === 'inbound' ||
-        (Array.isArray(data.invoiceNumbers) && data.invoiceNumbers.length > 0 && data.lastMovementType !== 'outbound');
-      if (hasInbound) {
-        validMap.set(doc.id, { ...data, itemKey: doc.id });
-      }
+    const stockDoc = { ...data, itemKey: doc.id };
+    const classification = classifyStockItem(stockDoc, evidenceIndex);
+    if (classification.status === 'RETAIN') {
+      validStock.push(stockDoc);
     }
   }
 
-  return Array.from(validMap.values());
+  return validStock;
 }
 
 
@@ -1406,15 +1352,25 @@ async function cleanupZeroStockItems(projectId, userUid, userEmail, userName) {
   projectId = await resolveProjectId(db, projectId);
 
   const projectRef = db.collection("warehouseProjects").doc(projectId);
-  const stockSnap = await projectRef.collection("stock").get();
+
+  // Single-pass scoped reads: read stock, movements, and invoices
+  const [stockSnap, movementsSnap, invoicesSnap] = await Promise.all([
+    projectRef.collection("stock").get(),
+    projectRef.collection("movements").get(),
+    projectRef.collection("invoices").get(),
+  ]);
+
+  const movements = movementsSnap.docs.map(doc => ({ ...(doc.data() || {}), id: doc.id }));
+  const invoices = invoicesSnap.docs.map(doc => ({ ...(doc.data() || {}), id: doc.id }));
+  const evidenceIndex = buildEvidenceIndex({ movements, invoices });
 
   const zeroItems = [];
   for (const doc of stockSnap.docs) {
     const data = doc.data() || {};
-    const bar = Number(data.quantityBar || 0);
-    const lm = Number(data.quantityLm || 0);
-    // ONLY clean up if it's a phantom duplicate record; never purge legitimate catalog originals!
-    if (bar <= 0 && lm <= 0 && isPhantomDuplicate(data, doc.id)) {
+    const stockDoc = { ...data, itemKey: doc.id };
+    const classification = classifyStockItem(stockDoc, evidenceIndex);
+    // Delete ONLY proven exact-zero outbound artifacts; unknowns and legitimate depleted records are completely safe
+    if (classification.status === 'EXCLUDE' && classification.reason === 'PROVEN_OUTBOUND_ARTIFACT') {
       zeroItems.push({
         itemKey: doc.id,
         itemCode: data.itemCode || doc.id,
