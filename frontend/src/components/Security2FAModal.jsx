@@ -68,7 +68,7 @@ export default function Security2FAModal({
       padding: '1rem',
       overflowY: 'auto'
     }}>
-      <div style={{
+      <div className="fx-security-modal" role="dialog" aria-modal="true" aria-label={isAr ? 'التحقق بخطوتين' : 'Two factor verification'} style={{
         background: 'linear-gradient(145deg, rgba(20, 24, 40, 0.98), rgba(10, 12, 22, 0.99))',
         border: '1px solid rgba(255, 215, 0, 0.35)',
         borderRadius: '24px',
@@ -87,7 +87,7 @@ export default function Security2FAModal({
           height: '68px',
           margin: '0 auto 1rem',
           borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(255, 215, 0, 0.25), rgba(0, 224, 161, 0.08))',
+          background: 'radial-gradient(circle, rgba(255, 215, 0, 0.25), color-mix(in srgb, var(--accent) 8%, transparent))',
           border: '2px solid #FFD700',
           display: 'flex',
           alignItems: 'center',
@@ -98,13 +98,13 @@ export default function Security2FAModal({
           📱
         </div>
 
-        <h3 style={{ margin: '0 0 0.4rem', color: '#ffffff', fontSize: '1.35rem', fontWeight: 800 }}>
+        <h3 style={{ margin: '0 0 0.4rem', color: 'var(--text)', fontSize: '1.35rem', fontWeight: 800 }}>
           {needsTotpSetup
             ? (isAr ? 'ربط التحقق بخطوتين (Google Authenticator)' : 'Setup 2FA Authenticator App')
             : (isAr ? 'تأكيد أمان الجهاز الجديد (2FA)' : 'New Device 2FA Verification')}
         </h3>
 
-        <p style={{ fontSize: '0.86rem', color: 'rgba(255, 255, 255, 0.75)', lineHeight: 1.6, marginBottom: '1.2rem' }}>
+        <p style={{ fontSize: '0.86rem', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '1.2rem' }}>
           {needsTotpSetup ? (
             isAr ? (
               <>
@@ -118,12 +118,12 @@ export default function Security2FAModal({
           ) : (
             isAr ? (
               <>
-                تم اكتشاف دخول من جهاز جديد لحساب (<strong style={{ color: '#FFD700' }}>{userEmail}</strong>).<br />
+                تم اكتشاف دخول من جهاز جديد لحساب (<strong style={{ color: 'var(--accent)' }}>{userEmail}</strong>).<br />
                 أدخل الرمز المكون من 6 أرقام الظاهر في تطبيق <strong>Google Authenticator</strong> على هاتفك:
               </>
             ) : (
               <>
-                New device login detected for (<strong style={{ color: '#FFD700' }}>{userEmail}</strong>).<br />
+                New device login detected for (<strong style={{ color: 'var(--accent)' }}>{userEmail}</strong>).<br />
                 Enter the 6-digit code from your <strong>Google Authenticator</strong> app:
               </>
             )
@@ -162,7 +162,7 @@ export default function Security2FAModal({
             padding: '0.5rem 0.8rem',
             marginBottom: '1.2rem',
             fontSize: '0.8rem',
-            color: '#e8eaf6',
+            color: 'var(--text)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -171,7 +171,7 @@ export default function Security2FAModal({
             <span style={{ fontSize: '0.75rem', color: '#a4b0be' }}>
               {isAr ? 'أو أدخل المفتاح يدوياً:' : 'Or manual key:'}
             </span>
-            <code style={{ color: '#FFD700', fontWeight: 700, letterSpacing: '1px', fontSize: '0.85rem' }}>
+            <code style={{ color: 'var(--accent)', fontWeight: 700, letterSpacing: '1px', fontSize: '0.85rem' }}>
               {secretText}
             </code>
             <button
@@ -180,7 +180,7 @@ export default function Security2FAModal({
               style={{
                 background: 'rgba(255, 215, 0, 0.15)',
                 border: '1px solid rgba(255, 215, 0, 0.3)',
-                color: '#FFD700',
+                color: 'var(--accent)',
                 borderRadius: '6px',
                 padding: '0.2rem 0.5rem',
                 fontSize: '0.75rem',
@@ -214,8 +214,8 @@ export default function Security2FAModal({
                 padding: '0.65rem 1rem',
                 borderRadius: '14px',
                 border: '2px solid rgba(255, 215, 0, 0.45)',
-                background: 'rgba(7, 9, 17, 0.95)',
-                color: '#00e0a1',
+                background: 'var(--bg-surface)',
+                color: 'var(--accent)',
                 fontWeight: 800,
                 outline: 'none',
                 boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.6)',
@@ -268,7 +268,7 @@ export default function Security2FAModal({
 
         {onLogout && (
           <div style={{
-            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+            borderTop: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
             paddingTop: '0.8rem',
             fontSize: '0.85rem'
           }}>

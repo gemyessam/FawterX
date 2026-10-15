@@ -36,6 +36,8 @@ import {
 } from '../services/warehouseApi'
 import ManualStockModal from '../components/ManualStockModal'
 import DispatchesTrackerView from '../components/DispatchesTrackerView'
+import { PageHeading } from '../components/DesignSystem'
+import { Package, History, FileInput, Truck, UsersRound, ShieldCheck, Folder, ArchiveRestore } from 'lucide-react'
 import ErrorBoundary from '../components/ErrorBoundary'
 
 function getDelmarAvailableBars(line, activeDispatches = [], aliasesMap = {}) {
@@ -545,7 +547,7 @@ function isCoatedItem(line) {
   return false
 }
 
-export default function Warehouse() {
+export default function Warehouse({ designTab }) {
   const { lang, user, isAdmin } = useContext(AppContext)
   const isAr = lang === 'ar'
 
@@ -891,7 +893,7 @@ export default function Warehouse() {
 
   const [activeDispatches, setActiveDispatches] = useState([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('stock') // 'stock' | 'history' | 'upload' | 'dispatches' | 'users' | 'projects'
+  const [activeTab, setActiveTab] = useState(import.meta.env.DEV && designTab ? designTab : 'stock') // 'stock' | 'history' | 'upload' | 'dispatches' | 'users' | 'projects'
 
   // Manual Stock Movement & Multi-Stage Dispatches Modal State
   const [showManualModal, setShowManualModal] = useState(false)
@@ -2840,11 +2842,12 @@ export default function Warehouse() {
     <div className={`warehouse-container fade-in ${!isAr ? 'ltr-layout' : ''}`} style={{ padding: '1.5rem 0' }}>
       {stockError && <div className="card" role="alert">{isAr ? 'تعذر تحميل الأرصدة؛ القيم الحالية غير متاحة: ' : 'Stock unavailable: '}{stockError}<button className="btn btn-secondary" onClick={() => loadStock(selectedProjectId)}>{isAr ? 'إعادة المحاولة' : 'Retry'}</button></div>}
       {/* ─── Hero Header & Project Selector ─── */}
-      <div className="card glassmorphism" style={{ padding: '1.75rem', marginBottom: '1.5rem' }}>
+      <PageHeading eyebrow="INVENTORY / PROJECTS" title={isAr ? 'مخزونك، تحت عينك.' : 'Your inventory, in focus.'} description={isAr ? 'الأرصدة والحركات والمشاريع في مساحة واحدة واضحة.' : 'Stock, movements, and projects in one focused workspace.'} />
+      <div className="card glassmorphism fx-warehouse-overview" data-enter style={{ padding: '1.75rem', marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
           <div>
-            <h2 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              📦 {isAr ? 'إدارة المخازن والمشاريع' : 'Project Warehouse Management'}
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <Package size={20} /> {isAr ? 'ملخص المشروع' : 'Project overview'}
             </h2>
             <p style={{ color: 'var(--text-muted)', marginTop: '0.25rem', fontSize: '0.95rem' }}>
               {isAr
@@ -2854,15 +2857,15 @@ export default function Warehouse() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#e8eaf6' }}>
+            <label style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text)' }}>
               {isAr ? 'المشروع الحالي:' : 'Active Project:'}
             </label>
             <select
               value={selectedProjectId}
               onChange={(e) => handleSelectProject(e.target.value)}
               style={{
-                background: '#161b33',
-                color: '#00e0a1',
+                background: 'var(--bg-surface)',
+                color: 'var(--accent)',
                 border: '1px solid #00e0a1',
                 padding: '0.5rem 1rem',
                 borderRadius: '10px',
@@ -2889,17 +2892,17 @@ export default function Warehouse() {
             marginTop: '1.5rem',
           }}
         >
-          <div className="card" style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', padding: '1rem' }}>
+          <div className="card" style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', border: '1px solid color-mix(in srgb, var(--text) 8%, transparent)', padding: '1rem' }}>
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'عدد الأصناف (SKU)' : 'Total SKUs'}</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#ffffff', marginTop: '0.2rem' }}>{stockError ? '—' : stats.totalSKUs}</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text)', marginTop: '0.2rem' }}>{stockError ? '—' : stats.totalSKUs}</div>
           </div>
-          <div className="card" style={{ background: 'rgba(0, 224, 161, 0.05)', border: '1px solid rgba(0, 224, 161, 0.2)', padding: '1rem' }}>
-            <div style={{ fontSize: '0.8rem', color: '#00e0a1' }}>{isAr ? 'إجمالي الأعواد (BAR)' : 'Total Bars (BAR)'}</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#00e0a1', marginTop: '0.2rem' }}>{stockError ? '—' : stats.totalBar.toLocaleString()}</div>
+          <div className="card" style={{ background: 'color-mix(in srgb, var(--accent) 5%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', padding: '1rem' }}>
+            <div style={{ fontSize: '0.8rem', color: 'var(--accent)' }}>{isAr ? 'إجمالي الأعواد (BAR)' : 'Total Bars (BAR)'}</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--accent)', marginTop: '0.2rem' }}>{stockError ? '—' : stats.totalBar.toLocaleString()}</div>
           </div>
           <div className="card" style={{ background: 'rgba(255, 215, 0, 0.05)', border: '1px solid rgba(255, 215, 0, 0.2)', padding: '1rem' }}>
-            <div style={{ fontSize: '0.8rem', color: '#FFD700' }}>{isAr ? 'الأمتار الطولية (LM)' : 'Linear Meters (LM)'}</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#FFD700', marginTop: '0.2rem' }}>{stockError ? '—' : stats.totalLm.toLocaleString(undefined, { maximumFractionDigits: 1 })} m</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--accent)' }}>{isAr ? 'الأمتار الطولية (LM)' : 'Linear Meters (LM)'}</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--accent)', marginTop: '0.2rem' }}>{stockError ? '—' : stats.totalLm.toLocaleString(undefined, { maximumFractionDigits: 1 })} m</div>
           </div>
           <div className="card" style={{ background: 'rgba(100, 181, 246, 0.05)', border: '1px solid rgba(100, 181, 246, 0.2)', padding: '1rem' }}>
             <div style={{ fontSize: '0.8rem', color: '#64b5f6' }}>{isAr ? 'الوزن الإجمالي (KG)' : 'Total Weight (KG)'}</div>
@@ -2909,37 +2912,37 @@ export default function Warehouse() {
       </div>
 
       {/* ─── Navigation Tabs ─── */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+      <div className="fx-warehouse-tabs" aria-label={isAr ? 'أقسام المخزون' : 'Inventory sections'}>
         <button
           className={`btn ${activeTab === 'stock' ? 'btn-primary' : 'btn-ghost'}`}
           onClick={() => setActiveTab('stock')}
         >
-          📦 {isAr ? 'رصيد أصناف المخزن' : 'Stock Balance'}
+          <Package size={17} />{isAr ? 'رصيد المخزن' : 'Stock balance'}
         </button>
         <button
           className={`btn ${activeTab === 'history' ? 'btn-primary' : 'btn-ghost'}`}
           onClick={() => setActiveTab('history')}
         >
-          📜 {isAr ? 'سجل الحركات والتوريدات' : 'Transaction History'}
+          <History size={17} />{isAr ? 'الحركات والتوريدات' : 'Transaction history'}
         </button>
         <button
           className={`btn ${activeTab === 'upload' ? 'btn-primary' : 'btn-ghost'}`}
           onClick={() => setActiveTab('upload')}
         >
-          🧾 {isAr ? 'حركات الفواتير (إضافة / خصم)' : 'Invoice Movements (In / Out)'}
+          <FileInput size={17} />{isAr ? 'حركات الفواتير' : 'Invoice movements'}
         </button>
         <button
           className={`btn ${activeTab === 'dispatches' ? 'btn-primary' : 'btn-ghost'}`}
           onClick={() => setActiveTab('dispatches')}
         >
-          🚚 {isAr ? 'تتبع مراحل الصرف والدهان' : 'Dispatches Tracker'}
+          <Truck size={17} />{isAr ? 'الصرف والدهان' : 'Dispatches'}
         </button>
         {isAdmin && (
           <button
             className={`btn ${activeTab === 'users' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setActiveTab('users')}
           >
-            ⚙️ {isAr ? 'إدارة صلاحيات المستخدمين' : 'Access Control'}
+            <UsersRound size={17} />{isAr ? 'الصلاحيات' : 'Access control'}
           </button>
         )}
         {isAdmin && (
@@ -2947,20 +2950,20 @@ export default function Warehouse() {
             className={`btn ${activeTab === 'audit' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setActiveTab('audit')}
           >
-            🛡️ {isAr ? 'سجل التدقيق والتغييرات' : 'Audit Trail Logs'}
+            <ShieldCheck size={17} />{isAr ? 'سجل التدقيق' : 'Audit trail'}
           </button>
         )}
         <button
           className={`btn ${activeTab === 'projects' ? 'btn-primary' : 'btn-ghost'}`}
           onClick={() => setActiveTab('projects')}
         >
-          📁 {isAr ? 'إدارة المشاريع' : 'Projects Manager'}
+          <Folder size={17} />{isAr ? 'المشاريع' : 'Projects'}
         </button>
         <button
           className={`btn ${activeTab === 'restore_points' ? 'btn-primary' : 'btn-ghost'}`}
           onClick={() => setActiveTab('restore_points')}
         >
-          💾 {isAr ? 'نقاط الحفظ والنسخ الاحتياطية' : 'Restore Points & Snapshots'}
+          <ArchiveRestore size={17} />{isAr ? 'نقاط الحفظ' : 'Restore points'}
         </button>
       </div>
 
@@ -2969,23 +2972,23 @@ export default function Warehouse() {
         <div className="card fade-in" style={{ padding: '1.5rem' }}>
           {/* Summary Stat Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem' }}>
+            <div style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem' }}>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '0.2rem' }}>
                 {isAr ? 'عدد الأصناف' : 'Total Items'}
               </div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#fff' }}>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text)' }}>
                 {stockTotals.itemCount}
               </div>
             </div>
-            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem' }}>
+            <div style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem' }}>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '0.2rem' }}>
                 {isAr ? 'إجمالي عدد الأعواد' : 'Total Bars'}
               </div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#8ab4ff' }}>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--primary)' }}>
                 <span dir="ltr">{stockTotals.bars.toLocaleString()} BAR</span>
               </div>
             </div>
-            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem' }}>
+            <div style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem' }}>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '0.2rem' }}>
                 {isAr ? 'إجمالي الأمتار' : 'Total Meters'}
               </div>
@@ -2993,11 +2996,11 @@ export default function Warehouse() {
                 <span dir="ltr">{stockTotals.lm.toLocaleString('en-US', { maximumFractionDigits: 1 })} m</span>
               </div>
             </div>
-            <div style={{ background: 'rgba(0, 224, 161, 0.08)', border: '1px solid rgba(0, 224, 161, 0.3)', borderRadius: '10px', padding: '1rem' }}>
-              <div style={{ color: '#00e0a1', fontSize: '0.8rem', marginBottom: '0.2rem', fontWeight: 600 }}>
+            <div style={{ background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', borderRadius: '10px', padding: '1rem' }}>
+              <div style={{ color: 'var(--accent)', fontSize: '0.8rem', marginBottom: '0.2rem', fontWeight: 600 }}>
                 {isAr ? 'إجمالي قيمة المخزون الحالية' : 'Grand Total Stock Value'}
               </div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#00e0a1' }}>
+              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--accent)' }}>
                 <span dir="ltr">{stockTotals.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP</span>
               </div>
             </div>
@@ -3020,18 +3023,18 @@ export default function Warehouse() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
                   minWidth: '260px',
-                  background: '#101223',
+                  background: 'var(--bg-surface)',
                   border: '1px solid var(--border)',
                   padding: '0.55rem 1rem',
                   borderRadius: '8px',
-                  color: '#fff',
+                  color: 'var(--text)',
                 }}
               />
               <button
                 className="btn"
                 onClick={() => handleOpenManualModal('inbound')}
                 style={{
-                  background: 'linear-gradient(135deg, #00e0a1 0%, #00b894 100%)',
+                  background: 'var(--accent)',
                   color: '#000',
                   border: 'none',
                   padding: '0.55rem 1.1rem',
@@ -3041,7 +3044,7 @@ export default function Warehouse() {
                   alignItems: 'center',
                   gap: '0.4rem',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(0, 224, 161, 0.25)',
+                  boxShadow: '0 4px 12px color-mix(in srgb, var(--accent) 25%, transparent)',
                 }}
                 title={isAr ? 'إضافة وتوريد قطاعات جديدة أو رصيد يدوي' : 'Manual stock supply'}
               >
@@ -3053,7 +3056,7 @@ export default function Warehouse() {
                 onClick={() => handleOpenManualModal('outbound')}
                 style={{
                   background: 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)',
-                  color: '#fff',
+                  color: 'var(--text)',
                   border: 'none',
                   padding: '0.55rem 1.1rem',
                   borderRadius: '8px',
@@ -3097,7 +3100,7 @@ export default function Warehouse() {
                 onClick={handleExportStockToExcel}
                 style={{
                   background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                  color: '#fff',
+                  color: 'var(--text)',
                   border: 'none',
                   padding: '0.55rem 1.2rem',
                   borderRadius: '8px',
@@ -3120,7 +3123,7 @@ export default function Warehouse() {
                   onClick={handleBulkDeleteStockItems}
                   style={{
                     background: 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)',
-                    color: '#fff',
+                    color: 'var(--text)',
                     border: 'none',
                     padding: '0.55rem 1.2rem',
                     borderRadius: '8px',
@@ -3142,8 +3145,8 @@ export default function Warehouse() {
                   className="btn"
                   onClick={() => setShowColumnPicker(!showColumnPicker)}
                   style={{
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    color: '#fff',
+                    background: 'color-mix(in srgb, var(--text) 8%, transparent)',
+                    color: 'var(--text)',
                     border: '1px solid var(--border)',
                     padding: '0.55rem 1.1rem',
                     borderRadius: '8px',
@@ -3168,7 +3171,7 @@ export default function Warehouse() {
                       right: isAr ? 'auto' : 0,
                       zIndex: 900,
                       width: '260px',
-                      background: '#161b33',
+                      background: 'var(--bg-surface)',
                       border: '1px solid #00e0a1',
                       boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
                       padding: '1rem',
@@ -3176,12 +3179,12 @@ export default function Warehouse() {
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
-                      <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#00e0a1' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--accent)' }}>
                         ⚙️ {isAr ? 'تحديد أعمدة الجدول' : 'Select Columns'}
                       </span>
                       <button
                         onClick={resetStockColumns}
-                        style={{ background: 'transparent', border: 'none', color: '#8ab4ff', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
                       >
                         {isAr ? 'الافتراضي' : 'Reset'}
                       </button>
@@ -3204,12 +3207,12 @@ export default function Warehouse() {
                         { key: 'totalValue', label: isAr ? 'إجمالي القيمة' : 'Total Value' },
                         { key: 'actions', label: isAr ? 'السجل والتحكم' : 'Actions' },
                       ].map((col) => (
-                        <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#e8eaf6', cursor: 'pointer' }}>
+                        <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text)', cursor: 'pointer' }}>
                           <input
                             type="checkbox"
                             checked={!!stockColumns[col.key]}
                             onChange={() => toggleStockColumn(col.key)}
-                            style={{ accentColor: '#00e0a1', cursor: 'pointer' }}
+                            style={{ accentColor: 'var(--accent)', cursor: 'pointer' }}
                           />
                           {col.label}
                         </label>
@@ -3224,7 +3227,7 @@ export default function Warehouse() {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
               <thead>
-                <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
+                <tr style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
                   {isAdmin && (
                     <th style={{ padding: '0.75rem 0.5rem', width: '40px', textAlign: 'center' }}>
                       <input
@@ -3241,14 +3244,14 @@ export default function Warehouse() {
                   {stockColumns.customerCode && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>}
                   {stockColumns.description && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>}
                   {stockColumns.finish && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'نوع الدهان/اللون' : 'Finish/Color'}</th>}
-                  {stockColumns.salesOrder && <th style={{ padding: '0.75rem 1rem', color: '#00e0a1' }}>{isAr ? 'أمر البيع (SO)' : 'Sales Order #'}</th>}
+                  {stockColumns.salesOrder && <th style={{ padding: '0.75rem 1rem', color: 'var(--accent)' }}>{isAr ? 'أمر البيع (SO)' : 'Sales Order #'}</th>}
                   {stockColumns.customerRef && <th style={{ padding: '0.75rem 1rem', color: '#ffb74d' }}>{isAr ? 'مرجع العميل' : 'Customer Ref'}</th>}
                   {stockColumns.lengthMm && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الطول (mm)' : 'Length (mm)'}</th>}
                   {stockColumns.quantityBar && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأعواد (BAR)' : 'Bars (BAR)'}</th>}
                   {stockColumns.quantityLm && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأمتار (LM)' : 'Meters (LM)'}</th>}
                   {stockColumns.quantityKg && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الوزن (KG)' : 'Weight (KG)'}</th>}
                   {stockColumns.lastUnitCost && <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'آخر سعر توريد' : 'Last Cost'}</th>}
-                  {stockColumns.totalValue && <th style={{ padding: '0.75rem 1rem', color: '#00e0a1' }}>{isAr ? 'إجمالي القيمة' : 'Total Value'}</th>}
+                  {stockColumns.totalValue && <th style={{ padding: '0.75rem 1rem', color: 'var(--accent)' }}>{isAr ? 'إجمالي القيمة' : 'Total Value'}</th>}
                   {stockColumns.actions && <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>{isAr ? 'السجل والتحكم' : 'History & Actions'}</th>}
                 </tr>
               </thead>
@@ -3258,7 +3261,7 @@ export default function Warehouse() {
                     const isEditing = editingStockKey === item.itemKey
                     const itemVal = getItemValue(item)
                     return (
-                      <tr key={item.itemKey} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: selectedStockKeys.includes(item.itemKey) ? 'rgba(255, 71, 87, 0.1)' : isEditing ? 'rgba(0, 224, 161, 0.05)' : 'transparent' }}>
+                      <tr key={item.itemKey} style={{ borderBottom: '1px solid color-mix(in srgb, var(--text) 4%, transparent)', background: selectedStockKeys.includes(item.itemKey) ? 'rgba(255, 71, 87, 0.1)' : isEditing ? 'color-mix(in srgb, var(--accent) 5%, transparent)' : 'transparent' }}>
                         {isAdmin && (
                           <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
                             <input
@@ -3274,7 +3277,7 @@ export default function Warehouse() {
                           <td style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>
                             <button
                               onClick={() => handleViewItemHistory(item)}
-                              style={{ background: 'transparent', border: 'none', color: '#00e0a1', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: '0.9rem' }}
+                              style={{ background: 'transparent', border: 'none', color: 'var(--accent)', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: '0.9rem' }}
                               title={isAr ? 'عرض سجل حركات هذا البند' : 'View item history'}
                             >
                               📜 {item.itemCode}
@@ -3282,13 +3285,13 @@ export default function Warehouse() {
                           </td>
                         )}
                         {stockColumns.customerCode && (
-                          <td style={{ padding: '0.75rem 1rem', color: '#8ab4ff', fontWeight: 600 }}>
+                          <td style={{ padding: '0.75rem 1rem', color: 'var(--primary)', fontWeight: 600 }}>
                             {isEditing ? (
                               <input
                                 type="text"
                                 value={editingStockData.customerCode}
                                 onChange={(e) => setEditingStockData({ ...editingStockData, customerCode: e.target.value })}
-                                style={{ width: '90px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                                style={{ width: '90px', background: 'var(--bg-surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
                               />
                             ) : (
                               item.customerCode || '—'
@@ -3302,7 +3305,7 @@ export default function Warehouse() {
                                 type="text"
                                 value={editingStockData.description}
                                 onChange={(e) => setEditingStockData({ ...editingStockData, description: e.target.value })}
-                                style={{ width: '100%', minWidth: '220px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                                style={{ width: '100%', minWidth: '220px', background: 'var(--bg-surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
                               />
                             ) : (
                               item.description
@@ -3316,23 +3319,23 @@ export default function Warehouse() {
                                 type="text"
                                 value={editingStockData.finish}
                                 onChange={(e) => setEditingStockData({ ...editingStockData, finish: e.target.value })}
-                                style={{ width: '70px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                                style={{ width: '70px', background: 'var(--bg-surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
                               />
                             ) : (
-                              <span className="badge" style={{ background: 'rgba(255,215,0,0.1)', color: '#FFD700', border: '1px solid rgba(255,215,0,0.3)' }}>
+                              <span className="badge" style={{ background: 'rgba(255,215,0,0.1)', color: 'var(--accent)', border: '1px solid rgba(255,215,0,0.3)' }}>
                                 {item.finish || 'STD'}
                               </span>
                             )}
                           </td>
                         )}
                         {stockColumns.salesOrder && (
-                          <td style={{ padding: '0.75rem 1rem', color: '#00e0a1', fontWeight: 600 }}>
+                          <td style={{ padding: '0.75rem 1rem', color: 'var(--accent)', fontWeight: 600 }}>
                             {isEditing ? (
                               <input
                                 type="text"
                                 value={editingStockData.lastSalesOrder || ''}
                                 onChange={(e) => setEditingStockData({ ...editingStockData, lastSalesOrder: e.target.value })}
-                                style={{ width: '100px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                                style={{ width: '100px', background: 'var(--bg-surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
                               />
                             ) : (
                               item.lastSalesOrder || item.salesOrder || '—'
@@ -3346,7 +3349,7 @@ export default function Warehouse() {
                                 type="text"
                                 value={editingStockData.lastCustomerRef || ''}
                                 onChange={(e) => setEditingStockData({ ...editingStockData, lastCustomerRef: e.target.value })}
-                                style={{ width: '100px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                                style={{ width: '100px', background: 'var(--bg-surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
                               />
                             ) : (
                               item.lastCustomerRef || item.customerReference || '—'
@@ -3360,7 +3363,7 @@ export default function Warehouse() {
                                 type="number"
                                 value={editingStockData.lengthMm}
                                 onChange={(e) => setEditingStockData({ ...editingStockData, lengthMm: Number(e.target.value) })}
-                                style={{ width: '80px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                                style={{ width: '80px', background: 'var(--bg-surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
                               />
                             ) : (
                               <span dir="ltr">{item.lengthMm} mm</span>
@@ -3368,13 +3371,13 @@ export default function Warehouse() {
                           </td>
                         )}
                         {stockColumns.quantityBar && (
-                          <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#ffffff' }}>
+                          <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: 'var(--text)' }}>
                             {isEditing ? (
                               <input
                                 type="number"
                                 value={editingStockData.quantityBar}
                                 onChange={(e) => setEditingStockData({ ...editingStockData, quantityBar: Number(e.target.value) })}
-                                style={{ width: '90px', background: '#101223', color: '#00e0a1', fontWeight: 'bold', border: '1px solid #00e0a1', borderRadius: '4px', padding: '4px 6px' }}
+                                style={{ width: '90px', background: 'var(--bg-surface)', color: 'var(--accent)', fontWeight: 'bold', border: '1px solid #00e0a1', borderRadius: '4px', padding: '4px 6px' }}
                               />
                             ) : (
                               item.quantityBar
@@ -3398,7 +3401,7 @@ export default function Warehouse() {
                                 step="0.1"
                                 value={editingStockData.quantityKg}
                                 onChange={(e) => setEditingStockData({ ...editingStockData, quantityKg: Number(e.target.value) })}
-                                style={{ width: '80px', background: '#101223', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
+                                style={{ width: '80px', background: 'var(--bg-surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px 6px' }}
                               />
                             ) : (
                               <span dir="ltr">{item.quantityKg ? `${item.quantityKg.toFixed(1)} kg` : '—'}</span>
@@ -3411,7 +3414,7 @@ export default function Warehouse() {
                           </td>
                         )}
                         {stockColumns.totalValue && (
-                          <td style={{ padding: '0.75rem 1rem', color: '#00e0a1', fontWeight: 700 }}>
+                          <td style={{ padding: '0.75rem 1rem', color: 'var(--accent)', fontWeight: 700 }}>
                             <span dir="ltr">
                               {itemVal > 0
                                 ? `${itemVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP`
@@ -3427,7 +3430,7 @@ export default function Warehouse() {
                                 className="btn btn-sm"
                                 disabled={savingStockEdit}
                                 onClick={() => handleSaveStockEdit(item.itemKey)}
-                                style={{ background: '#00e0a1', color: '#000', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 600 }}
+                                style={{ background: 'var(--accent)', color: '#000', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 600 }}
                                 title={isAr ? 'حفظ التعديلات' : 'Save'}
                               >
                                 {savingStockEdit ? '...' : (isAr ? '💾 حفظ' : 'Save')}
@@ -3435,7 +3438,7 @@ export default function Warehouse() {
                               <button
                                 className="btn btn-sm"
                                 onClick={() => setEditingStockKey(null)}
-                                style={{ background: 'rgba(255,255,255,0.1)', color: '#ccc', padding: '2px 8px', fontSize: '0.8rem' }}
+                                style={{ background: 'color-mix(in srgb, var(--text) 10%, transparent)', color: '#ccc', padding: '2px 8px', fontSize: '0.8rem' }}
                                 title={isAr ? 'إلغاء' : 'Cancel'}
                               >
                                 {isAr ? 'إلغاء' : 'Cancel'}
@@ -3446,7 +3449,7 @@ export default function Warehouse() {
                               <button
                                 className="btn btn-sm"
                                 onClick={() => handleViewItemHistory(item)}
-                                style={{ background: 'rgba(255, 215, 0, 0.15)', color: '#FFD700', border: '1px solid rgba(255, 215, 0, 0.3)', padding: '2px 8px', fontSize: '0.8rem' }}
+                                style={{ background: 'rgba(255, 215, 0, 0.15)', color: 'var(--accent)', border: '1px solid rgba(255, 215, 0, 0.3)', padding: '2px 8px', fontSize: '0.8rem' }}
                                 title={isAr ? 'عرض سجل حركات هذا البند' : 'View item history'}
                               >
                                 📜 {isAr ? 'السجل' : 'History'}
@@ -3514,11 +3517,11 @@ export default function Warehouse() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
                   minWidth: '260px',
-                  background: '#101223',
+                  background: 'var(--bg-surface)',
                   border: '1px solid var(--border)',
                   padding: '0.55rem 1rem',
                   borderRadius: '8px',
-                  color: '#fff',
+                  color: 'var(--text)',
                 }}
               />
               <button
@@ -3526,7 +3529,7 @@ export default function Warehouse() {
                 onClick={handleExportHistoryToExcel}
                 style={{
                   background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                  color: '#fff',
+                  color: 'var(--text)',
                   border: 'none',
                   padding: '0.55rem 1.2rem',
                   borderRadius: '8px',
@@ -3556,7 +3559,7 @@ export default function Warehouse() {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                 <thead>
-                  <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
+                  <tr style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
                     <th style={{ padding: '0.75rem 0.75rem', width: '45px', textAlign: 'center' }}>#</th>
                     <th style={{ padding: '0.75rem 1rem', minWidth: '170px', whiteSpace: 'nowrap' }}>{isAr ? 'رقم الفاتورة' : 'Invoice No'}</th>
                     <th style={{ padding: '0.75rem 1rem', minWidth: '120px', whiteSpace: 'nowrap' }}>{isAr ? 'أمر البيع (SO)' : 'Sales Order #'}</th>
@@ -3580,7 +3583,7 @@ export default function Warehouse() {
                       <tr
                         key={inv.id || idx}
                         style={{
-                          borderBottom: '1px solid rgba(255,255,255,0.04)',
+                          borderBottom: '1px solid color-mix(in srgb, var(--text) 4%, transparent)',
                           background: isCancelled ? 'rgba(255,71,87,0.04)' : 'transparent',
                           opacity: isCancelled ? 0.75 : 1,
                         }}
@@ -3644,7 +3647,7 @@ export default function Warehouse() {
                             )
                           })()}
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', minWidth: '120px', whiteSpace: 'nowrap', fontWeight: 700, color: '#00e0a1' }}>{inv.salesOrder || '—'}</td>
+                        <td style={{ padding: '0.75rem 1rem', minWidth: '120px', whiteSpace: 'nowrap', fontWeight: 700, color: 'var(--accent)' }}>{inv.salesOrder || '—'}</td>
                         <td style={{ padding: '0.75rem 1rem', minWidth: '130px', whiteSpace: 'nowrap', color: '#ffb74d' }}>{inv.customerReference || '—'}</td>
                         <td style={{ padding: '0.75rem 0.75rem', width: '130px', minWidth: '130px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                           <span
@@ -3655,9 +3658,9 @@ export default function Warehouse() {
                               justifyContent: 'center',
                               minWidth: '105px',
                               padding: '0.35rem 0.65rem',
-                              background: isOut ? 'rgba(255,71,87,0.15)' : 'rgba(0,224,161,0.15)',
-                              color: isOut ? '#ff4757' : '#00e0a1',
-                              border: `1px solid ${isOut ? 'rgba(255,71,87,0.3)' : 'rgba(0,224,161,0.3)'}`,
+                              background: isOut ? 'rgba(255,71,87,0.15)' : 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                              color: isOut ? '#ff4757' : 'var(--accent)',
+                              border: `1px solid ${isOut ? 'rgba(255,71,87,0.3)' : 'color-mix(in srgb, var(--accent) 30%, transparent)'}`,
                               fontWeight: 800,
                               fontSize: '0.82rem',
                               whiteSpace: 'nowrap',
@@ -3668,7 +3671,7 @@ export default function Warehouse() {
                         </td>
                         <td style={{ padding: '0.75rem 1rem', minWidth: '110px', whiteSpace: 'nowrap' }}>{inv.supplier || 'Canex'}</td>
                         <td style={{ padding: '0.75rem 1rem', minWidth: '130px', color: 'var(--text-muted)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{inv.fileName || 'يدوي'}</td>
-                        <td style={{ padding: '0.75rem 0.75rem', width: '95px', minWidth: '95px', textAlign: 'center', whiteSpace: 'nowrap', fontWeight: 700, color: '#FFD700' }}>
+                        <td style={{ padding: '0.75rem 0.75rem', width: '95px', minWidth: '95px', textAlign: 'center', whiteSpace: 'nowrap', fontWeight: 700, color: 'var(--accent)' }}>
                           {inv.lineItemsCount || 0} {isAr ? 'بند' : 'items'}
                         </td>
                         <td style={{ padding: '0.75rem 0.75rem', width: '145px', minWidth: '145px', textAlign: 'center', whiteSpace: 'nowrap' }}>
@@ -3697,7 +3700,7 @@ export default function Warehouse() {
                         <td style={{ padding: '0.75rem 0.75rem', width: '125px', minWidth: '125px', textAlign: 'center', whiteSpace: 'nowrap', fontWeight: 700, color: '#a29bfe' }}>
                           <span dir="ltr">{(inv.totalQuantityLm || 0).toFixed(1)} m</span>
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', width: '150px', minWidth: '150px', textAlign: 'center', whiteSpace: 'nowrap', fontWeight: 800, color: '#00e0a1' }}>
+                        <td style={{ padding: '0.75rem 1rem', width: '150px', minWidth: '150px', textAlign: 'center', whiteSpace: 'nowrap', fontWeight: 800, color: 'var(--accent)' }}>
                           <span dir="ltr">{(inv.totalAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} EGP</span>
                         </td>
                         <td style={{ padding: '0.75rem 0.75rem', width: '150px', minWidth: '150px', fontSize: '0.82rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
@@ -3750,17 +3753,17 @@ export default function Warehouse() {
       {/* ─── MODAL: Invoice Movement Items Details ─── */}
       {selectedInvoice && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-          <div className="card fade-in" style={{ width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', background: '#121629', border: '1px solid #00e0a1', padding: '1.5rem' }}>
+          <div className="card fade-in" style={{ width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', background: 'var(--bg-card)', border: '1px solid #00e0a1', padding: '1.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#00e0a1', margin: 0 }}>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--accent)', margin: 0 }}>
                   🧾 {isAr ? `تفاصيل الفاتورة: ${selectedInvoice.invoiceNumber}` : `Invoice Details: ${selectedInvoice.invoiceNumber}`}
                 </h3>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '0.4rem', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                     {isAr ? 'المورد:' : 'Supplier:'} {selectedInvoice.supplier || 'Canex'} | {isAr ? 'التاريخ:' : 'Date:'} {selectedInvoice.invoiceDate || '—'}
                   </span>
-                  <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.3)', fontSize: '0.8rem' }}>
+                  <span className="badge" style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', fontSize: '0.8rem' }}>
                     SO #: {selectedInvoice.salesOrder || '—'}
                   </span>
                   <span className="badge" style={{ background: 'rgba(255, 183, 77, 0.15)', color: '#ffb74d', border: '1px solid rgba(255, 183, 77, 0.3)', fontSize: '0.8rem' }}>
@@ -3779,7 +3782,7 @@ export default function Warehouse() {
                     <button
                       className="btn btn-sm"
                       onClick={() => setEditingMetadata(!editingMetadata)}
-                      style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', fontSize: '0.8rem', padding: '2px 8px' }}
+                      style={{ background: 'color-mix(in srgb, var(--text) 8%, transparent)', color: 'var(--text)', fontSize: '0.8rem', padding: '2px 8px' }}
                     >
                       ✏️ {editingMetadata ? (isAr ? 'إلغاء التعديل' : 'Cancel') : (isAr ? 'تعديل البيانات (SO / Customer Ref)' : 'Edit Metadata')}
                     </button>
@@ -3789,13 +3792,13 @@ export default function Warehouse() {
                 {editingMetadata && (
                   <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem', background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                     <div>
-                      <label style={{ fontSize: '0.75rem', color: '#00e0a1', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>{isAr ? 'أمر البيع (Sales Order)' : 'Sales Order #'}</label>
+                      <label style={{ fontSize: '0.75rem', color: 'var(--accent)', display: 'block', marginBottom: '0.2rem', fontWeight: 600 }}>{isAr ? 'أمر البيع (Sales Order)' : 'Sales Order #'}</label>
                       <input
                         type="text"
                         value={editSalesOrder}
                         onChange={(e) => setEditSalesOrder(e.target.value)}
                         placeholder="e.g. SO-100234"
-                        style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.6rem', borderRadius: '6px', fontSize: '0.85rem' }}
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.4rem 0.6rem', borderRadius: '6px', fontSize: '0.85rem' }}
                       />
                     </div>
                     <div>
@@ -3805,7 +3808,7 @@ export default function Warehouse() {
                         value={editCustomerRef}
                         onChange={(e) => setEditCustomerRef(e.target.value)}
                         placeholder="e.g. CUST-REF-889"
-                        style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.4rem 0.6rem', borderRadius: '6px', fontSize: '0.85rem' }}
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.4rem 0.6rem', borderRadius: '6px', fontSize: '0.85rem' }}
                       />
                     </div>
                     <button
@@ -3822,7 +3825,7 @@ export default function Warehouse() {
               <button
                 className="btn btn-sm"
                 onClick={() => { setSelectedInvoice(null); setInvoiceMovements([]); setEditingMetadata(false); }}
-                style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '1.1rem', padding: '4px 10px' }}
+                style={{ background: 'color-mix(in srgb, var(--text) 10%, transparent)', color: 'var(--text)', fontSize: '1.1rem', padding: '4px 10px' }}
               >
                 ✕
               </button>
@@ -3844,17 +3847,17 @@ export default function Warehouse() {
                     gap: '1.25rem',
                     flexWrap: 'wrap',
                     marginBottom: '1rem',
-                    background: 'rgba(255,255,255,0.03)',
+                    background: 'color-mix(in srgb, var(--text) 3%, transparent)',
                     padding: '0.85rem 1.2rem',
                     borderRadius: '10px',
-                    border: '1px solid rgba(255,255,255,0.07)',
+                    border: '1px solid color-mix(in srgb, var(--text) 7%, transparent)',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                   }}
                 >
                   <div>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'عدد البنود:' : 'Line Items:'} </span>
-                    <strong style={{ color: '#FFD700', fontSize: '1rem' }}>{invoiceMovements.length} {isAr ? 'بند' : 'items'}</strong>
+                    <strong style={{ color: 'var(--accent)', fontSize: '1rem' }}>{invoiceMovements.length} {isAr ? 'بند' : 'items'}</strong>
                   </div>
                   <div>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'إجمالي الأعواد / القطاعات:' : 'Total Bars:'} </span>
@@ -3870,7 +3873,7 @@ export default function Warehouse() {
                   </div>
                   <div>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'إجمالي القيمة:' : 'Total Value:'} </span>
-                    <strong style={{ color: '#00e0a1', fontSize: '1rem' }}>
+                    <strong style={{ color: 'var(--accent)', fontSize: '1rem' }}>
                       {invoiceMovements.reduce((acc, m) => acc + Number(m.netTotal || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} EGP
                     </strong>
                   </div>
@@ -3879,7 +3882,7 @@ export default function Warehouse() {
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                   <thead>
-                    <tr style={{ background: 'rgba(255,255,255,0.05)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
+                    <tr style={{ background: 'color-mix(in srgb, var(--text) 5%, transparent)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
                       <th style={{ padding: '0.6rem 0.8rem', width: '40px' }}>#</th>
                       <th style={{ padding: '0.6rem 0.8rem' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
                       <th style={{ padding: '0.6rem 0.8rem' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
@@ -3889,22 +3892,22 @@ export default function Warehouse() {
                       <th style={{ padding: '0.6rem 0.8rem' }}>{isAr ? 'الأعواد' : 'Bars'}</th>
                       <th style={{ padding: '0.6rem 0.8rem' }}>{isAr ? 'الأمتار' : 'Meters'}</th>
                       <th style={{ padding: '0.6rem 0.8rem' }}>{isAr ? 'سعر الوحدة' : 'Unit Price'}</th>
-                      <th style={{ padding: '0.6rem 0.8rem', color: '#00e0a1' }}>{isAr ? 'الإجمالي' : 'Total'}</th>
+                      <th style={{ padding: '0.6rem 0.8rem', color: 'var(--accent)' }}>{isAr ? 'الإجمالي' : 'Total'}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {invoiceMovements.map((mov, idx) => (
-                      <tr key={mov.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                      <tr key={mov.id || idx} style={{ borderBottom: '1px solid color-mix(in srgb, var(--text) 3%, transparent)' }}>
                         <td style={{ padding: '0.6rem 0.8rem', color: 'var(--text-muted)' }}>{idx + 1}</td>
-                        <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: '#00e0a1' }}>{mov.itemCode}</td>
-                        <td style={{ padding: '0.6rem 0.8rem', color: '#8ab4ff' }}>{mov.customerCode || '—'}</td>
+                        <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--accent)' }}>{mov.itemCode}</td>
+                        <td style={{ padding: '0.6rem 0.8rem', color: 'var(--primary)' }}>{mov.customerCode || '—'}</td>
                         <td style={{ padding: '0.6rem 0.8rem' }}>{mov.description}</td>
                         <td style={{ padding: '0.6rem 0.8rem' }}>{mov.finish || 'STD'}</td>
                         <td style={{ padding: '0.6rem 0.8rem' }}><span dir="ltr">{mov.lengthMm} mm</span></td>
-                        <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: '#fff' }}>{mov.quantityBar}</td>
+                        <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--text)' }}>{mov.quantityBar}</td>
                         <td style={{ padding: '0.6rem 0.8rem' }}><span dir="ltr">{(mov.quantityLm || 0).toFixed(1)} m</span></td>
                         <td style={{ padding: '0.6rem 0.8rem' }}><span dir="ltr">{mov.unitPrice || 0} EGP</span></td>
-                        <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: '#00e0a1' }}>
+                        <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--accent)' }}>
                           <span dir="ltr">{(mov.netTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} EGP</span>
                         </td>
                       </tr>
@@ -3930,20 +3933,20 @@ export default function Warehouse() {
       {/* ─── ITEM MOVEMENT HISTORY MODAL ─── */}
       {selectedStockItemHistory && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
-          <div style={{ background: '#121629', border: '1px solid rgba(0, 224, 161, 0.3)', borderRadius: '16px', maxWidth: '1050px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', borderRadius: '16px', maxWidth: '1050px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
             {/* Modal Header */}
-            <div style={{ padding: '1.2rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.2)' }}>
+            <div style={{ padding: '1.2rem 1.5rem', borderBottom: '1px solid color-mix(in srgb, var(--text) 8%, transparent)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.2)' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#00e0a1', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   📜 {isAr ? `سجل حركات وتتبع البند: ${selectedStockItemHistory.itemCode}` : `Movement History: ${selectedStockItemHistory.itemCode}`}
                 </h3>
                 <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                  {selectedStockItemHistory.description} | {isAr ? 'الدهان' : 'Finish'}: <span style={{ color: '#FFD700' }}>{selectedStockItemHistory.finish || 'STD'}</span> | {isAr ? 'الطول' : 'Length'}: <span dir="ltr">{selectedStockItemHistory.lengthMm || 6000} mm</span> | {isAr ? 'كود العميل' : 'Cust Code'}: <span style={{ color: '#64b5f6' }}>{selectedStockItemHistory.customerCode || '—'}</span>
+                  {selectedStockItemHistory.description} | {isAr ? 'الدهان' : 'Finish'}: <span style={{ color: 'var(--accent)' }}>{selectedStockItemHistory.finish || 'STD'}</span> | {isAr ? 'الطول' : 'Length'}: <span dir="ltr">{selectedStockItemHistory.lengthMm || 6000} mm</span> | {isAr ? 'كود العميل' : 'Cust Code'}: <span style={{ color: '#64b5f6' }}>{selectedStockItemHistory.customerCode || '—'}</span>
                 </p>
               </div>
               <button
                 onClick={() => { setSelectedStockItemHistory(null); setItemMovements([]) }}
-                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{ background: 'color-mix(in srgb, var(--text) 10%, transparent)', border: 'none', color: 'var(--text)', fontSize: '1.2rem', cursor: 'pointer', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
                 ✕
               </button>
@@ -3960,12 +3963,12 @@ export default function Warehouse() {
 
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-                    <div style={{ background: 'rgba(0, 224, 161, 0.08)', border: '1px solid rgba(0, 224, 161, 0.25)', borderRadius: '12px', padding: '1rem' }}>
+                    <div style={{ background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', borderRadius: '12px', padding: '1rem' }}>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'إجمالي التوريد (الوارد +)' : 'Total Inbound (+)'}</div>
-                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#00e0a1', marginTop: '0.2rem' }}>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent)', marginTop: '0.2rem' }}>
                         +{totalInBar} <span style={{ fontSize: '0.85rem' }}>{isAr ? 'عود / قطاع' : 'bars'}</span>
                       </div>
-                      <div style={{ fontSize: '0.85rem', color: '#00e0a1', opacity: 0.8 }}>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--accent)', opacity: 0.8 }}>
                         +{totalInLm.toFixed(1)} m
                       </div>
                     </div>
@@ -3982,10 +3985,10 @@ export default function Warehouse() {
 
                     <div style={{ background: 'rgba(255, 215, 0, 0.08)', border: '1px solid rgba(255, 215, 0, 0.25)', borderRadius: '12px', padding: '1rem' }}>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'الرصيد المتبقي بالمخزن' : 'Current Net Stock'}</div>
-                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#FFD700', marginTop: '0.2rem' }}>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent)', marginTop: '0.2rem' }}>
                         {selectedStockItemHistory.quantityBar || 0} <span style={{ fontSize: '0.85rem' }}>{isAr ? 'عود' : 'bars'}</span>
                       </div>
-                      <div style={{ fontSize: '0.85rem', color: '#FFD700', opacity: 0.8 }}>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--accent)', opacity: 0.8 }}>
                         {(selectedStockItemHistory.quantityLm || 0).toFixed(1)} m
                       </div>
                     </div>
@@ -4003,10 +4006,10 @@ export default function Warehouse() {
                   📭 {isAr ? 'لا توجد حركات تفصيلية مسجلة لهذا البند حتى الآن' : 'No movement history recorded for this item yet.'}
                 </div>
               ) : (
-                <div style={{ overflowX: 'auto', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ overflowX: 'auto', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--text) 5%, transparent)' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                     <thead>
-                      <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
+                      <tr style={{ background: 'color-mix(in srgb, var(--text) 4%, transparent)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
                         <th style={{ padding: '0.75rem 1rem' }}>#</th>
                         <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'التاريخ والوقت' : 'Date & Time'}</th>
                         <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'نوع الحركة' : 'Type'}</th>
@@ -4016,9 +4019,9 @@ export default function Warehouse() {
                         <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'المورد / الجهة' : 'Supplier / Dest'}</th>
                         <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأعواد (BAR)' : 'Bars'}</th>
                         <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'الأمتار (LM)' : 'Meters'}</th>
-                        <th style={{ padding: '0.75rem 1rem', color: '#FFD700' }}>{isAr ? 'الرصيد التراكمي' : 'Running Stock'}</th>
+                        <th style={{ padding: '0.75rem 1rem', color: 'var(--accent)' }}>{isAr ? 'الرصيد التراكمي' : 'Running Stock'}</th>
                         <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'سعر الوحدة' : 'Unit Cost'}</th>
-                        <th style={{ padding: '0.75rem 1rem', color: '#00e0a1' }}>{isAr ? 'الإجمالي' : 'Total'}</th>
+                        <th style={{ padding: '0.75rem 1rem', color: 'var(--accent)' }}>{isAr ? 'الإجمالي' : 'Total'}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4028,11 +4031,11 @@ export default function Warehouse() {
                         const lmQty = Number(m.quantityLm || 0)
                         const dateStr = m.createdAt ? new Date(m.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US') : '—'
                         return (
-                          <tr key={m.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                          <tr key={m.id || idx} style={{ borderBottom: '1px solid color-mix(in srgb, var(--text) 4%, transparent)' }}>
                             <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{idx + 1}</td>
                             <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{dateStr}</td>
                             <td style={{ padding: '0.75rem 1rem' }}>
-                              <span className="badge" style={{ background: isOut ? 'rgba(255, 71, 87, 0.15)' : 'rgba(0, 224, 161, 0.15)', color: isOut ? '#ff4757' : '#00e0a1', border: `1px solid ${isOut ? 'rgba(255, 71, 87, 0.3)' : 'rgba(0, 224, 161, 0.3)'}` }}>
+                              <span className="badge" style={{ background: isOut ? 'rgba(255, 71, 87, 0.15)' : 'color-mix(in srgb, var(--accent) 15%, transparent)', color: isOut ? '#ff4757' : 'var(--accent)', border: `1px solid ${isOut ? 'rgba(255, 71, 87, 0.3)' : 'color-mix(in srgb, var(--accent) 30%, transparent)'}` }}>
                                 {isOut ? (isAr ? '📤 صرف (-)' : 'Outbound') : (isAr ? '📥 توريد (+)' : 'Inbound')}
                               </span>
                             </td>
@@ -4041,26 +4044,26 @@ export default function Warehouse() {
                                 {m.invoiceNumber || m.invoiceId || '—'}
                               </span>
                             </td>
-                            <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#00e0a1' }}>
+                            <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: 'var(--accent)' }}>
                               {m.salesOrder || '—'}
                             </td>
                             <td style={{ padding: '0.75rem 1rem', color: '#ffb74d' }}>
                               {m.customerReference || '—'}
                             </td>
-                            <td style={{ padding: '0.75rem 1rem', color: '#fff' }}>{m.supplier || 'Canex'}</td>
-                            <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: isOut ? '#ff4757' : '#00e0a1' }}>
+                            <td style={{ padding: '0.75rem 1rem', color: 'var(--text)' }}>{m.supplier || 'Canex'}</td>
+                            <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: isOut ? '#ff4757' : 'var(--accent)' }}>
                               {isOut ? `-${barQty}` : `+${barQty}`}
                             </td>
-                            <td style={{ padding: '0.75rem 1rem', color: isOut ? '#ff4757' : '#00e0a1' }}>
+                            <td style={{ padding: '0.75rem 1rem', color: isOut ? '#ff4757' : 'var(--accent)' }}>
                               <span dir="ltr">{isOut ? `-${lmQty.toFixed(1)}` : `+${lmQty.toFixed(1)}`} m</span>
                             </td>
-                            <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#FFD700' }}>
+                            <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: 'var(--accent)' }}>
                               <span dir="ltr">{m.runningBar !== undefined ? `${m.runningBar} BAR (${m.runningLm} m)` : '—'}</span>
                             </td>
-                            <td style={{ padding: '0.75rem 1rem', color: '#8ab4ff' }}>
+                            <td style={{ padding: '0.75rem 1rem', color: 'var(--primary)' }}>
                               <span dir="ltr">{m.unitPrice ? `${m.unitPrice} EGP` : '—'}</span>
                             </td>
-                            <td style={{ padding: '0.75rem 1rem', color: '#00e0a1', fontWeight: 700 }}>
+                            <td style={{ padding: '0.75rem 1rem', color: 'var(--accent)', fontWeight: 700 }}>
                               <span dir="ltr">{m.netTotal ? `${Number(m.netTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })} EGP` : '—'}</span>
                             </td>
                           </tr>
@@ -4073,7 +4076,7 @@ export default function Warehouse() {
             </div>
 
             {/* Modal Footer */}
-            <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.2)', display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid color-mix(in srgb, var(--text) 8%, transparent)', background: 'rgba(0,0,0,0.2)', display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 className="btn btn-secondary"
                 onClick={() => { setSelectedStockItemHistory(null); setItemMovements([]) }}
@@ -4094,7 +4097,7 @@ export default function Warehouse() {
               <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 🧾 {isAr ? 'رفع ومعالجة الفواتير (فردي أو دفعة واحدة)' : 'Upload & Process Invoices (Single or Batch)'}
                 {batchInvoices.length > 0 && (
-                  <span className="badge" style={{ background: 'rgba(0,224,161,0.15)', color: '#00e0a1', border: '1px solid rgba(0,224,161,0.3)', borderRadius: '12px' }}>
+                  <span className="badge" style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', borderRadius: '12px' }}>
                     {batchInvoices.length} {isAr ? 'فواتير في الدفعة' : 'invoices in queue'}
                   </span>
                 )}
@@ -4113,7 +4116,7 @@ export default function Warehouse() {
                 className="btn btn-sm"
                 onClick={() => handleOpenManualModal('inbound')}
                 style={{
-                  background: 'linear-gradient(135deg, #00e0a1 0%, #00b894 100%)',
+                  background: 'var(--accent)',
                   color: '#000',
                   fontWeight: 700,
                   borderRadius: '8px',
@@ -4129,7 +4132,7 @@ export default function Warehouse() {
                 onClick={() => handleOpenManualModal('outbound')}
                 style={{
                   background: 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)',
-                  color: '#fff',
+                  color: 'var(--text)',
                   fontWeight: 700,
                   borderRadius: '8px',
                   padding: '0.45rem 0.9rem',
@@ -4140,7 +4143,7 @@ export default function Warehouse() {
               </button>
 
               {/* Global Movement Mode Switcher */}
-              <div style={{ display: 'flex', gap: '0.5rem', background: '#101223', padding: '0.3rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', background: 'var(--bg-surface)', padding: '0.3rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
                 <button
                   type="button"
                   className={`btn btn-sm ${movementType === 'inbound' ? 'btn-primary' : 'btn-ghost'}`}
@@ -4158,7 +4161,7 @@ export default function Warehouse() {
                     fontWeight: 700,
                     background: movementType === 'outbound' ? '#ff4d4f' : 'transparent',
                     borderColor: movementType === 'outbound' ? '#ff4d4f' : 'transparent',
-                    color: '#fff',
+                    color: 'var(--text)',
                   }}
                 >
                   📤 {isAr ? 'تعيين الكل: صرف (-)' : 'Set All: Outbound (-)'}
@@ -4175,7 +4178,7 @@ export default function Warehouse() {
                 borderRadius: '12px',
                 padding: '3rem',
                 textAlign: 'center',
-                background: 'rgba(255,255,255,0.01)',
+                background: 'color-mix(in srgb, var(--text) 1%, transparent)',
               }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
@@ -4212,8 +4215,8 @@ export default function Warehouse() {
                   display: 'flex',
                   justify: 'space-between',
                   alignItems: 'center',
-                  background: 'rgba(0, 224, 161, 0.05)',
-                  border: '1px solid rgba(0, 224, 161, 0.2)',
+                  background: 'color-mix(in srgb, var(--accent) 5%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                   borderRadius: '12px',
                   padding: '1rem 1.25rem',
                   marginBottom: '1.5rem',
@@ -4222,7 +4225,7 @@ export default function Warehouse() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 700, color: '#00e0a1', fontSize: '1.05rem' }}>
+                  <span style={{ fontWeight: 700, color: 'var(--accent)', fontSize: '1.05rem' }}>
                     📦 {isAr ? `دفعة المعالجة: ${batchInvoices.length} فواتير` : `Batch Queue: ${batchInvoices.length} Invoices`}
                   </span>
                   <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -4261,7 +4264,7 @@ export default function Warehouse() {
                       fontWeight: 800,
                       padding: '0.6rem 1.4rem',
                       borderRadius: '8px',
-                      boxShadow: '0 4px 15px rgba(0, 224, 161, 0.3)',
+                      boxShadow: '0 4px 15px color-mix(in srgb, var(--accent) 30%, transparent)',
                     }}
                   >
                     {savingBatch ? (
@@ -4285,7 +4288,7 @@ export default function Warehouse() {
                       key={batch.id}
                       style={{
                         background: 'rgba(18, 22, 41, 0.95)',
-                        border: `1px solid ${batch.status === 'saved' ? '#00e0a1' : batch.status === 'error' ? '#ff4757' : 'rgba(255,255,255,0.1)'}`,
+                        border: `1px solid ${batch.status === 'saved' ? 'var(--accent)' : batch.status === 'error' ? '#ff4757' : 'color-mix(in srgb, var(--text) 10%, transparent)'}`,
                         borderRadius: '12px',
                         overflow: 'hidden',
                         transition: 'all 0.2s ease-in-out',
@@ -4296,25 +4299,25 @@ export default function Warehouse() {
                       <div
                         style={{
                           padding: '1rem 1.25rem',
-                          background: batch.status === 'saved' ? 'rgba(0,224,161,0.06)' : 'rgba(255,255,255,0.02)',
+                          background: batch.status === 'saved' ? 'color-mix(in srgb, var(--accent) 6%, transparent)' : 'color-mix(in srgb, var(--text) 2%, transparent)',
                           display: 'flex',
                           justify: 'space-between',
                           alignItems: 'center',
                           flexWrap: 'wrap',
                           gap: '1rem',
-                          borderBottom: batch.expanded ? '1px solid rgba(255,255,255,0.08)' : 'none',
+                          borderBottom: batch.expanded ? '1px solid color-mix(in srgb, var(--text) 8%, transparent)' : 'none',
                         }}
                       >
                         {/* Title & Metadata fields */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap', flex: 1 }}>
                           <button
                             onClick={() => toggleBatchInvoiceExpand(batch.id)}
-                            style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '1.1rem', cursor: 'pointer', padding: 0 }}
+                            style={{ background: 'transparent', border: 'none', color: 'var(--text)', fontSize: '1.1rem', cursor: 'pointer', padding: 0 }}
                           >
                             {batch.expanded ? '▼' : '►'}
                           </button>
 
-                          <span style={{ fontWeight: 800, color: '#fff', fontSize: '1rem' }}>
+                          <span style={{ fontWeight: 800, color: 'var(--text)', fontSize: '1rem' }}>
                             #{bIdx + 1}
                           </span>
 
@@ -4325,7 +4328,7 @@ export default function Warehouse() {
                               type="text"
                               value={batch.parsedMeta.invoiceNumber || ''}
                               onChange={(e) => updateBatchInvoiceMeta(batch.id, 'invoiceNumber', e.target.value)}
-                              style={{ background: '#101223', border: '1px solid var(--border)', color: '#64b5f6', fontWeight: 700, padding: '0.3rem 0.6rem', borderRadius: '6px', fontSize: '0.88rem', width: '140px' }}
+                              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: '#64b5f6', fontWeight: 700, padding: '0.3rem 0.6rem', borderRadius: '6px', fontSize: '0.88rem', width: '140px' }}
                             />
                           </div>
 
@@ -4340,9 +4343,9 @@ export default function Warehouse() {
                               onChange={(e) => updateBatchInvoiceMeta(batch.id, 'salesOrder', e.target.value)}
                               placeholder="SO-10023"
                               style={{
-                                background: '#101223',
+                                background: 'var(--bg-surface)',
                                 border: batch.parsedMeta.salesOrder ? '1px solid var(--border)' : '1.5px solid #ff4757',
-                                color: '#00e0a1',
+                                color: 'var(--accent)',
                                 fontWeight: 700,
                                 padding: '0.3rem 0.6rem',
                                 borderRadius: '6px',
@@ -4364,7 +4367,7 @@ export default function Warehouse() {
                               onChange={(e) => updateBatchInvoiceMeta(batch.id, 'customerReference', e.target.value)}
                               placeholder="Q-00235 / SP-001"
                               style={{
-                                background: '#101223',
+                                background: 'var(--bg-surface)',
                                 border: batch.parsedMeta.customerReference ? '1px solid var(--border)' : '1.5px solid #ff4757',
                                 color: '#ffb74d',
                                 fontWeight: 700,
@@ -4382,7 +4385,7 @@ export default function Warehouse() {
                             value={batch.movementType}
                             onChange={(e) => updateBatchInvoiceMovementType(batch.id, e.target.value)}
                             style={{
-                              background: isOut ? '#ff4757' : '#00e0a1',
+                              background: isOut ? '#ff4757' : 'var(--accent)',
                               color: '#000',
                               border: 'none',
                               padding: '0.35rem 0.75rem',
@@ -4400,7 +4403,7 @@ export default function Warehouse() {
                           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                             📄 {batch.fileName}
                           </span>
-                          <span className="badge" style={{ background: 'rgba(255, 215, 0, 0.1)', color: '#FFD700', border: '1px solid rgba(255, 215, 0, 0.3)', fontSize: '0.8rem' }}>
+                          <span className="badge" style={{ background: 'rgba(255, 215, 0, 0.1)', color: 'var(--accent)', border: '1px solid rgba(255, 215, 0, 0.3)', fontSize: '0.8rem' }}>
                             {validLinesCount} {isAr ? 'بنود صالحة' : 'valid lines'}
                           </span>
                           <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1.5px solid #38bdf8', fontSize: '0.85rem', fontWeight: 800 }}>
@@ -4433,7 +4436,7 @@ export default function Warehouse() {
                                     🏭 {isAr ? 'المغطى من دلمار:' : 'Delmar Covered:'} {totalDelmarCoveredBars} BAR
                                   </span>
                                   {remainingWhBars === 0 && totalBars > 0 && unmatchedLines.length === 0 ? (
-                                    <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1.5px solid #00e0a1', fontSize: '0.85rem', fontWeight: 800 }}>
+                                    <span className="badge" style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)', border: '1.5px solid #00e0a1', fontSize: '0.85rem', fontWeight: 800 }}>
                                       ✅ {isAr ? 'مغطى بالكامل من دلمار' : 'Fully Covered'}
                                     </span>
                                   ) : (
@@ -4456,7 +4459,7 @@ export default function Warehouse() {
                               ✅ {batch.isDuplicate ? (isAr ? 'مدمجة (تحديث بيانات)' : 'Merged Duplicate') : (isAr ? 'تم الحفظ' : 'Saved')}
                             </span>
                           ) : batch.status === 'saving' ? (
-                            <span className="badge" style={{ background: 'rgba(255,215,0,0.15)', color: '#FFD700', border: '1px solid rgba(255,215,0,0.3)', fontSize: '0.85rem' }}>
+                            <span className="badge" style={{ background: 'rgba(255,215,0,0.15)', color: 'var(--accent)', border: '1px solid rgba(255,215,0,0.3)', fontSize: '0.85rem' }}>
                               ⏳ {isAr ? 'جاري الحفظ...' : 'Saving...'}
                             </span>
                           ) : batch.status === 'error' ? (
@@ -4464,7 +4467,7 @@ export default function Warehouse() {
                               ❌ {batch.errorMessage || (isAr ? 'خطأ' : 'Error')}
                             </span>
                           ) : (
-                            <span className="badge" style={{ background: 'rgba(255,255,255,0.08)', color: '#ccc', border: '1px solid rgba(255,255,255,0.2)', fontSize: '0.85rem' }}>
+                            <span className="badge" style={{ background: 'color-mix(in srgb, var(--text) 8%, transparent)', color: '#ccc', border: '1px solid color-mix(in srgb, var(--text) 20%, transparent)', fontSize: '0.85rem' }}>
                               🟡 {isAr ? 'جاهز للمراجعة' : 'Ready'}
                             </span>
                           )}
@@ -4483,7 +4486,7 @@ export default function Warehouse() {
                           <button
                             className="btn btn-sm"
                             onClick={() => removeBatchInvoice(batch.id)}
-                            style={{ background: 'rgba(255, 255, 255, 0.08)', color: '#ff7875', border: '1px solid rgba(255,255,255,0.1)', padding: '0.35rem 0.6rem' }}
+                            style={{ background: 'color-mix(in srgb, var(--text) 8%, transparent)', color: '#ff7875', border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)', padding: '0.35rem 0.6rem' }}
                             title={isAr ? 'حذف من الدفعة' : 'Remove from batch'}
                           >
                             🗑️
@@ -4562,7 +4565,7 @@ export default function Warehouse() {
                               background: 'rgba(0,0,0,0.2)',
                               padding: '0.85rem 1rem',
                               borderRadius: '8px',
-                              border: '1px solid rgba(255,255,255,0.05)',
+                              border: '1px solid color-mix(in srgb, var(--text) 5%, transparent)',
                             }}
                           >
                             <div>
@@ -4571,7 +4574,7 @@ export default function Warehouse() {
                                 type="text"
                                 value={batch.parsedMeta.customerReference || ''}
                                 onChange={(e) => updateBatchInvoiceMeta(batch.id, 'customerReference', e.target.value)}
-                                style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.4rem 0.6rem', color: '#ffb74d', borderRadius: '6px', fontSize: '0.85rem', marginTop: '0.2rem' }}
+                                style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '0.4rem 0.6rem', color: '#ffb74d', borderRadius: '6px', fontSize: '0.85rem', marginTop: '0.2rem' }}
                               />
                             </div>
                             <div>
@@ -4580,7 +4583,7 @@ export default function Warehouse() {
                                 type="text"
                                 value={batch.parsedMeta.supplier || 'Canex'}
                                 onChange={(e) => updateBatchInvoiceMeta(batch.id, 'supplier', e.target.value)}
-                                style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.4rem 0.6rem', color: '#fff', borderRadius: '6px', fontSize: '0.85rem', marginTop: '0.2rem' }}
+                                style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '0.4rem 0.6rem', color: 'var(--text)', borderRadius: '6px', fontSize: '0.85rem', marginTop: '0.2rem' }}
                               />
                             </div>
                             <div>
@@ -4589,7 +4592,7 @@ export default function Warehouse() {
                                 type="date"
                                 value={batch.parsedMeta.invoiceDate || ''}
                                 onChange={(e) => updateBatchInvoiceMeta(batch.id, 'invoiceDate', e.target.value)}
-                                style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.4rem 0.6rem', color: '#fff', borderRadius: '6px', fontSize: '0.85rem', marginTop: '0.2rem' }}
+                                style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '0.4rem 0.6rem', color: 'var(--text)', borderRadius: '6px', fontSize: '0.85rem', marginTop: '0.2rem' }}
                               />
                             </div>
                             <div>
@@ -4598,7 +4601,7 @@ export default function Warehouse() {
                                 type="date"
                                 value={batch.parsedMeta.receiptDate || ''}
                                 onChange={(e) => updateBatchInvoiceMeta(batch.id, 'receiptDate', e.target.value)}
-                                style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.4rem 0.6rem', color: '#fff', borderRadius: '6px', fontSize: '0.85rem', marginTop: '0.2rem' }}
+                                style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '0.4rem 0.6rem', color: 'var(--text)', borderRadius: '6px', fontSize: '0.85rem', marginTop: '0.2rem' }}
                               />
                             </div>
                           </div>
@@ -4628,7 +4631,7 @@ export default function Warehouse() {
                                 <div
                                   style={{
                                     background: 'rgba(15, 23, 42, 0.65)',
-                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    border: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
                                     borderRadius: '10px',
                                     padding: '0.75rem 1rem',
                                     display: 'flex',
@@ -4655,17 +4658,17 @@ export default function Warehouse() {
                                     </div>
 
                                     {/* Warehouse Shortage / Coverage Metric */}
-                                    <div style={{ background: diffBars > 0 ? 'rgba(56, 189, 248, 0.08)' : 'rgba(0, 224, 161, 0.08)', border: `1px solid ${diffBars > 0 ? 'rgba(56, 189, 248, 0.3)' : 'rgba(0, 224, 161, 0.3)'}`, borderRadius: '8px', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <div style={{ background: diffBars > 0 ? 'rgba(56, 189, 248, 0.08)' : 'color-mix(in srgb, var(--accent) 8%, transparent)', border: `1px solid ${diffBars > 0 ? 'rgba(56, 189, 248, 0.3)' : 'color-mix(in srgb, var(--accent) 30%, transparent)'}`, borderRadius: '8px', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                       <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isAr ? 'المطلوب من المستودع:' : 'Warehouse:'}</span>
-                                      <strong style={{ fontSize: '1.05rem', color: diffBars > 0 ? '#38bdf8' : '#00e0a1', fontWeight: 900 }}>
+                                      <strong style={{ fontSize: '1.05rem', color: diffBars > 0 ? '#38bdf8' : 'var(--accent)', fontWeight: 900 }}>
                                         {diffBars > 0 ? `+${diffBars.toLocaleString()} عود` : (isAr ? 'مغطى 100%' : '100%')}
                                       </strong>
                                     </div>
 
                                     {/* Stock Check Metric */}
-                                    <div style={{ background: shortage > 0 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(0, 224, 161, 0.08)', border: `1px solid ${shortage > 0 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(0, 224, 161, 0.25)'}`, borderRadius: '8px', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <div style={{ background: shortage > 0 ? 'rgba(239, 68, 68, 0.08)' : 'color-mix(in srgb, var(--accent) 8%, transparent)', border: `1px solid ${shortage > 0 ? 'rgba(239, 68, 68, 0.25)' : 'color-mix(in srgb, var(--accent) 25%, transparent)'}`, borderRadius: '8px', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                       <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isAr ? 'فحص المخزن:' : 'Stock:'}</span>
-                                      <strong style={{ fontSize: '0.95rem', color: shortage > 0 ? '#f87171' : '#00e0a1', fontWeight: 800 }}>
+                                      <strong style={{ fontSize: '0.95rem', color: shortage > 0 ? '#f87171' : 'var(--accent)', fontWeight: 800 }}>
                                         {shortage > 0 ? `عجز ${shortage} صنف` : `${sufficient} متوفر`}
                                       </strong>
                                     </div>
@@ -4695,9 +4698,9 @@ export default function Warehouse() {
                                       onClick={() => handleSyncBatchPrices(batch.id)}
                                       className="btn btn-sm"
                                       style={{
-                                        background: 'rgba(0, 224, 161, 0.12)',
-                                        border: '1px solid rgba(0, 224, 161, 0.35)',
-                                        color: '#00e0a1',
+                                        background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                                        border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+                                        color: 'var(--accent)',
                                         padding: '0.35rem 0.7rem',
                                         borderRadius: '6px',
                                         fontSize: '0.75rem',
@@ -4722,12 +4725,12 @@ export default function Warehouse() {
                                       const isDelmarSelected = activeBatchPriority === 'delmar'
 
                                       return (
-                                        <div style={{ display: 'flex', background: 'rgba(0,0,0,0.5)', borderRadius: '8px', padding: '3px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                        <div style={{ display: 'flex', background: 'rgba(0,0,0,0.5)', borderRadius: '8px', padding: '3px', border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)' }}>
                                           <button
                                             type="button"
                                             onClick={() => handleApplyBatchPriority(batch.id, 'delmar')}
                                             style={{
-                                              background: isDelmarSelected ? '#00e0a1' : 'transparent',
+                                              background: isDelmarSelected ? 'var(--accent)' : 'transparent',
                                               color: isDelmarSelected ? '#000' : '#94a3b8',
                                               border: isDelmarSelected ? '1px solid #00e0a1' : '1px solid transparent',
                                               fontWeight: isDelmarSelected ? 900 : 600,
@@ -4735,7 +4738,7 @@ export default function Warehouse() {
                                               borderRadius: '6px',
                                               fontSize: '0.78rem',
                                               cursor: 'pointer',
-                                              boxShadow: isDelmarSelected ? '0 0 10px rgba(0, 224, 161, 0.4)' : 'none',
+                                              boxShadow: isDelmarSelected ? '0 0 10px color-mix(in srgb, var(--accent) 40%, transparent)' : 'none',
                                               transition: 'all 0.2s ease',
                                             }}
                                             title={isAr ? 'صرف دلمار أولاً لكافة البنود وحفظ رصيد المستودع' : 'Delmar first'}
@@ -4771,9 +4774,9 @@ export default function Warehouse() {
                                         type="button"
                                         onClick={() => handleDelmarDecision(batch.id, activeCoated.length === allCoated.length ? 'exclude' : 'delmar')}
                                         style={{
-                                          background: activeCoated.length === allCoated.length ? 'rgba(0, 224, 161, 0.15)' : 'rgba(255, 71, 87, 0.15)',
-                                          color: activeCoated.length === allCoated.length ? '#00e0a1' : '#ff4757',
-                                          border: `1px solid ${activeCoated.length === allCoated.length ? 'rgba(0, 224, 161, 0.35)' : 'rgba(255, 71, 87, 0.35)'}`,
+                                          background: activeCoated.length === allCoated.length ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'rgba(255, 71, 87, 0.15)',
+                                          color: activeCoated.length === allCoated.length ? 'var(--accent)' : '#ff4757',
+                                          border: `1px solid ${activeCoated.length === allCoated.length ? 'color-mix(in srgb, var(--accent) 35%, transparent)' : 'rgba(255, 71, 87, 0.35)'}`,
                                           fontWeight: 800,
                                           padding: '0.35rem 0.7rem',
                                           borderRadius: '6px',
@@ -4877,13 +4880,13 @@ export default function Warehouse() {
                                 <col style={{ width: '105px' }} /> {/* Total */}
                               </colgroup>
                               <thead>
-                                <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '2px solid var(--border)' }}>
+                                <tr style={{ background: 'color-mix(in srgb, var(--text) 4%, transparent)', borderBottom: '2px solid var(--border)' }}>
                                   <th style={{ padding: '0.75rem 0.4rem', textAlign: 'center' }}>#</th>
                                   <th style={{ padding: '0.75rem 0.4rem' }}>{isAr ? 'تجاهل' : 'Ignore'}</th>
-                                  <th style={{ padding: '0.75rem 0.5rem', color: '#00e0a1', fontSize: '0.9rem' }}>
+                                  <th style={{ padding: '0.75rem 0.5rem', color: 'var(--accent)', fontSize: '0.9rem' }}>
                                     {isAr ? 'كود الصنف والربط (كانكس)' : 'Item & Canex Code'}
                                   </th>
-                                  <th style={{ padding: '0.75rem 0.4rem', color: '#8ab4ff' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
+                                  <th style={{ padding: '0.75rem 0.4rem', color: 'var(--primary)' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
                                   {batch.movementType === 'outbound' && (
                                     <>
                                       <th style={{ padding: '0.75rem 0.4rem', color: '#38bdf8', fontSize: '0.9rem', textAlign: 'center' }}>
@@ -4892,19 +4895,19 @@ export default function Warehouse() {
                                       <th style={{ padding: '0.75rem 0.4rem', color: '#fbbf24', fontSize: '0.9rem', textAlign: 'center' }}>
                                         {isAr ? '🏭 المتاح بدلمار' : 'Delmar Stock'}
                                       </th>
-                                      <th style={{ padding: '0.75rem 0.4rem', color: '#ffffff', fontSize: '0.9rem', textAlign: 'center' }}>
+                                      <th style={{ padding: '0.75rem 0.4rem', color: 'var(--text)', fontSize: '0.9rem', textAlign: 'center' }}>
                                         {isAr ? '📋 المطلوب' : 'Requested'}
                                       </th>
                                       <th style={{ padding: '0.75rem 0.4rem', color: '#a78bfa', fontSize: '0.9rem', textAlign: 'center' }}>
                                         {isAr ? '⚖️ الأولوية والتوزيع' : 'Priority & Split'}
                                       </th>
-                                      <th style={{ padding: '0.75rem 0.4rem', color: '#00e0a1', fontSize: '0.9rem', textAlign: 'center' }}>
+                                      <th style={{ padding: '0.75rem 0.4rem', color: 'var(--accent)', fontSize: '0.9rem', textAlign: 'center' }}>
                                         {isAr ? '📊 المتبقي بعد الصرف' : 'Remaining Balance'}
                                       </th>
                                     </>
                                   )}
                                   <th style={{ padding: '0.75rem 0.5rem', minWidth: '450px' }}>{isAr ? 'وصف الصنف / القطاع' : 'Description'}</th>
-                                  <th style={{ padding: '0.75rem 0.4rem', color: '#00e0a1', fontWeight: 800 }}>{isAr ? 'الأعواد (Bars)' : 'Bars'}</th>
+                                  <th style={{ padding: '0.75rem 0.4rem', color: 'var(--accent)', fontWeight: 800 }}>{isAr ? 'الأعواد (Bars)' : 'Bars'}</th>
                                   <th style={{ padding: '0.75rem 0.4rem' }}>{isAr ? 'التشطيب' : 'Finish'}</th>
                                   <th style={{ padding: '0.75rem 0.4rem' }}>{isAr ? 'الطول mm' : 'Length mm'}</th>
                                   <th style={{ padding: '0.75rem 0.4rem' }}>{isAr ? 'إجمالي الأمتار' : 'Total LM'}</th>
@@ -4924,7 +4927,7 @@ export default function Warehouse() {
                                   <tr
                                     key={line.id}
                                     style={{
-                                      borderBottom: '1px solid rgba(255,255,255,0.03)',
+                                      borderBottom: '1px solid color-mix(in srgb, var(--text) 3%, transparent)',
                                       opacity: line.ignored ? 0.4 : 1,
                                       background: line.isService ? 'rgba(255, 77, 79, 0.05)' : isCoated ? 'rgba(245, 158, 11, 0.02)' : 'transparent',
                                     }}
@@ -4949,9 +4952,9 @@ export default function Warehouse() {
                                             value={line.itemCode}
                                             onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'itemCode', e.target.value)}
                                             style={{
-                                              background: '#101223',
+                                              background: 'var(--bg-surface)',
                                               border: '1px solid var(--border)',
-                                              color: '#00e0a1',
+                                              color: 'var(--accent)',
                                               padding: '0.35rem 0.45rem',
                                               borderRadius: '5px',
                                               fontWeight: 800,
@@ -4975,7 +4978,7 @@ export default function Warehouse() {
                                             }}
                                             style={{
                                               background: 'rgba(138, 180, 248, 0.15)',
-                                              color: '#8ab4ff',
+                                              color: 'var(--primary)',
                                               border: '1px solid rgba(138, 180, 248, 0.35)',
                                               borderRadius: '5px',
                                               padding: '0.35rem 0.45rem',
@@ -5013,9 +5016,9 @@ export default function Warehouse() {
                                                 <span
                                                   className="badge"
                                                   style={{
-                                                    background: 'rgba(0, 224, 161, 0.15)',
-                                                    color: '#00e0a1',
-                                                    border: '1px solid rgba(0, 224, 161, 0.35)',
+                                                    background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                                                    color: 'var(--accent)',
+                                                    border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
                                                     fontSize: '0.74rem',
                                                     fontWeight: 700,
                                                     padding: '0.15rem 0.4rem',
@@ -5047,7 +5050,7 @@ export default function Warehouse() {
                                                 background: '#0d1117',
                                                 border: '1px solid #3b82f6',
                                                 borderRadius: '4px',
-                                                color: '#fff',
+                                                color: 'var(--text)',
                                                 fontSize: '0.78rem',
                                                 padding: '0.25rem 0.4rem',
                                                 flex: '1 1 auto',
@@ -5060,7 +5063,7 @@ export default function Warehouse() {
                                               onClick={() => handleManualLinkByCode(batch.id, idx, line.itemCode, line.manualTargetCode)}
                                               style={{
                                                 background: '#2563eb',
-                                                color: '#fff',
+                                                color: 'var(--text)',
                                                 border: 'none',
                                                 borderRadius: '4px',
                                                 fontSize: '0.74rem',
@@ -5118,7 +5121,7 @@ export default function Warehouse() {
                                                   type="button"
                                                   onClick={() => handleQuickLinkAlias(batch.id, idx, line.itemCode, fuzzy.item)}
                                                   style={{
-                                                    background: '#00e0a1',
+                                                    background: 'var(--accent)',
                                                     color: '#000',
                                                     border: 'none',
                                                     borderRadius: '3px',
@@ -5157,7 +5160,7 @@ export default function Warehouse() {
                                         type="text"
                                         value={line.customerCode || ''}
                                         onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'customerCode', e.target.value)}
-                                        style={{ background: '#101223', border: '1px solid var(--border)', color: '#8ab4ff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%', fontSize: '0.85rem' }}
+                                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--primary)', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%', fontSize: '0.85rem' }}
                                       />
                                     </td>
 
@@ -5168,7 +5171,7 @@ export default function Warehouse() {
                                           const chk = checkStockAvailability(line, stock, aliasesMap, activeDispatches)
                                           return (
                                             <div>
-                                              <span style={{ fontSize: '1.25rem', fontWeight: 900, color: chk.availableBar > 0 ? '#00e0a1' : '#ff4757' }}>
+                                              <span style={{ fontSize: '1.25rem', fontWeight: 900, color: chk.availableBar > 0 ? 'var(--accent)' : '#ff4757' }}>
                                                 {chk.availableBar}
                                               </span>
                                               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.1rem' }}>
@@ -5211,7 +5214,7 @@ export default function Warehouse() {
                                             alloc.sharingDetails.orderIndex === 1 ? (
                                               <span
                                                 className="badge"
-                                                style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid #00e0a1', fontSize: '0.68rem', fontWeight: 800, padding: '0.15rem 0.35rem' }}
+                                                style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)', border: '1px solid #00e0a1', fontSize: '0.68rem', fontWeight: 800, padding: '0.15rem 0.35rem' }}
                                                 title={alloc.sharingDetails.message}
                                               >
                                                 🏷️ مشترك (1 من {alloc.sharingDetails.totalSharingLines})
@@ -5245,7 +5248,7 @@ export default function Warehouse() {
                                           const chk = checkStockAvailability(line, stock, aliasesMap, activeDispatches)
                                           return (
                                             <div>
-                                              <span style={{ fontSize: '1.3rem', fontWeight: 900, color: '#ffffff' }}>
+                                              <span style={{ fontSize: '1.3rem', fontWeight: 900, color: 'var(--text)' }}>
                                                 {chk.reqBar}
                                               </span>
                                               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.1rem' }}>
@@ -5273,8 +5276,8 @@ export default function Warehouse() {
                                                   onClick={() => handleApplyLinePriority(batch.id, idx, 'delmar')}
                                                   disabled={isExhausted}
                                                   style={{
-                                                    background: isDelmarPrio && !isExhausted ? '#00e0a1' : 'rgba(0, 224, 161, 0.12)',
-                                                    color: isDelmarPrio && !isExhausted ? '#000' : '#00e0a1',
+                                                    background: isDelmarPrio && !isExhausted ? 'var(--accent)' : 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                                                    color: isDelmarPrio && !isExhausted ? '#000' : 'var(--accent)',
                                                     border: '1.5px solid #00e0a1',
                                                     borderRadius: '6px',
                                                     padding: '0.35rem 0.5rem',
@@ -5328,12 +5331,12 @@ export default function Warehouse() {
                                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
                                             <span style={{ color: '#94a3b8' }}>{isAr ? 'متبقي المخزن:' : 'Wh Rem:'}</span>
                                             {alloc.remainingWarehouse >= 0 ? (
-                                              <strong style={{ color: '#00e0a1', fontSize: '0.85rem' }}>🟢 {alloc.remainingWarehouse} عود</strong>
+                                              <strong style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>🟢 {alloc.remainingWarehouse} عود</strong>
                                             ) : (
                                               <strong style={{ color: '#ff4757', fontSize: '0.85rem' }}>🔴 عجز {Math.abs(alloc.remainingWarehouse)} عود</strong>
                                             )}
                                           </div>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', borderTop: '1px dashed rgba(255,255,255,0.08)', paddingTop: '0.25rem' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', borderTop: '1px dashed color-mix(in srgb, var(--text) 8%, transparent)', paddingTop: '0.25rem' }}>
                                             <span style={{ color: '#94a3b8' }}>{isAr ? 'متبقي دلمار:' : 'Delmar Rem:'}</span>
                                             {alloc.isShared && alloc.sharingDetails?.exhaustedByPrevious ? (
                                               <strong style={{ color: '#ff4757', fontSize: '0.78rem' }}>0 (نَفَد بسطر #{alloc.sharingDetails.previousLineIndex})</strong>
@@ -5354,9 +5357,9 @@ export default function Warehouse() {
                                         rows={Math.max(1, Math.ceil(String(line.description || '').length / 55))}
                                         onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'description', e.target.value)}
                                         style={{
-                                          background: '#101223',
+                                          background: 'var(--bg-surface)',
                                           border: '1px solid var(--border)',
-                                          color: '#fff',
+                                          color: 'var(--text)',
                                           padding: '0.4rem 0.6rem',
                                           borderRadius: '4px',
                                           width: '100%',
@@ -5375,7 +5378,7 @@ export default function Warehouse() {
                                         type="number"
                                         value={line.quantityBar}
                                         onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'quantityBar', e.target.value)}
-                                        style={{ background: '#101223', border: '1px solid #00e0a1', color: '#00e0a1', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%', fontWeight: 800, fontSize: '0.95rem' }}
+                                        style={{ background: 'var(--bg-surface)', border: '1px solid #00e0a1', color: 'var(--accent)', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%', fontWeight: 800, fontSize: '0.95rem' }}
                                       />
                                     </td>
 
@@ -5385,23 +5388,23 @@ export default function Warehouse() {
                                         type="text"
                                         value={line.finish}
                                         onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'finish', e.target.value)}
-                                        style={{ background: '#101223', border: '1px solid var(--border)', color: '#FFD700', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }}
+                                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--accent)', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }}
                                       />
                                     </td>
 
                                     {/* Length mm */}
                                     <td style={{ padding: '0.5rem 0.4rem' }}>
-                                      <input type="number" value={line.lengthMm} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'lengthMm', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }} />
+                                      <input type="number" value={line.lengthMm} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'lengthMm', e.target.value)} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }} />
                                     </td>
 
                                     {/* Total LM */}
                                     <td style={{ padding: '0.5rem 0.4rem' }}>
-                                      <input type="number" step="0.001" value={line.quantityLm} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'quantityLm', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%', fontWeight: 700 }} />
+                                      <input type="number" step="0.001" value={line.quantityLm} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'quantityLm', e.target.value)} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%', fontWeight: 700 }} />
                                     </td>
 
                                     {/* Total KG */}
                                     <td style={{ padding: '0.5rem 0.4rem' }}>
-                                      <input type="number" step="0.001" value={line.quantityKg} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'quantityKg', e.target.value)} style={{ background: '#101223', border: '1px solid var(--border)', color: '#fff', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }} />
+                                      <input type="number" step="0.001" value={line.quantityKg} onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'quantityKg', e.target.value)} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.35rem 0.45rem', borderRadius: '4px', width: '100%' }} />
                                     </td>
 
                                     {/* Unit Price */}
@@ -5419,7 +5422,7 @@ export default function Warehouse() {
                                             placeholder="0.00"
                                             onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'unitPrice', e.target.value)}
                                             style={{
-                                              background: '#101223',
+                                              background: 'var(--bg-surface)',
                                               border: displayUp > 0 ? '1px solid var(--border)' : '1.5px solid #ff4757',
                                               color: displayUp > 0 ? '#fff' : '#ff7875',
                                               padding: '0.35rem 0.45rem',
@@ -5447,7 +5450,7 @@ export default function Warehouse() {
                                             placeholder="0.00"
                                             onChange={(e) => updateBatchInvoiceLine(batch.id, idx, 'barPrice', e.target.value)}
                                             style={{
-                                              background: '#101223',
+                                              background: 'var(--bg-surface)',
                                               border: displayBp > 0 ? '1px solid var(--border)' : '1.5px solid #ff4757',
                                               color: displayBp > 0 ? '#fff' : '#ff7875',
                                               padding: '0.35rem 0.45rem',
@@ -5479,14 +5482,14 @@ export default function Warehouse() {
                               })}
                               </tbody>
                               <tfoot>
-                                <tr style={{ background: 'rgba(15, 23, 42, 0.95)', borderTop: '2px solid rgba(255, 255, 255, 0.15)', fontWeight: 800 }}>
-                                  <td colSpan={batch.movementType === 'outbound' ? 9 : 4} style={{ padding: '0.75rem 0.6rem', textAlign: isAr ? 'left' : 'right', color: '#00e0a1', fontSize: '0.92rem' }}>
+                                <tr style={{ background: 'rgba(15, 23, 42, 0.95)', borderTop: '2px solid color-mix(in srgb, var(--text) 15%, transparent)', fontWeight: 800 }}>
+                                  <td colSpan={batch.movementType === 'outbound' ? 9 : 4} style={{ padding: '0.75rem 0.6rem', textAlign: isAr ? 'left' : 'right', color: 'var(--accent)', fontSize: '0.92rem' }}>
                                     {isAr ? 'المجموع الكلي للإذن:' : 'Grand Total:'}
                                   </td>
                                   <td style={{ padding: '0.75rem 0.5rem' }}>
                                     {/* Description column */}
                                   </td>
-                                  <td style={{ padding: '0.75rem 0.4rem', color: '#00e0a1', fontSize: '1rem', fontWeight: 900 }}>
+                                  <td style={{ padding: '0.75rem 0.4rem', color: 'var(--accent)', fontSize: '1rem', fontWeight: 900 }}>
                                     {totalSdBars.toLocaleString()} <span style={{ fontSize: '0.72rem' }}>{isAr ? 'عود' : 'b'}</span>
                                   </td>
                                   <td style={{ padding: '0.75rem 0.4rem' }}></td>
@@ -5551,7 +5554,7 @@ export default function Warehouse() {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                 <thead>
-                  <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)' }}>
+                  <tr style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', borderBottom: '1px solid var(--border)' }}>
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'المستخدم' : 'User'}</th>
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'البريد الإلكتروني' : 'Email'}</th>
                     <th style={{ padding: '0.75rem 1rem' }}>{isAr ? 'صلاحية المخزن' : 'Warehouse Status'}</th>
@@ -5560,7 +5563,7 @@ export default function Warehouse() {
                 </thead>
                 <tbody>
                   {warehouseUsers.map((u) => (
-                    <tr key={u.uid} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <tr key={u.uid} style={{ borderBottom: '1px solid color-mix(in srgb, var(--text) 4%, transparent)' }}>
                       <td style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>{u.displayName || u.email}</td>
                       <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{u.email}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>
@@ -5574,7 +5577,7 @@ export default function Warehouse() {
                       </td>
                       <td style={{ padding: '0.75rem 1rem' }}>
                         {u.email === 'gemy.essam.ge@gmail.com' ? (
-                          <span style={{ fontSize: '0.8rem', color: '#FFD700' }}>👑 Master Admin</span>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--accent)' }}>👑 Master Admin</span>
                         ) : (
                           <button
                             className={`btn ${u.warehouseEnabled ? 'btn-ghost' : 'btn-primary'} btn-sm`}
@@ -5614,8 +5617,8 @@ export default function Warehouse() {
                 value={auditSearchQuery}
                 onChange={(e) => setAuditSearchQuery(e.target.value)}
                 style={{
-                  background: '#101223',
-                  color: '#fff',
+                  background: 'var(--bg-surface)',
+                  color: 'var(--text)',
                   border: '1px solid var(--border)',
                   padding: '0.5rem 0.9rem',
                   borderRadius: '8px',
@@ -5643,7 +5646,7 @@ export default function Warehouse() {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                 <thead>
-                  <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)', color: '#8ab4ff' }}>
+                  <tr style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', borderBottom: '1px solid var(--border)', color: 'var(--primary)' }}>
                     <th style={{ padding: '0.75rem 1rem', textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'التاريخ والوقت' : 'Timestamp'}</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'المستخدم' : 'User'}</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'نوع العملية' : 'Action'}</th>
@@ -5663,7 +5666,7 @@ export default function Warehouse() {
                       switch (log.action) {
                         case 'PROCESS_INVOICE':
                           actionBadge = (
-                            <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.3)' }}>
+                            <span className="badge" style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' }}>
                               🧾 {log.details?.movementType === 'outbound' ? (isAr ? 'فاتورة خصم' : 'Outbound Invoice') : (isAr ? 'فاتورة إضافة' : 'Inbound Invoice')}
                             </span>
                           )
@@ -5694,12 +5697,12 @@ export default function Warehouse() {
                       }
 
                       return (
-                        <tr key={log.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <tr key={log.id} style={{ borderBottom: '1px solid color-mix(in srgb, var(--text) 4%, transparent)' }}>
                           <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
                             {log.timestamp ? new Date(log.timestamp).toLocaleString(isAr ? 'ar-EG' : 'en-US') : '—'}
                           </td>
                           <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
-                            <div style={{ fontWeight: 700, color: '#ffffff' }}>{log.userName || 'Unknown User'}</div>
+                            <div style={{ fontWeight: 700, color: 'var(--text)' }}>{log.userName || 'Unknown User'}</div>
                             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{log.userEmail}</div>
                           </td>
                           <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>{actionBadge}</td>
@@ -5707,7 +5710,7 @@ export default function Warehouse() {
                             {log.action === 'PROCESS_INVOICE' && (
                               <div>
                                 <span>{isAr ? 'الفاتورة:' : 'Invoice:'} <strong>{log.details?.invoiceNumber}</strong></span>
-                                {log.details?.salesOrder && <span style={{ marginRight: '10px', marginLeft: '10px', color: '#00e0a1' }}>SO: {log.details.salesOrder}</span>}
+                                {log.details?.salesOrder && <span style={{ marginRight: '10px', marginLeft: '10px', color: 'var(--accent)' }}>SO: {log.details.salesOrder}</span>}
                                 {log.details?.customerReference && <span style={{ color: '#ffb74d' }}>Ref: {log.details.customerReference}</span>}
                                 <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                                   {isAr ? `عدد البنود: ${log.details?.movementsCount || 0}` : `Items count: ${log.details?.movementsCount || 0}`}
@@ -5722,7 +5725,7 @@ export default function Warehouse() {
                                 {log.details?.oldMeta && log.details?.newMeta && (
                                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                                     {log.details.oldMeta.salesOrder !== log.details.newMeta.salesOrder && (
-                                      <div>SO: <span style={{ textDecoration: 'line-through' }}>{log.details.oldMeta.salesOrder || '—'}</span> ➔ <strong style={{ color: '#00e0a1' }}>{log.details.newMeta.salesOrder}</strong></div>
+                                      <div>SO: <span style={{ textDecoration: 'line-through' }}>{log.details.oldMeta.salesOrder || '—'}</span> ➔ <strong style={{ color: 'var(--accent)' }}>{log.details.newMeta.salesOrder}</strong></div>
                                     )}
                                     {log.details.oldMeta.customerReference !== log.details.newMeta.customerReference && (
                                       <div>Customer Ref: <span style={{ textDecoration: 'line-through' }}>{log.details.oldMeta.customerReference || '—'}</span> ➔ <strong style={{ color: '#ffb74d' }}>{log.details.newMeta.customerReference}</strong></div>
@@ -5738,8 +5741,8 @@ export default function Warehouse() {
                                 {log.details?.changes && (
                                   <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                                     {Object.entries(log.details.changes).map(([k, v]) => (
-                                      <span key={k} style={{ background: 'rgba(255,255,255,0.04)', padding: '2px 6px', borderRadius: '4px' }}>
-                                        {k}: <span style={{ textDecoration: 'line-through' }}>{String(v.old ?? '—')}</span> ➔ <strong style={{ color: '#00e0a1' }}>{String(v.new ?? '—')}</strong>
+                                      <span key={k} style={{ background: 'color-mix(in srgb, var(--text) 4%, transparent)', padding: '2px 6px', borderRadius: '4px' }}>
+                                        {k}: <span style={{ textDecoration: 'line-through' }}>{String(v.old ?? '—')}</span> ➔ <strong style={{ color: 'var(--accent)' }}>{String(v.new ?? '—')}</strong>
                                       </span>
                                     ))}
                                   </div>
@@ -5771,7 +5774,7 @@ export default function Warehouse() {
           <div className="card glassmorphism" style={{ padding: '1.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
-                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   📁 {isAr ? 'إدارة مشاريع المخازن' : 'Warehouse Projects Management'}
                 </h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.2rem' }}>
@@ -5784,9 +5787,9 @@ export default function Warehouse() {
                 className="btn"
                 onClick={loadProjects}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: '#ffffff',
+                  background: 'color-mix(in srgb, var(--text) 6%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--text) 15%, transparent)',
+                  color: 'var(--text)',
                   borderRadius: '8px',
                   padding: '0.45rem 0.85rem',
                   fontSize: '0.82rem',
@@ -5804,7 +5807,7 @@ export default function Warehouse() {
             <div className="table-responsive">
               <table className="stock-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)' }}>
+                  <tr style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', borderBottom: '1px solid var(--border)' }}>
                     <th style={{ textAlign: 'center', width: '50px' }}>#</th>
                     <th>{isAr ? 'اسم المشروع' : 'Project Name'}</th>
                     <th>{isAr ? 'الكود (Code)' : 'Code'}</th>
@@ -5818,20 +5821,20 @@ export default function Warehouse() {
                     const isSelected = selectedProjectId === proj.id
                     const isDeleting = deletingProjectId === proj.id
                     return (
-                      <tr key={proj.id} style={{ background: isSelected ? 'rgba(0, 224, 161, 0.06)' : 'transparent', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                      <tr key={proj.id} style={{ background: isSelected ? 'color-mix(in srgb, var(--accent) 6%, transparent)' : 'transparent', borderBottom: '1px solid color-mix(in srgb, var(--text) 4%, transparent)' }}>
                         <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)' }}>{idx + 1}</td>
-                        <td style={{ fontWeight: 700, color: '#ffffff' }}>
+                        <td style={{ fontWeight: 700, color: 'var(--text)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <span>{proj.name}</span>
                             {isSelected && (
-                              <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.2)', color: '#00e0a1', border: '1px solid #00e0a1', fontSize: '0.75rem' }}>
+                              <span className="badge" style={{ background: 'color-mix(in srgb, var(--accent) 20%, transparent)', color: 'var(--accent)', border: '1px solid #00e0a1', fontSize: '0.75rem' }}>
                                 {isAr ? 'المحدد حالياً' : 'Active'}
                               </span>
                             )}
                           </div>
                         </td>
                         <td>
-                          <span className="badge" style={{ background: 'rgba(138, 180, 255, 0.15)', color: '#8ab4ff' }}>
+                          <span className="badge" style={{ background: 'rgba(138, 180, 255, 0.15)', color: 'var(--primary)' }}>
                             {proj.code || 'MAIN'}<small style={{ display: 'block' }}>{proj.id}</small>
                           </span>
                         </td>
@@ -5862,9 +5865,9 @@ export default function Warehouse() {
                                   fontSize: '0.78rem',
                                   whiteSpace: 'nowrap',
                                   borderRadius: '6px',
-                                  background: projects.length <= 1 ? 'rgba(255,255,255,0.04)' : 'rgba(255, 71, 87, 0.15)',
+                                  background: projects.length <= 1 ? 'color-mix(in srgb, var(--text) 4%, transparent)' : 'rgba(255, 71, 87, 0.15)',
                                   color: projects.length <= 1 ? 'var(--text-muted)' : '#ff4757',
-                                  border: projects.length <= 1 ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255, 71, 87, 0.35)',
+                                  border: projects.length <= 1 ? '1px solid color-mix(in srgb, var(--text) 8%, transparent)' : '1px solid rgba(255, 71, 87, 0.35)',
                                   cursor: projects.length <= 1 ? 'not-allowed' : 'pointer',
                                   display: 'inline-flex',
                                   alignItems: 'center',
@@ -5895,10 +5898,10 @@ export default function Warehouse() {
           </div>}
           {/* ─── Warehouse Access & Permissions Management Section ─── */}
           {isAdmin && (
-            <div className="card glassmorphism fade-in" style={{ padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div className="card glassmorphism fade-in" style={{ padding: '1.5rem', border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
                 <div>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     ⚙️ {isAr ? 'إدارة صلاحيات الوصول للمخزن' : 'Warehouse Access & Project Permissions'}
                   </h3>
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '0.2rem' }}>
@@ -5918,8 +5921,8 @@ export default function Warehouse() {
                       onChange={(e) => setPermissionsSearchQuery(e.target.value)}
                       style={{
                         width: '100%',
-                        background: '#101223',
-                        color: '#ffffff',
+                        background: 'var(--bg-surface)',
+                        color: 'var(--text)',
                         border: '1px solid var(--border)',
                         borderRadius: '8px',
                         padding: '0.45rem 0.85rem',
@@ -5933,9 +5936,9 @@ export default function Warehouse() {
                     onClick={loadWarehouseUsers}
                     disabled={loadingPermissionsList}
                     style={{
-                      background: 'rgba(255, 255, 255, 0.06)',
-                      border: '1px solid rgba(255, 255, 255, 0.15)',
-                      color: '#ffffff',
+                      background: 'color-mix(in srgb, var(--text) 6%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--text) 15%, transparent)',
+                      color: 'var(--text)',
                       borderRadius: '8px',
                       padding: '0.45rem 0.85rem',
                       fontSize: '0.82rem',
@@ -5975,12 +5978,12 @@ export default function Warehouse() {
                         style={{
                           background: isFounderSuperAdmin
                             ? 'rgba(255, 71, 87, 0.05)'
-                            : usr.warehouseEnabled ? 'rgba(0, 224, 161, 0.03)' : 'rgba(0, 0, 0, 0.25)',
+                            : usr.warehouseEnabled ? 'color-mix(in srgb, var(--accent) 3%, transparent)' : 'rgba(0, 0, 0, 0.25)',
                           border: isExpanded
                             ? '1px solid var(--accent)'
                             : isFounderSuperAdmin
                             ? '1px solid rgba(255, 71, 87, 0.4)'
-                            : usr.warehouseEnabled ? '1px solid rgba(0, 224, 161, 0.2)' : '1px solid rgba(255, 255, 255, 0.06)',
+                            : usr.warehouseEnabled ? '1px solid color-mix(in srgb, var(--accent) 20%, transparent)' : '1px solid color-mix(in srgb, var(--text) 6%, transparent)',
                           borderRadius: '12px',
                           overflow: 'hidden',
                           transition: 'all 0.2s ease',
@@ -6003,8 +6006,8 @@ export default function Warehouse() {
                               width: '36px',
                               height: '36px',
                               borderRadius: '50%',
-                              background: isFounderSuperAdmin ? 'rgba(255, 71, 87, 0.2)' : usr.warehouseEnabled ? 'rgba(0, 224, 161, 0.15)' : 'rgba(255, 255, 255, 0.08)',
-                              color: isFounderSuperAdmin ? '#ff4757' : usr.warehouseEnabled ? '#00e0a1' : 'var(--text-muted)',
+                              background: isFounderSuperAdmin ? 'rgba(255, 71, 87, 0.2)' : usr.warehouseEnabled ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'color-mix(in srgb, var(--text) 8%, transparent)',
+                              color: isFounderSuperAdmin ? '#ff4757' : usr.warehouseEnabled ? 'var(--accent)' : 'var(--text-muted)',
                               display: 'flex',
                               alignItems: 'center',
                               justify: 'center',
@@ -6015,7 +6018,7 @@ export default function Warehouse() {
                             </div>
 
                             <div>
-                              <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                              <div style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                                 <span>{usr.displayName || usr.email}</span>
                                 {isFounderSuperAdmin ? (
                                   <span className="badge" style={{ background: 'rgba(255, 71, 87, 0.2)', color: '#ff4757', border: '1px solid rgba(255, 71, 87, 0.4)', fontSize: '0.72rem', fontWeight: 800 }}>
@@ -6030,7 +6033,7 @@ export default function Warehouse() {
                                     ✅ {isAr ? 'مُصرّح له' : 'Access Granted'}
                                   </span>
                                 ) : (
-                                  <span className="badge" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                                  <span className="badge" style={{ background: 'color-mix(in srgb, var(--text) 5%, transparent)', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
                                     🚫 {isAr ? 'معطّل' : 'Disabled'}
                                   </span>
                                 )}
@@ -6041,7 +6044,7 @@ export default function Warehouse() {
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }} onClick={(e) => e.stopPropagation()}>
                             {/* Fast Access Checkbox (Auto-Saved) */}
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: (isFounderSuperAdmin || updatingUserUid === usr.uid) ? 'not-allowed' : 'pointer', fontSize: '0.82rem', fontWeight: 600, color: usr.warehouseEnabled ? '#00e0a1' : 'var(--text-muted)' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: (isFounderSuperAdmin || updatingUserUid === usr.uid) ? 'not-allowed' : 'pointer', fontSize: '0.82rem', fontWeight: 600, color: usr.warehouseEnabled ? 'var(--accent)' : 'var(--text-muted)' }}>
                               <input
                                 type="checkbox"
                                 checked={Boolean(usr.warehouseEnabled)}
@@ -6049,7 +6052,7 @@ export default function Warehouse() {
                                 onChange={(e) => {
                                   handleQuickToggleAccess(usr, e.target.checked)
                                 }}
-                                style={{ width: '16px', height: '16px', accentColor: '#00e0a1', cursor: (isFounderSuperAdmin || updatingUserUid === usr.uid) ? 'not-allowed' : 'pointer' }}
+                                style={{ width: '16px', height: '16px', accentColor: 'var(--accent)', cursor: (isFounderSuperAdmin || updatingUserUid === usr.uid) ? 'not-allowed' : 'pointer' }}
                               />
                               <span style={{ display: 'inline-block' }}>
                                 {updatingUserUid === usr.uid ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'السماح بالوصول' : 'Allow Access')}
@@ -6066,9 +6069,9 @@ export default function Warehouse() {
                                 gap: '0.35rem',
                                 fontSize: '0.78rem',
                                 padding: '0.35rem 0.65rem',
-                                background: isExpanded ? 'rgba(0, 224, 161, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                                color: isExpanded ? '#00e0a1' : '#ffffff',
-                                border: '1px solid rgba(255,255,255,0.1)',
+                                background: isExpanded ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'color-mix(in srgb, var(--text) 5%, transparent)',
+                                color: isExpanded ? 'var(--accent)' : '#ffffff',
+                                border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
                                 borderRadius: '6px',
                               }}
                             >
@@ -6082,7 +6085,7 @@ export default function Warehouse() {
                         {isExpanded && (
                           <div style={{
                             padding: '1.1rem 1.25rem',
-                            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                            borderTop: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
                             background: 'rgba(0, 0, 0, 0.2)',
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
@@ -6104,8 +6107,8 @@ export default function Warehouse() {
                                     }))
                                   }}
                                   style={{
-                                    background: '#101223',
-                                    color: '#ffffff',
+                                    background: 'var(--bg-surface)',
+                                    color: 'var(--text)',
                                     border: '1px solid var(--border)',
                                     borderRadius: '8px',
                                     padding: '0.35rem 0.65rem',
@@ -6124,13 +6127,13 @@ export default function Warehouse() {
                             {usr.warehouseEnabled && (
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem', alignItems: 'start' }}>
                                 {/* Allowed Projects Selection */}
-                                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                  <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.6rem', color: '#8ab4ff', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid color-mix(in srgb, var(--text) 5%, transparent)' }}>
+                                  <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.6rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                     📂 {isAr ? 'المشاريع المسموح بالوصول إليها:' : 'Allowed Projects Scope:'}
                                   </div>
 
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer', color: (usr.allowedProjects || []).includes('*') ? '#00e0a1' : '#fff' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', cursor: isFounderSuperAdmin ? 'not-allowed' : 'pointer', color: (usr.allowedProjects || []).includes('*') ? 'var(--accent)' : '#fff' }}>
                                       <input
                                         type="checkbox"
                                         checked={(usr.allowedProjects || ['*']).includes('*')}
@@ -6144,7 +6147,7 @@ export default function Warehouse() {
                                             return u
                                           }))
                                         }}
-                                        style={{ accentColor: '#00e0a1' }}
+                                        style={{ accentColor: 'var(--accent)' }}
                                       />
                                       <strong>🌐 {isAr ? 'جميع المشاريع (All Projects)' : 'All Projects'}</strong>
                                     </label>
@@ -6170,7 +6173,7 @@ export default function Warehouse() {
                                                     return u
                                                   }))
                                                 }}
-                                                style={{ accentColor: '#00e0a1' }}
+                                                style={{ accentColor: 'var(--accent)' }}
                                               />
                                               {p.name} <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>({p.code || 'CODE'})</span>
                                             </label>
@@ -6182,7 +6185,7 @@ export default function Warehouse() {
                                 </div>
 
                                 {/* Granular Action Rights */}
-                                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid color-mix(in srgb, var(--text) 5%, transparent)' }}>
                                   <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.6rem', color: '#ffb74d', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                     🛡️ {isAr ? 'الأذونات والتحكم التفصيلي:' : 'Action Permissions & Restrictions:'}
                                   </div>
@@ -6211,7 +6214,7 @@ export default function Warehouse() {
                                           const val = e.target.checked
                                           setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canEdit: val } : u))
                                         }}
-                                        style={{ accentColor: '#00e0a1' }}
+                                        style={{ accentColor: 'var(--accent)' }}
                                       />
                                       <span>✏️ {isAr ? 'صلاحية تعديل الكميات والبيانات (Can Edit)' : 'Can Edit Quantities & Metadata'}</span>
                                     </label>
@@ -6239,7 +6242,7 @@ export default function Warehouse() {
                                           const val = e.target.checked
                                           setUsersList(prev => prev.map(u => u.uid === usr.uid ? { ...u, canManual: val } : u))
                                         }}
-                                        style={{ accentColor: '#00e0a1' }}
+                                        style={{ accentColor: 'var(--accent)' }}
                                       />
                                       <span>📦 {isAr ? 'صلاحية التوريد والصرف اليدوي (Can Manual Movement)' : 'Can Manual Movement'}</span>
                                     </label>
@@ -6263,7 +6266,7 @@ export default function Warehouse() {
                             )}
 
                             {/* Save Action Bar */}
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid color-mix(in srgb, var(--text) 5%, transparent)' }}>
                               <button
                                 className="btn btn-primary"
                                 onClick={() => handleSaveUserPermissions(usr)}
@@ -6295,7 +6298,7 @@ export default function Warehouse() {
 
           {/* Create New Project Form */}
           <div className="card glassmorphism" style={{ padding: '1.5rem', maxWidth: '650px' }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem', color: '#00e0a1' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--accent)' }}>
               ➕ {isAr ? 'إضافة مشروع مخزن جديد' : 'Create New Warehouse Project'}
             </h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
@@ -6311,7 +6314,7 @@ export default function Warehouse() {
                   placeholder="e.g. Schuco Villa Project A"
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
-                  style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: '#fff' }}
+                  style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: 'var(--text)' }}
                 />
               </div>
               <div>
@@ -6321,7 +6324,7 @@ export default function Warehouse() {
                   placeholder="e.g. SCHUCO_A"
                   value={newProjectCode}
                   onChange={(e) => setNewProjectCode(e.target.value)}
-                  style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: '#fff' }}
+                  style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: 'var(--text)' }}
                 />
               </div>
               <div>
@@ -6331,7 +6334,7 @@ export default function Warehouse() {
                   placeholder={isAr ? 'وصف اختياري للمشروع والموقع' : 'Optional project details'}
                   value={newProjectDesc}
                   onChange={(e) => setNewProjectDesc(e.target.value)}
-                  style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: '#fff' }}
+                  style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: 'var(--text)' }}
                 />
               </div>
               <button type="submit" className="btn btn-primary" disabled={creatingProject} style={{ alignSelf: 'flex-start' }}>
@@ -6349,7 +6352,7 @@ export default function Warehouse() {
           <div className="card glassmorphism" style={{ padding: '1.5rem' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
               <div>
-                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   💾 {isAr ? 'نقاط الحفظ والنسخ الاحتياطية للمشروع' : 'Project Stock Restore Points & Snapshots'}
                 </h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.2rem' }}>
@@ -6369,8 +6372,8 @@ export default function Warehouse() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateRestorePoint} style={{ background: 'rgba(255,255,255,0.03)', padding: '1.25rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', color: '#00e0a1' }}>
+            <form onSubmit={handleCreateRestorePoint} style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', padding: '1.25rem', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--text) 8%, transparent)' }}>
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--accent)' }}>
                 ➕ {isAr ? 'إنشاء نقطة حفظ جديدة الآن (Save New Restore Point)' : 'Save New Restore Point'}
               </h4>
 
@@ -6385,7 +6388,7 @@ export default function Warehouse() {
                     placeholder={isAr ? 'مثال: رصيد بداية شهر أغسطس 2026' : 'e.g. Pre-Invoice Deduction Snapshot'}
                     value={newPointName}
                     onChange={(e) => setNewPointName(e.target.value)}
-                    style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: '#fff' }}
+                    style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: 'var(--text)' }}
                   />
                 </div>
 
@@ -6398,7 +6401,7 @@ export default function Warehouse() {
                     placeholder={isAr ? 'ملاحظات توضيحية لسبب أخذ نقطة الحفظ' : 'Optional notes regarding snapshot reason'}
                     value={newPointDesc}
                     onChange={(e) => setNewPointDesc(e.target.value)}
-                    style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: '#fff' }}
+                    style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '0.6rem 0.9rem', borderRadius: '8px', color: 'var(--text)' }}
                   />
                 </div>
               </div>
@@ -6436,9 +6439,9 @@ export default function Warehouse() {
                 style={{
                   fontSize: '0.8rem',
                   padding: '0.3rem 0.8rem',
-                  background: restoreFilter === 'auto' ? '#00e0a1' : 'rgba(0, 224, 161, 0.1)',
-                  color: restoreFilter === 'auto' ? '#000' : '#00e0a1',
-                  border: '1px solid rgba(0, 224, 161, 0.3)',
+                  background: restoreFilter === 'auto' ? 'var(--accent)' : 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                  color: restoreFilter === 'auto' ? '#000' : 'var(--accent)',
+                  border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
                 }}
               >
                 🔄 {isAr ? 'تلقائي قبل الحركات' : 'Auto Snapshots'} ({restorePoints.filter((p) => p.isAuto).length})
@@ -6464,7 +6467,7 @@ export default function Warehouse() {
                 <span className="spinner"></span> {isAr ? 'جاري تحميل نقاط الحفظ...' : 'Loading restore points...'}
               </div>
             ) : filteredRestorePoints.length === 0 ? (
-              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.02)', borderRadius: '12px' }}>
+              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', background: 'color-mix(in srgb, var(--text) 2%, transparent)', borderRadius: '12px' }}>
                 <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>💾</div>
                 <p>{isAr ? 'لا توجد نقاط حفظ مسجلة تطابق التصفية الحالية.' : 'No restore points matching current filter.'}</p>
                 <p style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>
@@ -6492,14 +6495,14 @@ export default function Warehouse() {
                         <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)' }}>{idx + 1}</td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <span style={{ fontWeight: 700, color: '#ffffff', fontSize: '0.95rem' }}>{pt.name}</span>
+                            <span style={{ fontWeight: 700, color: 'var(--text)', fontSize: '0.95rem' }}>{pt.name}</span>
                             {pt.isAuto ? (
                               <span
                                 className="badge"
                                 style={{
-                                  background: 'rgba(0, 224, 161, 0.15)',
-                                  color: '#00e0a1',
-                                  border: '1px solid rgba(0, 224, 161, 0.35)',
+                                  background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                                  color: 'var(--accent)',
+                                  border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
                                   fontSize: '0.72rem',
                                   padding: '1px 6px',
                                   fontWeight: 700,
@@ -6532,8 +6535,8 @@ export default function Warehouse() {
                           <div>{pt.createdAt ? new Date(pt.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US') : '—'}</div>
                           <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{pt.createdByName || pt.createdByEmail || pt.createdBy}</div>
                         </td>
-                        <td style={{ textAlign: 'center', fontWeight: 700, color: '#00e0a1' }}>{pt.totalItems ?? 0}</td>
-                        <td style={{ textAlign: 'center', fontWeight: 700, color: '#FFD700' }}>{(pt.totalQuantityBar ?? 0).toLocaleString()}</td>
+                        <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)' }}>{pt.totalItems ?? 0}</td>
+                        <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)' }}>{(pt.totalQuantityBar ?? 0).toLocaleString()}</td>
                         <td style={{ textAlign: 'center', fontSize: '0.85rem' }}>{(pt.totalQuantityLm ?? 0).toLocaleString()} m</td>
                         <td style={{ textAlign: 'center', fontSize: '0.85rem' }}>{(pt.totalQuantityKg ?? 0).toLocaleString()} kg</td>
                         <td style={{ textAlign: 'center' }}>
@@ -6542,7 +6545,7 @@ export default function Warehouse() {
                               className="btn btn-secondary"
                               onClick={() => handleRestoreToPoint(pt)}
                               disabled={!isAdmin || !pt.restorable || restoringPointId !== null}
-                              style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem', background: '#e65100', borderColor: '#ff9800', color: '#fff' }}
+                              style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem', background: '#e65100', borderColor: '#ff9800', color: 'var(--text)' }}
                               title={isAr ? 'استعادة أرصدة المخزن لهذه النقطة' : 'Restore stock to this point'}
                             >
                               {restoringPointId === pt.id ? <span className="spinner"></span> : isAr ? '⏪ استعادة' : 'Restore'}
@@ -6621,17 +6624,17 @@ export default function Warehouse() {
             <div
               style={{
                 padding: '1.2rem 1.5rem',
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                borderBottom: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                background: 'rgba(255,255,255,0.02)',
+                background: 'color-mix(in srgb, var(--text) 2%, transparent)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <span style={{ fontSize: '1.4rem' }}>🔗</span>
                 <div>
-                  <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#8ab4ff' }}>
+                  <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--primary)' }}>
                     {isAr ? 'ربط كود الفاتورة بصنف بديل من المخزن' : 'Link Item Code to Stock Profile'}
                   </div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -6642,7 +6645,7 @@ export default function Warehouse() {
               <button
                 type="button"
                 onClick={() => setLinkModalData(null)}
-                style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: 'var(--text)', fontSize: '1.2rem', cursor: 'pointer' }}
               >
                 ✕
               </button>
@@ -6650,7 +6653,7 @@ export default function Warehouse() {
 
             {/* Content */}
             <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.8rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', padding: '0.8rem 1rem', borderRadius: '8px', border: '1px solid color-mix(in srgb, var(--text) 6%, transparent)' }}>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{isAr ? 'كود الصنف في الفاتورة الحالية:' : 'Invoice Profile Code:'}</div>
                 <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#fbbf24', marginTop: '0.2rem' }}>
                   {linkModalData.sourceCode} <span style={{ fontSize: '0.85rem', fontWeight: 400, color: '#aaa' }}>({linkModalData.sourceDesc || '—'})</span>
@@ -6668,17 +6671,17 @@ export default function Warehouse() {
                   onChange={(e) => setAliasSearchQuery(e.target.value)}
                   style={{
                     width: '100%',
-                    background: '#101223',
+                    background: 'var(--bg-surface)',
                     border: '1px solid var(--border)',
                     borderRadius: '8px',
                     padding: '0.5rem 0.8rem',
-                    color: '#fff',
+                    color: 'var(--text)',
                     fontSize: '0.85rem',
                     marginBottom: '0.6rem',
                   }}
                 />
 
-                <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px' }}>
+                <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid color-mix(in srgb, var(--text) 8%, transparent)', borderRadius: '8px' }}>
                   {stock
                     .filter((s) => {
                       if (!aliasSearchQuery.trim()) return true
@@ -6698,7 +6701,7 @@ export default function Warehouse() {
                           onClick={() => setLinkModalData((prev) => ({ ...prev, selectedItemKey: item.itemKey }))}
                           style={{
                             padding: '0.6rem 0.8rem',
-                            borderBottom: '1px solid rgba(255,255,255,0.04)',
+                            borderBottom: '1px solid color-mix(in srgb, var(--text) 4%, transparent)',
                             background: isSelected ? 'rgba(138, 180, 248, 0.18)' : 'transparent',
                             cursor: 'pointer',
                             display: 'flex',
@@ -6715,7 +6718,7 @@ export default function Warehouse() {
                             </div>
                           </div>
                           <div style={{ textAlign: 'right' }}>
-                            <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.3)', fontSize: '0.75rem' }}>
+                            <span className="badge" style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', fontSize: '0.75rem' }}>
                               {item.quantityBar} {isAr ? 'عود' : 'bars'}
                             </span>
                           </div>
@@ -6726,7 +6729,7 @@ export default function Warehouse() {
               </div>
 
               {/* Remember Checkbox */}
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', background: 'rgba(0, 224, 161, 0.05)', border: '1px solid rgba(0, 224, 161, 0.2)', padding: '0.7rem 0.9rem', borderRadius: '8px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', background: 'color-mix(in srgb, var(--accent) 5%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', padding: '0.7rem 0.9rem', borderRadius: '8px' }}>
                 <input
                   type="checkbox"
                   checked={linkModalData.rememberAlways}
@@ -6745,11 +6748,11 @@ export default function Warehouse() {
             <div
               style={{
                 padding: '1rem 1.5rem',
-                borderTop: '1px solid rgba(255,255,255,0.08)',
+                borderTop: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
                 display: 'flex',
                 justifyContent: 'flex-end',
                 gap: '0.8rem',
-                background: 'rgba(255,255,255,0.02)',
+                background: 'color-mix(in srgb, var(--text) 2%, transparent)',
               }}
             >
               <button
@@ -6764,7 +6767,7 @@ export default function Warehouse() {
                 className="btn btn-primary btn-sm"
                 onClick={handleConfirmManualLink}
                 disabled={!linkModalData.selectedItemKey}
-                style={{ background: '#3b82f6', color: '#fff', fontWeight: 700 }}
+                style={{ background: '#3b82f6', color: 'var(--text)', fontWeight: 700 }}
               >
                 🔗 {isAr ? 'اعتماد الربط وتحديث الرصيد' : 'Confirm Link & Update'}
               </button>

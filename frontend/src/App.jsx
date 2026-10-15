@@ -1,20 +1,23 @@
 import { useState, useEffect, createContext, useContext, lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { Toaster, toast } from 'react-hot-toast'
 import Home from './pages/Home'
-import ErrorBoundary from './components/ErrorBoundary'
+import LoginExperience from './components/LoginExperience'
+import WorkspaceNavigation from './components/WorkspaceNavigation'
+import { MotionRegion } from './components/DesignSystem'
+import Drafts from './pages/Drafts'
+import DraftDetails from './pages/DraftDetails'
+import AdminPanel from './pages/AdminPanel'
+import ReleaseNotesModal from './components/ReleaseNotesModal'
 import Security2FAModal from './components/Security2FAModal'
 import StepGuideModal from './components/StepGuideModal'
-
-const Drafts = lazy(() => import('./pages/Drafts'))
-const DraftDetails = lazy(() => import('./pages/DraftDetails'))
-const AdminPanel = lazy(() => import('./pages/AdminPanel'))
-const Warehouse = lazy(() => import('./pages/Warehouse'))
-const ReleaseNotesModal = lazy(() => import('./components/ReleaseNotesModal'))
 import { testETAAuth, getCompanySettings, saveCompanySettings, syncUserData, getAuthSecurityStatus, warmUpServer } from './services/api'
 import { getWarehouseAccess } from './services/warehouseApi'
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase'
+import ErrorBoundary from './components/ErrorBoundary'
 import packageInfo from '../package.json'
+import { readTheme, saveTheme, nextTheme, startThemeTransition } from './utils/theme.mjs'
+import { googleLoginError } from './utils/authError.mjs'
 
 export const CURRENT_APP_VERSION = `v${packageInfo.version}`
 
@@ -22,7 +25,7 @@ export const CURRENT_APP_VERSION = `v${packageInfo.version}`
 export const AppContext = createContext(null)
 export const SettingsContext = createContext(null)
 
-const TRANSLATIONS = {
+export const TRANSLATIONS = {
   ar: {
     logo: `فاوتر إكس ${CURRENT_APP_VERSION}`,
     logoSub: 'بديل ERP system لرفع الفواتير',
@@ -95,8 +98,8 @@ const TRANSLATIONS = {
   }
 }
 
-function Layout({ children }) {
-  const { lang, setLang, t, user, isAdmin, hasWarehouseAccess, handleLogout, triggerReset, showTutorialModal, setShowTutorialModal } = useContext(AppContext)
+export function Layout({ children }) {
+  const { lang, setLang, theme, toggleTheme, t, user, isAdmin, hasWarehouseAccess, handleLogout, triggerReset, showTutorialModal, setShowTutorialModal } = useContext(AppContext)
   const location = useLocation()
   const navigate = useNavigate()
   const handleLogoClick = (e) => {
@@ -108,7 +111,6 @@ function Layout({ children }) {
     }
   };
   const [showSettingsModal, setShowSettingsModal] = useState(false)
-  const [showUserDropdown, setShowUserDropdown] = useState(false)
   const [showReleaseNotesModal, setShowReleaseNotesModal] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -172,17 +174,6 @@ function Layout({ children }) {
       .catch(() => { })
   }, [user])
 
-  useEffect(() => {
-    if (!showUserDropdown) return;
-    const closeDropdown = (e) => {
-      if (!e.target.closest('.user-profile-widget')) {
-        setShowUserDropdown(false);
-      }
-    };
-    document.addEventListener('click', closeDropdown);
-    return () => document.removeEventListener('click', closeDropdown);
-  }, [showUserDropdown]);
-
   const updateSetting = (key, value) => {
     setSettings(prev => ({ ...prev, [key]: value, isVerified: false }))
     setConnStatus(null)
@@ -228,221 +219,20 @@ function Layout({ children }) {
 
   return (
     <div className={`app-wrapper ${lang === 'en' ? 'ltr-layout' : ''}`}>
-      {/* ─── Modern Premium Responsive Header ─── */}
-      <header className="header glassmorphism">
-        <Link to="/" onClick={handleLogoClick} style={{ textDecoration: 'none', color: '#fff', display: 'flex', alignItems: 'center' }}>
-          <div className="header-brand" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div className="header-logo-icon" style={{ display: 'flex', alignItems: 'center' }}>
-              <img src="/Logo.png" alt="Logo" style={{ height: '36px', objectFit: 'contain' }} />
-            </div>
-            <div className="header-logo-text">
-              <h2>{t.logo}</h2>
-              <span>{t.logoSub}</span>
-            </div>
-            <span className="premium-badge">{t.badge}</span>
-
-            {/* Permanent Green Slogan Badge & Changelog Trigger */}
-            <button
-              type="button"
-              className="header-slogan-btn"
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                setShowReleaseNotesModal(true)
-              }}
-              style={{
-                background: 'rgba(0, 224, 161, 0.08)',
-                color: '#00e0a1',
-                border: '1px solid rgba(0, 224, 161, 0.25)',
-                borderRadius: '20px',
-                padding: '0.2rem 0.65rem',
-                fontSize: '0.76rem',
-                fontWeight: 700,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                marginLeft: '0.5rem',
-                boxShadow: '0 0 12px rgba(0, 224, 161, 0.12)'
-              }}
-              title={lang === 'ar' ? 'اضغط لعرض سجل التحديثات والإصدارات' : 'Click to view version release history'}
-            >
-              <span>⚡ {lang === 'ar' ? 'منصة رفع الفواتير الرقمية المعتمدة' : 'Certified ETA Invoice Platform'}</span>
-              <span style={{ background: 'rgba(0, 224, 161, 0.2)', color: '#00e0a1', padding: '0.1rem 0.4rem', borderRadius: '10px', fontSize: '0.7rem', fontWeight: 800 }}>
-                {CURRENT_APP_VERSION} ✨
-              </span>
-            </button>
-          </div>
-        </Link>
-
-        {/* Mobile Hamburger Toggle Button */}
-        <button
-          type="button"
-          className={`mobile-menu-toggle ${mobileMenuOpen ? 'active' : ''}`}
-          onClick={() => setMobileMenuOpen(prev => !prev)}
-          aria-label={lang === 'ar' ? 'القائمة الرئيسية' : 'Toggle navigation menu'}
-        >
-          <span className="hamburger-line"></span>
-          <span className="hamburger-line"></span>
-          <span className="hamburger-line"></span>
-        </button>
-
-        {/* Backdrop overlay for mobile menu */}
-        {mobileMenuOpen && (
-          <div className="mobile-menu-backdrop" onClick={() => setMobileMenuOpen(false)} />
-        )}
-
-        {/* Navigation Bar (Inline on Desktop / Slide Drawer on Mobile) */}
-        <nav className={`header-nav ${mobileMenuOpen ? 'mobile-open' : ''}`}>
-          <div className="mobile-nav-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <img src="/Logo.png" alt="Logo" style={{ height: '28px', objectFit: 'contain' }} />
-              <strong style={{ fontSize: '1rem', color: '#fff' }}>{t.logo}</strong>
-            </div>
-            <button
-              type="button"
-              className="btn-close-mobile-nav"
-              onClick={() => setMobileMenuOpen(false)}
-              aria-label="Close menu"
-            >
-              ✕
-            </button>
-          </div>
-
-          <div className="mobile-nav-links">
-            <Link to="/" onClick={(e) => { handleLogoClick(e); setMobileMenuOpen(false); }} className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>
-              📊 {t.navHome}
-            </Link>
-            <Link to="/drafts" onClick={() => setMobileMenuOpen(false)} className={`nav-link ${location.pathname.includes('/drafts') ? 'active' : ''}`}>
-              📁 {t.navDrafts}
-            </Link>
-            {hasWarehouseAccess && (
-              <Link to="/warehouse" onClick={() => setMobileMenuOpen(false)} className={`nav-link ${location.pathname.includes('/warehouse') ? 'active' : ''}`}>
-                📦 {t.navWarehouse || (lang === 'ar' ? 'المخزون' : 'Warehouse')}
-              </Link>
-            )}
-            {isAdmin && (
-              <Link to="/admin" onClick={() => setMobileMenuOpen(false)} className={`nav-link ${location.pathname.includes('/admin') ? 'active' : ''}`}>
-                👑 {t.navAdmin || (lang === 'ar' ? 'لوحة الأدمن' : 'Admin Panel')}
-              </Link>
-            )}
-            <button type="button" className="nav-link" onClick={() => { setShowTutorialModal(true); setMobileMenuOpen(false); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}>
-              💡 {lang === 'ar' ? 'دليل الخطوات' : 'Step Guide'}
-            </button>
-            <button className="nav-link btn-settings-trigger" onClick={() => { setShowSettingsModal(true); setMobileMenuOpen(false); }} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-              ⚙️ {t.navSettings}
-            </button>
-          </div>
-
-          {/* Mobile Drawer Bottom Quick Controls */}
-          <div className="mobile-nav-footer">
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm mobile-footer-btn"
-              onClick={() => { setShowReleaseNotesModal(true); setMobileMenuOpen(false); }}
-            >
-              <span>⚡ {lang === 'ar' ? 'سجل التحديثات' : 'Release Notes'}</span>
-              <span style={{ color: 'var(--accent)', fontWeight: 800 }}>{CURRENT_APP_VERSION}</span>
-            </button>
-
-            <button
-              type="button"
-              className="lang-toggle-btn mobile-lang-btn"
-              onClick={() => { setLang(lang === 'ar' ? 'en' : 'ar'); }}
-            >
-              🌐 {lang === 'ar' ? 'English' : 'العربية'}
-            </button>
-
-            {user && (
-              <div className="mobile-user-card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                  <div
-                    className="user-avatar"
-                    style={{
-                      width: '38px',
-                      height: '38px',
-                      backgroundImage: user.photoURL ? `url(${user.photoURL})` : 'none',
-                      backgroundSize: 'cover',
-                      flexShrink: 0
-                    }}
-                  >
-                    {!user.photoURL && (user.displayName?.slice(0, 2).toUpperCase() || 'US')}
-                  </div>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {user.displayName || 'User'}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {user.email}
-                    </div>
-                  </div>
-                </div>
-                <button
-                  className="btn-logout"
-                  onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
-                >
-                  {t.logout} 🚪
-                </button>
-              </div>
-            )}
-          </div>
-        </nav>
-
-        {/* Desktop Header Actions */}
-        <div className="header-actions desktop-header-actions">
-          <button className="lang-toggle-btn" onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}>
-            🌐 {lang === 'ar' ? 'English' : 'العربية'}
-          </button>
-
-          {user && (() => {
-            const isMaster = user.email === 'gemy.essam.ge@gmail.com';
-            return (
-              <div
-                className={`user-profile-widget ${isMaster ? 'master-gm-widget' : ''}`}
-                onClick={() => setShowUserDropdown(!showUserDropdown)}
-              >
-                <div
-                  className={`user-avatar ${isMaster ? 'master-gm-avatar' : ''}`}
-                  style={{
-                    backgroundImage: user.photoURL ? `url(${user.photoURL})` : 'none',
-                    backgroundSize: 'cover',
-                    position: 'relative'
-                  }}
-                >
-                  {!user.photoURL && (user.displayName?.slice(0, 2).toUpperCase() || 'US')}
-                  {isMaster && (
-                    <span className="master-crown-icon">
-                      👑
-                    </span>
-                  )}
-                </div>
-                <div className={`user-info-dropdown ${showUserDropdown ? 'show-dropdown' : ''}`}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.4rem' }}>
-                    <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#ffffff', whiteSpace: 'nowrap' }}>
-                      {user.displayName || 'SaaS User'}
-                    </h4>
-                    {isMaster && (
-                      <span className="master-gm-badge">
-                        MASTER GM 👑
-                      </span>
-                    )}
-                  </div>
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'rgba(255, 215, 0, 0.85)', marginBottom: '0.85rem' }}>
-                    {user.email}
-                  </p>
-                  <button className="btn-logout" onClick={(e) => { e.stopPropagation(); handleLogout(); }}>{t.logout} 🚪</button>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      </header>
-
+      <WorkspaceNavigation
+        lang={lang} setLang={setLang} theme={theme} onToggleTheme={toggleTheme} user={user} isAdmin={isAdmin}
+        hasWarehouseAccess={hasWarehouseAccess} onHome={handleLogoClick}
+        onSettings={() => setShowSettingsModal(true)}
+        onGuide={() => setShowTutorialModal(true)}
+        onReleases={() => setShowReleaseNotesModal(true)} onLogout={handleLogout}
+        open={mobileMenuOpen} setOpen={setMobileMenuOpen} version={CURRENT_APP_VERSION}
+      />
       {/* ─── Main Content Wrapper ─── */}
-      <main className="main-content-flow">
+      <main id="workspace-content" className="main-content-flow" tabIndex={-1}>
+        {import.meta.env.DEV && import.meta.env.VITE_ACCOUNT_PREVIEW === '1' && <div className="fx-preview-banner" role="status">{lang === 'ar' ? 'تجربة محلية بحساب حقيقي · البيانات من حسابك · قراءة فقط بدون حفظ أو إرسال' : 'Local real-account preview · Your account data · Read-only, saving and submissions disabled'}</div>}
+        {import.meta.env.DEV && import.meta.env.VITE_ACCOUNT_PREVIEW !== '1' && import.meta.env.VITE_DESIGN_PREVIEW === '1' && <div className="fx-preview-banner" role="status">{lang === 'ar' ? 'معاينة تصميم محلية · كل الأرصدة بيانات تجريبية · الحفظ والإرسال غير متاحين' : 'Local design preview · All balances are sample data · Saving and submissions are disabled'}</div>}
         <SettingsContext.Provider value={settings}>
-          {children}
+          <MotionRegion key={location.pathname} className="fx-route-content" motionKey={location.pathname}>{children}</MotionRegion>
         </SettingsContext.Provider>
       </main>
 
@@ -529,17 +319,13 @@ function Layout({ children }) {
         </div>
       )}
 
-      {/* Release Notes Modal (Lazy loaded on demand) */}
-      {showReleaseNotesModal && (
-        <Suspense fallback={null}>
-          <ReleaseNotesModal
-            isOpen={showReleaseNotesModal}
-            onClose={() => setShowReleaseNotesModal(false)}
-            lang={lang}
-            hasWarehouseAccess={hasWarehouseAccess || isAdmin}
-          />
-        </Suspense>
-      )}
+      {/* Release Notes Modal */}
+      <ReleaseNotesModal
+        isOpen={showReleaseNotesModal}
+        onClose={() => setShowReleaseNotesModal(false)}
+        lang={lang}
+        hasWarehouseAccess={hasWarehouseAccess || isAdmin}
+      />
 
       {/* Step Guide Modal (Global Access) */}
       <StepGuideModal
@@ -551,8 +337,28 @@ function Layout({ children }) {
   )
 }
 
+const Warehouse = lazy(() => import('./pages/Warehouse'))
+const DesignShowcase = lazy(() => import('./pages/DesignShowcase'))
 export default function App() {
+  if (import.meta.env.DEV && window.location.pathname === '/design-showcase') {
+    return <Suspense fallback={<div className="card">جاري تحميل معرض الشاشات…</div>}><DesignShowcase translations={TRANSLATIONS} /></Suspense>
+  }
+  return <AccountApp />
+}
+
+function AccountApp() {
+  const [loginError, setLoginError] = useState('')
   const [lang, setLang] = useState('ar')
+  const [theme, setTheme] = useState(() => readTheme())
+  const toggleTheme = (event) => {
+    startThemeTransition(event)
+    setTheme(current => nextTheme(current))
+  }
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    document.documentElement.style.colorScheme = theme
+    saveTheme(theme)
+  }, [theme])
   const [user, setUser] = useState(null)
   const [hasWarehouseAccess, setHasWarehouseAccess] = useState(false)
   const [loadingAuth, setLoadingAuth] = useState(true)
@@ -588,7 +394,7 @@ export default function App() {
 
   useEffect(() => {
     const isLocalDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || import.meta.env.DEV)
-    const hasDevBypass = isLocalDev && localStorage.getItem('fawterx_dev_bypass') === 'true'
+    const hasDevBypass = isLocalDev && import.meta.env.VITE_ACCOUNT_PREVIEW !== '1' && localStorage.getItem('fawterx_dev_bypass') === 'true'
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
@@ -617,15 +423,18 @@ export default function App() {
   }, [])
 
   async function handleGoogleLogin() {
+    setLoginError('')
     try {
+      localStorage.removeItem('fawterx_dev_bypass')
+      localStorage.removeItem('useQuickLogin')
       const result = await signInWithPopup(auth, googleProvider)
       await syncUserData(result.user)
       toast.success(lang === 'ar' ? `مرحباً بك ${result.user.displayName}` : `Welcome ${result.user.displayName}`)
     } catch (error) {
       console.error(error)
-      toast.error(lang === 'ar'
-        ? 'فشل تسجيل الدخول بواسطة Google: يرجى التحقق من إعدادات المتصفح أو الاتصال بالدعم'
-        : 'Sign in failed via Google: Please verify your browser popup block settings')
+      const message = googleLoginError(error, lang)
+      setLoginError(message)
+      toast.error(message, { duration: 8000 })
     }
   }
 
@@ -649,7 +458,7 @@ export default function App() {
   }
 
   return (
-    <AppContext.Provider value={{ lang, setLang, t, user, isAdmin, hasWarehouseAccess, handleLogout, resetTrigger, triggerReset, showTutorialModal, setShowTutorialModal }}>
+    <AppContext.Provider value={{ lang, setLang, theme, toggleTheme, t, user, isAdmin, hasWarehouseAccess, handleLogout, resetTrigger, triggerReset, showTutorialModal, setShowTutorialModal }}>
       <BrowserRouter>
         <Security2FAModal
           isOpen={show2FAModal}
@@ -664,134 +473,49 @@ export default function App() {
           }}
           lang={lang}
         />
-        <Toaster position="bottom-center" toastOptions={{ style: { background: '#101223', color: '#e8eaf6', border: '1px solid #202442', borderRadius: '12px' } }} />
+        <Toaster position="bottom-center" toastOptions={{ style: { background: 'var(--bg-card)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '12px' } }} />
 
         {!user ? (
-          <div className={`auth-full-screen ${lang === 'en' ? 'ltr-layout' : ''}`}>
-            <div className="auth-brand-side">
-              <div className="brand-side-content" style={{ position: 'relative', zIndex: 2 }}>
-                <div className="brand-side-logo-icon">
-                  <img src="/Logo.png" alt="Logo" style={{ height: '70px', objectFit: 'contain', marginBottom: '1rem' }} />
-                </div>
-                <h1>{t.logo}</h1>
-                <p>{t.welcomeSub}</p>
-                <div className="brand-side-features">
-                  <div className="feature-item">
-                    <span>⚡</span>
-                    <div>
-                      <h4>Direct Excel Auto-parsing</h4>
-                      <p>Import sheets directly without mapping twice</p>
-                    </div>
-                  </div>
-                  <div className="feature-item">
-                    <span>🔑</span>
-                    <div>
-                      <h4>Encrypted Token Security</h4>
-                      <p>Your portal keys remain locked in your browser</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="auth-form-side">
-              <div className="lang-toggle-auth">
-                <button className="lang-toggle-btn" onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}>
-                  🌐 {lang === 'ar' ? 'English' : 'العربية'}
-                </button>
-              </div>
-
-              <div className="auth-form animate-fade-in" style={{ textAlign: 'center' }}>
-                <h2 style={{ marginBottom: '1rem' }}>{t.loginTitle}</h2>
-                <p className="form-sub-desc" style={{ marginBottom: '2.5rem' }}>{t.loginSubtitle}</p>
-
-                <button
-                  type="button"
-                  className="btn btn-primary btn-block btn-lg"
-                  onClick={handleGoogleLogin}
-                  style={{ background: '#ffffff', color: '#000000', border: '1px solid #cccccc', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '1rem' }}
-                >
-                  <svg width="24" height="24" viewBox="0 0 48 48">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
-                  </svg>
-                  {t.googleBtn}
-                </button>
-
-                {/* Local Development Quick Bypass Button */}
-                {(import.meta.env.DEV || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))) && (
-                  <button
-                    type="button"
-                    className="btn-dev-bypass"
-                    onClick={() => {
-                      const devUser = {
-                        uid: 'dev-local-master-user',
-                        displayName: 'Gemy (Dev Master)',
-                        email: 'gemy.essam.ge@gmail.com',
-                        photoURL: ''
-                      }
-                      localStorage.setItem('fawterx_dev_bypass', 'true')
-                      setUser(devUser)
-                      toast.success(lang === 'ar' ? 'تم تخطي الدخول كمسؤول للتطوير المحلي 🛠️' : 'Dev Master Bypass Activated 🛠️')
-                    }}
-                    style={{
-                      marginTop: '0.75rem',
-                      width: '100%',
-                      padding: '0.75rem 1rem',
-                      background: 'rgba(0, 224, 161, 0.08)',
-                      border: '1px dashed #00e0a1',
-                      borderRadius: '12px',
-                      color: '#00e0a1',
-                      fontWeight: 700,
-                      fontSize: '0.85rem',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.5rem',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <span>🛠️</span>
-                    <span>{lang === 'ar' ? 'تخطي تسجيل الدخول (وضع المطور المحلي)' : 'Bypass Login (Dev Mode)'}</span>
-                  </button>
-                )}
-
-              </div>
-            </div>
-          </div>
+          <LoginExperience loginError={loginError} lang={lang} setLang={setLang} theme={theme} onToggleTheme={toggleTheme} t={t} onLogin={handleGoogleLogin}
+            onDevLogin={() => {
+              const devUser = {
+                uid: 'dev-local-master-user', displayName: 'Gemy (Dev Master)',
+                email: 'gemy.essam.ge@gmail.com', photoURL: ''
+              }
+              localStorage.setItem('fawterx_dev_bypass', 'true')
+              setUser(devUser)
+              toast.success(lang === 'ar' ? 'تم تخطي الدخول كمسؤول للتطوير المحلي 🛠️' : 'Dev Master Bypass Activated 🛠️')
+            }}
+          />
         ) : (
           <Layout>
             <ErrorBoundary isAr={lang === 'ar'}>
-              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}><span className="spinner"></span></div>}>
-                <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/drafts" element={<Drafts />} />
-                  <Route path="/drafts/:id" element={<DraftDetails />} />
-                  <Route path="/warehouse" element={hasWarehouseAccess ? <Warehouse /> : (
-                    <div className="card fade-in" style={{ padding: '2rem' }}>
-                      <h2 className="card-title">{lang === 'ar' ? 'غير مصرح بالوصول' : 'Access Denied'}</h2>
-                      <p className="card-sub" style={{ marginBottom: 0 }}>
-                        {lang === 'ar'
-                          ? 'صفحة المخازن مخصصة للمسؤولين والمستخدمين المصرح لهم فقط.'
-                          : 'Warehouse access is restricted to authorized users.'}
-                      </p>
-                    </div>
-                  )} />
-                  <Route path="/admin" element={isAdmin ? <AdminPanel /> : (
-                    <div className="card fade-in" style={{ padding: '2rem' }}>
-                      <h2 className="card-title">Access Denied</h2>
-                      <p className="card-sub" style={{ marginBottom: 0 }}>
-                        {lang === 'ar'
-                          ? 'هذه الصفحة محجوبة لحساب الإدارة المعتمد فقط.'
-                          : 'This page is restricted to the approved administrator account only.'}
-                      </p>
-                    </div>
-                  )} />
-                </Routes>
-              </Suspense>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/drafts" element={<Drafts />} />
+              <Route path="/drafts/:id" element={<DraftDetails />} />
+              <Route path="/warehouse" element={hasWarehouseAccess ? <Suspense fallback={<div className="card" role="status">{lang === 'ar' ? 'جاري تحميل المخزون…' : 'Loading warehouse…'}</div>}><Warehouse /></Suspense> : (
+                <div className="card fade-in" style={{ padding: '2rem' }}>
+                  <h2 className="card-title">{lang === 'ar' ? 'غير مصرح بالوصول' : 'Access Denied'}</h2>
+                  <p className="card-sub" style={{ marginBottom: 0 }}>
+                    {lang === 'ar'
+                      ? 'صفحة المخازن مخصصة للمسؤولين والمستخدمين المصرح لهم فقط.'
+                      : 'Warehouse access is restricted to authorized users.'}
+                  </p>
+                </div>
+              )} />
+              {import.meta.env.DEV && <Route path="/design-showcase" element={<Suspense fallback={<div className="card">جاري تحميل معرض الشاشات…</div>}><DesignShowcase translations={TRANSLATIONS} /></Suspense>} />}
+              <Route path="/admin" element={isAdmin ? <AdminPanel /> : (
+                <div className="card fade-in" style={{ padding: '2rem' }}>
+                  <h2 className="card-title">Access Denied</h2>
+                  <p className="card-sub" style={{ marginBottom: 0 }}>
+                    {lang === 'ar'
+                      ? 'هذه الصفحة محجوبة لحساب الإدارة المعتمد فقط.'
+                      : 'This page is restricted to the approved administrator account only.'}
+                  </p>
+                </div>
+              )} />
+            </Routes>
             </ErrorBoundary>
           </Layout>
         )}

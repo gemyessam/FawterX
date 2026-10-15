@@ -18,7 +18,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '8 سبتمبر 2026' : 'Sep 8, 2026',
       badge: isAr ? '✨ التحديث الأحدث' : '✨ Latest Release',
-      badgeColor: '#00e0a1',
+      badgeColor: 'var(--accent)',
       title: isAr
         ? 'ضبط تتبع مراحل الصرف: استبعاد وعزل الأوامر الملغاة وإتاحة حذفها بضغطة زر'
         : 'Dispatches Tracker Fix: Cancelled Orders Isolation, Red Badging & One-Click Cleanup',
@@ -524,7 +524,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'تكبير وإبراز أرقام عدد البارات (BAR) في بطاقات التتبع وجداول الفحص' : 'Enlarged High-Visibility Bar Count Typography Across Lifecycle Tracker & Audit Tables',
       highlights: [
         {
@@ -546,7 +546,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'خصم وإغلاق أوامر مخزن دلمار آلياً عند الصرف، واحتساب قيمة الصرف بسعر تكلفة الدخول' : 'Auto-Fulfill Delmar Dispatches & Valuation of Outbound Deliveries by Inbound Acquisition Cost',
       highlights: [
         {
@@ -574,7 +574,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'إخفاء خانة الربط اليدوي تلقائياً وتفعيلها بزر مخصص عند الطلب' : 'Collapsible On-Demand Canex Manual Link Input',
       highlights: [
         {
@@ -596,7 +596,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'أعمدة الأرصدة والمتبقي (المستودع ودلمار)، إزالة الاقتراحات الزائدة، وشريط الأولوية العام' : 'Independent Stock & Remaining Columns, Cleaner Canex Link UI & Batch Priority Toolbar',
       highlights: [
         {
@@ -624,7 +624,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'التحكم الرقمي المباشر في أعواد دلمار، أزرار الأولويات الفورية، والربط المانيوال بكود كانكس' : 'Interactive Delmar Bar Input, 1-Click Priority Controls & Always-Available Canex Code Linking',
       highlights: [
         {
@@ -652,7 +652,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'عمود مخزن دلمار المستقل، تتبع وتأكيد كود العميل، وحساب الرصيد المتبقي بدقة 100%' : 'Dedicated Delmar Column, Customer Code Tracking & Accurate Remaining Stock Calculation',
       highlights: [
         {
@@ -680,7 +680,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'تغطية عجز الأعواد من مخزن دلمار، كتابة الكود الصحيح يدوياً، ونقل عمود الأعواد' : 'Delmar Shortage Coverage Prompt, Manual Code Mapping & Column Reordering',
       highlights: [
         {
@@ -708,7 +708,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'نظام الأكواد المترادفة والبديلة (Item Aliases) والربط الذكي بين أكواد شوكو وكانكس' : 'Item Aliases Dictionary & Smart Match for Schüco vs Canex Discrepancies',
       highlights: [
         {
@@ -736,7 +736,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'احتساب بنود دهان دلمار للتسليم ولوحة قرار المالك للصرف والاستبعاد' : 'Delmar Coating Delivery Calculation & Owner Dispatch Decision Engine',
       highlights: [
         {
@@ -764,7 +764,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'دعم أذون تسليم شوكو (SD) ونظام فحص وتدقيق الرصيد التلقائي قبل الصرف' : 'Schüco SD Delivery Note Parser & Pre-Dispatch Stock Availability Checker',
       highlights: [
         {
@@ -792,7 +792,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'دعم متقدم لكافة صيغ فواتير الإكسيل، إلزامية أوامر البيع ومراجع العملاء، والتذكر التلقائي لبيانات الصرف' : 'Robust Multi-Format Excel Parsing, Mandatory SO & Customer Ref Validation, and Auto-Fill Last Dispatch',
       highlights: [
         {
@@ -820,7 +820,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'إصلاح استثناء إنشاء نقاط الحفظ اليدوية والتلقائية في المخزن' : 'Fix isAuto Parameter Exception in Manual & Auto Restore Points',
       highlights: [
         {
@@ -842,7 +842,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '2 سبتمبر 2026' : 'Sep 2, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'نظام الحفظ الاحتياطي التلقائي (Auto-Snapshots) والتراجع الفوري عن الحركات والفواتير للمالك' : 'Zero-Click Auto Restore Points & Instant Invoice/Movement Rollback System',
       highlights: [
         {
@@ -870,7 +870,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '1 سبتمبر 2026' : 'Sep 1, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'صرف الفواتير الواردة بالكامل أو أجزاء منها، تحديد المستودع، وتخصيص صلاحيات الصرف والتوريد' : 'Invoice-Based Bulk/Partial Outbound, Warehouse Picker & Granular Permissions',
       highlights: [
         {
@@ -898,7 +898,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '1 سبتمبر 2026' : 'Sep 1, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'إضافة التوريد والصرف اليدوي ونظام تتبع مراحل الصرف (دهان ⬅️ عميل نهائي)' : 'Manual Stock Supply, Multi-Stage Outbound & Lifecycle Tracking Pipeline',
       highlights: [
         {
@@ -926,7 +926,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'invoicing',
       date: isAr ? '31 أغسطس 2026' : 'Aug 31, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'توحيد مطابقة عملاء إكسيل وفرض Schema v1.0 لمنع رفض الفواتير' : 'Excel Mapping Parity with Smart Upload & Strict v1.0 Schema Enforcement',
       highlights: [
         {
@@ -948,7 +948,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'invoicing',
       date: isAr ? '31 أغسطس 2026' : 'Aug 31, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'توحيد منظومة التوقيع الرقمي لمنع رفض الفواتير لعدم وجود توقيع' : 'Universal Digital Signing Pipeline & Strict Pre-Dispatch Validation',
       highlights: [
         {
@@ -970,7 +970,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'invoicing',
       date: isAr ? '19 أغسطس 2026' : 'Aug 19, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'تسريع الاستيقاظ ومنع أخطاء التقديم والمحاولة الأولى' : 'Preemptive Server Warm-up, Signer Auto-Wait & Status Check Fixes',
       highlights: [
         {
@@ -998,7 +998,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       category: 'warehouse',
       date: isAr ? '18 أغسطس 2026' : 'Aug 18, 2026',
       badge: isAr ? '✨ إصدار سابق' : '✨ Previous Release',
-      badgeColor: 'rgba(255, 255, 255, 0.1)',
+      badgeColor: 'color-mix(in srgb, var(--text) 10%, transparent)',
       title: isAr ? 'استعادة ترقيم فواتير شوكو القياسي بالبادئة 202303xxx تلقائياً' : 'Restored Standard Schuco Invoice Number Formatting with 202303xxx Prefix',
       highlights: [
         {
@@ -1594,6 +1594,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
 
   return (
     <div
+      className="fx-release-backdrop"
       style={{
         position: 'fixed',
         inset: 0,
@@ -1609,10 +1610,14 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
       onClick={onClose}
     >
       <div
+        className="fx-release-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={isAr ? 'سجل التحديثات' : 'Release history'}
         style={{
           background: 'linear-gradient(145deg, #13172d 0%, #0d1021 100%)',
           border: '1px solid rgba(138, 180, 255, 0.2)',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(0, 224, 161, 0.1)',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px color-mix(in srgb, var(--accent) 10%, transparent)',
           borderRadius: '20px',
           width: '100%',
           maxWidth: '780px',
@@ -1620,7 +1625,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          color: '#ffffff',
+          color: 'var(--text)',
           direction: isAr ? 'rtl' : 'ltr'
         }}
         onClick={(e) => e.stopPropagation()}
@@ -1629,11 +1634,11 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
         <div
           style={{
             padding: '1.15rem 1.5rem',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            borderBottom: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: 'rgba(255, 255, 255, 0.02)'
+            background: 'color-mix(in srgb, var(--text) 2%, transparent)'
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -1642,19 +1647,19 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                 width: '42px',
                 height: '42px',
                 borderRadius: '12px',
-                background: 'rgba(0, 224, 161, 0.15)',
-                border: '1px solid rgba(0, 224, 161, 0.3)',
+                background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: '1.3rem',
-                color: '#00e0a1'
+                color: 'var(--accent)'
               }}
             >
               🚀
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#ffffff' }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--text)' }}>
                 {isAr ? 'سجل التحديثات والإصدارات ✨' : 'Release History & Changelog ✨'}
               </h3>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted, #8ab4ff)' }}>
@@ -1666,9 +1671,9 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <span
               style={{
-                background: 'rgba(0, 224, 161, 0.15)',
-                color: '#00e0a1',
-                border: '1px solid rgba(0, 224, 161, 0.3)',
+                background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                color: 'var(--accent)',
+                border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
                 padding: '0.25rem 0.65rem',
                 borderRadius: '20px',
                 fontSize: '0.8rem',
@@ -1680,9 +1685,9 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
             <button
               onClick={onClose}
               style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                color: '#ffffff',
+                background: 'color-mix(in srgb, var(--text) 5%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)',
+                color: 'var(--text)',
                 width: '32px',
                 height: '32px',
                 borderRadius: '50%',
@@ -1708,10 +1713,10 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
             borderRadius: '14px',
             background: activeTab === 'warehouse' && canViewWarehouse
               ? 'linear-gradient(90deg, rgba(245, 158, 11, 0.12) 0%, rgba(139, 92, 246, 0.12) 100%)'
-              : 'linear-gradient(90deg, rgba(0, 224, 161, 0.08) 0%, rgba(66, 133, 244, 0.08) 100%)',
+              : 'linear-gradient(90deg, color-mix(in srgb, var(--accent) 8%, transparent) 0%, rgba(66, 133, 244, 0.08) 100%)',
             border: activeTab === 'warehouse' && canViewWarehouse
               ? '1px solid rgba(245, 158, 11, 0.3)'
-              : '1px solid rgba(0, 224, 161, 0.2)',
+              : '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
             display: 'flex',
             alignItems: 'center',
             gap: '1rem'
@@ -1719,12 +1724,12 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
         >
           <div style={{ fontSize: '1.6rem' }}>{activeTab === 'warehouse' && canViewWarehouse ? '🔒' : '⚡'}</div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: '0.95rem', color: activeTab === 'warehouse' && canViewWarehouse ? '#fbbf24' : '#00e0a1' }}>
+            <div style={{ fontWeight: 800, fontSize: '0.95rem', color: activeTab === 'warehouse' && canViewWarehouse ? '#fbbf24' : 'var(--accent)' }}>
               {activeTab === 'warehouse' && canViewWarehouse
                 ? (isAr ? 'إدارة ومحركات المستودع والتشغيل الداخلي' : 'Internal Warehouse & Operational Engines')
                 : (isAr ? 'منصة رفع الفواتير الرقمية والامتثال الضريبي' : 'Certified ETA Invoice Automation Platform')}
             </div>
-            <div style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.75)', marginTop: '0.15rem' }}>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
               {activeTab === 'warehouse' && canViewWarehouse
                 ? (isAr
                     ? 'سجل التحديثات الهندسية ومحركات التسعير، مطابقة الأرصدة، أذون الصرف والتوريد، والربط التلقائي للأكواد والداي.'
@@ -1743,10 +1748,10 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
               <div
                 style={{
                   display: 'inline-flex',
-                  background: 'rgba(255, 255, 255, 0.05)',
+                  background: 'color-mix(in srgb, var(--text) 5%, transparent)',
                   padding: '4px',
                   borderRadius: '12px',
-                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                  border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)'
                 }}
               >
                 <button
@@ -1770,7 +1775,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                   <span>⚡ {isAr ? 'رفع الفواتير والمنظومة' : 'ETA Invoicing'}</span>
                   <span
                     style={{
-                      background: activeTab === 'invoicing' ? 'rgba(0,0,0,0.2)' : 'rgba(255, 255, 255, 0.12)',
+                      background: activeTab === 'invoicing' ? 'rgba(0,0,0,0.2)' : 'color-mix(in srgb, var(--text) 12%, transparent)',
                       color: activeTab === 'invoicing' ? '#000000' : '#8ab4ff',
                       padding: '0.1rem 0.4rem',
                       borderRadius: '10px',
@@ -1803,7 +1808,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                   <span>📦 {isAr ? 'حركات المستودع والتشغيل' : 'Warehouse & Operations'}</span>
                   <span
                     style={{
-                      background: activeTab === 'warehouse' ? 'rgba(0,0,0,0.2)' : 'rgba(255, 255, 255, 0.12)',
+                      background: activeTab === 'warehouse' ? 'rgba(0,0,0,0.2)' : 'color-mix(in srgb, var(--text) 12%, transparent)',
                       color: activeTab === 'warehouse' ? '#000000' : '#f59e0b',
                       padding: '0.1rem 0.4rem',
                       borderRadius: '10px',
@@ -1821,7 +1826,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                   style={{
                     border: 'none',
                     background: activeTab === 'all' ? 'linear-gradient(135deg, #4285f4 0%, #1a73e8 100%)' : 'transparent',
-                    color: activeTab === 'all' ? '#ffffff' : 'rgba(255, 255, 255, 0.8)',
+                    color: activeTab === 'all' ? '#ffffff' : 'color-mix(in srgb, var(--text) 80%, transparent)',
                     fontWeight: activeTab === 'all' ? 800 : 600,
                     padding: '0.35rem 0.8rem',
                     borderRadius: '8px',
@@ -1836,8 +1841,8 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                   <span>🌟 {isAr ? 'كافة التحديثات' : 'All Updates'}</span>
                   <span
                     style={{
-                      background: activeTab === 'all' ? 'rgba(0,0,0,0.25)' : 'rgba(255, 255, 255, 0.12)',
-                      color: '#ffffff',
+                      background: activeTab === 'all' ? 'rgba(0,0,0,0.25)' : 'color-mix(in srgb, var(--text) 12%, transparent)',
+                      color: 'var(--text)',
                       padding: '0.1rem 0.4rem',
                       borderRadius: '10px',
                       fontSize: '0.72rem',
@@ -1859,11 +1864,11 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                 placeholder={isAr ? '🔍 ابحث بالإصدار أو الميزة...' : '🔍 Search version or feature...'}
                 style={{
                   width: '100%',
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  background: 'color-mix(in srgb, var(--text) 6%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--text) 12%, transparent)',
                   borderRadius: '8px',
                   padding: '0.4rem 0.75rem',
-                  color: '#ffffff',
+                  color: 'var(--text)',
                   fontSize: '0.8rem',
                   outline: 'none',
                   boxSizing: 'border-box'
@@ -1881,7 +1886,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                     transform: 'translateY(-50%)',
                     background: 'none',
                     border: 'none',
-                    color: 'rgba(255, 255, 255, 0.5)',
+                    color: 'color-mix(in srgb, var(--text) 50%, transparent)',
                     cursor: 'pointer',
                     fontSize: '0.85rem'
                   }}
@@ -1929,7 +1934,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
           }}
         >
           {filteredReleases.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'rgba(255, 255, 255, 0.6)' }}>
+            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'color-mix(in srgb, var(--text) 60%, transparent)' }}>
               <div style={{ fontSize: '2.2rem', marginBottom: '0.5rem' }}>🔍</div>
               <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
                 {isAr ? 'لا توجد إصدارات مطابقة لمعايير البحث' : 'No releases match your search query'}
@@ -1939,9 +1944,9 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                 onClick={() => { setSearchQuery(''); setActiveTab('invoicing'); }}
                 style={{
                   marginTop: '0.75rem',
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: '#8ab4ff',
+                  background: 'color-mix(in srgb, var(--text) 8%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--text) 15%, transparent)',
+                  color: 'var(--primary)',
                   padding: '0.35rem 0.85rem',
                   borderRadius: '6px',
                   cursor: 'pointer',
@@ -1956,10 +1961,10 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
               <div
                 key={rel.version}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.02)',
+                  background: 'color-mix(in srgb, var(--text) 2%, transparent)',
                   border: rel.badgeColor
                     ? `1px solid ${rel.badgeColor}40`
-                    : '1px solid rgba(255, 255, 255, 0.06)',
+                    : '1px solid color-mix(in srgb, var(--text) 6%, transparent)',
                   borderRadius: '14px',
                   padding: '1.15rem',
                   transition: 'all 0.2s ease'
@@ -1992,9 +1997,9 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                     {rel.badge && (
                       <span
                         style={{
-                          background: 'rgba(0, 224, 161, 0.15)',
-                          color: '#00e0a1',
-                          border: '1px solid rgba(0, 224, 161, 0.3)',
+                          background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                          color: 'var(--accent)',
+                          border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
                           padding: '0.15rem 0.5rem',
                           borderRadius: '6px',
                           fontSize: '0.72rem',
@@ -2028,7 +2033,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                         <span
                           style={{
                             background: 'rgba(66, 133, 244, 0.15)',
-                            color: '#8ab4ff',
+                            color: 'var(--primary)',
                             border: '1px solid rgba(66, 133, 244, 0.35)',
                             padding: '0.15rem 0.55rem',
                             borderRadius: '6px',
@@ -2044,7 +2049,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                       )
                     )}
 
-                    <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#ffffff' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>
                       {rel.title}
                     </span>
                   </div>
@@ -2064,7 +2069,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
                         gap: '0.6rem',
                         fontSize: '0.83rem',
                         lineHeight: '1.45',
-                        color: 'rgba(255, 255, 255, 0.88)'
+                        color: 'color-mix(in srgb, var(--text) 88%, transparent)'
                       }}
                     >
                       <span style={{ fontSize: '0.9rem', marginTop: '0.1rem' }}>{h.icon}</span>
@@ -2081,7 +2086,7 @@ export default function ReleaseNotesModal({ isOpen, onClose, lang = 'ar', hasWar
         <div
           style={{
             padding: '0.85rem 1.5rem',
-            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+            borderTop: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
             background: 'rgba(0, 0, 0, 0.2)',
             display: 'flex',
             justifyContent: 'space-between',

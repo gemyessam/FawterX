@@ -523,6 +523,7 @@ export default function ManualStockModal({
 
   return (
     <div
+      className="fx-stock-backdrop"
       style={{
         position: 'fixed',
         top: 0,
@@ -539,9 +540,13 @@ export default function ManualStockModal({
       }}
     >
       <div
+        className="fx-stock-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={isAr ? 'إدارة حركة المخزون' : 'Stock movement'}
         style={{
-          background: '#121629',
-          border: `1px solid ${mode === 'outbound' ? 'rgba(255, 71, 87, 0.4)' : 'rgba(0, 224, 161, 0.4)'}`,
+          background: 'var(--bg-card)',
+          border: `1px solid ${mode === 'outbound' ? 'rgba(255, 71, 87, 0.4)' : 'color-mix(in srgb, var(--accent) 40%, transparent)'}`,
           borderRadius: '16px',
           maxWidth: '1100px',
           width: '100%',
@@ -556,17 +561,17 @@ export default function ManualStockModal({
         <div
           style={{
             padding: '1.1rem 1.5rem',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            borderBottom: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            background: mode === 'outbound' ? 'linear-gradient(90deg, rgba(255,71,87,0.1) 0%, rgba(18,22,41,0.5) 100%)' : 'linear-gradient(90deg, rgba(0,224,161,0.1) 0%, rgba(18,22,41,0.5) 100%)',
+            background: mode === 'outbound' ? 'linear-gradient(90deg, rgba(255,71,87,0.1) 0%, rgba(18,22,41,0.5) 100%)' : 'linear-gradient(90deg, color-mix(in srgb, var(--accent) 10%, transparent) 0%, rgba(18,22,41,0.5) 100%)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '1.6rem' }}>{mode === 'outbound' ? '📤' : '📥'}</span>
             <div>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: 'var(--text)' }}>
                 {mode === 'outbound'
                   ? (isAr ? 'صرف وتتبع مراحل القطاعات (Outbound Dispatch)' : 'Outbound Profile Dispatch')
                   : (isAr ? 'توريد يدوي للقطاعات (Manual Stock Supply)' : 'Manual Stock Supply')}
@@ -583,9 +588,9 @@ export default function ManualStockModal({
                       if (onSelectProject) onSelectProject(e.target.value)
                     }}
                     style={{
-                      background: '#1a1f3a',
-                      color: '#00e0a1',
-                      border: '1px solid rgba(0, 224, 161, 0.4)',
+                      background: 'var(--bg-surface)',
+                      color: 'var(--accent)',
+                      border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
                       padding: '0.2rem 0.6rem',
                       borderRadius: '6px',
                       fontSize: '0.82rem',
@@ -600,7 +605,7 @@ export default function ManualStockModal({
                     ))}
                   </select>
                 ) : (
-                  <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.3)', fontSize: '0.8rem' }}>
+                  <span className="badge" style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', fontSize: '0.8rem' }}>
                     {activeProjectObject.name}
                   </span>
                 )}
@@ -610,7 +615,7 @@ export default function ManualStockModal({
 
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             {/* Mode Switcher */}
-            <div style={{ display: 'flex', background: '#0a0d1a', padding: '0.25rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', background: 'var(--bg-surface)', padding: '0.25rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
               <button
                 type="button"
                 className={`btn btn-sm ${mode === 'inbound' ? 'btn-primary' : 'btn-ghost'}`}
@@ -628,7 +633,7 @@ export default function ManualStockModal({
                   fontWeight: 700,
                   background: mode === 'outbound' ? '#ff4757' : 'transparent',
                   borderColor: mode === 'outbound' ? '#ff4757' : 'transparent',
-                  color: '#fff',
+                  color: 'var(--text)',
                 }}
               >
                 📤 {isAr ? 'صرف بمراحل (-)' : 'Outbound'}
@@ -673,7 +678,7 @@ export default function ManualStockModal({
                   fontSize: '0.82rem',
                   background: sourceType === 'invoice' ? 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)' : 'transparent',
                   borderColor: sourceType === 'invoice' ? '#3b82f6' : 'var(--border)',
-                  color: '#fff',
+                  color: 'var(--text)',
                 }}
               >
                 🧾 {isAr ? 'استيراد وصرف من فاتورة واردة مسجلة' : 'From Recorded Inbound Invoice'}
@@ -707,8 +712,8 @@ export default function ManualStockModal({
                     style={{
                       flex: 1,
                       minWidth: '280px',
-                      background: '#101426',
-                      color: '#ffffff',
+                      background: 'var(--bg-surface)',
+                      color: 'var(--text)',
                       border: '1px solid #3b82f6',
                       padding: '0.6rem 1rem',
                       borderRadius: '8px',
@@ -763,7 +768,7 @@ export default function ManualStockModal({
                   </div>
                   {hasRestoredDispatch && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.3)', fontSize: '0.78rem' }}>
+                      <span className="badge" style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', fontSize: '0.78rem' }}>
                         ✨ {isAr ? 'تم استرجاع بيانات آخر صرف تلقائياً' : 'Auto-filled from last dispatch'}
                       </span>
                       <button
@@ -788,8 +793,8 @@ export default function ManualStockModal({
                       alignItems: 'flex-start',
                       gap: '0.75rem',
                       padding: '1rem',
-                      background: dispatchType === 'coating_then_customer' ? 'rgba(0, 224, 161, 0.08)' : 'rgba(255,255,255,0.02)',
-                      border: `1px solid ${dispatchType === 'coating_then_customer' ? '#00e0a1' : 'rgba(255,255,255,0.08)'}`,
+                      background: dispatchType === 'coating_then_customer' ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'color-mix(in srgb, var(--text) 2%, transparent)',
+                      border: `1px solid ${dispatchType === 'coating_then_customer' ? 'var(--accent)' : 'color-mix(in srgb, var(--text) 8%, transparent)'}`,
                       borderRadius: '10px',
                       cursor: 'pointer',
                     }}
@@ -800,10 +805,10 @@ export default function ManualStockModal({
                       value="coating_then_customer"
                       checked={dispatchType === 'coating_then_customer'}
                       onChange={() => setDispatchType('coating_then_customer')}
-                      style={{ marginTop: '0.25rem', accentColor: '#00e0a1' }}
+                      style={{ marginTop: '0.25rem', accentColor: 'var(--accent)' }}
                     />
                     <div>
-                      <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '0.95rem' }}>
+                      <div style={{ fontWeight: 800, color: 'var(--text)', fontSize: '0.95rem' }}>
                         1️⃣ {isAr ? 'مرحلتين (مورد دهان ⬅️ ثم عميل نهائي)' : '2 Stages (Coating Supplier ➡️ Customer)'}
                       </div>
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
@@ -821,8 +826,8 @@ export default function ManualStockModal({
                       alignItems: 'flex-start',
                       gap: '0.75rem',
                       padding: '1rem',
-                      background: dispatchType === 'direct_customer' ? 'rgba(0, 224, 161, 0.08)' : 'rgba(255,255,255,0.02)',
-                      border: `1px solid ${dispatchType === 'direct_customer' ? '#00e0a1' : 'rgba(255,255,255,0.08)'}`,
+                      background: dispatchType === 'direct_customer' ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'color-mix(in srgb, var(--text) 2%, transparent)',
+                      border: `1px solid ${dispatchType === 'direct_customer' ? 'var(--accent)' : 'color-mix(in srgb, var(--text) 8%, transparent)'}`,
                       borderRadius: '10px',
                       cursor: 'pointer',
                     }}
@@ -833,10 +838,10 @@ export default function ManualStockModal({
                       value="direct_customer"
                       checked={dispatchType === 'direct_customer'}
                       onChange={() => setDispatchType('direct_customer')}
-                      style={{ marginTop: '0.25rem', accentColor: '#00e0a1' }}
+                      style={{ marginTop: '0.25rem', accentColor: 'var(--accent)' }}
                     />
                     <div>
-                      <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '0.95rem' }}>
+                      <div style={{ fontWeight: 800, color: 'var(--text)', fontSize: '0.95rem' }}>
                         2️⃣ {isAr ? 'مرحلة واحدة (تسليم مباشر للعميل النهائي)' : '1 Stage (Direct Customer Delivery)'}
                       </div>
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
@@ -864,11 +869,11 @@ export default function ManualStockModal({
                         required
                         style={{
                           width: '100%',
-                          background: '#101223',
+                          background: 'var(--bg-surface)',
                           border: '1px solid #ff4757',
                           padding: '0.55rem 0.85rem',
                           borderRadius: '8px',
-                          color: '#fff',
+                          color: 'var(--text)',
                         }}
                       />
                       <datalist id="coating-suppliers-list">
@@ -881,7 +886,7 @@ export default function ManualStockModal({
 
                   {dispatchType === 'coating_then_customer' && (
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: 'var(--text)' }}>
                         🎨 {isAr ? 'اللون / التشطيب المطلوب (اختياري)' : 'Target Finish / RAL (Optional)'}
                       </label>
                       <input
@@ -892,11 +897,11 @@ export default function ManualStockModal({
                         placeholder={isAr ? 'مثال: RAL 9005 أسود مط...' : 'e.g. RAL 9005 Matt Black'}
                         style={{
                           width: '100%',
-                          background: '#101223',
+                          background: 'var(--bg-surface)',
                           border: '1px solid var(--border)',
                           padding: '0.55rem 0.85rem',
                           borderRadius: '8px',
-                          color: '#fff',
+                          color: 'var(--text)',
                         }}
                       />
                       <datalist id="target-finish-list">
@@ -908,7 +913,7 @@ export default function ManualStockModal({
                   )}
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: 'var(--text)' }}>
                       👤 {isAr ? 'اسم العميل النهائي (اختياري)' : 'Customer Name (Optional)'}
                     </label>
                     <input
@@ -918,17 +923,17 @@ export default function ManualStockModal({
                       placeholder={isAr ? 'اسم العميل أو جهة التسليم...' : 'Customer or receiver name...'}
                       style={{
                         width: '100%',
-                        background: '#101223',
+                        background: 'var(--bg-surface)',
                         border: '1px solid var(--border)',
                         padding: '0.55rem 0.85rem',
                         borderRadius: '8px',
-                        color: '#fff',
+                        color: 'var(--text)',
                       }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: 'var(--text)' }}>
                       🏢 {isAr ? 'المشروع / وجهة التسليم (اختياري)' : 'Project / Destination Site'}
                     </label>
                     <input
@@ -938,17 +943,17 @@ export default function ManualStockModal({
                       placeholder={isAr ? 'مثال: مول التجمع / برج الياسمين...' : 'e.g. Site name...'}
                       style={{
                         width: '100%',
-                        background: '#101223',
+                        background: 'var(--bg-surface)',
                         border: '1px solid var(--border)',
                         padding: '0.55rem 0.85rem',
                         borderRadius: '8px',
-                        color: '#fff',
+                        color: 'var(--text)',
                       }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: 'var(--text)' }}>
                       📄 {isAr ? 'رقم إذن الصرف اليدوي' : 'Delivery Note / DSP #'}
                     </label>
                     <input
@@ -958,17 +963,17 @@ export default function ManualStockModal({
                       placeholder={isAr ? 'مثال: DSP-104...' : 'e.g. DSP-104'}
                       style={{
                         width: '100%',
-                        background: '#101223',
+                        background: 'var(--bg-surface)',
                         border: '1px solid var(--border)',
                         padding: '0.55rem 0.85rem',
                         borderRadius: '8px',
-                        color: '#fff',
+                        color: 'var(--text)',
                       }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: 'var(--text)' }}>
                       📅 {isAr ? 'تاريخ الصرف والخروج' : 'Dispatch Date'}
                     </label>
                     <input
@@ -977,11 +982,11 @@ export default function ManualStockModal({
                       onChange={(e) => setDispatchDate(e.target.value)}
                       style={{
                         width: '100%',
-                        background: '#101223',
+                        background: 'var(--bg-surface)',
                         border: '1px solid var(--border)',
                         padding: '0.55rem 0.85rem',
                         borderRadius: '8px',
-                        color: '#fff',
+                        color: 'var(--text)',
                       }}
                     />
                   </div>
@@ -993,20 +998,20 @@ export default function ManualStockModal({
             {mode === 'inbound' && (
               <div
                 style={{
-                  background: 'rgba(0, 224, 161, 0.05)',
-                  border: '1px solid rgba(0, 224, 161, 0.2)',
+                  background: 'color-mix(in srgb, var(--accent) 5%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                   borderRadius: '12px',
                   padding: '1.25rem',
                   marginBottom: '1.25rem',
                 }}
               >
-                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#00e0a1', marginBottom: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--accent)', marginBottom: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   📥 {isAr ? 'بيانات التوريد والإذن:' : 'Inbound Supply Details:'}
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: 'var(--text)' }}>
                       🏭 {isAr ? 'المورد / المصنع' : 'Supplier'}
                     </label>
                     <input
@@ -1014,12 +1019,12 @@ export default function ManualStockModal({
                       value={inboundSupplier}
                       onChange={(e) => setInboundSupplier(e.target.value)}
                       placeholder="CANEX"
-                      style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: '#fff' }}
+                      style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: 'var(--text)' }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: 'var(--text)' }}>
                       📋 {isAr ? 'أمر البيع (Sales Order)' : 'Sales Order (SO)'}
                     </label>
                     <input
@@ -1027,12 +1032,12 @@ export default function ManualStockModal({
                       value={salesOrder}
                       onChange={(e) => setSalesOrder(e.target.value)}
                       placeholder={isAr ? 'مثال: SO-10928...' : 'e.g. SO-10928'}
-                      style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: '#fff' }}
+                      style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: 'var(--text)' }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: 'var(--text)' }}>
                       🏷️ {isAr ? 'مرجع العميل (Customer Ref)' : 'Customer Ref'}
                     </label>
                     <input
@@ -1040,12 +1045,12 @@ export default function ManualStockModal({
                       value={customerRef}
                       onChange={(e) => setCustomerRef(e.target.value)}
                       placeholder={isAr ? 'مثال: CUST-44...' : 'e.g. CUST-44'}
-                      style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: '#fff' }}
+                      style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: 'var(--text)' }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: '#fff' }}>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: 'var(--text)' }}>
                       📄 {isAr ? 'رقم إذن الاستلام / الفاتورة' : 'Receipt / Doc #'}
                     </label>
                     <input
@@ -1053,7 +1058,7 @@ export default function ManualStockModal({
                       value={docNumber}
                       onChange={(e) => setDocNumber(e.target.value)}
                       placeholder={isAr ? 'مثال: REC-9921...' : 'e.g. REC-9921'}
-                      style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: '#fff' }}
+                      style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: 'var(--text)' }}
                     />
                   </div>
                 </div>
@@ -1062,9 +1067,9 @@ export default function ManualStockModal({
 
             {/* ─── LINES TABLE ─── */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-              <div style={{ fontWeight: 800, fontSize: '1rem', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 📑 {isAr ? 'بنود القطاعات المراد تنفيذ الحركة عليها:' : 'Line Items:'}
-                <span className="badge" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff' }}>
+                <span className="badge" style={{ background: 'color-mix(in srgb, var(--text) 8%, transparent)', color: 'var(--text)' }}>
                   {activeSelectedLines.length} {isAr ? 'بند محدد' : 'selected'}
                 </span>
               </div>
@@ -1087,9 +1092,9 @@ export default function ManualStockModal({
                     className="btn btn-secondary btn-sm"
                     onClick={handleAddLine}
                     style={{
-                      background: 'rgba(0, 224, 161, 0.15)',
-                      color: '#00e0a1',
-                      border: '1px solid rgba(0, 224, 161, 0.3)',
+                      background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                      color: 'var(--accent)',
+                      border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
                       borderRadius: '8px',
                       fontWeight: 700,
                     }}
@@ -1100,17 +1105,17 @@ export default function ManualStockModal({
               </div>
             </div>
 
-            <div style={{ overflowX: 'auto', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)', marginBottom: '1rem' }}>
+            <div style={{ overflowX: 'auto', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--text) 6%, transparent)', marginBottom: '1rem' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                 <thead>
-                  <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
+                  <tr style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', borderBottom: '1px solid var(--border)', textAlign: isAr ? 'right' : 'left' }}>
                     {sourceType === 'invoice' && (
                       <th style={{ padding: '0.65rem 0.5rem', textAlign: 'center', width: '40px' }}>
                         <input
                           type="checkbox"
                           checked={allSelected}
                           onChange={(e) => handleToggleSelectAll(e.target.checked)}
-                          style={{ accentColor: '#00e0a1', cursor: 'pointer' }}
+                          style={{ accentColor: 'var(--accent)', cursor: 'pointer' }}
                         />
                       </th>
                     )}
@@ -1119,7 +1124,7 @@ export default function ManualStockModal({
                       {sourceType === 'invoice' ? (isAr ? 'كود الصنف' : 'Item Code') : (isAr ? 'اختيار من رصيد المخزن' : 'Select From Stock')}
                     </th>
                     <th style={{ padding: '0.65rem 0.5rem', minWidth: '100px' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
-                    <th style={{ padding: '0.65rem 0.5rem', minWidth: '100px', color: '#8ab4ff' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
+                    <th style={{ padding: '0.65rem 0.5rem', minWidth: '100px', color: 'var(--primary)' }}>{isAr ? 'كود العميل' : 'Customer Code'}</th>
                     <th style={{ padding: '0.65rem 0.5rem', minWidth: '130px' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
                     <th style={{ padding: '0.65rem 0.5rem', width: '80px' }}>{isAr ? 'الدهان' : 'Finish'}</th>
                     <th style={{ padding: '0.65rem 0.5rem', width: '70px' }}>{isAr ? 'الطول (mm)' : 'Length'}</th>
@@ -1127,14 +1132,14 @@ export default function ManualStockModal({
                       <th style={{ padding: '0.65rem 0.5rem', width: '80px', color: '#60a5fa' }}>{isAr ? 'كمية الفاتورة' : 'Inv Qty'}</th>
                     )}
                     {mode === 'outbound' && (
-                      <th style={{ padding: '0.65rem 0.5rem', width: '80px', color: '#FFD700' }}>{isAr ? 'المتاح' : 'Available'}</th>
+                      <th style={{ padding: '0.65rem 0.5rem', width: '80px', color: 'var(--accent)' }}>{isAr ? 'المتاح' : 'Available'}</th>
                     )}
                     <th style={{ padding: '0.65rem 0.5rem', width: '90px' }}>
                       {mode === 'outbound' ? (isAr ? 'المنصرف (BAR)' : 'Dispensed (BAR)') : (isAr ? 'الوارد (BAR)' : 'Inbound (BAR)')}
                     </th>
                     <th style={{ padding: '0.65rem 0.5rem', width: '80px' }}>{isAr ? 'الأمتار (LM)' : 'Meters'}</th>
                     <th style={{ padding: '0.65rem 0.5rem', width: '105px' }}>{isAr ? 'سعر العود' : 'Bar Cost'}</th>
-                    <th style={{ padding: '0.65rem 0.5rem', width: '115px', color: '#00e0a1' }}>{isAr ? 'إجمالي القيمة' : 'Total'}</th>
+                    <th style={{ padding: '0.65rem 0.5rem', width: '115px', color: 'var(--accent)' }}>{isAr ? 'إجمالي القيمة' : 'Total'}</th>
                     <th style={{ padding: '0.65rem 0.5rem', width: '40px', textAlign: 'center' }}>-</th>
                   </tr>
                 </thead>
@@ -1147,7 +1152,7 @@ export default function ManualStockModal({
                       <tr
                         key={idx}
                         style={{
-                          borderBottom: '1px solid rgba(255,255,255,0.04)',
+                          borderBottom: '1px solid color-mix(in srgb, var(--text) 4%, transparent)',
                           background: !isSelectedLine ? 'rgba(0,0,0,0.3)' : isOverStock ? 'rgba(255, 71, 87, 0.12)' : 'transparent',
                           opacity: !isSelectedLine ? 0.5 : 1,
                         }}
@@ -1158,7 +1163,7 @@ export default function ManualStockModal({
                               type="checkbox"
                               checked={Boolean(line.selected)}
                               onChange={(e) => handleUpdateLine(idx, 'selected', e.target.checked)}
-                              style={{ accentColor: '#00e0a1', cursor: 'pointer' }}
+                              style={{ accentColor: 'var(--accent)', cursor: 'pointer' }}
                             />
                           </td>
                         )}
@@ -1172,9 +1177,9 @@ export default function ManualStockModal({
                               onChange={(e) => handleSelectStockItem(idx, e.target.value)}
                               style={{
                                 width: '100%',
-                                background: '#101223',
+                                background: 'var(--bg-surface)',
                                 border: '1px solid var(--border)',
-                                color: '#fff',
+                                color: 'var(--text)',
                                 padding: '0.4rem 0.6rem',
                                 borderRadius: '6px',
                                 fontSize: '0.8rem',
@@ -1188,7 +1193,7 @@ export default function ManualStockModal({
                               ))}
                             </select>
                           ) : (
-                            <span style={{ fontWeight: 700, color: '#ffffff' }}>{line.itemCode}</span>
+                            <span style={{ fontWeight: 700, color: 'var(--text)' }}>{line.itemCode}</span>
                           )}
                         </td>
 
@@ -1202,9 +1207,9 @@ export default function ManualStockModal({
                             disabled={sourceType === 'invoice'}
                             style={{
                               width: '100%',
-                              background: '#101223',
+                              background: 'var(--bg-surface)',
                               border: '1px solid var(--border)',
-                              color: '#fff',
+                              color: 'var(--text)',
                               padding: '0.4rem 0.5rem',
                               borderRadius: '6px',
                             }}
@@ -1221,9 +1226,9 @@ export default function ManualStockModal({
                             disabled={sourceType === 'invoice'}
                             style={{
                               width: '100%',
-                              background: '#101223',
+                              background: 'var(--bg-surface)',
                               border: '1px solid var(--border)',
-                              color: '#8ab4ff',
+                              color: 'var(--primary)',
                               padding: '0.4rem 0.5rem',
                               borderRadius: '6px',
                             }}
@@ -1240,9 +1245,9 @@ export default function ManualStockModal({
                             disabled={sourceType === 'invoice'}
                             style={{
                               width: '100%',
-                              background: '#101223',
+                              background: 'var(--bg-surface)',
                               border: '1px solid var(--border)',
-                              color: '#fff',
+                              color: 'var(--text)',
                               padding: '0.4rem 0.5rem',
                               borderRadius: '6px',
                             }}
@@ -1259,9 +1264,9 @@ export default function ManualStockModal({
                             disabled={sourceType === 'invoice'}
                             style={{
                               width: '100%',
-                              background: '#101223',
+                              background: 'var(--bg-surface)',
                               border: '1px solid var(--border)',
-                              color: '#fff',
+                              color: 'var(--text)',
                               padding: '0.4rem 0.5rem',
                               borderRadius: '6px',
                               textAlign: 'center',
@@ -1278,9 +1283,9 @@ export default function ManualStockModal({
                             disabled={sourceType === 'invoice'}
                             style={{
                               width: '100%',
-                              background: '#101223',
+                              background: 'var(--bg-surface)',
                               border: '1px solid var(--border)',
-                              color: '#fff',
+                              color: 'var(--text)',
                               padding: '0.4rem 0.5rem',
                               borderRadius: '6px',
                               textAlign: 'center',
@@ -1300,7 +1305,7 @@ export default function ManualStockModal({
                           <td style={{ padding: '0.5rem', textAlign: 'center' }}>
                             <span
                               style={{
-                                color: (line.availableBar || 0) > 0 ? '#00e0a1' : '#ff4757',
+                                color: (line.availableBar || 0) > 0 ? 'var(--accent)' : '#ff4757',
                                 fontWeight: 700,
                               }}
                             >
@@ -1318,9 +1323,9 @@ export default function ManualStockModal({
                             onChange={(e) => handleUpdateLine(idx, 'quantityBar', Number(e.target.value))}
                             style={{
                               width: '100%',
-                              background: '#101223',
-                              border: `1px solid ${isOverStock ? '#ff4757' : '#00e0a1'}`,
-                              color: '#fff',
+                              background: 'var(--bg-surface)',
+                              border: `1px solid ${isOverStock ? '#ff4757' : 'var(--accent)'}`,
+                              color: 'var(--text)',
                               padding: '0.4rem 0.5rem',
                               borderRadius: '6px',
                               fontWeight: 800,
@@ -1345,7 +1350,7 @@ export default function ManualStockModal({
                               onChange={(e) => handleUpdateLine(idx, 'barPrice', Number(e.target.value))}
                               style={{
                                 width: '100%',
-                                background: '#101223',
+                                background: 'var(--bg-surface)',
                                 border: Number(line.barPrice || 0) === 0 ? '1px solid #f59e0b' : '1px solid var(--border)',
                                 color: Number(line.barPrice || 0) === 0 ? '#fbbf24' : '#fff',
                                 padding: '0.35rem 0.45rem',
@@ -1363,7 +1368,7 @@ export default function ManualStockModal({
                         </td>
 
                         {/* Line Net Total */}
-                        <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontWeight: 800, color: '#00e0a1' }}>
+                        <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontWeight: 800, color: 'var(--accent)' }}>
                           <span dir="ltr">
                             {Number(line.netTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
@@ -1402,7 +1407,7 @@ export default function ManualStockModal({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder={isAr ? 'ملاحظات إضافية على أمر الحركة...' : 'Additional notes...'}
-                style={{ width: '100%', background: '#101223', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: '#fff' }}
+                style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '0.55rem 0.85rem', borderRadius: '8px', color: 'var(--text)' }}
               />
             </div>
 
@@ -1412,10 +1417,10 @@ export default function ManualStockModal({
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                background: 'rgba(255,255,255,0.03)',
+                background: 'color-mix(in srgb, var(--text) 3%, transparent)',
                 padding: '0.85rem 1.25rem',
                 borderRadius: '10px',
-                border: '1px solid rgba(255,255,255,0.06)',
+                border: '1px solid color-mix(in srgb, var(--text) 6%, transparent)',
                 flexWrap: 'wrap',
                 gap: '1rem',
               }}
@@ -1423,13 +1428,13 @@ export default function ManualStockModal({
               <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                 <div style={{ fontSize: '0.9rem' }}>
                   <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'إجمالي الأعواد:' : 'Total Bars:'} </span>
-                  <strong style={{ color: mode === 'outbound' ? '#ff6b81' : '#00e0a1', fontSize: '1.1rem' }}>
+                  <strong style={{ color: mode === 'outbound' ? '#ff6b81' : 'var(--accent)', fontSize: '1.1rem' }}>
                     {totalBars.toLocaleString()} BAR
                   </strong>
                 </div>
                 <div style={{ fontSize: '0.9rem' }}>
                   <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'إجمالي الأمتار:' : 'Total Meters:'} </span>
-                  <strong style={{ color: '#ffffff' }}>
+                  <strong style={{ color: 'var(--text)' }}>
                     {totalLm.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} m
                   </strong>
                 </div>
@@ -1462,7 +1467,7 @@ export default function ManualStockModal({
                   className="btn"
                   disabled={submitting || totalBars <= 0}
                   style={{
-                    background: mode === 'outbound' ? 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)' : 'linear-gradient(135deg, #00e0a1 0%, #00b894 100%)',
+                    background: mode === 'outbound' ? 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)' : 'var(--accent)',
                     color: mode === 'outbound' ? '#fff' : '#000',
                     border: 'none',
                     padding: '0.55rem 1.75rem',
@@ -1470,7 +1475,7 @@ export default function ManualStockModal({
                     fontWeight: 800,
                     fontSize: '0.95rem',
                     cursor: submitting || totalBars <= 0 ? 'not-allowed' : 'pointer',
-                    boxShadow: mode === 'outbound' ? '0 4px 14px rgba(255, 71, 87, 0.35)' : '0 4px 14px rgba(0, 224, 161, 0.35)',
+                    boxShadow: mode === 'outbound' ? '0 4px 14px rgba(255, 71, 87, 0.35)' : '0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent)',
                   }}
                 >
                   {submitting ? (

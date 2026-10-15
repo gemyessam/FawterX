@@ -95,10 +95,10 @@ function serializeToken(object) {
   return serialized;
 }
 
-export default function BatchWorkflow({ lang, t, fetchUsage }) {
+export default function BatchWorkflow({ lang, t, fetchUsage, designDocuments }) {
   const settings = useContext(SettingsContext);
-  const [step, setStep] = useState(1) // 1: Upload, 2: Processing, 3: Review
-  const [invoices, setInvoices] = useState([]) // Array of generated ETA docs
+  const [step, setStep] = useState(import.meta.env.DEV && designDocuments ? 3 : 1) // 1: Upload, 2: Processing, 3: Review
+  const [invoices, setInvoices] = useState(import.meta.env.DEV && designDocuments ? structuredClone(designDocuments) : []) // Array of generated ETA docs
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [submissionResults, setSubmissionResults] = useState([])
@@ -677,11 +677,12 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
   const selectedDoc = invoices[selectedIdx]
 
   return (
-    <div className="card fade-in" style={{ padding: '0', overflow: 'hidden' }}>
+    <div className="card fade-in fx-batch-panel" style={{ padding: '0', overflow: 'hidden' }}>
       {/* Header bar matching user design */}
       <div style={{ padding: '1.5rem 2rem', background: 'var(--card-bg)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h2 style={{ margin: 0, fontWeight: 900, fontSize: '1.35rem' }}>📑 {lang === 'ar' ? 'مراجعة وتعديل الدفعة (Batch Review & Edit)' : 'Batch Review & Edit'}</h2>
+          <span className="fx-eyebrow">BATCH / REVIEW WORKSPACE</span>
+          <h2 style={{ margin: 0, fontWeight: 600, fontSize: '1.35rem' }}>{lang === 'ar' ? 'دفعة واحدة. كل التفاصيل تحت سيطرتك.' : 'One batch. Every detail in your control.'}</h2>
           <p style={{ margin: '0.25rem 0 0', color: 'var(--text-dim)', fontSize: '0.9rem' }}>
             {lang === 'ar' ? `تم تجهيز ${invoices.length} فواتير للإرسال - يمكنك التعديل المباشر على أي فاتورة` : `${invoices.length} invoices ready for submission - edit any invoice inline`}
           </p>
@@ -691,7 +692,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
             type="button"
             className="btn btn-ghost" 
             onClick={handleOpenSigner}
-            style={{ border: '1px solid rgba(255, 255, 255, 0.15)', fontWeight: 700 }}
+            style={{ border: '1px solid color-mix(in srgb, var(--text) 15%, transparent)', fontWeight: 700 }}
           >
             🔑 {lang === 'ar' ? 'فتح أداة التوقيع' : 'Open Signing Tool'}
           </button>
@@ -720,15 +721,15 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                 padding: '1.1rem',
                 marginBottom: '0.75rem',
                 borderRadius: '12px',
-                background: selectedIdx === idx ? 'rgba(0, 224, 161, 0.08)' : 'var(--card-bg)',
+                background: selectedIdx === idx ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'var(--card-bg)',
                 border: selectedIdx === idx ? '1px solid var(--accent)' : '1px solid var(--border)',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
-                boxShadow: selectedIdx === idx ? '0 4px 15px rgba(0, 224, 161, 0.15)' : 'none'
+                boxShadow: selectedIdx === idx ? '0 4px 15px color-mix(in srgb, var(--accent) 15%, transparent)' : 'none'
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#fff', fontFamily: 'monospace' }}>
+                <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text)', fontFamily: 'monospace' }}>
                   {inv.internalID || `Invoice #${idx + 1}`}
                 </span>
                 <span className="badge badge-accent" style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem' }}>
@@ -758,7 +759,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
               {/* SECTION A: INVOICE METADATA & PARTIES REVIEW (HEADER SECTION) */}
               <div className="card animate-fade-in" style={{
                 padding: '2rem',
-                background: 'rgba(255, 255, 255, 0.01)',
+                background: 'color-mix(in srgb, var(--text) 1%, transparent)',
                 border: '1px solid var(--border)',
                 borderRadius: 'var(--radius)',
                 marginBottom: '2.5rem',
@@ -783,7 +784,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                     <input 
                       type="text" 
                       className="input" 
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
                       value={selectedDoc.internalID || ''} 
                       onChange={(e) => updateInvoiceMetadata('internalID', e.target.value)} 
                     />
@@ -797,7 +798,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                     <input 
                       type="datetime-local" 
                       className="input" 
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={formatCairoDateTimeInput(selectedDoc.dateTimeIssued)} 
                       onChange={(e) => updateInvoiceMetadata('dateTimeIssued', cairoLocalInputToUtcIso(e.target.value))} 
                     />
@@ -813,7 +814,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                     </label>
                     <select
                       className="input"
-                      style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={selectedDoc.documentType || 'I'}
                       onChange={(e) => updateInvoiceMetadata('documentType', e.target.value)}
                     >
@@ -830,7 +831,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                     </label>
                     <select
                       className="input"
-                      style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={selectedDoc.invoiceLines?.[0]?.unitValue?.currencySold || 'EGP'}
                       onChange={(e) => updateInvoiceMetadata('currency', e.target.value)}
                     >
@@ -850,7 +851,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                         type="number" 
                         step="0.00001"
                         className="input" 
-                        style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#f1c40f', fontWeight: 'bold', borderRadius: '6px', padding: '0.5rem' }} 
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: '#f1c40f', fontWeight: 'bold', borderRadius: '6px', padding: '0.5rem' }}
                         value={selectedDoc.invoiceLines?.[0]?.unitValue?.currencyExchangeRate || 1} 
                         onChange={(e) => updateInvoiceMetadata('exchangeRate', e.target.value)} 
                       />
@@ -864,7 +865,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                     </label>
                     <select
                       className="input"
-                      style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={selectedDoc.codeType || 'EGS'}
                       onChange={(e) => updateInvoiceMetadata('codeType', e.target.value)}
                     >
@@ -881,7 +882,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                     <input 
                       type="text" 
                       className="input" 
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
                       value={selectedDoc.taxpayerActivityCode || '2410'} 
                       onChange={(e) => updateInvoiceMetadata('taxpayerActivityCode', e.target.value)} 
                     />
@@ -895,7 +896,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                     <input 
                       type="text" 
                       className="input" 
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={selectedDoc.issuer?.name || ''} 
                       onChange={(e) => updateInvoiceMetadata('issuerName', e.target.value)} 
                     />
@@ -909,7 +910,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                     <input 
                       type="text" 
                       className="input" 
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
                       value={selectedDoc.issuer?.id || selectedDoc.issuer?.registrationNumber || ''} 
                       onChange={(e) => updateInvoiceMetadata('issuerVat', e.target.value)} 
                     />
@@ -924,7 +925,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                       type="text" 
                       className="input" 
                       dir={textDirection(selectedDoc.receiver?.name)}
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={selectedDoc.receiver?.name || ''} 
                       onChange={(e) => updateInvoiceMetadata('receiverName', e.target.value)} 
                     />
@@ -939,7 +940,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                       type="text" 
                       className="input" 
                       dir={textDirection(selectedDoc.receiver?.id)}
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
                       value={selectedDoc.receiver?.id || ''} 
                       onChange={(e) => updateInvoiceMetadata('receiverVat', e.target.value)} 
                     />
@@ -952,7 +953,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                     </label>
                     <select
                       className="input"
-                      style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={selectedDoc.receiver?.type || 'B'}
                       onChange={(e) => updateInvoiceMetadata('receiverType', e.target.value)}
                     >
@@ -971,7 +972,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                       type="text" 
                       className="input" 
                       dir={textDirection(selectedDoc.receiver?.address?.country)}
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
                       value={selectedDoc.receiver?.address?.country || 'EG'} 
                       onChange={(e) => updateInvoiceMetadata('receiverCountry', e.target.value)} 
                     />
@@ -987,7 +988,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                       <textarea
                         className="input"
                         dir={textDirection(selectedDoc.receiver?.address?.street || selectedDoc.receiver?.address?.addressLine)}
-                        style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.6rem', minHeight: '76px', resize: 'vertical', lineHeight: 1.5 }}
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.6rem', minHeight: '76px', resize: 'vertical', lineHeight: 1.5 }}
                         value={selectedDoc.receiver?.address?.street || selectedDoc.receiver?.address?.addressLine || ''} 
                         onChange={(e) => updateInvoiceMetadata('receiverStreet', e.target.value)} 
                       />
@@ -1001,7 +1002,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                       <div style={{ display: 'flex', gap: '0.5rem', height: '100%', alignItems: 'flex-start' }}>
                         <select
                           className="input"
-                          style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.55rem', flex: 1, minHeight: '38px' }}
+                          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.55rem', flex: 1, minHeight: '38px' }}
                           value={selectedCustomerId}
                           onChange={(e) => applyCustomer(e.target.value)}
                           disabled={customersLoading}
@@ -1032,7 +1033,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                         type="text"
                         className="input"
                         dir={textDirection(selectedDoc.receiver?.address?.buildingNumber)}
-                        style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
                         value={selectedDoc.receiver?.address?.buildingNumber || ''} 
                         onChange={(e) => updateInvoiceMetadata('receiverBuildingNumber', e.target.value)} 
                       />
@@ -1045,12 +1046,12 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                         type="text"
                         className="input"
                         dir={textDirection(selectedDoc.receiver?.address?.regionCity)}
-                        style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }}
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                         value={selectedDoc.receiver?.address?.regionCity || ''} 
                         onChange={(e) => updateInvoiceMetadata('receiverRegionCity', e.target.value)} 
                       />
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderInlineStart: '1px solid rgba(255,255,255,0.18)', paddingInlineStart: '0.9rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderInlineStart: '1px solid color-mix(in srgb, var(--text) 18%, transparent)', paddingInlineStart: '0.9rem' }}>
                       <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
                         🗺️ {lang === 'ar' ? 'المحافظة / الولاية' : 'Governate / Province'}
                       </label>
@@ -1058,7 +1059,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                         type="text"
                         className="input"
                         dir={textDirection(selectedDoc.receiver?.address?.governate)}
-                        style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }}
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                         value={selectedDoc.receiver?.address?.governate || ''} 
                         onChange={(e) => updateInvoiceMetadata('receiverGovernate', e.target.value)} 
                       />
@@ -1075,7 +1076,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                   <button type="button" className="btn btn-accent btn-sm" onClick={addInvoiceLine}>
                     ➕ {lang === 'ar' ? 'إضافة صنف جديد' : 'Add New Item'}
                   </button>
-                  <span className="badge badge-valid" style={{ background: 'rgba(0, 224, 161, 0.1)', padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+                  <span className="badge badge-valid" style={{ background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
                     {lang === 'ar' ? 'رقم الفاتورة:' : 'Invoice ID:'} {selectedDoc.internalID}
                   </span>
                 </div>
@@ -1085,17 +1086,17 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                 maxHeight: '650px', 
                 overflowX: 'auto', 
                 overflowY: 'auto', 
-                border: '1px solid rgba(255, 255, 255, 0.08)', 
+                border: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
                 borderRadius: '16px', 
                 marginBottom: '2.5rem',
-                background: 'rgba(20, 24, 46, 0.35)',
+                background: 'var(--bg-surface)',
                 backdropFilter: 'blur(20px)',
                 boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.5)',
                 padding: '1.25rem'
               }}>
                 <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 12px', minWidth: '1450px' }}>
                   <thead>
-                    <tr style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px' }}>
+                    <tr style={{ background: 'color-mix(in srgb, var(--text) 2%, transparent)', borderRadius: '8px' }}>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', width: '40px' }}>#</th>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', width: '90px' }}>Code Type</th>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', width: '170px' }}>Item Code</th>
@@ -1118,14 +1119,14 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                       const currentTaxRate = isForeign ? 0 : (line.taxableItems?.[0]?.rate ?? (line.taxPercent ?? 14))
 
                       return (
-                        <tr key={idx} style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '10px' }}>
+                        <tr key={idx} style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', borderRadius: '10px' }}>
                           <td style={{ padding: '0.8rem 0.5rem', textAlign: 'center', fontWeight: 800, color: 'var(--text-muted)' }}>
                             {idx + 1}
                           </td>
                           <td style={{ padding: '0.8rem 0.4rem' }}>
                             <select 
                               className="input" 
-                              style={{ padding: '0.4rem', fontSize: '0.75rem', background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', width: '100%' }}
+                              style={{ padding: '0.4rem', fontSize: '0.75rem', background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', width: '100%' }}
                               value={line.codeType || selectedDoc.codeType || 'EGS'}
                               onChange={(e) => updateInvoiceLine(idx, 'codeType', e.target.value)}
                             >
@@ -1137,7 +1138,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                             <input 
                               type="text" 
                               className="input" 
-                              style={{ padding: '0.4rem', fontSize: '0.8rem', fontFamily: 'monospace', background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', width: '100%' }}
+                              style={{ padding: '0.4rem', fontSize: '0.8rem', fontFamily: 'monospace', background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', width: '100%' }}
                               value={line.itemCode || ''} 
                               onChange={(e) => updateInvoiceLine(idx, 'itemCode', e.target.value)}
                             />
@@ -1146,7 +1147,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                             <input 
                               type="text" 
                               className="input" 
-                              style={{ padding: '0.4rem', fontSize: '0.8rem', fontFamily: 'monospace', background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', width: '100%' }}
+                              style={{ padding: '0.4rem', fontSize: '0.8rem', fontFamily: 'monospace', background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', width: '100%' }}
                               value={line.internalCode || ''} 
                               onChange={(e) => updateInvoiceLine(idx, 'internalCode', e.target.value)}
                             />
@@ -1155,7 +1156,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                             <textarea 
                               className="input" 
                               dir={textDirection(line.description)}
-                              style={{ padding: '0.4rem', fontSize: '0.8rem', minHeight: '42px', background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', width: '100%', resize: 'vertical' }}
+                              style={{ padding: '0.4rem', fontSize: '0.8rem', minHeight: '42px', background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', width: '100%', resize: 'vertical' }}
                               value={line.description || ''} 
                               onChange={(e) => updateInvoiceLine(idx, 'description', e.target.value)}
                             />
@@ -1165,7 +1166,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                               type="number" 
                               step="any"
                               className="input" 
-                              style={{ padding: '0.4rem', fontSize: '0.85rem', fontWeight: 'bold', textAlign: 'center', background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', width: '100%' }}
+                              style={{ padding: '0.4rem', fontSize: '0.85rem', fontWeight: 'bold', textAlign: 'center', background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', width: '100%' }}
                               value={line.quantity ?? 0} 
                               onChange={(e) => updateInvoiceLine(idx, 'quantity', e.target.value)}
                             />
@@ -1173,7 +1174,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                           <td style={{ padding: '0.8rem 0.4rem' }}>
                             <select 
                               className="input" 
-                              style={{ padding: '0.4rem', fontSize: '0.75rem', background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', width: '100%' }}
+                              style={{ padding: '0.4rem', fontSize: '0.75rem', background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', width: '100%' }}
                               value={line.unitType || 'EA'}
                               onChange={(e) => updateInvoiceLine(idx, 'unitType', e.target.value)}
                             >
@@ -1193,7 +1194,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                               type="number" 
                               step="any"
                               className="input" 
-                              style={{ padding: '0.4rem', fontSize: '0.85rem', fontWeight: 'bold', textAlign: 'center', background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', width: '100%' }}
+                              style={{ padding: '0.4rem', fontSize: '0.85rem', fontWeight: 'bold', textAlign: 'center', background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', width: '100%' }}
                               value={unitPriceDisplay} 
                               onChange={(e) => updateInvoiceLine(idx, 'unitValue', e.target.value)}
                             />
@@ -1202,7 +1203,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                             <select
                               className="input" 
                               disabled={isForeign}
-                              style={{ padding: '0.4rem', fontSize: '0.75rem', background: '#0b0d19', border: '1px solid var(--border)', color: isForeign ? 'var(--text-muted)' : '#fff', borderRadius: '6px', width: '100%' }}
+                              style={{ padding: '0.4rem', fontSize: '0.75rem', background: 'var(--bg-surface)', border: '1px solid var(--border)', color: isForeign ? 'var(--text-muted)' : '#fff', borderRadius: '6px', width: '100%' }}
                               value={currentTaxRate}
                               onChange={(e) => updateInvoiceLine(idx, 'taxPercent', e.target.value)}
                             >
@@ -1239,16 +1240,16 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
 
               {/* Totals Summary Footer */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '2.5rem' }}>
-                <div style={{ width: '380px', padding: '1.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                <div style={{ width: '380px', padding: '1.5rem', background: 'color-mix(in srgb, var(--text) 2%, transparent)', border: '1px solid var(--border)', borderRadius: '16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', color: 'var(--text-dim)', fontSize: '1rem' }}>
                     <span>{lang === 'ar' ? 'الإجمالي بدون ضريبة:' : 'Subtotal:'}</span>
-                    <strong style={{ color: '#fff', dir: 'ltr' }}>{(selectedDoc.totalSalesAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} EGP</strong>
+                    <strong style={{ color: 'var(--text)', dir: 'ltr' }}>{(selectedDoc.totalSalesAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} EGP</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.25rem', color: 'var(--text-dim)', fontSize: '1rem' }}>
                     <span>{lang === 'ar' ? 'قيمة الضريبة المضافة (VAT):' : 'Total VAT:'}</span>
-                    <strong style={{ color: '#00e0a1', dir: 'ltr' }}>{(selectedDoc.taxTotals?.[0]?.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} EGP</strong>
+                    <strong style={{ color: 'var(--accent)', dir: 'ltr' }}>{(selectedDoc.taxTotals?.[0]?.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} EGP</strong>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: '1.35rem', color: 'var(--accent)', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: '1.35rem', color: 'var(--accent)', borderTop: '1px solid color-mix(in srgb, var(--text) 10%, transparent)', paddingTop: '1rem' }}>
                     <span>{lang === 'ar' ? 'الإجمالي النهائي:' : 'Total Amount:'}</span>
                     <strong style={{ dir: 'ltr' }}>{(selectedDoc.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} EGP</strong>
                   </div>
@@ -1261,7 +1262,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                   type="button"
                   className="btn btn-ghost" 
                   onClick={() => setStep(1)}
-                  style={{ border: '1px solid rgba(255,255,255,0.15)' }}
+                  style={{ border: '1px solid color-mix(in srgb, var(--text) 15%, transparent)' }}
                 >
                   ← {lang === 'ar' ? 'السابق (إعادة الرفع)' : 'Back (Re-upload)'}
                 </button>
@@ -1270,7 +1271,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage }) {
                     type="button"
                     className="btn btn-ghost" 
                     onClick={handleOpenSigner}
-                    style={{ border: '1px solid rgba(255,255,255,0.15)', fontWeight: 700 }}
+                    style={{ border: '1px solid color-mix(in srgb, var(--text) 15%, transparent)', fontWeight: 700 }}
                   >
                     🔑 {lang === 'ar' ? 'فتح أداة التوقيع' : 'Open Signing Tool'}
                   </button>

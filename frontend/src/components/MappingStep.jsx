@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { previewInvoice } from '../services/api'
 import toast from 'react-hot-toast'
+import { Columns3 } from 'lucide-react'
 
 // حقول ETA للـ Mapping
 const ETA_FIELDS = [
@@ -94,8 +95,8 @@ export default function MappingStep({ uploadResult, onConfirm, onBack }) {
   const isPreviewEmpty = !preview || preview.length === 0
 
   return (
-    <div className="card fade-in">
-      <h2 className="card-title">🔗 ربط أعمدة الإكسيل (Mapping)</h2>
+    <div className="card fade-in fx-mapping-panel">
+      <div className="fx-section-intro"><span className="fx-section-icon"><Columns3 size={24} /></span><div><span className="fx-eyebrow">02 / COLUMN MAPPING</span><h2 className="card-title">اربط بياناتك، بدقة.</h2></div><span className="fx-section-count">{headers.length} عمود في ملفك</span></div>
       <p className="card-sub">
         قم بربط أعمدة ملفك بالحقول المطلوبة لمنظومة الضرائب المصرية.
       </p>
@@ -117,9 +118,9 @@ export default function MappingStep({ uploadResult, onConfirm, onBack }) {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+      <div className="fx-mapping-grid">
         {ETA_FIELDS.map(field => (
-          <div key={field.key} style={{ background: 'var(--bg-lighter)', padding: '1rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+          <div className={`fx-mapping-field ${mapping[field.key] ? 'is-connected' : ''}`} key={field.key}>
             <div style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
               <span>{field.label}</span>
               {field.required && <span style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>إلزامي *</span>}

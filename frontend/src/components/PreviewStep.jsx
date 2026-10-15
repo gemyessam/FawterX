@@ -28,11 +28,11 @@ function JsonHighlight({ json }) {
   return <pre className="json-viewer" dangerouslySetInnerHTML={{ __html: text }} />
 }
 
-export default function PreviewStep({ uploadResult, mapping, onBack }) {
+export default function PreviewStep({ uploadResult, mapping, onBack, designPreview }) {
   const navigate = useNavigate()
   const [loading,    setLoading]    = useState(false)
-  const [etaDocs,    setEtaDocs]    = useState(null)
-  const [validation, setValidation] = useState(null)
+  const [etaDocs,    setEtaDocs]    = useState(import.meta.env.DEV && designPreview ? designPreview.documents : null)
+  const [validation, setValidation] = useState(import.meta.env.DEV && designPreview ? designPreview.validation : null)
   const [draftId,    setDraftId]    = useState(null)
   const [error,      setError]      = useState('')
   const [tab,        setTab]        = useState('lines')
@@ -173,22 +173,22 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
   const totalLines = etaDocs ? etaDocs.reduce((acc, doc) => acc + doc.invoiceLines.length, 0) : 0;
 
   return (
-    <div className="card fade-in animate-zoom" style={{ 
+    <div className="card fade-in animate-zoom fx-preview-panel" style={{
       width: '100%', 
       maxWidth: '1550px', 
       margin: '0 auto 2.5rem', 
       padding: '2.5rem 3rem',
-      background: 'rgba(20, 24, 46, 0.45)',
+      background: 'var(--bg-surface)',
       backdropFilter: 'blur(20px)',
-      border: '1px solid rgba(255, 255, 255, 0.05)',
+      border: '1px solid color-mix(in srgb, var(--text) 5%, transparent)',
       boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
       borderRadius: '24px'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
-        <h2 className="card-title" style={{ margin: 0 }}>📋 معاينة وحفظ المسودة</h2>
+        <div><span className="fx-eyebrow">03 / REVIEW & VALIDATE</span><h2 className="card-title" style={{ margin: 0 }}>راجع التفاصيل، قبل الإرسال.</h2></div>
         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
           {workflowStatus === 'idle' && (
-            <span className="badge" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.1)', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+            <span className="badge" style={{ background: 'color-mix(in srgb, var(--text) 5%, transparent)', color: 'var(--text-muted)', border: '1px solid color-mix(in srgb, var(--text) 10%, transparent)', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}>
               ⚪ انتظار بدء العملية
             </span>
           )}
@@ -198,7 +198,7 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
             </span>
           )}
           {workflowStatus === 'eta_accepted' && (
-            <span className="badge" style={{ background: 'rgba(0, 245, 212, 0.12)', color: '#00f5d4', border: '1px solid rgba(0, 245, 212, 0.35)', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+            <span className="badge" style={{ background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}>
               🟢 ETA Accepted
             </span>
           )}
@@ -217,7 +217,7 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
               🔴 Submission Failed
             </span>
           )}
-          <span className="badge" style={{ background: submissionMode === 'live' ? 'rgba(239, 35, 60, 0.1)' : 'rgba(0, 245, 212, 0.1)', color: submissionMode === 'live' ? '#ef233c' : '#00f5d4', border: submissionMode === 'live' ? '1px solid rgba(239, 35, 60, 0.3)' : '1px solid rgba(0, 245, 212, 0.3)', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+          <span className="badge" style={{ background: submissionMode === 'live' ? 'rgba(239, 35, 60, 0.1)' : 'color-mix(in srgb, var(--accent) 10%, transparent)', color: submissionMode === 'live' ? '#ef233c' : 'var(--accent)', border: submissionMode === 'live' ? '1px solid rgba(239, 35, 60, 0.3)' : '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}>
             {submissionMode === 'live' ? '🚀 Real ETA Mode' : '🧪 Local Validation'}
           </span>
         </div>
@@ -355,14 +355,14 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
                   {timelineSteps.map((step, idx) => {
                     let badgeColor = '#6c757d';
-                    let badgeBg = 'rgba(255,255,255,0.03)';
+                    let badgeBg = 'color-mix(in srgb, var(--text) 3%, transparent)';
                     let borderStyle = '1px solid var(--border)';
                     let icon = '⚪';
 
                     if (step.state === 'success') {
-                      badgeColor = '#00f5d4';
-                      badgeBg = 'rgba(0, 245, 212, 0.05)';
-                      borderStyle = '1px solid rgba(0, 245, 212, 0.3)';
+                      badgeColor = 'var(--accent)';
+                      badgeBg = 'color-mix(in srgb, var(--accent) 5%, transparent)';
+                      borderStyle = '1px solid color-mix(in srgb, var(--accent) 30%, transparent)';
                       icon = '✅';
                     } else if (step.state === 'warning') {
                       badgeColor = '#f77f00';
@@ -400,8 +400,8 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
 
                 {/* تفاصيل البوابة الرسمية في حال الاستعلام عنها */}
                 {verificationResult && (
-                  <div style={{ marginTop: '1.25rem', background: 'rgba(255, 255, 255, 0.01)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem' }}>
-                    <strong style={{ fontSize: '0.85rem', color: '#00f5d4', display: 'block', marginBottom: '0.5rem' }}>🔍 تفاصيل البوابة الرسمية (Portal Verification):</strong>
+                  <div style={{ marginTop: '1.25rem', background: 'color-mix(in srgb, var(--text) 1%, transparent)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem' }}>
+                    <strong style={{ fontSize: '0.85rem', color: 'var(--accent)', display: 'block', marginBottom: '0.5rem' }}>🔍 تفاصيل البوابة الرسمية (Portal Verification):</strong>
                     <pre style={{ margin: 0, background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontSize: '0.8rem', fontFamily: 'monospace', overflowX: 'auto', textAlign: 'left', direction: 'ltr' }}>
                       {JSON.stringify(verificationResult, null, 2)}
                     </pre>
@@ -488,7 +488,7 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
             <div className="table-wrapper">
               <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                 <thead>
-                  <tr style={{ background: 'linear-gradient(135deg, #1a3a5c 0%, #234e78 100%)', color: '#fff' }}>
+                  <tr style={{ background: 'linear-gradient(135deg, #1a3a5c 0%, #234e78 100%)', color: 'var(--text)' }}>
                     <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Code Type</th>
                     <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Item Code</th>
                     <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, borderBottom: '2px solid #2a6cb5' }}>Internal Code</th>
@@ -520,13 +520,13 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
                     
                     return (
                       <tr key={i} style={{ 
-                        background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)',
-                        borderBottom: '1px solid rgba(255,255,255,0.06)',
+                        background: i % 2 === 0 ? 'color-mix(in srgb, var(--text) 2%, transparent)' : 'color-mix(in srgb, var(--text) 5%, transparent)',
+                        borderBottom: '1px solid color-mix(in srgb, var(--text) 6%, transparent)',
                         transition: 'background 0.15s'
                       }}>
                         {/* 1. Code Type */}
                         <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
-                          <span style={{ background: 'rgba(0, 245, 212, 0.08)', color: '#00f5d4', padding: '3px 10px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>{codeType}</span>
+                          <span style={{ background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: 'var(--accent)', padding: '3px 10px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>{codeType}</span>
                         </td>
                         {/* 2. Item Code */}
                         <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
@@ -538,7 +538,7 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
                         </td>
                         {/* 4. Item Description */}
                         <td style={{ padding: '14px 16px', textAlign: 'left', verticalAlign: 'middle' }}>
-                          <div style={{ fontSize: '0.8rem', color: '#fff', lineHeight: 1.4, maxWidth: '400px', wordBreak: 'break-word' }}>{desc}</div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text)', lineHeight: 1.4, maxWidth: '400px', wordBreak: 'break-word' }}>{desc}</div>
                           {packaging && (
                             <div dir="ltr" style={{ fontSize: '0.72rem', color: 'var(--accent)', marginTop: '0.3rem', fontWeight: 600, unicodeBidi: 'plaintext' }}>
                               {packaging}
@@ -570,9 +570,9 @@ export default function PreviewStep({ uploadResult, mapping, onBack }) {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontSize: '0.8rem' }}>
                             <div>
                               <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Net: </span>
-                              <span style={{ fontWeight: 'bold', color: '#fff' }}>{fmt(netAmt)}</span>
+                              <span style={{ fontWeight: 'bold', color: 'var(--text)' }}>{fmt(netAmt)}</span>
                             </div>
-                            <div style={{ color: '#00f5d4', fontWeight: 'bold', fontSize: '0.85rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.2rem' }}>
+                            <div style={{ color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.85rem', borderTop: '1px solid color-mix(in srgb, var(--text) 5%, transparent)', paddingTop: '0.2rem' }}>
                               <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Total: </span>
                               <span>{fmt(totalAmt)}</span>
                             </div>

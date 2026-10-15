@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { BookOpen, X, ChevronLeft, ChevronRight, Check, ArrowUpRight } from 'lucide-react'
 
 const TUTORIAL_STEPS = [
   {
@@ -101,206 +102,34 @@ export default function StepGuideModal({ isOpen, onClose, lang = 'ar' }) {
       setIsSlideFading(false)
     }, 180)
   }
-
   const currentStep = TUTORIAL_STEPS[tipSlide]
 
   return (
-    <div className="modal-backdrop glassmorphism-heavy" style={{ zIndex: 20000 }}>
-      <div 
-        className="modal-card animate-zoom" 
-        style={{ 
-          width: '850px', 
-          height: '760px', 
-          maxWidth: '95vw', 
-          maxHeight: '95vh', 
-          display: 'flex', 
-          flexDirection: 'column', 
-          background: '#090b14', 
-          border: '1px solid rgba(255, 255, 255, 0.08)', 
-          boxShadow: '0 12px 48px rgba(0, 0, 0, 0.8)', 
-          padding: '2rem', 
-          borderRadius: '16px' 
-        }}
-      >
-        <div className="modal-header" style={{ flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '1rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isAr ? 'row-reverse' : 'row' }}>
-          <h3 style={{ margin: 0, color: 'var(--accent, #00e0a1)', fontWeight: 800, fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            📖 {isAr ? 'دليل الاستخدام خطوة بخطوة' : 'Step-by-Step Operations Guide'}
-          </h3>
-          <button 
-            type="button" 
-            className="btn-close-modal" 
-            onClick={() => {
-              onClose()
-              localStorage.setItem('fawterx_tutorial_seen', 'true')
-            }}
-            style={{ cursor: 'pointer', fontSize: '1.4rem', background: 'transparent', border: 'none', color: 'var(--text-muted, #888)' }}
-          >
-            ✕
-          </button>
+    <div className="modal-backdrop fx-guide-backdrop" style={{ zIndex: 20000 }}>
+      <section className={`fx-guide animate-zoom ${!isAr ? 'ltr-layout' : ''}`} role="dialog" aria-modal="true" aria-labelledby="guide-title">
+        <header className="fx-guide-header">
+          <div><span className="fx-guide-brand-icon"><BookOpen size={23} strokeWidth={1.6} /></span><div><span className="fx-eyebrow">GETTING STARTED / FAWTERX</span><h2 id="guide-title">{isAr ? 'كل خطوة، في مكانها.' : 'Every step, in its place.'}</h2></div></div>
+          <button type="button" className="fx-icon-button" aria-label={isAr ? 'إغلاق الدليل' : 'Close guide'} onClick={() => { onClose(); localStorage.setItem('fawterx_tutorial_seen', 'true') }}><X size={21} /></button>
+        </header>
+        <div className="fx-guide-layout">
+          <nav className="fx-guide-rail" aria-label={isAr ? 'خطوات الإعداد' : 'Setup steps'}>
+            <span className="fx-eyebrow">{isAr ? 'خريطة البداية' : 'YOUR SETUP ROADMAP'}</span>
+            {TUTORIAL_STEPS.map((item, idx) => <button type="button" key={idx} aria-current={idx === tipSlide ? 'step' : undefined} className={`fx-guide-step ${idx === tipSlide ? 'active' : ''} ${idx < tipSlide ? 'done' : ''}`} onClick={() => handleSlideChange(idx)}><span>{idx < tipSlide ? <Check size={13} /> : String(idx + 1).padStart(2, '0')}</span><b>{(isAr ? item.titleAr : item.titleEn).replace(/^(الخطوة|Step) \d+:\s*/, '')}</b></button>)}
+          </nav>
+          <main className={`fx-guide-main ${isSlideFading ? 'is-fading' : ''}`}>
+            <div className="fx-guide-stage"><span>{isAr ? 'الخطوة الحالية' : 'CURRENT STEP'}</span><strong>{String(tipSlide + 1).padStart(2, '0')} <small>/ {TUTORIAL_STEPS.length}</small></strong></div>
+            <div className="fx-guide-track"><span style={{ width: `${((tipSlide + 1) / TUTORIAL_STEPS.length) * 100}%` }} /></div>
+            <h3>{isAr ? currentStep.titleAr : currentStep.titleEn}</h3>
+            <figure className="fx-guide-figure"><div className="fx-guide-window-bar"><i /><i /><i /><span>{isAr ? 'مرجع بصري للخطوة' : 'VISUAL STEP REFERENCE'}</span></div><img src={tipSlide === 0 ? '/Step 1.png' : `/step ${tipSlide + 1}.png`} alt={isAr ? currentStep.titleAr : currentStep.titleEn} /></figure>
+            <div className="fx-guide-instruction"><span className="fx-guide-instruction-icon"><BookOpen size={18} /></span><div><b>{isAr ? 'المطلوب في الخطوة دي' : 'WHAT TO DO'}</b><p>{isAr ? currentStep.descAr : currentStep.descEn}</p></div></div>
+          </main>
         </div>
-        
-        <div className="modal-body" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0 0.5rem' }}>
-          <div style={{ opacity: isSlideFading ? 0 : 1, transform: isSlideFading ? 'scale(0.98)' : 'scale(1)', transition: 'all 0.18s ease-in-out', display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-            <div style={{ 
-              flexShrink: 0,
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
-              marginBottom: '1.25rem',
-              flexDirection: isAr ? 'row-reverse' : 'row'
-            }}>
-              <h4 style={{ color: '#fff', fontWeight: 800, fontSize: '1.1rem', margin: 0 }}>
-                {isAr ? currentStep.titleAr : currentStep.titleEn}
-              </h4>
-              <span style={{ 
-                background: 'rgba(0, 224, 161, 0.15)', 
-                color: '#00e0a1', 
-                padding: '0.25rem 0.75rem', 
-                borderRadius: '20px', 
-                fontSize: '0.85rem', 
-                fontWeight: 700 
-              }}>
-                {isAr ? `الخطوة ${tipSlide + 1} من 10` : `Step ${tipSlide + 1} of 10`}
-              </span>
-            </div>
-
-            <div style={{ 
-              flexShrink: 0,
-              height: '300px',
-              position: 'relative', 
-              borderRadius: '12px', 
-              overflow: 'hidden', 
-              background: '#0b0d19', 
-              border: '1px solid rgba(255,255,255,0.08)', 
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginBottom: '1.5rem'
-            }}>
-              <img 
-                src={tipSlide === 0 ? '/Step 1.png' : `/step ${tipSlide + 1}.png`} 
-                alt={`Step ${tipSlide + 1}`} 
-                style={{ 
-                  maxHeight: '100%', 
-                  maxWidth: '100%', 
-                  objectFit: 'contain', 
-                  display: 'block'
-                }} 
-              />
-            </div>
-
-            <p style={{ 
-              flex: 1,
-              overflowY: 'auto',
-              color: '#e0e0e0', 
-              fontSize: '1.05rem', 
-              lineHeight: '1.75', 
-              textAlign: isAr ? 'right' : 'left',
-              margin: '0 0 1.25rem 0',
-              maxHeight: '130px',
-              padding: '0.75rem 1rem',
-              background: 'rgba(255, 255, 255, 0.03)',
-              borderRadius: '10px',
-              border: '1px solid rgba(255, 255, 255, 0.08)'
-            }}>
-              {isAr ? currentStep.descAr : currentStep.descEn}
-            </p>
-          </div>
-        </div>
-
-        <div className="modal-footer" style={{ 
-          flexShrink: 0,
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          borderTop: '1px solid rgba(255,255,255,0.08)',
-          paddingTop: '1.25rem',
-          flexDirection: isAr ? 'row-reverse' : 'row'
-        }}>
-          <button 
-            type="button"
-            className="btn btn-ghost btn-sm"
-            disabled={tipSlide === 0}
-            onClick={() => handleSlideChange(Math.max(0, tipSlide - 1))}
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '0.5rem',
-              opacity: tipSlide === 0 ? 0.4 : 1,
-              cursor: tipSlide === 0 ? 'not-allowed' : 'pointer',
-              color: '#fff',
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              padding: '0.5rem 1rem',
-              borderRadius: '8px'
-            }}
-          >
-            {isAr ? 'السابق ➔' : '← Previous'}
-          </button>
-
-          <div style={{ display: 'flex', gap: '0.4rem' }}>
-            {TUTORIAL_STEPS.map((_, idx) => (
-              <span 
-                key={idx}
-                onClick={() => handleSlideChange(idx)}
-                style={{ 
-                  width: idx === tipSlide ? '24px' : '8px', 
-                  height: '8px', 
-                  borderRadius: '4px', 
-                  background: idx === tipSlide ? '#00e0a1' : 'rgba(255, 255, 255, 0.2)',
-                  transition: 'all 0.2s ease',
-                  cursor: 'pointer'
-                }}
-              />
-            ))}
-          </div>
-
-          {tipSlide < TUTORIAL_STEPS.length - 1 ? (
-            <button 
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => handleSlideChange(Math.min(TUTORIAL_STEPS.length - 1, tipSlide + 1))}
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '0.5rem',
-                cursor: 'pointer',
-                background: '#00e0a1',
-                color: '#000',
-                fontWeight: 700,
-                border: 'none',
-                padding: '0.5rem 1.25rem',
-                borderRadius: '8px'
-              }}
-            >
-              {isAr ? '⬅ التالي' : 'Next →'}
-            </button>
-          ) : (
-            <button 
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => {
-                onClose()
-                localStorage.setItem('fawterx_tutorial_seen', 'true')
-              }}
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '0.5rem',
-                cursor: 'pointer',
-                background: '#00e0a1',
-                color: '#000',
-                fontWeight: 800,
-                border: 'none',
-                padding: '0.5rem 1.5rem',
-                borderRadius: '8px'
-              }}
-            >
-              {isAr ? '🚀 البدء الآن' : '🚀 Get Started'}
-            </button>
-          )}
-        </div>
-      </div>
+        <footer className="fx-guide-footer">
+          <button type="button" className="btn btn-ghost" disabled={tipSlide === 0} onClick={() => handleSlideChange(Math.max(0, tipSlide - 1))}>{isAr ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}{isAr ? 'السابق' : 'Previous'}</button>
+          <span>{isAr ? 'تقدر تتنقل بين الخطوات من القائمة' : 'Choose any step from the roadmap'}</span>
+          {tipSlide < TUTORIAL_STEPS.length - 1 ? <button type="button" className="btn btn-accent" onClick={() => handleSlideChange(Math.min(TUTORIAL_STEPS.length - 1, tipSlide + 1))}>{isAr ? 'الخطوة التالية' : 'Next step'}{isAr ? <ChevronLeft size={17} /> : <ChevronRight size={17} />}</button> : <button type="button" className="btn btn-accent" onClick={() => { onClose(); localStorage.setItem('fawterx_tutorial_seen', 'true') }}>{isAr ? 'ابدأ شغلك' : 'Get started'}<ArrowUpRight size={17} /></button>}
+        </footer>
+      </section>
     </div>
   )
 }

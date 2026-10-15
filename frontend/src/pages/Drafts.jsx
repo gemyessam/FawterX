@@ -1,8 +1,10 @@
-import { useState, useEffect, useContext } from 'react'
+﻿import { useState, useEffect, useContext } from 'react'
 import { Link } from 'react-router-dom'
 import { AppContext } from '../App'
 import { getDrafts, deleteDraft } from '../services/api'
 import toast from 'react-hot-toast'
+import { MotionRegion, PageHeading, EmptyIllustration } from '../components/DesignSystem'
+import { Plus, Files } from 'lucide-react'
 
 export default function Drafts() {
   const { lang } = useContext(AppContext)
@@ -39,22 +41,18 @@ export default function Drafts() {
   if (loading) return <div style={{ textAlign: 'center', padding: '5rem' }}><span className="spinner"></span></div>
 
   return (
-    <div className="card fade-in">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div>
-          <h2 className="card-title">📁 {lang === 'ar' ? 'نظام استرجاع المسودات (Recovery Drafts)' : 'Saved Recovery Drafts'}</h2>
-          <p className="card-sub" style={{ marginBottom: 0 }}>
-            {lang === 'ar' ? 'المسودات الموقوفة التي تم فحصها محلياً ولم تكتمل بالبوابة بعد.' : 'Invoices stored in local cache representing saved recovery sessions.'}
-          </p>
-        </div>
+    <MotionRegion className="fx-drafts-page">
+      <PageHeading eyebrow="DOCUMENTS / DRAFTS" title={lang === 'ar' ? 'شغلك محفوظ. كمّل رحلتك.' : 'Saved work. Ready to continue.'} description={lang === 'ar' ? 'استعرض المسودات التي لم تكتمل، وتابع حالة مستنداتك.' : 'Review unfinished drafts and track document status.'}>
         <Link to="/" className="btn btn-accent">
-          ➕ {lang === 'ar' ? 'رفع ملف إكسيل جديد' : 'New Excel Sheet'}
+          <Plus size={18} />{lang === 'ar' ? 'رفع ملف جديد' : 'New upload'}
         </Link>
-      </div>
+      </PageHeading>
+      <section className="fx-document-panel" data-enter>
+      <div className="fx-document-toolbar"><span><Files size={19} />{lang === 'ar' ? 'مكتبة المسودات' : 'Draft library'}</span><span className="fx-count-pill">{drafts.length} {lang === 'ar' ? 'مسودة' : 'drafts'}</span></div>
 
       {drafts.length === 0 ? (
-        <div className="empty-state" style={{ padding: '5rem 2rem' }}>
-          <span className="empty-icon" style={{ fontSize: '3.5rem' }}>📭</span>
+        <div className="fx-empty-state">
+          <EmptyIllustration />
           <p style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-muted)' }}>
             {lang === 'ar' ? 'لا يوجد أي مسودات محفوظة حالياً.' : 'No active recovery drafts found.'}
           </p>
@@ -77,13 +75,13 @@ export default function Drafts() {
                 <tr key={d.draftId}>
                   <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{d.draftId}</td>
                   <td style={{ fontWeight: 700 }}>
-                    <Link to={`/drafts/${d.draftId}`} style={{ color: 'var(--primary, #38bdf8)', textDecoration: 'underline' }}>
+                    <Link to={`/drafts/${d.draftId}`} style={{ color: 'var(--accent, #38bdf8)', textDecoration: 'underline' }}>
                       {d.internalID || 'N/A'}
                     </Link>
                   </td>
                   <td>
                     {d.status === 'uploaded' ? (
-                      <span className="badge badge-valid" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid #00e0a1' }}>
+                      <span className="badge badge-valid" style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)', border: '1px solid #00e0a1' }}>
                         ✓ {lang === 'ar' ? 'تم الرفع للبوابة' : 'Uploaded'}
                       </span>
                     ) : d.status === 'valid' ? (
@@ -105,8 +103,8 @@ export default function Drafts() {
                       <Link to={`/drafts/${d.draftId}`} className="btn btn-sm btn-secondary" style={{ textDecoration: 'none', padding: '0.25rem 0.6rem' }}>
                         👁️ {lang === 'ar' ? 'معاينة' : 'View'}
                       </Link>
-                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(d.draftId)} style={{ padding: '0.25rem 0.6rem' }}>
-                        🗑️ {lang === 'ar' ? 'حذف' : 'Delete'}
+                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(d.draftId)}>
+                        {lang === 'ar' ? 'حذف' : 'Delete'}
                       </button>
                     </div>
                   </td>
@@ -116,6 +114,7 @@ export default function Drafts() {
           </table>
         </div>
       )}
-    </div>
+      </section>
+    </MotionRegion>
   )
 }

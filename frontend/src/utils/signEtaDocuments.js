@@ -115,6 +115,7 @@ function isLikelyCmsSignature(value) {
 }
 
 export async function signEtaDocuments(documents, { onStatusUpdate = null } = {}) {
+  if (import.meta.env.DEV && window.location.pathname === '/design-showcase') throw new Error('معرض تصميم فقط: التوقيع غير متاح.')
   const docs = Array.isArray(documents) ? documents : [documents]
 
   const localSignerActive = await ensureLocalSignerActive(onStatusUpdate)

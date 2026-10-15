@@ -8,6 +8,10 @@ const api = axios.create({
 })
 
 api.interceptors.request.use(async (config) => {
+  if (import.meta.env.DEV && window.location.pathname === '/design-showcase') {
+    config.headers['X-Fawterx-Showcase'] = '1'
+    return config
+  }
   try {
     const user = auth.currentUser
     if (user) {

@@ -354,12 +354,13 @@ export default function DispatchesTrackerView({
   }
 
   return (
-    <div className="card fade-in" style={{ padding: '1.5rem' }}>
+    <div className="card fade-in fx-dispatch-panel" style={{ padding: '1.5rem' }}>
       {/* Header & Quick Action */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
         <div>
+          <span className="fx-eyebrow">OPERATIONS / LIFECYCLE</span>
           <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            🚚 {isAr ? 'تتبع مراحل الصرف والتشغيل الخارجي (Lifecycle Tracker)' : 'Dispatch & Painting Lifecycle Tracker'}
+            {isAr ? 'من الصرف للتسليم. تابع كل مرحلة.' : 'From dispatch to delivery. Track every stage.'}
           </h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.3rem 0 0' }}>
             {isAr
@@ -406,7 +407,7 @@ export default function DispatchesTrackerView({
               onClick={() => onOpenManualModal('outbound')}
               style={{
                 background: 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)',
-                color: '#fff',
+                color: 'var(--text)',
                 border: 'none',
                 padding: '0.55rem 1.25rem',
                 borderRadius: '8px',
@@ -428,16 +429,16 @@ export default function DispatchesTrackerView({
       {/* KPI Stats Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         <div style={{ background: 'rgba(255, 215, 0, 0.08)', border: '1px solid rgba(255, 215, 0, 0.35)', borderRadius: '14px', padding: '1.1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-          <div style={{ fontSize: '0.85rem', color: '#FFD700', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <div style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <span>🟡</span> {isAr ? 'قيد الدهان والمعالجة (المرحلة 1)' : 'In Coating / Processing'}
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.2rem' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#FFD700' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--accent)' }}>
               {kpiStats.activeCount} <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.85 }}>{isAr ? 'أوامر جارية' : 'active orders'}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', background: 'rgba(255, 215, 0, 0.15)', padding: '0.25rem 0.75rem', borderRadius: '10px', border: '1px solid rgba(255, 215, 0, 0.4)' }}>
-              <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#fff', letterSpacing: '0.5px' }}>{kpiStats.activeBars.toLocaleString()}</span>
-              <span style={{ fontSize: '1rem', fontWeight: 900, color: '#FFD700' }}>BAR</span>
+              <span style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text)', letterSpacing: '0.5px' }}>{kpiStats.activeBars.toLocaleString()}</span>
+              <span style={{ fontSize: '1rem', fontWeight: 900, color: 'var(--accent)' }}>BAR</span>
             </div>
           </div>
           <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
@@ -445,17 +446,17 @@ export default function DispatchesTrackerView({
           </div>
         </div>
 
-        <div style={{ background: 'rgba(0, 224, 161, 0.08)', border: '1px solid rgba(0, 224, 161, 0.35)', borderRadius: '14px', padding: '1.1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-          <div style={{ fontSize: '0.85rem', color: '#00e0a1', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <div style={{ background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', borderRadius: '14px', padding: '1.1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          <div style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <span>🟢</span> {isAr ? 'تم التسليم للعميل النهائي (المرحلة 2)' : 'Delivered to Final Customer'}
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.2rem' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#00e0a1' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--accent)' }}>
               {kpiStats.completedCount} <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.85 }}>{isAr ? 'أوامر منتهية' : 'completed orders'}</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', background: 'rgba(0, 224, 161, 0.15)', padding: '0.25rem 0.75rem', borderRadius: '10px', border: '1px solid rgba(0, 224, 161, 0.4)' }}>
-              <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#fff', letterSpacing: '0.5px' }}>{kpiStats.completedBars.toLocaleString()}</span>
-              <span style={{ fontSize: '1rem', fontWeight: 900, color: '#00e0a1' }}>BAR</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', background: 'color-mix(in srgb, var(--accent) 15%, transparent)', padding: '0.25rem 0.75rem', borderRadius: '10px', border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)' }}>
+              <span style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text)', letterSpacing: '0.5px' }}>{kpiStats.completedBars.toLocaleString()}</span>
+              <span style={{ fontSize: '1rem', fontWeight: 900, color: 'var(--accent)' }}>BAR</span>
             </div>
           </div>
           <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
@@ -463,12 +464,12 @@ export default function DispatchesTrackerView({
           </div>
         </div>
 
-        <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border)', borderRadius: '14px', padding: '1.1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+        <div style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', border: '1px solid var(--border)', borderRadius: '14px', padding: '1.1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
           <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 700 }}>
             📦 {isAr ? 'إجمالي حركات الصرف السارية' : 'Total Active Dispatches'}
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.2rem' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#fff' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text)' }}>
               {kpiStats.totalCount} <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.85 }}>{isAr ? 'أمر ساري' : 'orders'}</span>
               {kpiStats.cancelledCount > 0 && (
                 <span style={{ fontSize: '0.8rem', color: '#ff6b81', marginRight: '0.4rem', fontWeight: 700 }}>
@@ -476,7 +477,7 @@ export default function DispatchesTrackerView({
                 </span>
               )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', background: 'rgba(255, 255, 255, 0.06)', padding: '0.25rem 0.75rem', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', background: 'color-mix(in srgb, var(--text) 6%, transparent)', padding: '0.25rem 0.75rem', borderRadius: '10px', border: '1px solid color-mix(in srgb, var(--text) 15%, transparent)' }}>
               <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#64b5f6', letterSpacing: '0.5px' }}>{(kpiStats.activeBars + kpiStats.completedBars).toLocaleString()}</span>
               <span style={{ fontSize: '1rem', fontWeight: 900, color: '#64b5f6' }}>BAR</span>
             </div>
@@ -489,7 +490,7 @@ export default function DispatchesTrackerView({
 
       {/* Filters & Search Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', gap: '0.4rem', background: '#101223', padding: '3px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', gap: '0.4rem', background: 'var(--bg-surface)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border)' }}>
           <button
             type="button"
             className={`btn btn-sm ${statusFilter === 'active' ? 'btn-primary' : 'btn-ghost'}`}
@@ -511,8 +512,8 @@ export default function DispatchesTrackerView({
             style={{
               borderRadius: '6px',
               fontSize: '0.8rem',
-              background: statusFilter === 'completed' ? '#00e0a1' : 'transparent',
-              color: statusFilter === 'completed' ? '#000' : '#00e0a1',
+              background: statusFilter === 'completed' ? 'var(--accent)' : 'transparent',
+              color: statusFilter === 'completed' ? '#000' : 'var(--accent)',
               fontWeight: 700,
             }}
           >
@@ -558,11 +559,11 @@ export default function DispatchesTrackerView({
           onChange={(e) => setSearchQuery(e.target.value)}
           style={{
             minWidth: '280px',
-            background: '#101223',
+            background: 'var(--bg-surface)',
             border: '1px solid var(--border)',
             padding: '0.5rem 1rem',
             borderRadius: '8px',
-            color: '#fff',
+            color: 'var(--text)',
             fontSize: '0.85rem',
           }}
         />
@@ -597,8 +598,8 @@ export default function DispatchesTrackerView({
               <div
                 key={dispatchKey}
                 style={{
-                  background: isCancelled ? 'rgba(255, 71, 87, 0.03)' : 'rgba(255,255,255,0.025)',
-                  border: `1px solid ${isCancelled ? 'rgba(255, 71, 87, 0.4)' : isCompleted ? 'rgba(0, 224, 161, 0.25)' : isPartial ? 'rgba(255, 159, 67, 0.4)' : 'rgba(255, 215, 0, 0.35)'}`,
+                  background: isCancelled ? 'rgba(255, 71, 87, 0.03)' : 'color-mix(in srgb, var(--text) 2.5%, transparent)',
+                  border: `1px solid ${isCancelled ? 'rgba(255, 71, 87, 0.4)' : isCompleted ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : isPartial ? 'rgba(255, 159, 67, 0.4)' : 'rgba(255, 215, 0, 0.35)'}`,
                   borderRadius: '12px',
                   overflow: 'hidden',
                   transition: 'all 0.2s ease',
@@ -614,16 +615,16 @@ export default function DispatchesTrackerView({
                     alignItems: 'center',
                     flexWrap: 'wrap',
                     gap: '1rem',
-                    background: isCancelled ? 'rgba(255, 71, 87, 0.06)' : isCompleted ? 'rgba(0, 224, 161, 0.03)' : isPartial ? 'rgba(255, 159, 67, 0.05)' : 'rgba(255, 215, 0, 0.03)',
+                    background: isCancelled ? 'rgba(255, 71, 87, 0.06)' : isCompleted ? 'color-mix(in srgb, var(--accent) 3%, transparent)' : isPartial ? 'rgba(255, 159, 67, 0.05)' : 'rgba(255, 215, 0, 0.03)',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                     <span
                       className="badge"
                       style={{
-                        background: isCancelled ? 'rgba(255, 71, 87, 0.18)' : isCompleted ? 'rgba(0, 224, 161, 0.15)' : isPartial ? 'rgba(255, 159, 67, 0.18)' : 'rgba(255, 215, 0, 0.15)',
-                        color: isCancelled ? '#ff4757' : isCompleted ? '#00e0a1' : isPartial ? '#ff9f43' : '#FFD700',
-                        border: `1px solid ${isCancelled ? 'rgba(255, 71, 87, 0.5)' : isCompleted ? 'rgba(0, 224, 161, 0.3)' : isPartial ? 'rgba(255, 159, 67, 0.5)' : 'rgba(255, 215, 0, 0.4)'}`,
+                        background: isCancelled ? 'rgba(255, 71, 87, 0.18)' : isCompleted ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : isPartial ? 'rgba(255, 159, 67, 0.18)' : 'rgba(255, 215, 0, 0.15)',
+                        color: isCancelled ? '#ff4757' : isCompleted ? 'var(--accent)' : isPartial ? '#ff9f43' : '#FFD700',
+                        border: `1px solid ${isCancelled ? 'rgba(255, 71, 87, 0.5)' : isCompleted ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : isPartial ? 'rgba(255, 159, 67, 0.5)' : 'rgba(255, 215, 0, 0.4)'}`,
                         fontSize: '0.85rem',
                         fontWeight: 700,
                         padding: '4px 10px',
@@ -640,7 +641,7 @@ export default function DispatchesTrackerView({
 
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <strong style={{ fontSize: '1rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <strong style={{ fontSize: '1rem', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           📄 {disp.dispatchNumber || disp.deliveryNote || disp.id}
                         </strong>
                         {(() => {
@@ -674,17 +675,17 @@ export default function DispatchesTrackerView({
 
                   {/* Summary Badges & Quick Action */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                    <div style={{ textAlign: isAr ? 'left' : 'right', display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(255,255,255,0.04)', padding: '0.3rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                    <div style={{ textAlign: isAr ? 'left' : 'right', display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'color-mix(in srgb, var(--text) 4%, transparent)', padding: '0.3rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isAr ? 'الإجمالي:' : 'Total:'}</span>
                       <strong style={{ color: '#64b5f6', fontSize: '1.15rem', fontWeight: 900 }}>{dispTotalBars.toLocaleString()}</strong>
                       <span style={{ color: '#64b5f6', fontWeight: 800, fontSize: '0.85rem' }}>BAR</span>
                     </div>
 
                     {dispDeliveredBars > 0 && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(0, 224, 161, 0.08)', padding: '0.3rem 0.65rem', borderRadius: '8px', border: '1px solid rgba(0, 224, 161, 0.3)' }}>
-                        <span style={{ color: '#00e0a1', fontSize: '0.8rem' }}>{isAr ? 'تم تسليمه:' : 'Delivered:'}</span>
-                        <strong style={{ color: '#00e0a1', fontSize: '1.1rem', fontWeight: 900 }}>{dispDeliveredBars.toLocaleString()}</strong>
-                        <span style={{ color: '#00e0a1', fontWeight: 700, fontSize: '0.8rem' }}>BAR</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'color-mix(in srgb, var(--accent) 8%, transparent)', padding: '0.3rem 0.65rem', borderRadius: '8px', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' }}>
+                        <span style={{ color: 'var(--accent)', fontSize: '0.8rem' }}>{isAr ? 'تم تسليمه:' : 'Delivered:'}</span>
+                        <strong style={{ color: 'var(--accent)', fontSize: '1.1rem', fontWeight: 900 }}>{dispDeliveredBars.toLocaleString()}</strong>
+                        <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '0.8rem' }}>BAR</span>
                       </div>
                     )}
 
@@ -698,9 +699,9 @@ export default function DispatchesTrackerView({
 
                     {!isCompleted && !isCancelled && dispRemBars > 0 && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(255, 215, 0, 0.08)', padding: '0.3rem 0.65rem', borderRadius: '8px', border: '1px solid rgba(255, 215, 0, 0.3)' }}>
-                        <span style={{ color: '#FFD700', fontSize: '0.8rem' }}>{isAr ? 'متبقي دهان:' : 'Rem:'}</span>
-                        <strong style={{ color: '#FFD700', fontSize: '1.1rem', fontWeight: 900 }}>{dispRemBars.toLocaleString()}</strong>
-                        <span style={{ color: '#FFD700', fontWeight: 700, fontSize: '0.8rem' }}>BAR</span>
+                        <span style={{ color: 'var(--accent)', fontSize: '0.8rem' }}>{isAr ? 'متبقي دهان:' : 'Rem:'}</span>
+                        <strong style={{ color: 'var(--accent)', fontSize: '1.1rem', fontWeight: 900 }}>{dispRemBars.toLocaleString()}</strong>
+                        <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '0.8rem' }}>BAR</span>
                       </div>
                     )}
 
@@ -732,7 +733,7 @@ export default function DispatchesTrackerView({
                         className="btn btn-sm"
                         onClick={() => handleOpenDeliverModal(disp)}
                         style={{
-                          background: 'linear-gradient(135deg, #00e0a1 0%, #00b894 100%)',
+                          background: 'var(--accent)',
                           color: '#000',
                           border: 'none',
                           fontWeight: 700,
@@ -743,7 +744,7 @@ export default function DispatchesTrackerView({
                           gap: '0.3rem',
                           fontSize: '0.8rem',
                           cursor: 'pointer',
-                          boxShadow: '0 4px 10px rgba(0, 224, 161, 0.3)',
+                          boxShadow: '0 4px 10px color-mix(in srgb, var(--accent) 30%, transparent)',
                         }}
                       >
                         🚀 {isAr ? 'نقل للعميل النهائي وإتمام الدورة' : 'Deliver to Customer'}
@@ -798,7 +799,7 @@ export default function DispatchesTrackerView({
                 </div>
 
                 {/* Details Section */}
-                <div style={{ padding: '0.85rem 1.25rem', borderTop: '1px solid rgba(255,255,255,0.04)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', fontSize: '0.85rem' }}>
+                <div style={{ padding: '0.85rem 1.25rem', borderTop: '1px solid color-mix(in srgb, var(--text) 4%, transparent)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', fontSize: '0.85rem' }}>
                   {isCancelled && (
                     <div style={{ gridColumn: '1 / -1', background: 'rgba(255, 71, 87, 0.1)', border: '1px solid rgba(255, 71, 87, 0.3)', padding: '0.5rem 0.85rem', borderRadius: '8px', color: '#ff6b81', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <span>⚠️</span>
@@ -811,7 +812,7 @@ export default function DispatchesTrackerView({
                     return (
                       <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '0.4rem 0.75rem', borderRadius: '8px' }}>
                         <span style={{ color: '#38bdf8', fontWeight: 800 }}>🔗 {isAr ? 'الفاتورة المرجعية المصروف منها:' : 'Source Inbound Invoice:'} </span>
-                        <strong style={{ color: '#fff' }}>{src.invoiceNumber}</strong>
+                        <strong style={{ color: 'var(--text)' }}>{src.invoiceNumber}</strong>
                         {src.customerReference && (
                           <span style={{ color: '#ffb74d', marginRight: '0.3rem', fontSize: '0.82rem' }}>({src.customerReference})</span>
                         )}
@@ -820,7 +821,7 @@ export default function DispatchesTrackerView({
                   })()}
                   <div>
                     <span style={{ color: 'var(--text-muted)' }}>🏭 {isAr ? 'مورد الدهان / الورشة:' : 'Coating Supplier:'} </span>
-                    <strong style={{ color: '#FFD700' }}>{disp.coatingSupplier || '—'}</strong>
+                    <strong style={{ color: 'var(--accent)' }}>{disp.coatingSupplier || '—'}</strong>
                   </div>
                   <div>
                     <span style={{ color: 'var(--text-muted)' }}>🎨 {isAr ? 'اللون / التشطيب المطلوب:' : 'Target Finish:'} </span>
@@ -828,11 +829,11 @@ export default function DispatchesTrackerView({
                   </div>
                   <div>
                     <span style={{ color: 'var(--text-muted)' }}>👤 {isAr ? 'العميل النهائي:' : 'Customer:'} </span>
-                    <strong style={{ color: '#00e0a1' }}>{disp.customerName || '—'}</strong>
+                    <strong style={{ color: 'var(--accent)' }}>{disp.customerName || '—'}</strong>
                   </div>
                   <div>
                     <span style={{ color: 'var(--text-muted)' }}>🏢 {isAr ? 'الموقع / المشروع:' : 'Project / Site:'} </span>
-                    <strong style={{ color: '#fff' }}>{disp.projectNameOrSite || '—'}</strong>
+                    <strong style={{ color: 'var(--text)' }}>{disp.projectNameOrSite || '—'}</strong>
                   </div>
                 </div>
 
@@ -870,16 +871,16 @@ export default function DispatchesTrackerView({
                   const stageHistoryList = Array.isArray(disp.stageHistory) ? disp.stageHistory.filter(Boolean) : []
 
                   return (
-                    <div style={{ padding: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.2)' }}>
+                    <div style={{ padding: '1.25rem', borderTop: '1px solid color-mix(in srgb, var(--text) 8%, transparent)', background: 'rgba(0,0,0,0.2)' }}>
                       {/* Summary KPI Pills inside Expanded View */}
                       <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
                         <div style={{ background: 'rgba(255, 215, 0, 0.1)', border: '1px solid rgba(255, 215, 0, 0.3)', borderRadius: '8px', padding: '0.4rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <span style={{ color: '#FFD700', fontSize: '0.85rem' }}>🟡 {isAr ? 'المتبقي قيد الدهان:' : 'Remaining in Coating:'}</span>
-                          <strong style={{ color: '#FFD700', fontSize: '1rem', fontWeight: 800 }}>{dispRemBars} BAR</strong>
+                          <span style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>🟡 {isAr ? 'المتبقي قيد الدهان:' : 'Remaining in Coating:'}</span>
+                          <strong style={{ color: 'var(--accent)', fontSize: '1rem', fontWeight: 800 }}>{dispRemBars} BAR</strong>
                         </div>
-                        <div style={{ background: 'rgba(0, 224, 161, 0.1)', border: '1px solid rgba(0, 224, 161, 0.3)', borderRadius: '8px', padding: '0.4rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <span style={{ color: '#00e0a1', fontSize: '0.85rem' }}>🟢 {isAr ? 'المسلّم للعميل:' : 'Delivered to Customer:'}</span>
-                          <strong style={{ color: '#00e0a1', fontSize: '1rem', fontWeight: 800 }}>{dispDeliveredBars} BAR</strong>
+                        <div style={{ background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', borderRadius: '8px', padding: '0.4rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>🟢 {isAr ? 'المسلّم للعميل:' : 'Delivered to Customer:'}</span>
+                          <strong style={{ color: 'var(--accent)', fontSize: '1rem', fontWeight: 800 }}>{dispDeliveredBars} BAR</strong>
                         </div>
                         {dispScrapBars > 0 && (
                           <div style={{ background: 'rgba(255, 107, 129, 0.1)', border: '1px solid rgba(255, 107, 129, 0.3)', borderRadius: '8px', padding: '0.4rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -897,7 +898,7 @@ export default function DispatchesTrackerView({
                       <div style={{ marginBottom: '1.5rem', background: 'rgba(255, 215, 0, 0.02)', border: '1px solid rgba(255, 215, 0, 0.2)', borderRadius: '10px', padding: '1rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                           <div>
-                            <h5 style={{ margin: 0, color: '#FFD700', fontSize: '0.95rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <h5 style={{ margin: 0, color: 'var(--accent)', fontSize: '0.95rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                               🟡 {isAr ? `البنود المتبقية قيد الدهان والتشغيل (${remainingItems.length} بند)` : `Remaining Items in Coating (${remainingItems.length})`}
                             </h5>
                             <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
@@ -921,7 +922,7 @@ export default function DispatchesTrackerView({
                                   <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'إجمالي الأمر' : 'Total Bars'}</th>
                                   <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'مسلّم سابقاً' : 'Delivered'}</th>
                                   <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'هادر مسجل' : 'Scrap'}</th>
-                                  <th style={{ padding: '0.55rem 0.75rem', color: '#FFD700', fontWeight: 800 }}>{isAr ? 'المتبقي قيد الدهان' : 'Remaining in Coating'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem', color: 'var(--accent)', fontWeight: 800 }}>{isAr ? 'المتبقي قيد الدهان' : 'Remaining in Coating'}</th>
                                   {!isCompleted && !isCancelled && (
                                     <th style={{ padding: '0.55rem 0.75rem', textAlign: 'center' }}>{isAr ? 'إجراءات' : 'Actions'}</th>
                                   )}
@@ -929,21 +930,21 @@ export default function DispatchesTrackerView({
                               </thead>
                               <tbody>
                                 {remainingItems.map((it, rIdx) => (
-                                  <tr key={it.originalIdx || rIdx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                  <tr key={it.originalIdx || rIdx} style={{ borderBottom: '1px solid color-mix(in srgb, var(--text) 4%, transparent)' }}>
                                     <td style={{ padding: '0.55rem 0.75rem', color: 'var(--text-muted)' }}>{rIdx + 1}</td>
-                                    <td style={{ padding: '0.55rem 0.75rem', fontWeight: 700, color: '#00e0a1' }}>{it.itemCode}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem', fontWeight: 700, color: 'var(--accent)' }}>{it.itemCode}</td>
                                     <td style={{ padding: '0.55rem 0.75rem' }}>{it.description}</td>
-                                    <td style={{ padding: '0.55rem 0.75rem', color: '#8ab4ff' }}>{it.finish || 'STD'}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem', color: 'var(--primary)' }}>{it.finish || 'STD'}</td>
                                     <td style={{ padding: '0.55rem 0.75rem' }}><span dir="ltr">{it.lengthMm} mm</span></td>
-                                    <td style={{ padding: '0.55rem 0.75rem', fontWeight: 600, color: '#fff' }}>{it.itTotal}</td>
-                                    <td style={{ padding: '0.55rem 0.75rem', color: '#00e0a1' }}>{it.itDelivered > 0 ? it.itDelivered : '—'}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text)' }}>{it.itTotal}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem', color: 'var(--accent)' }}>{it.itDelivered > 0 ? it.itDelivered : '—'}</td>
                                     <td style={{ padding: '0.55rem 0.75rem', color: '#ff6b81' }}>{it.itScrap > 0 ? it.itScrap : '—'}</td>
                                     <td style={{ padding: '0.55rem 0.75rem' }}>
                                       <span
                                         style={{
                                           background: 'rgba(255, 215, 0, 0.15)',
                                           border: '1px solid rgba(255, 215, 0, 0.4)',
-                                          color: '#FFD700',
+                                          color: 'var(--accent)',
                                           fontWeight: 800,
                                           fontSize: '0.9rem',
                                           padding: '2px 8px',
@@ -982,17 +983,17 @@ export default function DispatchesTrackerView({
                             </table>
                           </div>
                         ) : (
-                          <div style={{ textAlign: 'center', padding: '1.25rem', background: 'rgba(0, 224, 161, 0.05)', borderRadius: '8px', color: '#00e0a1', fontWeight: 700, fontSize: '0.85rem' }}>
+                          <div style={{ textAlign: 'center', padding: '1.25rem', background: 'color-mix(in srgb, var(--accent) 5%, transparent)', borderRadius: '8px', color: 'var(--accent)', fontWeight: 700, fontSize: '0.85rem' }}>
                             🎉 {isAr ? 'تم تسليم كامل بنود هذا الأمر للعميل النهائي بنجاح ولا توجد أي أعواد متبقية قيد الدهان.' : 'All items from this dispatch have been fully delivered or settled.'}
                           </div>
                         )}
                       </div>
 
                       {/* ─── 2. DELIVERED / FULFILLED ITEMS TABLE ─── */}
-                      <div style={{ marginBottom: '1.5rem', background: 'rgba(0, 224, 161, 0.02)', border: '1px solid rgba(0, 224, 161, 0.2)', borderRadius: '10px', padding: '1rem' }}>
+                      <div style={{ marginBottom: '1.5rem', background: 'color-mix(in srgb, var(--accent) 2%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', borderRadius: '10px', padding: '1rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                           <div>
-                            <h5 style={{ margin: 0, color: '#00e0a1', fontSize: '0.95rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <h5 style={{ margin: 0, color: 'var(--accent)', fontSize: '0.95rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                               🟢 {isAr ? `البنود المسلّمة والمرحّلة للعميل النهائي (${deliveredItems.length} بند)` : `Delivered & Settled Items (${deliveredItems.length})`}
                             </h5>
                             <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
@@ -1007,14 +1008,14 @@ export default function DispatchesTrackerView({
                           <div style={{ overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                               <thead>
-                                <tr style={{ background: 'rgba(0, 224, 161, 0.05)', borderBottom: '1px solid rgba(0, 224, 161, 0.2)', textAlign: isAr ? 'right' : 'left' }}>
+                                <tr style={{ background: 'color-mix(in srgb, var(--accent) 5%, transparent)', borderBottom: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', textAlign: isAr ? 'right' : 'left' }}>
                                   <th style={{ padding: '0.55rem 0.75rem' }}>#</th>
                                   <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'كود الصنف' : 'Item Code'}</th>
                                   <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'بيان الصنف' : 'Description'}</th>
                                   <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'الدهان المنفذ' : 'Finished Coating'}</th>
                                   <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'الطول' : 'Length'}</th>
                                   <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'إجمالي الأمر' : 'Original Total'}</th>
-                                  <th style={{ padding: '0.55rem 0.75rem', color: '#00e0a1', fontWeight: 800 }}>{isAr ? 'المسلّم للعميل' : 'Delivered Qty'}</th>
+                                  <th style={{ padding: '0.55rem 0.75rem', color: 'var(--accent)', fontWeight: 800 }}>{isAr ? 'المسلّم للعميل' : 'Delivered Qty'}</th>
                                   <th style={{ padding: '0.55rem 0.75rem', color: '#ff6b81' }}>{isAr ? 'الهادر المسجل' : 'Scrap Qty'}</th>
                                   <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'المتبقي بالأمر' : 'Remaining'}</th>
                                   <th style={{ padding: '0.55rem 0.75rem' }}>{isAr ? 'حالة البند' : 'Item Status'}</th>
@@ -1022,19 +1023,19 @@ export default function DispatchesTrackerView({
                               </thead>
                               <tbody>
                                 {deliveredItems.map((it, dIdx) => (
-                                  <tr key={it.originalIdx || dIdx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                  <tr key={it.originalIdx || dIdx} style={{ borderBottom: '1px solid color-mix(in srgb, var(--text) 4%, transparent)' }}>
                                     <td style={{ padding: '0.55rem 0.75rem', color: 'var(--text-muted)' }}>{dIdx + 1}</td>
-                                    <td style={{ padding: '0.55rem 0.75rem', fontWeight: 700, color: '#00e0a1' }}>{it.itemCode}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem', fontWeight: 700, color: 'var(--accent)' }}>{it.itemCode}</td>
                                     <td style={{ padding: '0.55rem 0.75rem' }}>{it.description}</td>
-                                    <td style={{ padding: '0.55rem 0.75rem', color: '#FFD700' }}>{disp.targetFinish || it.finish || 'STD'}</td>
+                                    <td style={{ padding: '0.55rem 0.75rem', color: 'var(--accent)' }}>{disp.targetFinish || it.finish || 'STD'}</td>
                                     <td style={{ padding: '0.55rem 0.75rem' }}><span dir="ltr">{it.lengthMm} mm</span></td>
                                     <td style={{ padding: '0.55rem 0.75rem', color: 'var(--text-muted)' }}>{it.itTotal} BAR</td>
                                     <td style={{ padding: '0.55rem 0.75rem' }}>
                                       <span
                                         style={{
-                                          background: 'rgba(0, 224, 161, 0.15)',
-                                          border: '1px solid rgba(0, 224, 161, 0.4)',
-                                          color: '#00e0a1',
+                                          background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                                          border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
+                                          color: 'var(--accent)',
                                           fontWeight: 800,
                                           fontSize: '0.9rem',
                                           padding: '2px 8px',
@@ -1057,9 +1058,9 @@ export default function DispatchesTrackerView({
                                         style={{
                                           fontSize: '0.75rem',
                                           padding: '2px 7px',
-                                          background: it.itRem === 0 ? 'rgba(0, 224, 161, 0.15)' : 'rgba(255, 159, 67, 0.15)',
-                                          color: it.itRem === 0 ? '#00e0a1' : '#ff9f43',
-                                          border: `1px solid ${it.itRem === 0 ? 'rgba(0, 224, 161, 0.3)' : 'rgba(255, 159, 67, 0.3)'}`,
+                                          background: it.itRem === 0 ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'rgba(255, 159, 67, 0.15)',
+                                          color: it.itRem === 0 ? 'var(--accent)' : '#ff9f43',
+                                          border: `1px solid ${it.itRem === 0 ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'rgba(255, 159, 67, 0.3)'}`,
                                           fontWeight: 700,
                                         }}
                                       >
@@ -1072,14 +1073,14 @@ export default function DispatchesTrackerView({
                             </table>
                           </div>
                         ) : (
-                          <div style={{ textAlign: 'center', padding: '1.25rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                          <div style={{ textAlign: 'center', padding: '1.25rem', background: 'color-mix(in srgb, var(--text) 2%, transparent)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                             ⏳ {isAr ? 'لم يتم تسليم أي بنود للعميل النهائي بعد — كامل الكميات لا تزال قيد التشغيل والدهان لدى المورد.' : 'No items have been delivered to the customer yet.'}
                           </div>
                         )}
                       </div>
 
                       {/* ─── 3. STAGE HISTORY TIMELINE ─── */}
-                      <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', padding: '1rem' }}>
+                      <div style={{ background: 'color-mix(in srgb, var(--text) 2%, transparent)', border: '1px solid color-mix(in srgb, var(--text) 6%, transparent)', borderRadius: '10px', padding: '1rem' }}>
                         <h5 style={{ margin: '0 0 0.6rem 0', color: '#64b5f6', fontSize: '0.9rem', fontWeight: 800 }}>
                           ⏱️ {isAr ? 'سجل تتبع خط السير والمراحل (Timeline):' : 'Stage History Timeline:'}
                         </h5>
@@ -1090,7 +1091,7 @@ export default function DispatchesTrackerView({
                               <div
                                 key={hIdx}
                                 style={{
-                                  background: 'rgba(255,255,255,0.02)',
+                                  background: 'color-mix(in srgb, var(--text) 2%, transparent)',
                                   borderLeft: isAr ? 'none' : '3px solid #00e0a1',
                                   borderRight: isAr ? '3px solid #00e0a1' : 'none',
                                   padding: '0.5rem 0.85rem',
@@ -1099,13 +1100,13 @@ export default function DispatchesTrackerView({
                                 }}
                               >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <strong style={{ color: '#fff' }}>{hist.label || hist.stage || (isAr ? 'مرحلة غير محددة' : 'Stage')}</strong>
+                                  <strong style={{ color: 'var(--text)' }}>{hist.label || hist.stage || (isAr ? 'مرحلة غير محددة' : 'Stage')}</strong>
                                   <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
                                     {safeFormatDateTime(hist.timestamp, isAr ? 'ar-EG' : 'en-US')}
                                   </span>
                                 </div>
                                 {hist.notes && <div style={{ color: 'var(--text-muted)', marginTop: '0.2rem' }}>{hist.notes}</div>}
-                                <div style={{ color: '#8ab4ff', fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                                <div style={{ color: 'var(--primary)', fontSize: '0.75rem', marginTop: '0.2rem' }}>
                                   {isAr ? 'المسؤول:' : 'By:'} {hist.user || 'نظام'}
                                 </div>
                               </div>
@@ -1153,8 +1154,8 @@ export default function DispatchesTrackerView({
           >
             <div
               style={{
-                background: '#121629',
-                border: '1px solid rgba(0, 224, 161, 0.4)',
+                background: 'var(--bg-card)',
+                border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
                 borderRadius: '16px',
                 maxWidth: '560px',
                 width: '100%',
@@ -1162,8 +1163,8 @@ export default function DispatchesTrackerView({
                 boxShadow: '0 20px 50px rgba(0,0,0,0.7)',
               }}
             >
-              <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0, 224, 161, 0.08)' }}>
-                <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#00e0a1', fontWeight: 800 }}>
+              <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid color-mix(in srgb, var(--text) 8%, transparent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--accent)', fontWeight: 800 }}>
                   🚀 {isAr ? 'إتمام تسليم القطاعات للعميل النهائي' : 'Complete Delivery to Final Customer'}
                 </h3>
                 <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
@@ -1174,7 +1175,7 @@ export default function DispatchesTrackerView({
               </div>
 
               <form onSubmit={handleConfirmDeliverToCustomer} style={{ padding: '1.5rem' }}>
-                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.85rem', borderRadius: '8px', marginBottom: '1.25rem', fontSize: '0.85rem' }}>
+                <div style={{ background: 'color-mix(in srgb, var(--text) 3%, transparent)', padding: '0.85rem', borderRadius: '8px', marginBottom: '1.25rem', fontSize: '0.85rem' }}>
                   <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
                     <div>
                       <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'إجمالي الصرف:' : 'Total Qty:'} </span>
@@ -1183,7 +1184,7 @@ export default function DispatchesTrackerView({
                     {transDeliveredBars > 0 && (
                       <div>
                         <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'المسلّم:' : 'Delivered:'} </span>
-                        <strong style={{ color: '#00e0a1' }}>{transDeliveredBars} BAR</strong>
+                        <strong style={{ color: 'var(--accent)' }}>{transDeliveredBars} BAR</strong>
                       </div>
                     )}
                     {transScrapBars > 0 && (
@@ -1195,13 +1196,13 @@ export default function DispatchesTrackerView({
                     {transRemBars > 0 && (
                       <div>
                         <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'المتبقي:' : 'Rem:'} </span>
-                        <strong style={{ color: '#FFD700' }}>{transRemBars} BAR</strong>
+                        <strong style={{ color: 'var(--accent)' }}>{transRemBars} BAR</strong>
                       </div>
                     )}
                   </div>
                   <div style={{ marginTop: '0.4rem' }}>
                     <span style={{ color: 'var(--text-muted)' }}>{isAr ? 'الدهان المنفذ:' : 'Finished Coating:'} </span>
-                    <strong style={{ color: '#FFD700' }}>{transitioningDispatch.targetFinish}</strong>
+                    <strong style={{ color: 'var(--accent)' }}>{transitioningDispatch.targetFinish}</strong>
                   </div>
                 </div>
 
@@ -1219,7 +1220,7 @@ export default function DispatchesTrackerView({
                     </p>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', background: deliveryMode === 'settle_scrap' ? 'rgba(0, 224, 161, 0.1)' : 'rgba(255,255,255,0.02)', padding: '0.6rem 0.8rem', borderRadius: '8px', border: `1px solid ${deliveryMode === 'settle_scrap' ? '#00e0a1' : 'rgba(255,255,255,0.08)'}` }}>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', background: deliveryMode === 'settle_scrap' ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'color-mix(in srgb, var(--text) 2%, transparent)', padding: '0.6rem 0.8rem', borderRadius: '8px', border: `1px solid ${deliveryMode === 'settle_scrap' ? 'var(--accent)' : 'color-mix(in srgb, var(--text) 8%, transparent)'}` }}>
                         <input
                           type="radio"
                           name="deliveryMode"
@@ -1229,7 +1230,7 @@ export default function DispatchesTrackerView({
                           style={{ marginTop: '0.2rem' }}
                         />
                         <div>
-                          <strong style={{ color: '#00e0a1', fontSize: '0.85rem' }}>
+                          <strong style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>
                             🎯 {isAr ? `تسوية الـ (${transRemBars} عود) المتبقية كهادر/تالف دهان وإغلاق الأمر نهائياً (موصى به)` : `Settle remaining ${transRemBars} bars as coating scrap & close order`}
                           </strong>
                           <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
@@ -1240,7 +1241,7 @@ export default function DispatchesTrackerView({
                         </div>
                       </label>
 
-                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', background: deliveryMode === 'partial' ? 'rgba(255, 159, 67, 0.1)' : 'rgba(255,255,255,0.02)', padding: '0.6rem 0.8rem', borderRadius: '8px', border: `1px solid ${deliveryMode === 'partial' ? '#ff9f43' : 'rgba(255,255,255,0.08)'}` }}>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', background: deliveryMode === 'partial' ? 'rgba(255, 159, 67, 0.1)' : 'color-mix(in srgb, var(--text) 2%, transparent)', padding: '0.6rem 0.8rem', borderRadius: '8px', border: `1px solid ${deliveryMode === 'partial' ? '#ff9f43' : 'color-mix(in srgb, var(--text) 8%, transparent)'}` }}>
                         <input
                           type="radio"
                           name="deliveryMode"
@@ -1261,7 +1262,7 @@ export default function DispatchesTrackerView({
                         </div>
                       </label>
 
-                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', background: deliveryMode === 'full' ? 'rgba(100, 181, 246, 0.1)' : 'rgba(255,255,255,0.02)', padding: '0.6rem 0.8rem', borderRadius: '8px', border: `1px solid ${deliveryMode === 'full' ? '#64b5f6' : 'rgba(255,255,255,0.08)'}` }}>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', background: deliveryMode === 'full' ? 'rgba(100, 181, 246, 0.1)' : 'color-mix(in srgb, var(--text) 2%, transparent)', padding: '0.6rem 0.8rem', borderRadius: '8px', border: `1px solid ${deliveryMode === 'full' ? '#64b5f6' : 'color-mix(in srgb, var(--text) 8%, transparent)'}` }}>
                         <input
                           type="radio"
                           name="deliveryMode"
@@ -1286,7 +1287,7 @@ export default function DispatchesTrackerView({
                 )}
 
                 <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '0.4rem', fontWeight: 600 }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text)', marginBottom: '0.4rem', fontWeight: 600 }}>
                     👤 {isAr ? 'اسم المستلم في موقع العميل (اختياري)' : 'Received By (Optional)'}
                   </label>
                   <input
@@ -1294,12 +1295,12 @@ export default function DispatchesTrackerView({
                     value={customerReceivedBy}
                     onChange={(e) => setCustomerReceivedBy(e.target.value)}
                     placeholder={isAr ? 'مثال: م/ أحمد إبراهيم (مدير الموقع)...' : 'e.g. Site supervisor...'}
-                    style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem', fontSize: '0.85rem' }}
+                    style={{ width: '100%', background: 'var(--bg-surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem', fontSize: '0.85rem' }}
                   />
                 </div>
 
                 <div style={{ marginBottom: '1.5rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '0.4rem', fontWeight: 600 }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text)', marginBottom: '0.4rem', fontWeight: 600 }}>
                     📝 {isAr ? 'ملاحظات التسليم والإغلاق' : 'Closing Notes'}
                   </label>
                   <textarea
@@ -1307,7 +1308,7 @@ export default function DispatchesTrackerView({
                     value={transitionNotes}
                     onChange={(e) => setTransitionNotes(e.target.value)}
                     placeholder={isAr ? 'تم استلام القطاعات بحالة ممتازة ومطابقة للمواصفات...' : 'Received in good condition...'}
-                    style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem', fontSize: '0.85rem', resize: 'none' }}
+                    style={{ width: '100%', background: 'var(--bg-surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem', fontSize: '0.85rem', resize: 'none' }}
                   />
                 </div>
 
@@ -1325,7 +1326,7 @@ export default function DispatchesTrackerView({
                     className="btn"
                     disabled={savingTransition}
                     style={{
-                      background: 'linear-gradient(135deg, #00e0a1 0%, #00b894 100%)',
+                      background: 'var(--accent)',
                       color: '#000',
                       border: 'none',
                       padding: '0.55rem 1.5rem',
@@ -1364,7 +1365,7 @@ export default function DispatchesTrackerView({
         >
           <div
             style={{
-              background: '#121629',
+              background: 'var(--bg-card)',
               border: '1px solid rgba(255, 107, 129, 0.4)',
               borderRadius: '16px',
               maxWidth: '520px',
@@ -1373,7 +1374,7 @@ export default function DispatchesTrackerView({
               boxShadow: '0 20px 50px rgba(0,0,0,0.7)',
             }}
           >
-            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255, 107, 129, 0.08)' }}>
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid color-mix(in srgb, var(--text) 8%, transparent)', background: 'rgba(255, 107, 129, 0.08)' }}>
               <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#ff6b81', fontWeight: 800 }}>
                 🗑️ {isAr ? 'تسجيل هادر وتالف دهان (Coating Scrap)' : 'Record Coating Scrap / Waste'}
               </h3>
@@ -1386,7 +1387,7 @@ export default function DispatchesTrackerView({
 
             <form onSubmit={handleConfirmScrap} style={{ padding: '1.5rem' }}>
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '0.4rem', fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text)', marginBottom: '0.4rem', fontWeight: 600 }}>
                   🎯 {isAr ? 'نطاق تسجيل الهادر:' : 'Scrap Scope:'}
                 </label>
                 <select
@@ -1406,7 +1407,7 @@ export default function DispatchesTrackerView({
                       setScrapQuantity(rem)
                     }
                   }}
-                  style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem', fontSize: '0.85rem' }}
+                  style={{ width: '100%', background: 'var(--bg-surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem', fontSize: '0.85rem' }}
                 >
                   <option value="all">
                     {isAr ? '🔥 كامل المتبقي في أمر الصرف بالكامل' : 'All remaining bars in dispatch'}
@@ -1423,7 +1424,7 @@ export default function DispatchesTrackerView({
               </div>
 
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '0.4rem', fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text)', marginBottom: '0.4rem', fontWeight: 600 }}>
                   🔢 {isAr ? 'عدد الأعواد التالفة / الهادر:' : 'Scrap Quantity (Bars):'}
                 </label>
                 <input
@@ -1432,12 +1433,12 @@ export default function DispatchesTrackerView({
                   required
                   value={scrapQuantity}
                   onChange={(e) => setScrapQuantity(e.target.value)}
-                  style={{ width: '100%', background: '#0d1020', color: '#ff6b81', fontWeight: 800, fontSize: '1.1rem', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem' }}
+                  style={{ width: '100%', background: 'var(--bg-surface)', color: '#ff6b81', fontWeight: 800, fontSize: '1.1rem', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem' }}
                 />
               </div>
 
               <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '0.4rem', fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text)', marginBottom: '0.4rem', fontWeight: 600 }}>
                   📝 {isAr ? 'سبب التلف / ملاحظات الدهان:' : 'Reason / Notes:'}
                 </label>
                 <textarea
@@ -1445,7 +1446,7 @@ export default function DispatchesTrackerView({
                   value={scrapNotes}
                   onChange={(e) => setScrapNotes(e.target.value)}
                   placeholder={isAr ? 'مثال: قطاعات تعرضت للثني أو تشوه بالدهان أثناء المعالجة بالمصنع وتم استبعادها...' : 'Damaged during coating process...'}
-                  style={{ width: '100%', background: '#0d1020', color: '#fff', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem', fontSize: '0.85rem', resize: 'none' }}
+                  style={{ width: '100%', background: 'var(--bg-surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.55rem 0.75rem', fontSize: '0.85rem', resize: 'none' }}
                 />
               </div>
 
@@ -1464,7 +1465,7 @@ export default function DispatchesTrackerView({
                   disabled={savingScrap}
                   style={{
                     background: 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)',
-                    color: '#fff',
+                    color: 'var(--text)',
                     border: 'none',
                     padding: '0.55rem 1.5rem',
                     borderRadius: '8px',

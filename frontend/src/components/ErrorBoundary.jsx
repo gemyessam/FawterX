@@ -23,7 +23,7 @@ export default class ErrorBoundary extends React.Component {
       const isAr = this.props.isAr !== false
       return (
         <div
-          className="card fade-in"
+          className="card fade-in fx-error-state"
           style={{
             padding: '2rem',
             background: 'rgba(255, 71, 87, 0.08)',

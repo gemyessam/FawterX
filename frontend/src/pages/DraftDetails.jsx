@@ -4,6 +4,7 @@ import { AppContext } from '../App'
 import { getDraftById, getETAStatus, submitToETA, deleteDraft } from '../services/api'
 import { signEtaDocuments } from '../utils/signEtaDocuments'
 import toast from 'react-hot-toast'
+import { PageHeading } from '../components/DesignSystem'
 
 function fmt(n, digits = 4) {
   return Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })
@@ -130,7 +131,8 @@ export default function DraftDetails() {
   if (!draft) return null
 
   return (
-    <div className="card fade-in">
+    <div className="card fade-in fx-draft-detail">
+      <PageHeading eyebrow="DOCUMENT / REVIEW" title={lang === 'ar' ? 'كل تفصيلة، قبل الإرسال.' : 'Every detail, before submission.'} description={lang === 'ar' ? 'راجع البيانات والمطابقة وخطوات مستندك في مكان واحد.' : 'Review data, compliance, and document progress in one place.'} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
@@ -179,21 +181,21 @@ export default function DraftDetails() {
         ]
 
         return (
-          <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '1.5rem', borderRadius: '12px', marginBottom: '2rem', border: '1px solid var(--border)' }}>
+          <div style={{ background: 'color-mix(in srgb, var(--text) 2%, transparent)', padding: '1.5rem', borderRadius: '12px', marginBottom: '2rem', border: '1px solid var(--border)' }}>
             <h4 style={{ margin: '0 0 1rem 0', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent)' }}>
               🏁 {lang === 'ar' ? 'خطوات التحقق الفوري لـ ETA' : 'ETA Portal Submission Timeline'}
             </h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
               {timelineSteps.map((step, idx) => {
                 let badgeColor = '#6c757d'
-                let badgeBg = 'rgba(255,255,255,0.02)'
+                let badgeBg = 'color-mix(in srgb, var(--text) 2%, transparent)'
                 let borderStyle = '1px solid var(--border)'
                 let icon = '⚪'
 
                 if (step.state === 'success') {
                   badgeColor = 'var(--accent)'
-                  badgeBg = 'rgba(0, 224, 161, 0.04)'
-                  borderStyle = '1px solid rgba(0, 224, 161, 0.25)'
+                  badgeBg = 'color-mix(in srgb, var(--accent) 4%, transparent)'
+                  borderStyle = '1px solid color-mix(in srgb, var(--accent) 25%, transparent)'
                   icon = '✅'
                 } else if (step.state === 'warning') {
                   badgeColor = 'var(--warning)'
@@ -239,7 +241,7 @@ export default function DraftDetails() {
 
             {/* Portal Live Verification box */}
             {verificationResult && (
-              <div style={{ marginTop: '1.5rem', background: 'rgba(0, 224, 161, 0.02)', border: '1px solid rgba(0, 224, 161, 0.2)', borderRadius: '8px', padding: '1.25rem' }}>
+              <div style={{ marginTop: '1.5rem', background: 'color-mix(in srgb, var(--accent) 2%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', borderRadius: '8px', padding: '1.25rem' }}>
                 <strong style={{ color: 'var(--accent)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>🔍 {lang === 'ar' ? 'تأكيد البحث الفوري بـ Portal الضرائب:' : 'ETA portal active indexing confirmed:'}</strong>
                 <pre style={{ background: '#090b14', padding: '1rem', borderRadius: '6px', overflowX: 'auto', fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'left', direction: 'ltr' }}>
                   {JSON.stringify(verificationResult, null, 2)}

@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { uploadExcelBatch } from '../services/api' // Using a new batch function
 import { stampUploadIssuedTimestamp } from '../utils/uploadTime'
+import { UploadCloud, FileText } from 'lucide-react'
 
 export default function UploadStep({ onSuccess }) {
   const [dragging, setDragging] = useState(false)
@@ -70,7 +71,7 @@ export default function UploadStep({ onSuccess }) {
 
   return (
     <div className="card">
-      <h2 className="card-title">📂 رفع فواتير (Batch Upload)</h2>
+      <h2 className="card-title">ملفاتك معاً، في دفعة واحدة.</h2>
       <p className="card-sub">ارفع حتى 25 فاتورة (PDF أو Excel) ليتم قراءتها ومعالجتها معاً</p>
 
       {error && (
@@ -96,7 +97,7 @@ export default function UploadStep({ onSuccess }) {
           onChange={e => handleFiles(e.target.files)}
           style={{ display: 'none' }}
         />
-        <span className="upload-icon">📊</span>
+        <span className="fx-upload-symbol"><UploadCloud size={32} strokeWidth={1.4} /></span>
         <h3>{dragging ? 'أفلت الملفات هنا' : 'اسحب وأفلت أو انقر لاختيار الفواتير'}</h3>
         <p>يدعم PDF و Excel — حتى 25 فاتورة كحد أقصى</p>
       </div>
@@ -108,7 +109,7 @@ export default function UploadStep({ onSuccess }) {
             {files.map((f, i) => (
               <div key={i} className="file-info" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <span style={{ fontSize: '1.5rem' }}>📄</span>
+                  <FileText size={23} strokeWidth={1.5} />
                   <div>
                     <div className="file-info-name">{f.name}</div>
                     <div className="file-info-meta">{(f.size / 1024).toFixed(1)} KB</div>

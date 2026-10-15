@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, useContext } from 'react'
 import toast from 'react-hot-toast'
 import { AppContext } from '../App'
 import { getAdminStats, getAdminUsers, updateAdminUser, getAdminWhoami } from '../services/api'
+import { PageHeading } from '../components/DesignSystem'
+import { RefreshCw } from 'lucide-react'
 
 const ADMIN_EMAIL = 'gemy.essam.ge@gmail.com'
 
@@ -108,7 +110,7 @@ const emptyForm = {
   note: '',
 }
 
-export default function AdminPanel() {
+export default function AdminPanel({ designPreview = false }) {
   const { lang, user } = useContext(AppContext)
   const t = L[lang === 'ar' ? 'ar' : 'en']
   const [stats, setStats] = useState({ totalUsers: 0, subscribedUsers: 0, suspendedUsers: 0, adminUsers: 0 })
@@ -120,7 +122,7 @@ export default function AdminPanel() {
   const [form, setForm] = useState(emptyForm)
   const [loadError, setLoadError] = useState(null)
 
-  const isAdmin = (user?.email || '').toLowerCase() === ADMIN_EMAIL
+  const isAdmin = (import.meta.env.DEV && designPreview) || (user?.email || '').toLowerCase() === ADMIN_EMAIL
   const selectedQuotaDaily = selected?.quotaDaily ?? 10
   const selectedUsed = selected?.submissionsCount || 0
   const selectedRemaining = Math.max(0, selectedQuotaDaily - selectedUsed)
@@ -249,19 +251,15 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className="admin-console-shell fade-in">
-      <div className="card admin-hero-card">
-        <div className="admin-hero-copy">
-          <h2 className="card-title" style={{ marginBottom: '0.35rem' }}>{t.heroTitle}</h2>
-          <p className="card-sub" style={{ marginBottom: 0, maxWidth: '72ch' }}>{t.heroSub}</p>
-          <div className="admin-admin-chip">
+    <div className="admin-console-shell fade-in fx-admin-page">
+      <PageHeading eyebrow="ADMINISTRATION / ACCOUNTS" title={t.heroTitle} description={t.heroSub}>
+        <button className="btn btn-accent" onClick={loadData}><RefreshCw size={17} />{t.refresh}</button>
+      </PageHeading>
+          <div className="admin-admin-chip fx-admin-identity">
             <span>●</span>
             <span>{t.approvedAdmin}</span>
             <strong>{ADMIN_EMAIL}</strong>
           </div>
-        </div>
-        <button className="btn btn-accent" onClick={loadData}>{t.refresh}</button>
-      </div>
 
       <div className="admin-kpi-grid">
         {[
@@ -270,7 +268,7 @@ export default function AdminPanel() {
           { label: t.suspended, value: stats.suspendedUsers },
           { label: t.admins, value: stats.adminUsers },
         ].map((item) => (
-          <div className="card admin-kpi-card" key={item.label}>
+          <div className="card admin-kpi-card" key={item.label} data-enter>
             <div className="admin-kpi-label">{item.label}</div>
             <div className="admin-kpi-value">{item.value}</div>
           </div>
@@ -292,10 +290,10 @@ export default function AdminPanel() {
           <div style={{ display: 'grid', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)', direction: 'ltr', textAlign: 'left' }}>
             <div><strong>Stats API:</strong> {loadError.stats?.status ? `HTTP ${loadError.stats.status}` : 'No response'} — {loadError.stats?.message || 'unknown'}</div>
             <div><strong>Users API:</strong> {loadError.users?.status ? `HTTP ${loadError.users.status}` : 'No response'} — {loadError.users?.message || 'unknown'}</div>
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
+            <div style={{ borderTop: '1px solid color-mix(in srgb, var(--text) 6%, transparent)', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
               <strong>Whoami:</strong>{' '}
               {loadError.whoami?.success
-                ? <>Email: <code style={{ color: '#00e0a1' }}>{loadError.whoami.user?.email}</code> | isAdmin: <code style={{ color: loadError.whoami.user?.isAdmin ? '#00e0a1' : '#ff4d4f' }}>{String(loadError.whoami.user?.isAdmin)}</code> | Expected: <code>{loadError.whoami.expectedAdminEmail}</code></>
+                ? <>Email: <code style={{ color: 'var(--accent)' }}>{loadError.whoami.user?.email}</code> | isAdmin: <code style={{ color: loadError.whoami.user?.isAdmin ? 'var(--accent)' : '#ff4d4f' }}>{String(loadError.whoami.user?.isAdmin)}</code> | Expected: <code>{loadError.whoami.expectedAdminEmail}</code></>
                 : <span style={{ color: '#ff4d4f' }}>HTTP {loadError.whoami?._httpStatus || '?'} — {loadError.whoami?._message || 'Token is missing or invalid. Try logging out and back in.'}</span>
               }
             </div>
@@ -448,7 +446,7 @@ export default function AdminPanel() {
                   const used = u.submissionsCount || 0
                   const remaining = Math.max(0, quota - used)
                   return (
-                    <tr key={u.uid} style={{ background: selected?.uid === u.uid ? 'rgba(0, 224, 161, 0.08)' : 'transparent' }}>
+                    <tr key={u.uid} style={{ background: selected?.uid === u.uid ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'transparent' }}>
                       <td>
                         <div style={{ fontWeight: 700, lineHeight: 1.25 }}>{u.displayName || '—'}</div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', wordBreak: 'break-word', marginTop: '0.25rem' }}>{u.email || u.uid}</div>
@@ -463,7 +461,7 @@ export default function AdminPanel() {
                           <span className="badge badge-valid" style={{ textTransform: 'uppercase' }}>{u.role || 'user'}</span>
                         )}
                       </td>
-                      <td><span className="badge" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }}>{u.status || 'active'}</span></td>
+                      <td><span className="badge" style={{ background: 'color-mix(in srgb, var(--text) 4%, transparent)', border: '1px solid var(--border)' }}>{u.status || 'active'}</span></td>
                       <td>{quota}</td>
                       <td>{used}</td>
                       <td style={{ fontWeight: 'bold', color: remaining > 0 ? 'var(--accent)' : '#ff4d4f' }}>{remaining}</td>

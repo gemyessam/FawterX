@@ -1,0 +1,49 @@
+/* Briefly ease the existing surfaces when the theme preference changes. */
+html.theme-transitioning :is(body, #root),
+html.theme-transitioning #root :where(div, section, aside, header, footer, nav, article, fieldset, button, input, select, textarea, table, thead, tbody, tr, th, td) {
+  transition-property: background-color, color, border-color, box-shadow, fill, stroke;
+  transition-duration: 460ms;
+  transition-timing-function: cubic-bezier(.22, 1, .36, 1);
+}
+
+html.theme-transitioning::after {
+  position: fixed;
+  z-index: 99999;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--theme-transition-x, 50%) var(--theme-transition-y, 48%),
+    color-mix(in srgb, var(--accent, #9270e8) 19%, transparent) 0,
+    transparent 38%
+  );
+  opacity: 0;
+  animation: theme-transition-wash 720ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+html.theme-transitioning .fx-theme-toggle svg {
+  animation: theme-toggle-arrive 460ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+@keyframes theme-transition-wash {
+  0% { opacity: 0; }
+  24% { opacity: .8; }
+  100% { opacity: 0; }
+}
+
+@keyframes theme-toggle-arrive {
+  0% { opacity: .45; transform: rotate(-70deg) scale(.72); }
+  100% { opacity: 1; transform: rotate(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transitioning::after,
+  html.theme-transitioning .fx-theme-toggle svg {
+    animation: none;
+  }
+
+  html.theme-transitioning :is(body, #root),
+  html.theme-transitioning #root :where(div, section, aside, header, footer, nav, article, fieldset, button, input, select, textarea, table, thead, tbody, tr, th, td) {
+    transition-duration: 0.01ms;
+  }
+}

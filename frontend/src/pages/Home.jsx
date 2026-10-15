@@ -1,8 +1,11 @@
 import { useState, useEffect, useContext } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
 import { AppContext, SettingsContext } from '../App'
 import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations, getCustomers, saveCustomer, ensureLocalSignerActive } from '../services/api'
 import BatchWorkflow from '../components/BatchWorkflow'
+import DashboardOverview from '../components/DashboardOverview'
+import { PageHeading } from '../components/DesignSystem'
+import WorkflowProgress from '../components/WorkflowProgress'
+import { UploadCloud, FileSpreadsheet, ScanLine, Layers3 } from 'lucide-react'
 import { stampUploadIssuedTimestamp, formatCairoDateTime, formatCairoDateTimeInput, cairoLocalInputToUtcIso } from '../utils/uploadTime'
 import { applySavedCustomerMatches } from '../utils/customerMatching'
 import { signEtaDocuments } from '../utils/signEtaDocuments'
@@ -1034,209 +1037,56 @@ export default function Home() {
     setInWorkflow(false)
   }
 
+  const uploadModeSelector = (
+    <section className="fx-upload-mode-selector" aria-label={lang === 'ar' ? 'اختيار طريقة رفع الفواتير' : 'Choose an invoice upload mode'}>
+      <div className="fx-upload-mode-heading">
+        <h2>{lang === 'ar' ? 'اختار طريقة تجهيز فواتيرك' : 'Choose how to prepare your invoices'}</h2>
+        <p>{lang === 'ar' ? 'تقدر تغيّر الاختيار في أي وقت، والاختيارات هتفضل ظاهرة قدامك.' : 'You can switch modes at any time; these options stay available.'}</p>
+      </div>
+      <div className="fx-upload-modes" aria-label={lang === 'ar' ? 'طريقة قراءة الملفات' : 'File processing mode'}>
+        {[
+          ['template', FileSpreadsheet, lang === 'ar' ? 'قالب إكسيل' : 'Excel template', lang === 'ar' ? 'ربط الأعمدة بنفسك' : 'Map your columns'],
+          ['smart', ScanLine, lang === 'ar' ? 'قراءة ذكية' : 'Smart parsing', lang === 'ar' ? 'PDF وإكسيل · تجريبي' : 'PDF & Excel · Beta'],
+          ['batch', Layers3, lang === 'ar' ? 'دفعة ملفات' : 'Batch upload', lang === 'ar' ? 'أكثر من فاتورة معاً' : 'Multiple invoices together'],
+        ].map(([mode, Icon, label, description]) => (
+          <button key={mode} type="button" className={`fx-mode-card ${parseMode === mode ? 'selected' : ''}`} aria-pressed={parseMode === mode} onClick={() => { setParseMode(mode); setFile(null); }}>
+            <Icon size={22} strokeWidth={1.5} /><span><b>{label}</b><small>{description}</small></span><i />
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+
   return (
     <div className="home-dashboard-wrapper">
       {!inWorkflow ? (
-        /* ─── PREMIUM SAAS DASHBOARD HUB ─── */
-        <div className="dashboard-hub animate-fade-in">
-          {/* Hero Welcome Banner */}
-          <div className="dashboard-hero-card">
-            <div className="hero-card-content">
-              <h1>{lang === 'ar' ? 'رفع الفواتير الإلكترونية بذكاء لـ FawterX ⚡' : 'Smart ETA Invoicing Automation for FawterX ⚡'}</h1>
-              <p>{t.welcomeSub}</p>
-              
-              {/* Usage Warning Banner */}
-              <div style={{ margin: '1.5rem 0', padding: '1.1rem 1.15rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', display: 'grid', gap: '0.9rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                    <span>🎯</span>
-                    <strong style={{ fontSize: '0.95rem' }}>
-                      {!usageReady
-                        ? (lang === 'ar' ? 'جارٍ التحقق من حالة الحساب...' : 'Checking account status...')
-                        : usage.isSubscribed
-                          ? (lang === 'ar' ? 'باقة FawterX نشطة: إرسال غير محدود للضرائب ✓' : 'FawterX Premium Active: Unlimited transmissions ✓')
-                          : (usageRemaining <= 0
-                              ? (lang === 'ar' ? `⚠️ استنفدت الحد اليومي (${usageLimit} فواتير)` : `⚠️ Daily limit reached (${usageLimit} invoices)`)
-                              : (lang === 'ar' ? `🎁 متبقي لك ${usageRemaining} فواتير للرفع اليوم` : `🎁 ${usageRemaining} invoices left to upload today`)
-                            )
-                      }
-                    </strong>
-                  </div>
-                  {usageReady && !usage.isSubscribed && (
-                    <button className="btn btn-accent btn-sm" onClick={() => setShowPricingModal(true)}>
-                      {lang === 'ar' ? 'ترقية الاشتراك 🪙' : 'Upgrade Plan 🪙'}
-                    </button>
-                  )}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem' }}>
-                  <div style={{ padding: '0.8rem 0.9rem', borderRadius: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>{lang === 'ar' ? 'المستخدم اليوم' : 'Used Today'}</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{usageReady ? usageUsed : '—'}</div>
-                  </div>
-                  <div style={{ padding: '0.8rem 0.9rem', borderRadius: '10px', background: 'rgba(0, 224, 161, 0.05)', border: '1px solid rgba(0, 224, 161, 0.15)' }}>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>{lang === 'ar' ? 'المتبقي اليوم' : 'Remaining Today'}</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--accent)' }}>{!usageReady ? '—' : (usage.isSubscribed ? '∞' : usageRemaining)}</div>
-                  </div>
-                  <div style={{ padding: '0.8rem 0.9rem', borderRadius: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>{lang === 'ar' ? 'الحد اليومي' : 'Daily Limit'}</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{!usageReady ? '—' : (usage.isSubscribed ? '∞' : usageLimit)}</div>
-                  </div>
-                </div>
-                {usageReady && !usage.isSubscribed && (
-                  <div style={{ display: 'grid', gap: '0.35rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      <span>{lang === 'ar' ? 'نسبة الاستخدام' : 'Usage Progress'}</span>
-                      <span>{usageProgress}%</span>
-                    </div>
-                    <div style={{ height: '10px', background: 'rgba(255,255,255,0.06)', borderRadius: '999px', overflow: 'hidden' }}>
-                      <div style={{ width: `${usageProgress}%`, height: '100%', background: 'linear-gradient(90deg, var(--accent), #7b61ff)', borderRadius: 'inherit', transition: 'width 0.2s ease' }} />
-                    </div>
-                  </div>
-                )}
-              </div>
-              <button 
-                className="btn btn-accent btn-lg" 
-                onClick={() => {
-                  if (!usageReady) {
-                    toast(lang === 'ar' ? 'جارٍ التحقق من حالة الاشتراك، لحظة واحدة...' : 'Checking subscription status, one moment...')
-                    return
-                  }
-                  if (!usage.isSubscribed && usage.dailyCount >= (usage.dailyLimit || 10)) {
-                    setShowPricingModal(true)
-                  } else {
-                    setInWorkflow(true)
-                  }
-                }}
-              >
-                🚀 {t.welcomeCTA}
-              </button>
-            </div>
-          </div>
-
-          <h3 style={{ marginBottom: '1.25rem', fontWeight: 800 }}>📊 {t.statsTitle}</h3>
-          
-          <div className="dashboard-grid">
-            {/* Stats widgets */}
-            <div className="dashboard-main-strip">
-              <div className="stats-summary-strip">
-                <div className="stat-widget">
-                  <span className="stat-val">{stats.uploaded}</span>
-                  <span className="stat-lbl">{lang === 'ar' ? 'إجمالي المرفوع' : 'Total Uploaded'}</span>
-                </div>
-                <div className="stat-widget success">
-                  <span className="stat-val">{stats.accepted}</span>
-                  <span className="stat-lbl">{lang === 'ar' ? 'المستندات المقبولة' : 'Accepted Invoices'}</span>
-                </div>
-                <div className="stat-widget danger">
-                  <span className="stat-val">{stats.rejected}</span>
-                  <span className="stat-lbl">{lang === 'ar' ? 'المرفوضة بالبوابة' : 'Rejected Invoices'}</span>
-                </div>
-                <div className="stat-widget warning">
-                  <span className="stat-val">{stats.drafts}</span>
-                  <span className="stat-lbl">{lang === 'ar' ? 'المسودات النشطة' : 'Active Recovery'}</span>
-                </div>
-              </div>
-
-              {/* Submissions Overview Card */}
-              <div className="card" style={{ padding: '2rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
-                  <h3 style={{ fontWeight: 800 }}>⚡ {t.recentSubmissions}</h3>
-                  <Link to="/drafts" className="btn btn-ghost btn-sm">📁 {t.navDrafts}</Link>
-                </div>
-
-                <div className="table-wrapper">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>{lang === 'ar' ? 'رقم الفاتورة' : 'Invoice ID'}</th>
-                        <th>{lang === 'ar' ? 'اسم العميل' : 'Client / Receiver'}</th>
-                        <th>{lang === 'ar' ? 'المبلغ الإجمالي' : 'Total Value'}</th>
-                        <th>{lang === 'ar' ? 'الحالة' : 'Status'}</th>
-                        <th>{lang === 'ar' ? 'التاريخ' : 'Date'}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {operations.length === 0 ? (
-                        <tr>
-                          <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
-                            {lang === 'ar' ? 'لا توجد عمليات حتى الآن — ابدأ بإرسال أول فاتورة!' : 'No operations yet — submit your first invoice!'}
-                          </td>
-                        </tr>
-                      ) : (
-                        operations.slice(0, 10).map((op, idx) => (
-                          <tr key={op.operationId || idx}>
-                            <td style={{ fontWeight: 700 }}>{op.internalID || 'N/A'}</td>
-                            <td>{op.receiverName || '—'}</td>
-                            <td style={{ color: 'var(--accent)' }}>{op.totalAmount ? `${op.totalAmount.toLocaleString()} EGP` : '—'}</td>
-                            <td>
-                              {op.status === 'accepted' && <span className="badge badge-valid">{lang === 'ar' ? 'مقبولة ✓' : 'Accepted ✓'}</span>}
-                              {op.status === 'rejected' && <span className="badge badge-invalid">{lang === 'ar' ? 'مرفوضة ✗' : 'Rejected ✗'}</span>}
-                              {op.status === 'error' && <span className="badge badge-invalid">{lang === 'ar' ? 'خطأ ⚠' : 'Error ⚠'}</span>}
-                            </td>
-                            <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{op.timestamp ? new Date(op.timestamp).toLocaleDateString('ar-EG') : '—'}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            {/* Sidebar quick actions */}
-            <div className="dashboard-side-strip">
-
-              {/* FawterX Signer Download Card */}
-              <div className="card" style={{ padding: '1.5rem', border: '1px solid rgba(0, 224, 161, 0.2)', background: 'rgba(0, 224, 161, 0.02)' }}>
-                <h4 style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
-                  🔑 {lang === 'ar' ? 'أداة التوقيع FawterX Signer' : 'Local E-Signer Bridge'}
-                  <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'var(--accent)', color: '#000', marginLeft: '0.5rem' }}>v1.8.9</span>
-                </h4>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0.5rem 0 1.25rem' }}>
-                  {lang === 'ar' 
-                    ? 'يلزم فتح نافذة FawterX Signer وتركها ظاهرة أثناء التوقيع للتأكد من أن الأداة تعمل بشكل سليم.' 
-                    : 'Open the FawterX Signer window and keep it visible while signing so we can verify the tool is running correctly.'}
-                </p>
-                <a href={`/FawterX-Signer.zip?t=${Date.now()}`} download className="btn btn-accent btn-block btn-sm" style={{ textDecoration: 'none', textAlign: 'center', display: 'block' }}>
-                  📥 {lang === 'ar' ? 'تحميل أحدث إصدار v1.8.9 (ZIP)' : 'Download Latest v1.8.9 (ZIP)'}
-                </a>
-              </div>
-
-              <div className="card" style={{ padding: '1.5rem', marginTop: '1.5rem' }}>
-                <h4>{lang === 'ar' ? 'نظام الاسترجاع الذكي' : 'Recovery Hub'}</h4>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0.5rem 0 1.25rem' }}>
-                  {lang === 'ar' ? 'يتم حفظ تقدمك تلقائياً كمسودة محلياً في حال حدوث أي خطأ.' : 'Your work is auto-saved as draft in case of failure.'}
-                </p>
-                <Link to="/drafts" className="btn btn-primary btn-block btn-sm">
-                  📁 {lang === 'ar' ? 'استعراض المسودات المحفوظة' : 'Browse Recovered Drafts'}
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
+        <DashboardOverview
+          lang={lang} user={user} stats={stats} operations={operations}
+          usage={usage} usageReady={usageReady} usageLimit={usageLimit}
+          usageUsed={usageUsed} usageRemaining={usageRemaining} usageProgress={usageProgress}
+          onGuide={() => setShowTutorialModal(true)} onPricing={() => setShowPricingModal(true)}
+          onStart={() => {
+            if (!usageReady) {
+              toast(lang === 'ar' ? 'جارٍ التحقق من حالة الاشتراك، لحظة واحدة...' : 'Checking subscription status, one moment...')
+              return
+            }
+            if (!usage.isSubscribed && usage.dailyCount >= (usage.dailyLimit || 10)) {
+              setShowPricingModal(true)
+            } else {
+              setInWorkflow(true)
+            }
+          }}
+        />
       ) : (
         /* ─── DYNAMIC 6-STEP SAAS WORKFLOW WIZARD ─── */
         <div className="workflow-wizard animate-fade-in">
-          {/* stepper headers */}
-          <div className="stepper">
-            <div className={`step ${step === 1 ? 'active' : ''} ${step > 1 ? 'done' : ''}`}>
-              <div className="step-num">{step > 1 ? '✓' : '1'}</div>
-              <div className="step-label">{lang === 'ar' ? 'رفع إكسيل' : 'Upload Excel'}</div>
-            </div>
-            <div className={`step ${step === 2 ? 'active' : ''} ${step > 2 ? 'done' : ''}`}>
-              <div className="step-num">{step > 2 ? '✓' : '2'}</div>
-              <div className="step-label">{lang === 'ar' ? 'ربط الأعمدة' : 'Map Columns'}</div>
-            </div>
-            <div className={`step ${step === 3 ? 'active' : ''} ${step > 3 ? 'done' : ''}`}>
-              <div className="step-num">{step > 3 ? '✓' : '3'}</div>
-              <div className="step-label">{lang === 'ar' ? 'المعاينة والامتثال' : 'Preview & Compliance'}</div>
-            </div>
-            <div className={`step ${step === 4 ? 'active' : ''}`}>
-              <div className="step-num">4</div>
-              <div className="step-label">{lang === 'ar' ? 'بوابة الضرائب' : 'ETA Submit'}</div>
-            </div>
-          </div>
- 
+          <PageHeading eyebrow="INVOICES / NEW WORKFLOW" title={lang === 'ar' ? 'من ملفك لفاتورتك، خطوة بخطوة.' : 'From file to invoice, step by step.'} description={lang === 'ar' ? 'ارفع البيانات، راجع المطابقة، ثم كمّل خطوات الإرسال.' : 'Upload data, review compliance, and continue to submission.'}>
+            <button className="btn btn-ghost" onClick={() => setInWorkflow(false)}>{lang === 'ar' ? 'العودة لنظرة عامة' : 'Back to overview'}</button>
+          </PageHeading>
+          <WorkflowProgress step={step} lang={lang} />
+
+          {step === 1 && uploadModeSelector}
+
           {/* BATCH WORKFLOW */}
           {parseMode === 'batch' && (
             <BatchWorkflow lang={lang} t={t} fetchUsage={fetchUsage} />
@@ -1251,8 +1101,8 @@ export default function Home() {
               {/* Premium Top Template Download Banner */}
               {parseMode === 'template' && (
                 <div style={{
-                  background: 'rgba(0, 224, 161, 0.06)',
-                  border: '1px solid rgba(0, 224, 161, 0.2)',
+                  background: 'color-mix(in srgb, var(--accent) 6%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                   borderRadius: '12px',
                   padding: '1.25rem 1.5rem',
                   display: 'flex',
@@ -1264,7 +1114,7 @@ export default function Home() {
                   flexDirection: lang === 'ar' ? 'row-reverse' : 'row'
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexDirection: lang === 'ar' ? 'row-reverse' : 'row', textAlign: lang === 'ar' ? 'right' : 'left' }}>
-                    <span style={{ fontSize: '2rem', filter: 'drop-shadow(0 2px 8px rgba(0, 224, 161, 0.4))' }}>📥</span>
+                    <span style={{ fontSize: '2rem', filter: 'drop-shadow(0 2px 8px color-mix(in srgb, var(--accent) 40%, transparent))' }}>📥</span>
                     <div>
                       <strong style={{ display: 'block', color: 'var(--accent)', fontSize: '1.05rem', fontWeight: 800 }}>
                         {lang === 'ar' ? 'تحميل قالب الإكسيل المعتمد لرفع الفواتير' : 'Download Approved Excel Template'}
@@ -1285,7 +1135,7 @@ export default function Home() {
                       gap: '0.5rem',
                       textDecoration: 'none',
                       fontWeight: 700,
-                      boxShadow: '0 4px 12px rgba(0, 224, 161, 0.2)',
+                      boxShadow: '0 4px 12px color-mix(in srgb, var(--accent) 20%, transparent)',
                       padding: '0.75rem 1.5rem'
                     }}
                   >
@@ -1294,96 +1144,16 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Segmented Mode Selector */}
-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.75rem', background: '#090b14', padding: '0.4rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                <button 
-                  type="button"
-                  style={{ 
-                    flex: 1, 
-                    padding: '0.75rem', 
-                    borderRadius: '8px', 
-                    border: 'none', 
-                    background: parseMode === 'template' ? 'var(--primary)' : 'transparent', 
-                    color: '#fff', 
-                    cursor: 'pointer', 
-                    fontWeight: 600, 
-                    transition: 'all 0.25s ease',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem'
-                  }}
-                  onClick={() => { setParseMode('template'); setFile(null); }}
-                >
-                  📊 {lang === 'ar' ? 'الوضع القياسي (Excel mapping)' : 'Standard Excel Template'}
-                </button>
-                <button 
-                  type="button"
-                  style={{ 
-                    flex: 1, 
-                    padding: '0.75rem', 
-                    borderRadius: '8px', 
-                    border: 'none', 
-                    background: parseMode === 'smart' ? 'linear-gradient(135deg, #7c4dff, #18ffff)' : 'transparent', 
-                    color: parseMode === 'smart' ? '#0b0d19' : '#fff', 
-                    cursor: 'pointer', 
-                    fontWeight: 700, 
-                    transition: 'all 0.25s ease',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem'
-                  }}
-                  onClick={() => { setParseMode('smart'); setFile(null); }}
-                >
-                  🧠 {lang === 'ar' ? 'وضع الذكاء الاصطناعي الأذكى (PDF / Excel)' : 'AI Smart Auto-Parse (PDF / Excel)'}
-                  <span style={{ 
-                    fontSize: '0.62rem', 
-                    background: parseMode === 'smart' ? 'rgba(11, 13, 25, 0.15)' : 'rgba(255, 255, 255, 0.15)', 
-                    color: parseMode === 'smart' ? '#0b0d19' : 'var(--warning)',
-                    padding: '0.15rem 0.5rem', 
-                    borderRadius: '12px', 
-                    marginLeft: '0.5rem', 
-                    fontWeight: 800,
-                    border: parseMode === 'smart' ? '1px solid rgba(11, 13, 25, 0.2)' : '1px solid rgba(255, 184, 79, 0.3)',
-                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
-                  }}>
-                    {lang === 'ar' ? 'تحت التجربة والارتقاء 🧪' : 'Beta / Under Dev 🧪'}
-                  </span>
-                </button>
-                <button 
-                  type="button"
-                  style={{ 
-                    flex: 1, 
-                    padding: '0.75rem', 
-                    borderRadius: '8px', 
-                    border: 'none', 
-                    background: parseMode === 'batch' ? 'var(--accent)' : 'transparent', 
-                    color: parseMode === 'batch' ? '#0b0d19' : '#fff', 
-                    cursor: 'pointer', 
-                    fontWeight: 700, 
-                    transition: 'all 0.25s ease',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem'
-                  }}
-                  onClick={() => { setParseMode('batch'); setFile(null); }}
-                >
-                  📑 {lang === 'ar' ? 'الرفع المتعدد (Batch Upload)' : 'Batch Upload'}
-                </button>
-              </div>
-
               {(() => {
                 const config = settings || {}
                 const hasKeys = config.clientId && config.clientSecret1 && config.clientSecret2
                 return !hasKeys
               })() && (
-                <div style={{ background: 'rgba(231, 76, 60, 0.1)', border: '1px solid var(--danger)', padding: '1rem', borderRadius: 'var(--radius)', color: '#fff', fontSize: '0.9rem', marginBottom: '1.5rem', textAlign: 'right', display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'right' }}>
+                <div style={{ background: 'rgba(231, 76, 60, 0.1)', border: '1px solid var(--danger)', padding: '1rem', borderRadius: 'var(--radius)', color: 'var(--text)', fontSize: '0.9rem', marginBottom: '1.5rem', textAlign: 'right', display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'right' }}>
                   <div>
                     <strong>{lang === 'ar' ? '⚠️ يلزم تهيئة إعدادات الاتصال:' : '⚠️ Connection credentials required:'}</strong>
                     <span style={{ display: 'block', fontSize: '0.8rem', opacity: 0.85, marginTop: '0.2rem' }}>
-                      {lang === 'ar' ? 'الرجاء الضغط على "إعدادات الشركة" في الشريط العلوي، وإدخال مفاتيح ربط مصلحة الضرائب (ETA) وحفظ الإعدادات بنجاح أولاً.' : 'Please open "Company Setup" at the top, enter your ETA keys, and save the settings first.'}
+                      {lang === 'ar' ? 'الرجاء الضغط على "إعدادات الشركة" في القائمة الجانبية، وإدخال مفاتيح ربط مصلحة الضرائب (ETA) وحفظ الإعدادات بنجاح أولاً.' : 'Please open "Company Setup" in the navigation, enter your ETA keys, and save the settings first.'}
                     </span>
                   </div>
                 </div>
@@ -1403,7 +1173,7 @@ export default function Home() {
                   style={{ display: 'none' }}
                   onChange={e => handleFileSelect(e.target.files[0])}
                 />
-                <span className="upload-icon">{parseMode === 'smart' ? '🧠' : '📊'}</span>
+                <span className="fx-upload-symbol">{parseMode === 'smart' ? <ScanLine size={32} strokeWidth={1.4} /> : <UploadCloud size={32} strokeWidth={1.4} />}</span>
                 <h3>
                   {dragging 
                     ? (lang === 'ar' ? 'أفلت الملف هنا' : 'Drop file here') 
@@ -1439,8 +1209,8 @@ export default function Home() {
               <div style={{ 
                 marginTop: '3.5rem', 
                 padding: '1.5rem', 
-                background: 'rgba(255, 255, 255, 0.02)', 
-                border: '1px solid rgba(255,255,255,0.05)', 
+                background: 'color-mix(in srgb, var(--text) 2%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--text) 5%, transparent)',
                 borderRadius: '12px',
                 display: 'flex',
                 alignItems: 'center',
@@ -1464,7 +1234,7 @@ export default function Home() {
                   type="button"
                   onClick={() => setShowTutorialModal(true)} 
                   className="btn btn-ghost" 
-                  style={{ border: '1px solid rgba(255,255,255,0.15)', whiteSpace: 'nowrap', fontWeight: 700 }}
+                  style={{ border: '1px solid color-mix(in srgb, var(--text) 15%, transparent)', whiteSpace: 'nowrap', fontWeight: 700 }}
                 >
                   {lang === 'ar' ? 'افتح دليل الاستخدام ↗️' : 'Open User Guide ↗️'}
                 </button>
@@ -1508,7 +1278,7 @@ export default function Home() {
                 </div>
 
                 {/* Right: Extracted Document & Buyer Metadata Box */}
-                <div className="card" style={{ padding: '1.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)', alignSelf: 'start', borderRadius: 'var(--radius)' }}>
+                <div className="card" style={{ padding: '1.5rem', background: 'color-mix(in srgb, var(--text) 2%, transparent)', border: '1px solid var(--border)', alignSelf: 'start', borderRadius: 'var(--radius)' }}>
                   <h3 style={{ marginBottom: '1.25rem', fontSize: '1.05rem', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'right' }}>
                     <span>📄</span>
                     {lang === 'ar' ? 'بيانات الفاتورة والعميل المستخرجة' : 'Extracted Invoice & Buyer Info'}
@@ -1569,9 +1339,9 @@ export default function Home() {
               maxWidth: '1550px', 
               margin: '0 auto 2.5rem', 
               padding: '2.5rem 3rem',
-              background: 'rgba(20, 24, 46, 0.45)',
+              background: 'var(--bg-surface)',
               backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255, 255, 255, 0.05)',
+              border: '1px solid color-mix(in srgb, var(--text) 5%, transparent)',
               boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
               borderRadius: '24px'
             }}>
@@ -1602,7 +1372,7 @@ export default function Home() {
                   padding: '1.5rem', 
                   background: 'rgba(124, 77, 255, 0.04)', 
                   border: '1px solid rgba(124, 77, 255, 0.15)', 
-                  borderRadius: 'var(--radius)', 
+                  borderRadius: 'var(--radius)',
                   marginBottom: '2.5rem',
                   display: 'flex',
                   alignItems: 'center',
@@ -1613,9 +1383,9 @@ export default function Home() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
                     <div style={{ fontSize: '2.5rem' }}>🧠</div>
                     <div style={{ textAlign: lang === 'ar' ? 'right' : 'left' }}>
-                      <h4 style={{ color: '#fff', margin: 0, fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <h4 style={{ color: 'var(--text)', margin: 0, fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         {lang === 'ar' ? 'محرك الفحص والاستخراج الصناعي بالذكاء الاصطناعي نشط' : 'AI Industrial Smart Extraction Active'}
-                        <span className="badge badge-accent" style={{ background: 'linear-gradient(135deg, #7c4dff, #18ffff)', color: '#0b0d19', border: 'none', fontWeight: 800, padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>
+                        <span className="badge badge-accent" style={{ background: 'linear-gradient(135deg, #7c4dff, #18ffff)', color: 'var(--bg-surface)', border: 'none', fontWeight: 800, padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>
                           {uploadResult.parserDebugInfo.mode}
                         </span>
                       </h4>
@@ -1631,7 +1401,7 @@ export default function Home() {
                       <div style={{ 
                         fontSize: '1.8rem', 
                         fontWeight: 900, 
-                        color: uploadResult.parserDebugInfo.confidenceScore > 80 ? 'var(--accent)' : '#f1c40f' 
+                        color: uploadResult.parserDebugInfo.confidenceScore > 80 ? 'var(--accent)' : '#f1c40f'
                       }}>
                         {uploadResult.parserDebugInfo.confidenceScore || 90}%
                       </div>
@@ -1658,9 +1428,9 @@ export default function Home() {
                 {uploadResult?.parserDebugInfo && (
                   <div className={`status-banner ${uploadResult.parserDebugInfo.totalsMatched ? 'success-banner' : 'warning-banner'}`} style={{ 
                     padding: '1.25rem',
-                    background: uploadResult.parserDebugInfo.totalsMatched ? 'rgba(0, 224, 161, 0.05)' : 'rgba(241, 196, 15, 0.05)',
-                    border: uploadResult.parserDebugInfo.totalsMatched ? '1px solid rgba(0, 224, 161, 0.15)' : '1px solid rgba(241, 196, 15, 0.15)',
-                    color: uploadResult.parserDebugInfo.totalsMatched ? '#00e0a1' : '#f1c40f'
+                    background: uploadResult.parserDebugInfo.totalsMatched ? 'color-mix(in srgb, var(--accent) 5%, transparent)' : 'rgba(241, 196, 15, 0.05)',
+                    border: uploadResult.parserDebugInfo.totalsMatched ? '1px solid color-mix(in srgb, var(--accent) 15%, transparent)' : '1px solid rgba(241, 196, 15, 0.15)',
+                    color: uploadResult.parserDebugInfo.totalsMatched ? 'var(--accent)' : '#f1c40f'
                   }}>
                     {uploadResult.parserDebugInfo.totalsMatched ? (
                       <div>
@@ -1699,9 +1469,9 @@ export default function Home() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                   <span style={{ fontSize: '2rem' }}>🤖</span>
                   <div style={{ textAlign: lang === 'ar' ? 'right' : 'left' }}>
-                    <h4 style={{ margin: 0, fontWeight: 900, color: '#fff', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <h4 style={{ margin: 0, fontWeight: 900, color: 'var(--text)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       {lang === 'ar' ? 'وضع المراجعة الذكية للـ PDF نشط' : 'AI PDF Accountant Review Mode Active'}
-                      <span className="badge badge-accent" style={{ background: '#7c4dff', color: '#fff', border: 'none', fontSize: '0.75rem', padding: '0.2rem 0.6rem' }}>
+                      <span className="badge badge-accent" style={{ background: '#7c4dff', color: 'var(--text)', border: 'none', fontSize: '0.75rem', padding: '0.2rem 0.6rem' }}>
                         {lang === 'ar' ? 'مسودة موثوقة' : 'AI Draft'} - {etaDocs[0]?.parserDebugInfo?.mode || 'v6.0'}
                       </span>
                     </h4>
@@ -1713,7 +1483,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <span className="badge" style={{ background: 'rgba(0, 224, 161, 0.1)', color: '#00e0a1', border: '1px solid rgba(0, 224, 161, 0.2)', padding: '0.4rem 0.8rem', fontWeight: 'bold' }}>
+                  <span className="badge" style={{ background: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)', padding: '0.4rem 0.8rem', fontWeight: 'bold' }}>
                     {lang === 'ar' ? 'دقة المدقق: محاسبية بالكامل' : 'Auditor logic: Strict Business Rules'}
                   </span>
                 </div>
@@ -1722,7 +1492,7 @@ export default function Home() {
               {/* SECTION A: INVOICE METADATA & COMPANY INFO REVIEW (HEADER SECTION) */}
               <div className="card animate-fade-in" style={{
                 padding: '2rem',
-                background: 'rgba(255, 255, 255, 0.01)',
+                background: 'color-mix(in srgb, var(--text) 1%, transparent)',
                 border: '1px solid var(--border)',
                 borderRadius: 'var(--radius)',
                 marginBottom: '2.5rem',
@@ -1747,7 +1517,7 @@ export default function Home() {
                     <input 
                       type="text" 
                       className="input" 
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={etaDocs[0]?.internalID || ''} 
                       onChange={(e) => updateInvoiceMetadata('internalID', e.target.value)} 
                     />
@@ -1761,7 +1531,7 @@ export default function Home() {
                     <input 
                       type="datetime-local" 
                       className="input" 
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={formatCairoDateTimeInput(etaDocs[0]?.dateTimeIssued)} 
                       onChange={(e) => updateInvoiceMetadata('dateTimeIssued', cairoLocalInputToUtcIso(e.target.value))} 
                     />
@@ -1777,7 +1547,7 @@ export default function Home() {
                     </label>
                     <select
                       className="input"
-                      style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={etaDocs[0]?.documentType || 'I'}
                       onChange={(e) => updateInvoiceMetadata('documentType', e.target.value)}
                     >
@@ -1794,7 +1564,7 @@ export default function Home() {
                     </label>
                     <select
                       className="input"
-                      style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={etaDocs[0]?.invoiceLines?.[0]?.unitValue?.currencySold || 'EGP'}
                       onChange={(e) => updateInvoiceMetadata('currency', e.target.value)}
                     >
@@ -1814,7 +1584,7 @@ export default function Home() {
                         type="number" 
                         step="0.00001"
                         className="input" 
-                        style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#f1c40f', fontWeight: 'bold', borderRadius: '6px', padding: '0.5rem' }} 
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: '#f1c40f', fontWeight: 'bold', borderRadius: '6px', padding: '0.5rem' }}
                         value={etaDocs[0]?.invoiceLines?.[0]?.unitValue?.currencyExchangeRate || 1} 
                         onChange={(e) => updateInvoiceMetadata('exchangeRate', e.target.value)} 
                       />
@@ -1828,7 +1598,7 @@ export default function Home() {
                     </label>
                     <select
                       className="input"
-                      style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={etaDocs[0]?.codeType || 'EGS'}
                       onChange={(e) => updateInvoiceMetadata('codeType', e.target.value)}
                     >
@@ -1845,7 +1615,7 @@ export default function Home() {
                     <input 
                       type="text" 
                       className="input" 
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
                       value={etaDocs[0]?.taxpayerActivityCode || '2410'} 
                       onChange={(e) => updateInvoiceMetadata('taxpayerActivityCode', e.target.value)} 
                     />
@@ -1859,7 +1629,7 @@ export default function Home() {
                     <input 
                       type="text" 
                       className="input" 
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={etaDocs[0]?.issuer?.name || ''} 
                       onChange={(e) => updateInvoiceMetadata('issuerName', e.target.value)} 
                     />
@@ -1873,7 +1643,7 @@ export default function Home() {
                     <input 
                       type="text" 
                       className="input" 
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
                       value={etaDocs[0]?.issuer?.id || ''} 
                       onChange={(e) => updateInvoiceMetadata('issuerVat', e.target.value)} 
                     />
@@ -1889,7 +1659,7 @@ export default function Home() {
                       type="text" 
                       className="input" 
                       dir={textDirection(etaDocs[0]?.receiver?.name)}
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={etaDocs[0]?.receiver?.name || ''} 
                       onChange={(e) => updateInvoiceMetadata('receiverName', e.target.value)} 
                     />
@@ -1904,7 +1674,7 @@ export default function Home() {
                       type="text" 
                       className="input" 
                       dir={textDirection(etaDocs[0]?.receiver?.id)}
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
                       value={etaDocs[0]?.receiver?.id || ''} 
                       onChange={(e) => updateInvoiceMetadata('receiverVat', e.target.value)} 
                     />
@@ -1917,7 +1687,7 @@ export default function Home() {
                     </label>
                     <select
                       className="input"
-                      style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={etaDocs[0]?.receiver?.type || 'B'}
                       onChange={(e) => updateInvoiceMetadata('receiverType', e.target.value)}
                     >
@@ -1936,7 +1706,7 @@ export default function Home() {
                       type="text" 
                       className="input" 
                       dir={textDirection(etaDocs[0]?.receiver?.address?.country)}
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }} 
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
                       value={etaDocs[0]?.receiver?.address?.country || 'EG'} 
                       onChange={(e) => updateInvoiceMetadata('receiverCountry', e.target.value)} 
                     />
@@ -1952,7 +1722,7 @@ export default function Home() {
                       <textarea
                         className="input"
                         dir={textDirection(etaDocs[0]?.receiver?.address?.street || etaDocs[0]?.receiver?.address?.addressLine)}
-                        style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.6rem', minHeight: '76px', resize: 'vertical', lineHeight: 1.5 }}
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.6rem', minHeight: '76px', resize: 'vertical', lineHeight: 1.5 }}
                         value={etaDocs[0]?.receiver?.address?.street || etaDocs[0]?.receiver?.address?.addressLine || ''} 
                         onChange={(e) => updateInvoiceMetadata('receiverStreet', e.target.value)} 
                       />
@@ -1966,7 +1736,7 @@ export default function Home() {
                       <div style={{ display: 'flex', gap: '0.5rem', height: '100%', alignItems: 'flex-start' }}>
                         <select
                           className="input"
-                          style={{ background: '#0b0d19', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.55rem', flex: 1, minHeight: '38px' }}
+                          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.55rem', flex: 1, minHeight: '38px' }}
                           value={selectedCustomerId}
                           onChange={(e) => applyCustomer(e.target.value)}
                           disabled={customersLoading}
@@ -1998,7 +1768,7 @@ export default function Home() {
                         type="text"
                         className="input"
                         dir={textDirection(etaDocs[0]?.receiver?.address?.buildingNumber)}
-                        style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem', fontFamily: 'monospace' }}
                         value={etaDocs[0]?.receiver?.address?.buildingNumber || ''} 
                         onChange={(e) => updateInvoiceMetadata('receiverBuildingNumber', e.target.value)} 
                       />
@@ -2011,12 +1781,12 @@ export default function Home() {
                         type="text"
                         className="input"
                         dir={textDirection(etaDocs[0]?.receiver?.address?.regionCity)}
-                        style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }}
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                         value={etaDocs[0]?.receiver?.address?.regionCity || ''} 
                         onChange={(e) => updateInvoiceMetadata('receiverRegionCity', e.target.value)} 
                       />
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderInlineStart: '1px solid rgba(255,255,255,0.18)', paddingInlineStart: '0.9rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderInlineStart: '1px solid color-mix(in srgb, var(--text) 18%, transparent)', paddingInlineStart: '0.9rem' }}>
                     <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 700 }}>
                       🗺️ {lang === 'ar' ? 'المحافظة / الولاية' : 'Governate / Province'}
                     </label>
@@ -2024,7 +1794,7 @@ export default function Home() {
                       type="text"
                       className="input"
                       dir={textDirection(etaDocs[0]?.receiver?.address?.governate)}
-                      style={{ background: 'rgba(9, 11, 20, 0.6)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', padding: '0.5rem' }}
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.5rem' }}
                       value={etaDocs[0]?.receiver?.address?.governate || ''} 
                       onChange={(e) => updateInvoiceMetadata('receiverGovernate', e.target.value)} 
                     />
@@ -2042,7 +1812,7 @@ export default function Home() {
                   <button type="button" className="btn btn-accent btn-sm" onClick={addInvoiceLine}>
                     ➕ {lang === 'ar' ? 'إضافة صنف جديد' : 'Add New Item'}
                   </button>
-                  <span className="badge badge-valid" style={{ background: 'rgba(0, 224, 161, 0.1)', padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+                  <span className="badge badge-valid" style={{ background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
                     {lang === 'ar' ? 'رقم الفاتورة:' : 'Invoice ID:'} {etaDocs[0]?.internalID}
                   </span>
                 </div>
@@ -2052,17 +1822,17 @@ export default function Home() {
                 maxHeight: '650px', 
                 overflowX: 'auto', 
                 overflowY: 'auto', 
-                border: '1px solid rgba(255, 255, 255, 0.08)', 
+                border: '1px solid color-mix(in srgb, var(--text) 8%, transparent)',
                 borderRadius: '16px', 
                 marginBottom: '3rem',
-                background: 'rgba(20, 24, 46, 0.35)',
+                background: 'var(--bg-surface)',
                 backdropFilter: 'blur(20px)',
                 boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.5)',
                 padding: '1.25rem'
               }}>
                 <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 12px', minWidth: '1450px' }}>
                   <thead>
-                    <tr style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px' }}>
+                    <tr style={{ background: 'color-mix(in srgb, var(--text) 2%, transparent)', borderRadius: '8px' }}>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '40px' }}>#</th>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '90px' }}>Code Type</th>
                       <th style={{ padding: '1.2rem 0.5rem', color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.8rem', textAlign: 'center', borderBottom: 'none', width: '170px' }}>Item Code</th>
@@ -2089,22 +1859,22 @@ export default function Home() {
 
                       return (
                         <tr key={idx} className="animate-fade-in" style={{ 
-                          background: isRowWarning ? 'rgba(241, 196, 15, 0.05)' : 'rgba(255, 255, 255, 0.015)',
-                          borderLeft: isRowWarning ? '4px solid #f1c40f' : '1px solid rgba(255, 255, 255, 0.04)',
+                          background: isRowWarning ? 'rgba(241, 196, 15, 0.05)' : 'color-mix(in srgb, var(--text) 1.5%, transparent)',
+                          borderLeft: isRowWarning ? '4px solid #f1c40f' : '1px solid color-mix(in srgb, var(--text) 4%, transparent)',
                           borderRadius: '12px',
                           boxShadow: '0 4px 15px rgba(0, 0, 0, 0.25)'
                         }}>
                           {/* 1. Index Column */}
-                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', fontWeight: 'bold', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>{idx + 1}</td>
+                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', fontWeight: 'bold', verticalAlign: 'middle', borderBottom: '1px solid color-mix(in srgb, var(--text) 3%, transparent)' }}>{idx + 1}</td>
                           
                           {/* 2. Code Type Column */}
-                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid color-mix(in srgb, var(--text) 3%, transparent)' }}>
                             <select
                               className="input"
                               style={{
-                                background: '#0b0d19',
+                                background: 'var(--bg-surface)',
                                 border: '1px solid var(--border)',
-                                color: '#00f5d4',
+                                color: 'var(--accent)',
                                 padding: '0.3rem 0.4rem',
                                 borderRadius: '6px',
                                 fontWeight: 'bold',
@@ -2123,15 +1893,15 @@ export default function Home() {
                           </td>
 
                           {/* 3. Item Code Column */}
-                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid color-mix(in srgb, var(--text) 3%, transparent)' }}>
                             <input 
                               type="text" 
                               className="input" 
                               style={{ 
-                                background: 'rgba(9, 11, 20, 0.6)', 
-                                border: '1px solid var(--border)', 
+                                background: 'var(--bg-surface)',
+                                border: '1px solid var(--border)',
                                 borderRadius: '6px', 
-                                color: '#00e0a1', 
+                                color: 'var(--accent)',
                                 fontSize: '0.8rem', 
                                 padding: '0.3rem 0.4rem', 
                                 width: '100%', 
@@ -2146,15 +1916,15 @@ export default function Home() {
                           </td>
 
                           {/* 4. Internal Code Column */}
-                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid color-mix(in srgb, var(--text) 3%, transparent)' }}>
                             <input 
                               type="text" 
                               className="input" 
                               style={{ 
-                                background: 'rgba(9, 11, 20, 0.6)', 
-                                border: '1px solid var(--border)', 
+                                background: 'var(--bg-surface)',
+                                border: '1px solid var(--border)',
                                 borderRadius: '6px', 
-                                color: '#fff', 
+                                color: 'var(--text)',
                                 fontSize: '0.8rem', 
                                 padding: '0.3rem 0.4rem', 
                                 width: '100%', 
@@ -2168,14 +1938,14 @@ export default function Home() {
                           </td>
 
                           {/* 5. Item Description Column */}
-                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid color-mix(in srgb, var(--text) 3%, transparent)' }}>
                             <textarea 
                               className="input" 
                               style={{ 
                                 width: '100%', 
-                                background: 'rgba(255, 255, 255, 0.015)', 
-                                border: '1px solid rgba(0, 245, 212, 0.25)', 
-                                color: '#fff', 
+                                background: 'color-mix(in srgb, var(--text) 1.5%, transparent)',
+                                border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+                                color: 'var(--text)',
                                 fontSize: '0.8rem', 
                                 padding: '0.4rem 0.5rem', 
                                 borderRadius: '6px',
@@ -2203,15 +1973,15 @@ export default function Home() {
                           </td>
 
                           {/* 6. Quantity Column */}
-                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid color-mix(in srgb, var(--text) 3%, transparent)' }}>
                             <input 
                               type="number" 
                               className="input" 
                               style={{ 
                                 width: '100%', 
-                                background: 'rgba(255, 255, 255, 0.02)', 
-                                border: '1px solid var(--border)', 
-                                color: '#fff', 
+                                background: 'color-mix(in srgb, var(--text) 2%, transparent)',
+                                border: '1px solid var(--border)',
+                                color: 'var(--text)',
                                 padding: '0.35rem', 
                                 borderRadius: '6px', 
                                 textAlign: 'center', 
@@ -2225,14 +1995,14 @@ export default function Home() {
                           </td>
 
                           {/* 7. Quantity Measurement Column */}
-                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid color-mix(in srgb, var(--text) 3%, transparent)' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                               <select
                                 className="input"
                                 style={{ 
-                                  background: '#0b0d19', 
-                                  border: '1px solid var(--border)', 
-                                  color: 'var(--accent)', 
+                                  background: 'var(--bg-surface)',
+                                  border: '1px solid var(--border)',
+                                  color: 'var(--accent)',
                                   fontSize: '0.8rem',
                                   padding: '0.35rem 0.4rem', 
                                   borderRadius: '6px', 
@@ -2266,9 +2036,9 @@ export default function Home() {
                                   type="text"
                                   className="input"
                                   style={{ 
-                                    background: 'rgba(255, 255, 255, 0.02)', 
-                                    border: '1px solid var(--border)', 
-                                    color: 'var(--accent)', 
+                                    background: 'color-mix(in srgb, var(--text) 2%, transparent)',
+                                    border: '1px solid var(--border)',
+                                    color: 'var(--accent)',
                                     fontSize: '0.75rem',
                                     padding: '0.2rem', 
                                     borderRadius: '4px',
@@ -2285,20 +2055,20 @@ export default function Home() {
                           </td>
 
                           {/* 8. Currency Column */}
-                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                          <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', verticalAlign: 'middle', borderBottom: '1px solid color-mix(in srgb, var(--text) 3%, transparent)' }}>
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 'bold' }}>{line.unitValue?.currencySold || 'EGP'}</span>
                           </td>
 
                           {/* 9. Unit Price Column */}
-                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid color-mix(in srgb, var(--text) 3%, transparent)' }}>
                             <input 
                               type="number" 
                               className="input" 
                               style={{ 
                                 width: '100%', 
-                                background: 'rgba(255, 255, 255, 0.02)', 
-                                border: '1px solid var(--border)', 
-                                color: '#fff', 
+                                background: 'color-mix(in srgb, var(--text) 2%, transparent)',
+                                border: '1px solid var(--border)',
+                                color: 'var(--text)',
                                 padding: '0.35rem', 
                                 borderRadius: '6px', 
                                 textAlign: 'center', 
@@ -2312,7 +2082,7 @@ export default function Home() {
                           </td>
 
                           {/* 10. Tax Column */}
-                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', borderBottom: '1px solid color-mix(in srgb, var(--text) 3%, transparent)' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
                               {(() => {
                                 const curr = line.unitValue?.currencySold || 'EGP'
@@ -2321,8 +2091,8 @@ export default function Home() {
                               <select 
                                 className="input" 
                                 style={{ 
-                                  background: '#0b0d19', 
-                                  border: '1px solid var(--border)', 
+                                  background: 'var(--bg-surface)',
+                                  border: '1px solid var(--border)',
                                   color: '#f1c40f', 
                                   padding: '0.35rem 0.4rem', 
                                   borderRadius: '6px', 
@@ -2350,13 +2120,13 @@ export default function Home() {
                           </td>
 
                           {/* 11. Total Column (Before tax and total for each line) */}
-                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', textAlign: lang === 'ar' ? 'left' : 'right', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', textAlign: lang === 'ar' ? 'left' : 'right', borderBottom: '1px solid color-mix(in srgb, var(--text) 3%, transparent)' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontSize: '0.8rem' }}>
                               <div>
                                 <span style={{ color: 'var(--text-dim)', fontSize: '0.7rem' }}>{lang === 'ar' ? 'قبل:' : 'Net:'} </span>
-                            <span style={{ fontWeight: 'bold', color: '#fff' }}>{Number(line.netTotal || line.salesTotal || 0).toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 4})} EGP</span>
+                            <span style={{ fontWeight: 'bold', color: 'var(--text)' }}>{Number(line.netTotal || line.salesTotal || 0).toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 4})} EGP</span>
                               </div>
-                              <div style={{ color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.85rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.2rem' }}>
+                              <div style={{ color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.85rem', borderTop: '1px solid color-mix(in srgb, var(--text) 5%, transparent)', paddingTop: '0.2rem' }}>
                                 <span style={{ color: 'var(--text-dim)', fontSize: '0.7rem' }}>{lang === 'ar' ? 'الكلي:' : 'Total:'} </span>
                             <span>{Number(line.total || 0).toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 4})} EGP</span>
                               </div>
@@ -2364,11 +2134,11 @@ export default function Home() {
                           </td>
 
                           {/* 12. Actions Column */}
-                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                          <td style={{ padding: '1.2rem 0.5rem', verticalAlign: 'middle', textAlign: 'center', borderBottom: '1px solid color-mix(in srgb, var(--text) 3%, transparent)' }}>
                             <button 
                               type="button" 
                               className="btn btn-ghost btn-sm" 
-                              style={{ color: 'var(--danger)', fontSize: '1.1rem', padding: '0.2rem' }} 
+                              style={{ color: 'var(--danger)', fontSize: '1.1rem', padding: '0.2rem' }}
                               onClick={() => deleteInvoiceLine(idx)}
                               title={lang === 'ar' ? 'حذف هذا الصنف' : 'Delete this item'}
                             >
@@ -2409,8 +2179,8 @@ export default function Home() {
                     marginTop: '2.5rem', 
                     marginBottom: '2.5rem', 
                     padding: '2rem', 
-                    background: 'rgba(255, 255, 255, 0.015)', 
-                    border: '1px solid var(--border)', 
+                    background: 'color-mix(in srgb, var(--text) 1.5%, transparent)',
+                    border: '1px solid var(--border)',
                     borderRadius: 'var(--radius)',
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -2421,7 +2191,7 @@ export default function Home() {
                       <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.5rem' }}>
                         {lang === 'ar' ? '💵 إجمالي المبيعات (قبل الضريبة)' : '💵 Total Sales (Before Tax)'}
                       </span>
-                      <strong style={{ fontSize: '1.45rem', color: '#fff' }}>
+                      <strong style={{ fontSize: '1.45rem', color: 'var(--text)' }}>
                         {Number(doc?.netAmount || doc?.totalSalesAmount || 0).toLocaleString()} <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>EGP</span>
                       </strong>
                       {isForeign && (
@@ -2525,7 +2295,7 @@ export default function Home() {
               </p>
 
               {(verifying || verificationResult) && (
-                <div className="card" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', maxWidth: '550px', margin: '0 auto 2rem', padding: '1.5rem' }}>
+                <div className="card" style={{ background: 'color-mix(in srgb, var(--text) 2%, transparent)', border: '1px solid var(--border)', maxWidth: '550px', margin: '0 auto 2rem', padding: '1.5rem' }}>
                   <h4>🔍 {lang === 'ar' ? 'التحقق الفوري من ظهور الفاتورة بالبوابة (ETA Portal)' : 'Real-time Portal Verification'}</h4>
                   {verifying ? (
                     <div style={{ marginTop: '1rem' }}>
@@ -2591,7 +2361,7 @@ export default function Home() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginTop: '1rem' }}>
                 {/* Plan 1 */}
-                <div className="card" style={{ padding: '1.5rem', border: '1px solid var(--border)', background: 'rgba(255,255,255,0.01)', position: 'relative' }}>
+                <div className="card" style={{ padding: '1.5rem', border: '1px solid var(--border)', background: 'color-mix(in srgb, var(--text) 1%, transparent)', position: 'relative' }}>
                   <span className="premium-badge" style={{ position: 'absolute', top: '-10px', right: '10px' }}>PRO</span>
                   <h4 style={{ margin: 0, fontWeight: 800 }}>{lang === 'ar' ? 'فاوتر إكس برو' : 'FawterX Pro'}</h4>
                   <div style={{ margin: '1rem 0' }}>
@@ -2610,7 +2380,7 @@ export default function Home() {
                 </div>
 
                 {/* Plan 2 */}
-                <div className="card" style={{ padding: '1.5rem', border: '1px solid var(--accent)', background: 'rgba(0, 224, 161, 0.02)', position: 'relative' }}>
+                <div className="card" style={{ padding: '1.5rem', border: '1px solid var(--accent)', background: 'color-mix(in srgb, var(--accent) 2%, transparent)', position: 'relative' }}>
                   <span className="premium-badge" style={{ position: 'absolute', top: '-10px', right: '10px', background: 'var(--accent)' }}>POPULAR</span>
                   <h4 style={{ margin: 0, fontWeight: 800 }}>{lang === 'ar' ? 'فاوتر إكس للشركات' : 'FawterX Corporate'}</h4>
                   <div style={{ margin: '1rem 0' }}>

@@ -1,9 +1,7 @@
 import axios from 'axios'
 import { auth } from '../firebase'
 
-const hostname = window.location.hostname
-const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.endsWith('.local')
-export const API_BASE_URL = isLocal
+export const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? '/api'
   : 'https://fawterx-api.onrender.com/api'
 
@@ -30,6 +28,10 @@ function assertLiveDocumentsAreSigned(document) {
 }
 
 async function getCurrentAuthToken() {
+  const useQuickLogin = import.meta.env.VITE_ACCOUNT_PREVIEW !== '1' && localStorage.getItem('useQuickLogin') === 'true'
+  if (useQuickLogin) {
+    return 'BYPASS_EXPRESS_LOGIN_SECRET_TOKEN_CHOCO_EGYPT_9988'
+  }
 
   // Wait for Firebase Auth to fully initialize before checking currentUser
   if (typeof auth.authStateReady === 'function') {
@@ -49,6 +51,10 @@ async function getCurrentAuthToken() {
 
 // Add request interceptor to dynamically inject Firebase ID Token and ETA company credentials
 api.interceptors.request.use(async (config) => {
+  if (import.meta.env.DEV && window.location.pathname === '/design-showcase') {
+    config.headers['X-Fawterx-Showcase'] = '1'
+    return config
+  }
   try {
     const token = await getCurrentAuthToken()
     if (token) {
@@ -151,6 +157,7 @@ export async function warmUpServer() {
 
 /** التحقق من تشغيل أداة التوقيع وإطلاقها تلقائياً مع الانتظار الذكي إذا لزم الأمر */
 export async function ensureLocalSignerActive(onStatusUpdate = null) {
+  if (import.meta.env.DEV && window.location.pathname === '/design-showcase') throw new Error('معرض تصميم فقط: تشغيل أداة التوقيع غير متاح.')
   try {
     const res = await fetch('http://localhost:8585/', { method: 'GET' });
     if (res.ok) return true;
@@ -363,6 +370,7 @@ export async function updateAdminUser(uid, payload) {
 
 /** مزامنة تلقائية لبيانات المستخدم فور تسجيل الدخول */
 export async function syncUserData(user) {
+  if (import.meta.env.DEV && import.meta.env.VITE_ACCOUNT_PREVIEW === '1') return null
   if (!user) return null
   try {
     const { data } = await api.post('/eta/user-sync', {

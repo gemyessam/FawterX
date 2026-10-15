@@ -1,0 +1,12 @@
+export const sampleDocument = {
+  internalID: 'DESIGN-001', documentType: 'I', documentTypeVersion: '1.0', dateTimeIssued: '2026-10-05T10:00:00Z',
+  issuer: { type: 'B', id: '000000000', name: 'شركة تجريبية — معاينة فقط', address: { country: 'EG', governate: 'Cairo', regionCity: 'Cairo', street: 'Demo', buildingNumber: '1', branchID: '0' } },
+  receiver: { type: 'B', id: '000000001', name: 'عميل تجريبي', address: { country: 'EG', governate: 'Cairo', regionCity: 'Cairo', street: 'Demo', buildingNumber: '2' } },
+  invoiceLines: [{ itemCode: 'DEMO-1001', internalCode: 'DEMO-1001', codeType: 'EGS', description: 'قطاع ألومنيوم — بيانات تصميم', quantity: 12, unitType: 'EA', unitValue: { currencySold: 'EGP', amountEGP: 500 }, salesTotal: 6000, netTotal: 6000, total: 6840, totalAmount: 6840, discount: { rate: 0, amount: 0 }, taxableItems: [{ taxType: 'T1', subType: 'V009', rate: 14, amount: 840 }] }],
+  totalSalesAmount: 6000, netAmount: 6000, totalAmount: 6840, totalDiscountAmount: 0, extraDiscountAmount: 0, totalItemsDiscountAmount: 0, taxTotals: [{ taxType: 'T1', amount: 840 }], signatures: [],
+}
+export const sampleValidation = { valid: true, complianceScore: 100, errors: [], warnings: [], missingFields: [], calculatedTotals: { totalSalesAmount: 6000, taxTotal: 840, totalAmount: 6840 } }
+export const sampleDraft = { draftId: 'design-draft', internalID: 'DESIGN-001', status: 'valid', createdAt: '2026-10-05T10:00:00Z', document: sampleDocument, validationResult: sampleValidation }
+export const sampleUsers = [{ uid:'design-viewer',email:'preview@example.invalid',displayName:'مستخدم تجريبي',role:'user',quotaDaily:10,submissionsCount:3,isSubscribed:false,isSuspended:false }]
+export const sampleDispatches = [{ id:'design-dispatch',dispatchNumber:'DEMO-OUT-001',dispatchedAt:'2026-10-05T10:00:00Z',supplierName:'مورد دهان تجريبي',customerName:'عميل تجريبي',currentStage:'partially_delivered',totalQuantityBar:12,items:[{ itemCode:'DEMO-1001',description:'قطاع تجريبي',quantityBar:12,deliveredQuantityBar:4,scrapQuantityBar:0,lengthMm:6000 }],stageHistory:[] }]
+export const sampleUpload = { fileName: 'design-sample.xlsx', totalRows: 1, headers: ['item code','description','quantity','price','tax'], rows: [{ 'item code':'DEMO-1001', description:'قطاع تجريبي', quantity:12, price:500, tax:14 }], preview: [{ 'item code':'DEMO-1001', description:'قطاع تجريبي', quantity:12, price:500, tax:14 }], metadata: {} }
