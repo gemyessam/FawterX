@@ -835,13 +835,7 @@ function parseSchucoInvoice(text) {
   const rawLines = text.split('\n').map(l => l.trim().replace(/\\t/g, '\t')).filter(Boolean);
   const allText = rawLines.join('\n');
 
-  // ── RAW TEXT DEBUG LOG ──────────────────────────────────
-  console.log('═══════════════ SCHÜCO RAW OCR TEXT ═══════════════');
-  console.log('Total raw lines:', rawLines.length);
-  rawLines.forEach((line, i) => {
-    console.log(`  [${String(i).padStart(3, '0')}] "${line}"`);
-  });
-  console.log('═══════════════════════════════════════════════════');
+
 
   // ── Metadata extraction ──────────────────────────────────
   const metadata = {
@@ -909,7 +903,7 @@ function parseSchucoInvoice(text) {
   let vatS1 = allMatchesLit(new RegExp(`VAT\\s+(?:EUR|USD|GBP|EGP|SAR|AED)\\s+${numReStr}`, 'gi'), text);
   let totS1 = allMatchesLit(new RegExp(`Total\\s*Amount\\s+(?:EUR|USD|GBP|EGP|SAR|AED)\\s+${numReStr}`, 'gi'), text);
 
-  console.log('=== FOOTER STRATEGY 1 (currency-qualified) ===', { packing: packS1, freight: freightS1, net: netS1, vat: vatS1, total: totS1 });
+
 
   if (packS1 !== null) packingAmt = packS1;
   if (freightS1 !== null) freightAmt = freightS1;
@@ -946,7 +940,7 @@ function parseSchucoInvoice(text) {
         if (m) metadata.totalAmount = parseGlobalNumberStr(m[1]);
       }
     }
-    console.log('=== FOOTER STRATEGY 2 (line scan) ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, totalAmount: metadata.totalAmount });
+
   }
 
   const firstNumberInLine = (line) => {
@@ -1008,7 +1002,7 @@ function parseSchucoInvoice(text) {
           if (label === 'freight' && !freightAmt) freightAmt = value;
         }
       }
-      console.log('=== FOOTER STRATEGY 2B (ordered footer walk) ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, taxAmount: metadata.taxAmount, totalAmount: metadata.totalAmount });
+
     }
   }
 
@@ -1041,14 +1035,11 @@ function parseSchucoInvoice(text) {
     }
 
     
-    console.log('=== FOOTER STRATEGY 3 (noSpace fallback) ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, totalAmount: metadata.totalAmount });
+
   }
 
 
-  // Debug: show last 5 non-empty raw lines to understand PDF text structure
-  const lastLines = rawLines.filter(l => l.trim()).slice(-10);
-  console.log('=== LAST 10 NON-EMPTY LINES OF PDF ===', lastLines);
-  console.log('=== FINAL FOOTER RESULT ===', { packingAmt, freightAmt, netAmount: metadata.netAmount, taxAmount: metadata.taxAmount, totalAmount: metadata.totalAmount });
+
 
   for (const line of rawLines) {
     const crMatch = line.match(/\b(?:cr\s*#|cr#|commercial register|commercial reg|registration no|reg\.?\s*no|company reg(?:istration)?(?: no)?)\s*[:#-]?\s*([A-Z0-9\-\/]{3,30})/i);
@@ -1275,15 +1266,7 @@ function parseSchucoInvoice(text) {
 
   if (blocks.length === 0) return null; // not a Schüco invoice
 
-  // ── BLOCK SEGMENTATION DEBUG LOG ──────────────────────────
-  console.log(`═══════════════ SCHÜCO BLOCKS FOUND: ${blocks.length} ═══════════════`);
-  blocks.forEach((block, i) => {
-    console.log(`  Block ${i + 1}: Pos=${block.pos}, ItemCode=${block.itemCode}, Lines=${block.rawLines.length}`);
-    block.rawLines.forEach((line, j) => {
-      console.log(`    [${j}] "${line}"`);
-    });
-  });
-  console.log('═══════════════════════════════════════════════════');
+
 
   // ── Parse each block into exactly ONE invoice line ─────────────────────
   // IMPORTANT: Each Schüco block has BAR/KG/LM rows which are 3 representations
@@ -1671,10 +1654,7 @@ function parseSchucoInvoice(text) {
     if (quantity === 0) missingFields.push('Missing quantity');
     if (unitValue === 0) missingFields.push('Missing unit price');
 
-    console.log(`  📦 PARSED BLOCK [Pos=${block.pos}, Code=${block.itemCode}]:`, {
-      productName, quantity, unitValue: Number(unitValue.toFixed(4)), net: Number(net.toFixed(4)),
-      weight, length, finish, barQty, lmQty, unitPricePerMeter, unitPricePerBar, lineNetAmount, description
-    });
+
 
     return {
       invoiceNumber: metadata.internalID,

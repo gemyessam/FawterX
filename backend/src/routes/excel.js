@@ -107,6 +107,8 @@ router.post("/upload", uploadMiddleware, async (req, res) => {
     });
   } catch (err) {
     console.error("=== SERVER ERROR ===", err);
+    return res.status(500).json({ success: false, message: err.message });
+  } finally {
     try {
       if (req.file && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
@@ -114,7 +116,6 @@ router.post("/upload", uploadMiddleware, async (req, res) => {
     } catch (e) {
       console.error("Failed to delete temp file:", e);
     }
-    return res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -174,6 +175,18 @@ router.post("/upload-batch", uploadBatchMiddleware, async (req, res) => {
   } catch (err) {
     console.error("=== SERVER ERROR ===", err);
     return res.status(500).json({ success: false, message: err.message });
+  } finally {
+    if (req.files && Array.isArray(req.files)) {
+      for (const file of req.files) {
+        try {
+          if (file && fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+          }
+        } catch (e) {
+          console.error("Failed to delete batch temp file:", e);
+        }
+      }
+    }
   }
 });
 

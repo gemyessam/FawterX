@@ -1,7 +1,9 @@
 import axios from 'axios'
 import { auth } from '../firebase'
 
-export const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+const hostname = window.location.hostname
+const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.endsWith('.local')
+export const API_BASE_URL = isLocal
   ? '/api'
   : 'https://fawterx-api.onrender.com/api'
 
@@ -28,10 +30,6 @@ function assertLiveDocumentsAreSigned(document) {
 }
 
 async function getCurrentAuthToken() {
-  const useQuickLogin = localStorage.getItem('useQuickLogin') === 'true'
-  if (useQuickLogin) {
-    return 'BYPASS_EXPRESS_LOGIN_SECRET_TOKEN_CHOCO_EGYPT_9988'
-  }
 
   // Wait for Firebase Auth to fully initialize before checking currentUser
   if (typeof auth.authStateReady === 'function') {

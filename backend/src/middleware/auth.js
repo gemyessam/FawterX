@@ -32,7 +32,7 @@ module.exports = async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    if (process.env.NODE_ENV !== "production") {
+    if (process.env.NODE_ENV !== "production" && (process.env.ALLOW_DEV_MOCK_AUTH === "true" || process.env.NODE_ENV === "test")) {
       req.user = {
         uid: "mock-saas-user-uid",
         email: "accountant@company.com",

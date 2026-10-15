@@ -25,11 +25,7 @@ const UNIT_MAP = {
  * @returns {object[]} - Array of ETA Document objects
  */
 function mapToETADocument(mapping, rows, issuer, metadata = {}) {
-  console.log("=== ETA MAPPER INPUT ===", {
-    rows,
-    mapping,
-    metadata
-  });
+  // Group rows by Invoice Number / internalID
 
   // 1. Group rows by Invoice Number / internalID
   const invoiceGroups = {};
@@ -201,12 +197,6 @@ const METADATA_ROW_PATTERN = /(issuer|receiver|documenttype|document type|docume
 
       const codeName = desc.split(" | ")[0] || desc;
 
-      console.log("ETA ITEM MAPPING", {
-        codeType: itemType,
-        itemCode: itemCode,
-        internalCode: row[mapping.internalCode] || `ITEM-${idx + 1}`,
-        description: desc
-      });
 
       return {
         description:       desc,
@@ -295,7 +285,6 @@ const METADATA_ROW_PATTERN = /(issuer|receiver|documenttype|document type|docume
     });
   }
 
-  console.log("=== GENERATED DOCUMENT ===", documents);
   return documents;
 }
 

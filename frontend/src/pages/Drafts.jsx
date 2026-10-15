@@ -76,7 +76,11 @@ export default function Drafts() {
               {drafts.map(d => (
                 <tr key={d.draftId}>
                   <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{d.draftId}</td>
-                  <td style={{ fontWeight: 700 }}>{d.internalID || 'N/A'}</td>
+                  <td style={{ fontWeight: 700 }}>
+                    <Link to={`/drafts/${d.draftId}`} style={{ color: 'var(--primary, #38bdf8)', textDecoration: 'underline' }}>
+                      {d.internalID || 'N/A'}
+                    </Link>
+                  </td>
                   <td>
                     {d.status === 'uploaded' ? (
                       <span className="badge badge-valid" style={{ background: 'rgba(0, 224, 161, 0.15)', color: '#00e0a1', border: '1px solid #00e0a1' }}>
@@ -97,9 +101,12 @@ export default function Drafts() {
                     {new Date(d.createdAt).toLocaleString(lang === 'ar' ? 'ar-EG' : 'en-US')}
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(d.draftId)}>
-                        {lang === 'ar' ? 'حذف' : 'Delete'}
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <Link to={`/drafts/${d.draftId}`} className="btn btn-sm btn-secondary" style={{ textDecoration: 'none', padding: '0.25rem 0.6rem' }}>
+                        👁️ {lang === 'ar' ? 'معاينة' : 'View'}
+                      </Link>
+                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(d.draftId)} style={{ padding: '0.25rem 0.6rem' }}>
+                        🗑️ {lang === 'ar' ? 'حذف' : 'Delete'}
                       </button>
                     </div>
                   </td>

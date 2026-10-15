@@ -39,7 +39,13 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Allow non-browser requests (e.g. mobile apps, curl, local signing agent)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith("http://localhost")) {
+    if (
+      allowedOrigins.indexOf(origin) !== -1 ||
+      origin.startsWith("http://localhost") ||
+      origin.startsWith("http://127.0.0.1") ||
+      /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/.test(origin) ||
+      /^http:\/\/10\.\d+\.\d+\.\d+(:\d+)?$/.test(origin)
+    ) {
       callback(null, true);
     } else {
       callback(new Error("CORS policy violation: Access from this origin is denied."));
@@ -47,7 +53,8 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Device-Fingerprint", "X-Requested-With", "X-ETA-Client-Id", "X-ETA-Client-Secret"]
+  allowedHeaders: ["Content-Type", "Authorization", "X-Device-Fingerprint", "X-Requested-With", "X-ETA-Client-Id", "X-ETA-Client-Secret"],
+  exposedHeaders: ["X-FawterX-Commit", "X-FawterX-Stock-Deletion-Contract"]
 };
 
 module.exports = {

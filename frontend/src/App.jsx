@@ -1,14 +1,16 @@
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, useEffect, createContext, useContext, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { Toaster, toast } from 'react-hot-toast'
 import Home from './pages/Home'
-import Drafts from './pages/Drafts'
-import DraftDetails from './pages/DraftDetails'
-import AdminPanel from './pages/AdminPanel'
-import Warehouse from './pages/Warehouse'
-import ReleaseNotesModal from './components/ReleaseNotesModal'
+import ErrorBoundary from './components/ErrorBoundary'
 import Security2FAModal from './components/Security2FAModal'
 import StepGuideModal from './components/StepGuideModal'
+
+const Drafts = lazy(() => import('./pages/Drafts'))
+const DraftDetails = lazy(() => import('./pages/DraftDetails'))
+const AdminPanel = lazy(() => import('./pages/AdminPanel'))
+const Warehouse = lazy(() => import('./pages/Warehouse'))
+const ReleaseNotesModal = lazy(() => import('./components/ReleaseNotesModal'))
 import { testETAAuth, getCompanySettings, saveCompanySettings, syncUserData, getAuthSecurityStatus, warmUpServer } from './services/api'
 import { getWarehouseAccess } from './services/warehouseApi'
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase'
@@ -96,9 +98,14 @@ const TRANSLATIONS = {
 function Layout({ children }) {
   const { lang, setLang, t, user, isAdmin, hasWarehouseAccess, handleLogout, triggerReset, showTutorialModal, setShowTutorialModal } = useContext(AppContext)
   const location = useLocation()
+  const navigate = useNavigate()
   const handleLogoClick = (e) => {
-    e.preventDefault();
-    window.location.href = '/';
+    if (e?.preventDefault) e.preventDefault();
+    setMobileMenuOpen(false);
+    triggerReset?.();
+    if (location.pathname !== '/') {
+      navigate('/');
+    }
   };
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [showUserDropdown, setShowUserDropdown] = useState(false)
@@ -522,13 +529,17 @@ function Layout({ children }) {
         </div>
       )}
 
-      {/* Release Notes Modal */}
-      <ReleaseNotesModal
-        isOpen={showReleaseNotesModal}
-        onClose={() => setShowReleaseNotesModal(false)}
-        lang={lang}
-        hasWarehouseAccess={hasWarehouseAccess || isAdmin}
-      />
+      {/* Release Notes Modal (Lazy loaded on demand) */}
+      {showReleaseNotesModal && (
+        <Suspense fallback={null}>
+          <ReleaseNotesModal
+            isOpen={showReleaseNotesModal}
+            onClose={() => setShowReleaseNotesModal(false)}
+            lang={lang}
+            hasWarehouseAccess={hasWarehouseAccess || isAdmin}
+          />
+        </Suspense>
+      )}
 
       {/* Step Guide Modal (Global Access) */}
       <StepGuideModal
@@ -753,31 +764,35 @@ export default function App() {
           </div>
         ) : (
           <Layout>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/drafts" element={<Drafts />} />
-              <Route path="/drafts/:id" element={<DraftDetails />} />
-              <Route path="/warehouse" element={hasWarehouseAccess ? <Warehouse /> : (
-                <div className="card fade-in" style={{ padding: '2rem' }}>
-                  <h2 className="card-title">{lang === 'ar' ? 'غير مصرح بالوصول' : 'Access Denied'}</h2>
-                  <p className="card-sub" style={{ marginBottom: 0 }}>
-                    {lang === 'ar'
-                      ? 'صفحة المخازن مخصصة للمسؤولين والمستخدمين المصرح لهم فقط.'
-                      : 'Warehouse access is restricted to authorized users.'}
-                  </p>
-                </div>
-              )} />
-              <Route path="/admin" element={isAdmin ? <AdminPanel /> : (
-                <div className="card fade-in" style={{ padding: '2rem' }}>
-                  <h2 className="card-title">Access Denied</h2>
-                  <p className="card-sub" style={{ marginBottom: 0 }}>
-                    {lang === 'ar'
-                      ? 'هذه الصفحة محجوبة لحساب الإدارة المعتمد فقط.'
-                      : 'This page is restricted to the approved administrator account only.'}
-                  </p>
-                </div>
-              )} />
-            </Routes>
+            <ErrorBoundary isAr={lang === 'ar'}>
+              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}><span className="spinner"></span></div>}>
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/drafts" element={<Drafts />} />
+                  <Route path="/drafts/:id" element={<DraftDetails />} />
+                  <Route path="/warehouse" element={hasWarehouseAccess ? <Warehouse /> : (
+                    <div className="card fade-in" style={{ padding: '2rem' }}>
+                      <h2 className="card-title">{lang === 'ar' ? 'غير مصرح بالوصول' : 'Access Denied'}</h2>
+                      <p className="card-sub" style={{ marginBottom: 0 }}>
+                        {lang === 'ar'
+                          ? 'صفحة المخازن مخصصة للمسؤولين والمستخدمين المصرح لهم فقط.'
+                          : 'Warehouse access is restricted to authorized users.'}
+                      </p>
+                    </div>
+                  )} />
+                  <Route path="/admin" element={isAdmin ? <AdminPanel /> : (
+                    <div className="card fade-in" style={{ padding: '2rem' }}>
+                      <h2 className="card-title">Access Denied</h2>
+                      <p className="card-sub" style={{ marginBottom: 0 }}>
+                        {lang === 'ar'
+                          ? 'هذه الصفحة محجوبة لحساب الإدارة المعتمد فقط.'
+                          : 'This page is restricted to the approved administrator account only.'}
+                      </p>
+                    </div>
+                  )} />
+                </Routes>
+              </Suspense>
+            </ErrorBoundary>
           </Layout>
         )}
       </BrowserRouter>
