@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react'
 import { SettingsContext } from '../App'
+import { Link } from 'react-router-dom'
 import UploadStep from './UploadStep'
-import { generateInvoice, submitToETA, getETAStatus, getCustomers, saveCustomer, ensureLocalSignerActive } from '../services/api'
+import { generateInvoice, submitToETA, getETAStatus, getCustomers, saveCustomer, ensureLocalSignerActive, saveDraftOnFailure } from '../services/api'
 import { stampUploadIssuedTimestamp, formatCairoDateTime, formatCairoDateTimeInput, cairoLocalInputToUtcIso } from '../utils/uploadTime'
 import { applySavedCustomerMatches } from '../utils/customerMatching'
 import { signEtaDocuments } from '../utils/signEtaDocuments'
@@ -102,6 +103,9 @@ export default function BatchWorkflow({ lang, t, fetchUsage, designDocuments }) 
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [submissionResults, setSubmissionResults] = useState([])
+  const [submissionResponse, setSubmissionResponse] = useState(null)
+  const [verifying, setVerifying] = useState(false)
+  const [verificationResult, setVerificationResult] = useState(null)
 
   // Saved Customers State
   const [customers, setCustomers] = useState([])
@@ -648,12 +652,46 @@ export default function BatchWorkflow({ lang, t, fetchUsage, designDocuments }) 
       }
 
       setSubmissionResults(signedDocs)
+      setSubmissionResponse(res)
+      setStep(4)
     } catch (err) {
       console.error(err)
+      toast.dismiss('batch-submit')
+      const cleanedInvoices = invoices.map(({ _fileName, ...pureDoc }) => pureDoc);
+      try {
+        saveDraftOnFailure(cleanedInvoices, err.message).then(d => {
+          if (d?.draftId) toast.success(lang === 'ar' ? `تم حفظ الفواتير كمسودة استرجاع: ${d.draftId}` : `Draft saved: ${d.draftId}`);
+        }).catch(() => {});
+      } catch (dErr) {}
       toast.error(lang === 'ar' ? 'فشل إرسال الدفعة' : 'Batch submission failed', { id: 'batch-submit' })
     } finally {
       setSubmitting(false)
     }
+  }
+
+  async function handleReverify(targetUuid) {
+    if (!targetUuid || targetUuid === 'N/A') return;
+    setVerifying(true);
+    try {
+      const verifyRes = await getETAStatus(targetUuid);
+      setVerificationResult(verifyRes.data || verifyRes);
+      toast.success(lang === 'ar' ? 'تم تأكيد ظهور الفواتير بالبوابة بنجاح!' : 'Batch appearance confirmed in Portal!');
+    } catch (e) {
+      toast(lang === 'ar' ? 'بوابة الضرائب ما زالت تعالج الدفعة، يرجى إعادة المحاولة بعد قليل.' : 'ETA Portal is still processing, please retry shortly.', { icon: '⏳' });
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  function handleResetBatch() {
+    setInvoices([])
+    setSelectedIdx(0)
+    setSubmissionResults([])
+    setSubmissionResponse(null)
+    setVerificationResult(null)
+    setVerifying(false)
+    setSubmitting(false)
+    setStep(1)
   }
 
   if (step === 1) {
@@ -674,6 +712,197 @@ export default function BatchWorkflow({ lang, t, fetchUsage, designDocuments }) 
   }
 
   // REVIEW AND SUBMIT STEP
+  if (step === 4) {
+    const uuid = submissionResponse?.requestId || submissionResponse?.result?.submissionUUID || submissionResponse?.result?.submissionId || 'N/A';
+    const totalBatchAmount = (submissionResults.length ? submissionResults : invoices).reduce((acc, doc) => acc + Number(doc.totalAmount || 0), 0);
+    const docsCount = submissionResults.length || invoices.length;
+
+    return (
+      <div className="card fade-in fx-batch-panel" style={{ padding: '2.5rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            borderRadius: '50%',
+            background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+            border: '2px solid var(--accent)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 1.25rem',
+            fontSize: '2.5rem'
+          }}>
+            ✅
+          </div>
+          <span className="fx-eyebrow">BATCH SUBMISSION CONFIRMED</span>
+          <h2 style={{ fontSize: '1.8rem', fontWeight: 700, margin: '0.5rem 0' }}>
+            {lang === 'ar' ? 'تم توقيع وإرسال الدفعة بنجاح لمصلحة الضرائب المصرية!' : 'Batch signed and submitted successfully to ETA!'}
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '1rem', maxWidth: '650px', margin: '0 auto' }}>
+            {lang === 'ar'
+              ? 'تم تشفير الفواتير بالتوقيع الرقمي المعتمد وإرسالها مباشرة لخوادم المنظومة.'
+              : 'Invoices were signed with your digital token and securely transmitted to the official tax portal.'}
+          </p>
+        </div>
+
+        {/* Status / Metric Cards */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gap: '1.25rem',
+          marginBottom: '2rem'
+        }}>
+          <div className="fx-metric-card" style={{ padding: '1.25rem', borderRadius: '14px', background: 'var(--card-bg)', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.4rem' }}>
+              📋 {lang === 'ar' ? 'عدد الفواتير المعتمدة' : 'Submitted Invoices'}
+            </span>
+            <strong style={{ fontSize: '1.6rem', color: 'var(--text)' }}>{docsCount}</strong>
+          </div>
+
+          <div className="fx-metric-card" style={{ padding: '1.25rem', borderRadius: '14px', background: 'var(--card-bg)', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.4rem' }}>
+              💵 {lang === 'ar' ? 'إجمالي قيمة الدفعة' : 'Total Batch Amount'}
+            </span>
+            <strong style={{ fontSize: '1.6rem', color: 'var(--accent)' }}>
+              {Number(totalBatchAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <small style={{ fontSize: '0.85rem' }}>EGP</small>
+            </strong>
+          </div>
+
+          <div className="fx-metric-card" style={{ padding: '1.25rem', borderRadius: '14px', background: 'var(--card-bg)', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.4rem' }}>
+              🔑 {lang === 'ar' ? 'معرف التقديم بالبوابة (UUID)' : 'Submission UUID'}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.2rem' }}>
+              <span style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: 'var(--primary, #38bdf8)', wordBreak: 'break-all' }}>
+                {uuid}
+              </span>
+              {uuid !== 'N/A' && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(uuid);
+                    toast.success(lang === 'ar' ? 'تم نسخ الـ UUID!' : 'UUID copied!');
+                  }}
+                  title={lang === 'ar' ? 'نسخ' : 'Copy'}
+                  style={{ padding: '0.2rem 0.5rem' }}
+                >
+                  📋
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Portal Live Verification Box */}
+        <div style={{
+          padding: '1.5rem',
+          borderRadius: '16px',
+          background: 'color-mix(in srgb, var(--accent) 5%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+          marginBottom: '2.5rem'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h4 style={{ margin: '0 0 0.35rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>🔍</span>
+                <span>{lang === 'ar' ? 'التحقق المباشر من ظهور الدفعة في بوابة الضرائب (ETA Portal)' : 'Real-time Portal Verification'}</span>
+              </h4>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                {verifying
+                  ? (lang === 'ar' ? 'جاري الاستعلام المباشر من بورتال مصلحة الضرائب...' : 'Querying official tax portal...')
+                  : verificationResult
+                    ? (lang === 'ar' ? 'تم تأكيد وصول الدفعة وفهرستها بنجاح داخل المنظومة.' : 'Batch arrival confirmed and indexed on official system.')
+                    : (lang === 'ar' ? 'الدفعة وصلت المنظومة وجاري معالجتها بالخوادم الحكومية.' : 'Batch reached ETA and is being processed by official servers.')}
+              </p>
+            </div>
+            <div>
+              {verifying ? (
+                <span className="spinner" />
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleReverify(uuid)}
+                  style={{ fontWeight: 700 }}
+                >
+                  🔄 {lang === 'ar' ? 'فحص حالة البوابة الآن' : 'Check Portal Status'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Summary Table of Invoices */}
+        <div className="fx-document-panel" style={{ marginBottom: '2.5rem' }}>
+          <div className="fx-document-toolbar">
+            <span>📋 {lang === 'ar' ? 'الفواتير التي تم إرسالها في هذه الدفعة' : 'Invoices Submitted in this Batch'} ({docsCount})</span>
+            <span className="badge badge-valid">✓ {lang === 'ar' ? 'تم الإرسال والاعتماد' : 'Submitted'}</span>
+          </div>
+          <div className="table-wrapper" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>{lang === 'ar' ? 'رقم الفاتورة (Internal ID)' : 'Invoice ID'}</th>
+                  <th>{lang === 'ar' ? 'العميل المستلم' : 'Receiver'}</th>
+                  <th>{lang === 'ar' ? 'عدد البنود' : 'Lines'}</th>
+                  <th>{lang === 'ar' ? 'الإجمالي' : 'Total'}</th>
+                  <th>{lang === 'ar' ? 'الحالة' : 'Status'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(submissionResults.length ? submissionResults : invoices).map((inv, idx) => (
+                  <tr key={idx}>
+                    <td>{idx + 1}</td>
+                    <td style={{ fontWeight: 700, fontFamily: 'monospace' }}>{inv.internalID || 'N/A'}</td>
+                    <td>{inv.receiver?.name || 'N/A'}</td>
+                    <td>{inv.invoiceLines?.length || 0}</td>
+                    <td style={{ color: 'var(--accent)', fontWeight: 700 }}>
+                      {Number(inv.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} EGP
+                    </td>
+                    <td>
+                      <span className="badge badge-valid" style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)' }}>
+                        ✓ {lang === 'ar' ? 'معتمدة بالبوابة' : 'Portal Accepted'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Navigation Action Buttons */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-accent btn-lg"
+            onClick={handleResetBatch}
+            style={{ fontWeight: 700, padding: '0.85rem 2rem' }}
+          >
+            🔄 {lang === 'ar' ? 'تجهيز ورفع دفعة فواتير جديدة' : 'Upload Another Batch'}
+          </button>
+          <Link
+            to="/drafts"
+            className="btn btn-secondary btn-lg"
+            style={{ textDecoration: 'none', fontWeight: 700, padding: '0.85rem 2rem' }}
+          >
+            📁 {lang === 'ar' ? 'سجل الفواتير والمسودات' : 'Go to Drafts & Invoices'}
+          </Link>
+          <button
+            type="button"
+            className="btn btn-ghost btn-lg"
+            onClick={handleResetBatch}
+            style={{ fontWeight: 600 }}
+          >
+            🏠 {lang === 'ar' ? 'الرئيسية' : 'Home'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const selectedDoc = invoices[selectedIdx]
 
   return (
@@ -702,7 +931,7 @@ export default function BatchWorkflow({ lang, t, fetchUsage, designDocuments }) 
             disabled={submitting || invoices.length === 0}
           >
             {submitting ? <span className="spinner" /> : null}
-            🚀 {lang === 'ar' ? 'إرسال الكل لـ ETA' : 'Submit All to ETA'}
+            🚀 {lang === 'ar' ? 'توقيع وإرسال الكل لـ ETA' : 'Sign & Submit All to ETA'}
           </button>
         </div>
       </div>

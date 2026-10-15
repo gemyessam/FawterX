@@ -172,7 +172,10 @@ export async function ensureLocalSignerActive(onStatusUpdate = null) {
   }
 
   // Poll for up to 4.5 seconds (9 iterations x 500ms)
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 20; i++) {
+    if (i === 5) {
+      try { window.location.href = 'fawterx-signer://open'; } catch (e) {}
+    }
     await new Promise(r => setTimeout(r, 500));
     try {
       const res = await fetch('http://localhost:8585/', { method: 'GET' });
@@ -282,6 +285,25 @@ export async function submitToETA(document, dryRun = false) {
 }
 
 /** جلب كل الـ Drafts */
+/** حفظ الفاتورة أو الدفعة كمسودة في حالة الخطأ لضمان عدم ضياع البيانات */
+export async function saveDraftOnFailure(document, errorMessage = null) {
+  if (!document) return null;
+  try {
+    const payload = Array.isArray(document) ? document : [document];
+    const purePayload = payload.map(({ signatures, _fileName, ...pureDoc }) => pureDoc);
+    const docToSend = purePayload.length === 1 ? purePayload[0] : purePayload;
+    const { data } = await api.post('/eta/submit', { 
+      document: docToSend, 
+      dryRun: true,
+      customError: errorMessage 
+    }, { timeout: 15000 });
+    return data;
+  } catch (e) {
+    console.warn('[saveDraftOnFailure] Failed to save fallback draft:', e.message);
+    return null;
+  }
+}
+
 export async function getDrafts() {
   const { data } = await api.get('/eta/drafts')
   return data

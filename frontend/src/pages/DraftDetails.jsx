@@ -133,6 +133,23 @@ export default function DraftDetails() {
   return (
     <div className="card fade-in fx-draft-detail">
       <PageHeading eyebrow="DOCUMENT / REVIEW" title={lang === 'ar' ? 'كل تفصيلة، قبل الإرسال.' : 'Every detail, before submission.'} description={lang === 'ar' ? 'راجع البيانات والمطابقة وخطوات مستندك في مكان واحد.' : 'Review data, compliance, and document progress in one place.'} />
+      {etaResult && (
+        <div className="card fade-in" style={{
+          background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+          border: '1px solid var(--accent)',
+          borderRadius: '16px',
+          padding: '1.5rem',
+          marginBottom: '2rem',
+          textAlign: 'center'
+        }}>
+          <h3 style={{ color: 'var(--accent)', margin: '0 0 0.5rem' }}>
+            🎉 {lang === 'ar' ? 'تم إرسال الفاتورة بنجاح واعتمادها في مصلحة الضرائب المصرية!' : 'Invoice Successfully Submitted & Accepted by ETA!'}
+          </h3>
+          <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+            {lang === 'ar' ? 'المعرف الفرعي للتقديم (UUID):' : 'Submission UUID:'} <strong style={{ color: 'var(--text)', fontFamily: 'monospace' }}>{etaResult.requestId || etaResult.result?.submissionUUID || 'N/A'}</strong>
+          </p>
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
@@ -331,16 +348,23 @@ export default function DraftDetails() {
         )}
       </div>
 
-      <div className="nav-actions">
-        <Link to="/drafts" className="btn btn-ghost">← {lang === 'ar' ? 'رجوع للمسودات' : 'Back to Drafts'}</Link>
-        <button 
-          className={`btn ${isValid ? 'btn-accent' : 'btn-warning'} btn-lg`} 
-          disabled={submitting}
-          onClick={handleTriggerSubmit}
-        >
-          {submitting ? <span className="spinner"></span> : null}
-          {submitting ? (lang === 'ar' ? 'جاري الإرسال...' : 'Submitting...') : `🚀 ${lang === 'ar' ? 'توقيع وإرسال لـ ETA' : 'Sign & Submit Session'}`}
-        </button>
+      <div className="nav-actions" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <Link to="/drafts" className="btn btn-secondary btn-lg">📁 {lang === 'ar' ? 'سجل المسودات' : 'Drafts Hub'}</Link>
+        <Link to="/" className="btn btn-ghost btn-lg">🏠 {lang === 'ar' ? 'الرئيسية' : 'Home'}</Link>
+        {etaResult?.acceptedDocuments?.length > 0 || etaResult?.result?.acceptedDocuments?.length > 0 ? (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#10b981', padding: '0.75rem 1.25rem', borderRadius: '8px', fontWeight: 'bold' }}>
+            ✓ {lang === 'ar' ? 'تم الإرسال والاعتماد بنجاح في مصلحة الضرائب' : 'Submitted and Accepted Successfully'}
+          </div>
+        ) : (
+          <button 
+            className={`btn ${isValid ? 'btn-accent' : 'btn-warning'} btn-lg`} 
+            disabled={submitting}
+            onClick={handleTriggerSubmit}
+          >
+            {submitting ? <span className="spinner"></span> : null}
+            {submitting ? (lang === 'ar' ? 'جاري الإرسال...' : 'Submitting...') : `🚀 ${lang === 'ar' ? 'توقيع وإرسال لـ ETA' : 'Sign & Submit Session'}`}
+          </button>
+        )}
       </div>
 
     </div>

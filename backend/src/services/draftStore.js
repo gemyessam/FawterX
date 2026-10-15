@@ -61,7 +61,8 @@ async function saveDraft(userId, document, validationResult, uploadStatus = null
   const isUploaded = uploadStatus === "uploaded" || uploadStatus === true;
   const status = isUploaded ? "uploaded" : (validationResult?.valid !== false ? "valid" : "invalid");
 
-  // Minimal Privacy Data Storage
+  // Safe Data Storage for Draft Recovery
+  const sanitizedDoc = document ? JSON.parse(JSON.stringify(document)) : null;
   const draft = {
     draftId,
     userId,
@@ -69,6 +70,8 @@ async function saveDraft(userId, document, validationResult, uploadStatus = null
     totalAmount: Number(totalAmount || 0),
     status,
     errorMessage: errorMessage || null,
+    document: sanitizedDoc,
+    validationResult: validationResult ? JSON.parse(JSON.stringify(validationResult)) : null,
     createdAt: now,
     updatedAt: now,
   };

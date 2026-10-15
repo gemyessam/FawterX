@@ -182,7 +182,7 @@ router.get("/test-auth", async (req, res) => {
 // ══════════════════════════════════════════════════════════════════
 router.post("/submit", async (req, res) => {
   try {
-    const { document, dryRun = false } = req.body || {};
+    const { document, dryRun = false, customError = null } = req.body || {};
     const docId = document?.internalID || (Array.isArray(document) ? `${document.length} documents` : "unknown");
     console.log(`[ETA Submit] User: ${req.user?.uid || "anon"} | Document ID: ${docId} | DryRun: ${dryRun}`);
     const clientId = req.headers["x-eta-client-id"] || null;
@@ -199,7 +199,7 @@ router.post("/submit", async (req, res) => {
       console.log("[/submit] InternalID:", document.internalID);
 
       const validation = validateETADocument(document);
-      const draft = await saveDraft(req.user.uid, document, validation);
+      const draft = await saveDraft(req.user.uid, document, validation, null, customError);
 
       console.log("[/submit] Draft saved:", draft.draftId, "\n");
 
@@ -241,7 +241,12 @@ router.post("/submit", async (req, res) => {
     const preValidation = validateETADocument(document);
     if (!preValidation.valid) {
       console.error("[/submit] ❌ Pre-send validation failed — aborting\n");
+      let savedDraft = null;
+      try {
+        savedDraft = await saveDraft(req.user.uid, document, preValidation, "invalid", "فشل الفحص المسبق للفاتورة");
+      } catch (e) {}
       return res.status(422).json({
+        draftId:  savedDraft?.draftId,
         success:  false,
         message:  "❌ الفاتورة تحتوي على أخطاء — لم يتم الإرسال",
         errors:   preValidation.errors,
@@ -263,7 +268,12 @@ router.post("/submit", async (req, res) => {
     );
     if (hasUnsigned) {
       console.error("[/submit] ❌ Unsigned document blocked — ETA would reject with 'Profile is configured to submit digitally signed documents only'");
+      let savedDraft = null;
+      try {
+        savedDraft = await saveDraft(req.user.uid, document, preValidation, "invalid", "الفاتورة غير موقعة إلكترونياً");
+      } catch (e) {}
       return res.status(400).json({
+        draftId: savedDraft?.draftId,
         success: false,
         requiresLocalSigning: true,
         message: "⚠️ الفاتورة لا تحتوي على توقيع رقمي إلكتروني حقيقي. يرجى استخدام زر 'توقيع وإرسال' مع التأكد من تشغيل FawterX Signer وتوصيل USB Token."
@@ -297,7 +307,13 @@ router.post("/submit", async (req, res) => {
         // تسجيل العملية كرفض
         await recordOperation(req.user.uid, { ...opMeta, type: "submission", status: "rejected", requestId, errorDetails: errMsg, etaResponse: result });
 
+        let savedDraft = null;
+        try {
+          savedDraft = await saveDraft(req.user.uid, document, preValidation, "invalid", errMsg);
+        } catch (e) {}
+
         return res.status(400).json({
+          draftId: savedDraft?.draftId,
           success: false,
           message: errMsg,
           result
@@ -339,7 +355,15 @@ router.post("/submit", async (req, res) => {
       // تسجيل العملية كخطأ
       await recordOperation(req.user.uid, { ...opMeta, type: "submission", status: "error", requestId, errorDetails: errMsg, etaResponse: etaError });
 
+      let savedDraft = null;
+      try {
+        savedDraft = await saveDraft(req.user.uid, document, preValidation, "invalid", errMsg);
+      } catch (draftErr) {
+        console.warn("Could not auto-save draft:", draftErr.message);
+      }
+
       return res.status(status).json({
+        draftId:    savedDraft?.draftId,
         success:    false,
         dryRun:     false,
         requestId,

@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext } from 'react'
+import { Link } from 'react-router-dom'
 import { AppContext, SettingsContext } from '../App'
-import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations, getCustomers, saveCustomer, ensureLocalSignerActive } from '../services/api'
+import { uploadExcel, previewInvoice, generateInvoice, submitToETA, getETAStatus, getUsageStatus, getOperations, getCustomers, saveCustomer, ensureLocalSignerActive, saveDraftOnFailure } from '../services/api'
 import BatchWorkflow from '../components/BatchWorkflow'
 import DashboardOverview from '../components/DashboardOverview'
 import { PageHeading } from '../components/DesignSystem'
@@ -1014,6 +1015,15 @@ export default function Home() {
       if (errData?.details) {
         errorStr += "\n\n[ETA Rejection Details]:\n" + JSON.stringify(errData.details, null, 2);
       }
+      if (etaDocs) {
+        saveDraftOnFailure(etaDocs, errorStr).then(d => {
+          if (d?.draftId) {
+            setDraftId(d.draftId);
+            toast.success(lang === 'ar' ? `تم حفظ الفاتورة بالمسودات: ${d.draftId}` : `Draft saved: ${d.draftId}`);
+          }
+        }).catch(() => {});
+      }
+      setStep(4)
       setSubmissionResult({
         success: false,
         error: errorStr
@@ -2330,9 +2340,17 @@ export default function Home() {
                 </div>
               )}
 
-              <button className="btn btn-primary btn-lg" onClick={handleResetFlow}>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <button className="btn btn-primary btn-lg" onClick={handleResetFlow}>
                 🔄 {lang === 'ar' ? 'إنشاء فاتورة جديدة' : 'Start New Invoice Sheet'}
-              </button>
+                </button>
+                <Link to="/drafts" className="btn btn-secondary btn-lg" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                  📁 {lang === 'ar' ? 'سجل الفواتير والمسودات' : 'Go to Drafts & Invoices'}
+                </Link>
+                <button className="btn btn-ghost btn-lg" onClick={handleResetFlow}>
+                  🏠 {lang === 'ar' ? 'الرئيسية' : 'Home'}
+                </button>
+              </div>
             </div>
           )}
         </div>
