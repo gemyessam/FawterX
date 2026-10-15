@@ -26,6 +26,13 @@ async function submitDocuments(documents, dryRun = false, customCredentials = nu
 
   const docsArray = Array.isArray(documents) ? documents : [documents];
 
+  // ترتيب المستندات تصاعدياً برقم الفاتورة (ترتيب طبيعي للأرقام 1, 2, ..., 10) قبل الإرسال لـ ETA
+  docsArray.sort((a, b) => {
+    const idA = String(a.internalID || "");
+    const idB = String(b.internalID || "");
+    return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: "base" });
+  });
+
   // ─── Strict signature check for production submission ─────────────────────
   // ETA profile is set to "digitally signed documents only" — sending
   // an unsigned or mock-signed document causes immediate rejection:

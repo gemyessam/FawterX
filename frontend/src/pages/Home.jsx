@@ -7,7 +7,7 @@ import DashboardOverview from '../components/DashboardOverview'
 import { PageHeading } from '../components/DesignSystem'
 import WorkflowProgress from '../components/WorkflowProgress'
 import { UploadCloud, FileSpreadsheet, ScanLine, Layers3 } from 'lucide-react'
-import { stampUploadIssuedTimestamp, formatCairoDateTime, formatCairoDateTimeInput, cairoLocalInputToUtcIso } from '../utils/uploadTime'
+import { stampUploadIssuedTimestamp, formatCairoDateTime, formatCairoDateTimeInput, cairoLocalInputToUtcIso, sortAndStaggerDocuments } from '../utils/uploadTime'
 import { applySavedCustomerMatches } from '../utils/customerMatching'
 import { signEtaDocuments } from '../utils/signEtaDocuments'
 import toast from 'react-hot-toast'
@@ -433,7 +433,7 @@ export default function Home() {
         const docs = genRes.documents || [genRes.document]
         const customerList = customers.length ? customers : await fetchCustomers()
         const matched = applySavedCustomerMatches(docs, customerList)
-        const finalDocs = matched.documents
+        const finalDocs = sortAndStaggerDocuments(matched.documents, 3);
         if (matched.firstMatch) {
           setSelectedCustomerId(matched.firstMatch.id)
           toast.success(
@@ -872,7 +872,7 @@ export default function Home() {
       const docs = genRes.documents || [genRes.document]
       const customerList = customers.length ? customers : await fetchCustomers()
       const matched = applySavedCustomerMatches(docs, customerList)
-      const finalDocs = matched.documents
+      const finalDocs = sortAndStaggerDocuments(matched.documents, 3);
       if (matched.firstMatch) {
         setSelectedCustomerId(matched.firstMatch.id)
         toast.success(
@@ -946,7 +946,9 @@ export default function Home() {
 
     try {
       toast.loading(lang === 'ar' ? 'يرجى اختيار الشهادة وإدخال رقم الـ PIN في نافذة التوقيع...' : 'Please choose certificate & enter PIN in signer popup...', { id: 'submit-loader' });
-      const updatedDocs = await signEtaDocuments(etaDocs, {
+      const orderedDocs = sortAndStaggerDocuments(etaDocs, 3);
+      setEtaDocs(orderedDocs);
+      const updatedDocs = await signEtaDocuments(orderedDocs, {
         onStatusUpdate: (statusMsg) => {
           toast.loading(lang === 'ar' ? statusMsg : 'Starting FawterX Signer and checking USB Token...', { id: 'submit-loader' })
         }

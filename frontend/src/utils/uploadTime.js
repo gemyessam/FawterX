@@ -119,3 +119,42 @@ export function stampUploadIssuedTimestamp(payload, timestamp = getUploadIssuedT
 
   return next
 }
+
+/**
+ * ترتيب المستندات تصاعدياً برقم الفاتورة (ترتيب طبيعي للأرقام 1, 2, ..., 10)
+ * وضبط فارق زمني بالثواني (افتراضياً 3 ثوانٍ) بين كل فاتورة والأخرى
+ * لضمان عدم ظهور الفواتير بشكل مقلوب أو عشوائي في منصة الضرائب
+ */
+export function sortAndStaggerDocuments(documents, stepSeconds = 3) {
+  if (!Array.isArray(documents) || documents.length === 0) return documents
+
+  // ترتيب طبيعي ذكي للأرقام والأسماء
+  const sorted = [...documents].sort((a, b) => {
+    const idA = String(a.internalID || a._fileName || a.fileName || '')
+    const idB = String(b.internalID || b._fileName || b.fileName || '')
+    return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' })
+  })
+
+  if (sorted.length <= 1) return sorted
+
+  // احتساب وقت أساسي آمن بالماضي لضمان عدم رفض منظومة الضرائب لأي تاريخ مستقبلي
+  const totalSpanMs = sorted.length * stepSeconds * 1000
+  const firstDocTime = sorted[0].dateTimeIssued ? new Date(sorted[0].dateTimeIssued) : null
+  const isValidFirstTime = firstDocTime && !Number.isNaN(firstDocTime.getTime())
+
+  // لو الوقت الحالي أحدث، نبدأ من وقت آمن في الماضي القريب
+  const nowMs = Date.now()
+  let baseTimeMs = isValidFirstTime ? firstDocTime.getTime() : (nowMs - totalSpanMs)
+
+  // إذا كان الوقت الأساسي + الفارق سيتجاوز الوقت الحالي، نرجع بالأساس للوراء
+  if (baseTimeMs + totalSpanMs > nowMs) {
+    baseTimeMs = nowMs - totalSpanMs
+  }
+
+  return sorted.map((doc, idx) => ({
+    ...doc,
+    dateTimeIssued: new Date(baseTimeMs + (idx * stepSeconds * 1000))
+      .toISOString()
+      .replace(/\.\d{3}Z$/, 'Z')
+  }))
+}

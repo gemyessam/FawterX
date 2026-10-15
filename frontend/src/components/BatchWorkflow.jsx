@@ -3,7 +3,7 @@ import { SettingsContext } from '../App'
 import { Link } from 'react-router-dom'
 import UploadStep from './UploadStep'
 import { generateInvoice, submitToETA, getETAStatus, getCustomers, saveCustomer, ensureLocalSignerActive, saveDraftOnFailure } from '../services/api'
-import { stampUploadIssuedTimestamp, formatCairoDateTime, formatCairoDateTimeInput, cairoLocalInputToUtcIso } from '../utils/uploadTime'
+import { stampUploadIssuedTimestamp, formatCairoDateTime, formatCairoDateTimeInput, cairoLocalInputToUtcIso, sortAndStaggerDocuments } from '../utils/uploadTime'
 import { applySavedCustomerMatches } from '../utils/customerMatching'
 import { signEtaDocuments } from '../utils/signEtaDocuments'
 import toast from 'react-hot-toast'
@@ -180,11 +180,18 @@ export default function BatchWorkflow({ lang, t, fetchUsage, designDocuments }) 
         unitValue: 'unitValue', taxPercent: 'taxPercent'
       }
 
+      // ترتيب نتائج قراءة الملفات طبيعياً برقم الفاتورة أو اسم الملف
+      const sortedResults = [...resultsArray].sort((a, b) => {
+        const idA = String(a.metadata?.internalID || a.fileName || '');
+        const idB = String(b.metadata?.internalID || b.fileName || '');
+        return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
+      });
+
       const generatedDocs = []
       const customerList = customers.length ? customers : await fetchCustomers()
       let autoMatchedCustomers = 0
 
-      for (const res of resultsArray) {
+      for (const res of sortedResults) {
         if (!res.success) {
           toast.error(`Failed to parse file: ${res.fileName}`)
           continue
@@ -207,7 +214,9 @@ export default function BatchWorkflow({ lang, t, fetchUsage, designDocuments }) 
         }
       }
 
-      setInvoices(generatedDocs)
+      // ترتيب الفواتير تصاعدياً (1, 2, ..., 10) مع فارق 3 ثوانٍ بين كل فاتورة والأخرى
+      const orderedInvoices = sortAndStaggerDocuments(generatedDocs, 3);
+      setInvoices(orderedInvoices)
       if (autoMatchedCustomers > 0) {
         toast.success(
           lang === 'ar'
@@ -613,8 +622,12 @@ export default function BatchWorkflow({ lang, t, fetchUsage, designDocuments }) 
     let signedDocs = []
     
     try {
+      // التأكد من ترتيب الفواتير تصاعدياً وفارق الثواني الزمني قبل التوقيع
+      const orderedInvoices = sortAndStaggerDocuments(invoices, 3);
+      setInvoices(orderedInvoices);
+
       // 1. Sign each document locally using centralized signing helper
-      const cleanedInvoices = invoices.map(({ _fileName, ...pureDoc }) => pureDoc);
+      const cleanedInvoices = orderedInvoices.map(({ _fileName, ...pureDoc }) => pureDoc);
       signedDocs = await signEtaDocuments(cleanedInvoices, {
         onStatusUpdate: (msg) => {
           toast.loading(lang === 'ar' ? msg : 'Connecting to FawterX Signer...', { id: 'batch-submit' });

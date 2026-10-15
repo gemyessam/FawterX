@@ -32,6 +32,7 @@ export default function UploadStep({ onSuccess }) {
     if (validFiles.length > 0) {
       setFiles(prev => {
         const combined = [...prev, ...validFiles]
+        combined.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
         if (combined.length > 25) {
           setError('الحد الأقصى هو 25 ملف في الرفعة الواحدة')
           return combined.slice(0, 25)

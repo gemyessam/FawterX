@@ -129,8 +129,12 @@ router.post("/upload-batch", uploadBatchMiddleware, async (req, res) => {
     const mode = req.body.mode || req.query.mode || "template";
     console.log(`[Batch Upload] Mode: ${mode}, Files count: ${req.files.length}`);
 
+    const sortedFiles = [...req.files].sort((a, b) =>
+      a.originalname.localeCompare(b.originalname, undefined, { numeric: true, sensitivity: 'base' })
+    );
+
     const results = await Promise.all(
-      req.files.map(async (file) => {
+      sortedFiles.map(async (file) => {
         try {
           const ext = path.extname(file.originalname).toLowerCase();
           const isPdf = ext === ".pdf";
@@ -170,6 +174,12 @@ router.post("/upload-batch", uploadBatchMiddleware, async (req, res) => {
         }
       })
     );
+
+    results.sort((a, b) => {
+      const idA = String(a.metadata?.internalID || a.fileName || '');
+      const idB = String(b.metadata?.internalID || b.fileName || '');
+      return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
+    });
 
     return res.json({ success: true, results });
   } catch (err) {

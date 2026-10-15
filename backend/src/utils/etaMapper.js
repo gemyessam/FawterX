@@ -285,6 +285,28 @@ const METADATA_ROW_PATTERN = /(issuer|receiver|documenttype|document type|docume
     });
   }
 
+  // ترتيب المستندات تصاعدياً برقم الفاتورة ترتيباً طبيعياً (1, 2, ..., 10)
+  documents.sort((a, b) => {
+    const idA = String(a.internalID || "");
+    const idB = String(b.internalID || "");
+    return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: "base" });
+  });
+
+  // وضع فارق زمني بالثواني (3 ثوانٍ) بين الفواتير المتعددة في نفس الدفعة
+  if (documents.length > 1) {
+    const totalSpanMs = documents.length * 3000;
+    const baseDate = metadata.dateTimeIssued ? new Date(metadata.dateTimeIssued) : null;
+    const isValidBase = baseDate && !isNaN(baseDate.getTime());
+    const nowMs = Date.now();
+    let baseTimeMs = isValidBase ? baseDate.getTime() : (nowMs - totalSpanMs);
+    if (baseTimeMs + totalSpanMs > nowMs) {
+      baseTimeMs = nowMs - totalSpanMs;
+    }
+    documents.forEach((doc, idx) => {
+      doc.dateTimeIssued = new Date(baseTimeMs + (idx * 3000)).toISOString().replace(/\.\d{3}Z$/, "Z");
+    });
+  }
+
   return documents;
 }
 
